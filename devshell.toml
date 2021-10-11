@@ -1,0 +1,34 @@
+imports = [
+  "language.go"
+]
+
+[[env]]
+name = "DATABASE_URL"
+value = "sqlite:db/database.sqlite3"
+
+[[commands]]
+package = "go"
+
+[[commands]]
+package = "dbmate"
+
+[[commands]]
+package = "golangci-lint"
+
+[[commands]]
+package = "liftbridge-cli"
+
+[[commands]]
+package = "liftbridge"
+
+[devshell]
+name = "cicero"
+packages = [
+  "diffutils",
+  "go",
+  "goimports",
+  "gopls",
+  "gocode",
+  "gcc",
+  "sqliteInteractive",
+]
