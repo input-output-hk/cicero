@@ -23,10 +23,11 @@
         cicero = prev.buildGoModule rec {
           pname = "cicero";
           version = "2021.10.11.001";
-          vendorSha256 = "sha256-2qcMea6MvA/hhIQLt0mwiOk/KW7KiwHCT7l5FxqW6S0=";
+          vendorSha256 = "sha256-S1YuuiJUiQG9SMzXJUDmF4ZyYmAPNoVnemzBGdWMzdM=";
 
-          src =
-            inputs.inclusive.lib.inclusive ./. [ ./go.mod ./go.sum ./main.go ];
+          src = inputs.inclusive.lib.inclusive ./. [
+            ./go.mod ./go.sum ./main.go ./brain.go ./invoker.go ./show.go
+          ];
 
           ldflags = [
             "-s"
