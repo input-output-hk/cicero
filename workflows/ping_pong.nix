@@ -9,22 +9,18 @@ workflow {
   };
 
   tasks = {
-    ping = { ping ? false, pong ? false }: {
-      when = {
-        "ping missing" = !ping;
-        "pong missing" = !pong;
-      };
+    ping = { ping ? false }: {
+      when = { "ping missing" = !ping; };
 
       run = ''
         echo running ping ${id}
       '';
     };
 
-    pong = { ping ? false, pong ? false, coverage ? 0 }: {
+    pong = { ping ? false, pong ? false }: {
       when = {
         "ping sent" = ping;
         "pong missing" = !pong;
-        "coverage is over 9000" = coverage > 900;
       };
 
       run = ''
@@ -32,10 +28,10 @@ workflow {
       '';
     };
 
-    pingpong = { ping ? false, pong ? false }: {
+    pingpong = { pong ? false, pingpong ? false }: {
       when = {
-        "ping sent" = ping;
         "pong sent" = pong;
+        "pingpong missing" = !pingpong;
       };
 
       run = ''

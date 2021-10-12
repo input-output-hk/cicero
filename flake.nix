@@ -23,18 +23,22 @@
         cicero = prev.buildGoModule rec {
           pname = "cicero";
           version = "2021.10.14.001";
-          vendorSha256 = "sha256-S1YuuiJUiQG9SMzXJUDmF4ZyYmAPNoVnemzBGdWMzdM=";
+          vendorSha256 = "sha256-KMtmgsoScz5XmaApxGVNkYplc9nz3Vm7m3mZSfz2jyQ=";
 
           src = inputs.inclusive.lib.inclusive ./. [
-            ./go.mod
-            ./go.sum
-            ./main.go
+            ./api.go
             ./brain.go
             ./builder.sh
             ./db
+            ./go.mod
+            ./go.sum
             ./invoker.go
             ./lib.nix
+            ./main.go
+            ./nix.go
             ./show.go
+            ./web
+            ./web.go
           ];
 
           ldflags = [
@@ -54,7 +58,6 @@
 
       hydraJobs = { cicero }@pkgs: pkgs;
 
-      devShell = { devshell }:
-        devshell.fromTOML ./devshell.toml;
+      devShell = { devshell }: devshell.fromTOML ./devshell.toml;
     };
 }

@@ -1,0 +1,52 @@
+{{template "_layout.html" .}}
+
+{{define "main"}}
+<div id="{{scope}}">
+	<h1>{{.Name}}</h1>
+
+	<h3>Actions</h3>
+	<ul>
+		<li><a href="/workflow/{{.Name}}/start">Start</a></li>
+	</ul>
+
+	<iframe src="/workflow/{{.Name}}/graph">
+		- [x] https://github.com/go-echarts/go-echarts
+		- [ ] https://github.com/goccy/go-graphviz
+	</iframe>
+
+	<h3>Instances</h3>
+	<table>
+		<tr>
+			<th>ID</th>
+			<th>Name</th>
+			<th>Created At</th>
+			<th>Updated At</th>
+			<th>Certificates</th>
+		</tr>
+		{{range .Instances}}
+		<tr>
+			<td>{{.ID}}</td>
+			<td>{{.Name}}</td>
+			<td>{{.CreatedAt}}</td>
+			<td>{{.UpdatedAt}}</td>
+			<td><pre>{{.Certs | toJson}}</pre></td>
+		</tr>
+		{{end}}
+	</table>
+</div>
+
+<style>
+#{{scope}} {
+	height: 100%;
+
+	display: flex;
+	flex-direction: column;
+}
+
+#{{scope}} > iframe {
+	flex-grow: 1;
+	border: none;
+  height: 100%;
+}
+</style>
+{{end}}

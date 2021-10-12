@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<link rel="stylesheet" type="text/css" href="/style.css"/>
+	</head>
+	<body>
+		<nav>
+			<ul>
+				<li><em>[LOGO]</em></li>
+				<li><a href="/workflow">Workflows</a></li>
+				<li><a href="/task">Task Log</a></li>
+			</ul>
+		</nav>
+		<main>
+			{{block "main" .}}{{end}}
+		</main>
+	</body>
+
+	<style>
+	html {
+		width: 100%;
+		height: 100%;
+	}
+	body {
+		width: 100%;
+		height: 100%;
+		margin: 0;
+
+		display: flex;
+		flex-direction: column;
+	}
+	body > main {
+		flex-grow: 1;
+		padding: 1rem;
+	}
+	</style>
+</html>

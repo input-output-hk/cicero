@@ -39,7 +39,8 @@ let
   runners = with pkgs;
     let
       run = ourArgs: taskArgs: mkDerivation (ourArgs // taskArgs);
-      makeBinPath = extra: lib.makeBinPath ([ liftbridge-cli nixUnstable gnutar xz ] ++ extra);
+      makeBinPath = extra:
+        lib.makeBinPath ([ liftbridge-cli nixUnstable gnutar xz ] ++ extra);
     in {
       bash = run {
         PATH = makeBinPath [ bash coreutils git ];
@@ -84,14 +85,9 @@ let
         } // (task filteredInputs));
       transformedTasks = pkgs.lib.mapAttrs transformTask tasks;
     in {
-      inherit name meta;
+      inherit name meta version;
       tasks = transformedTasks;
     };
-
-  x = {
-    pingpong = { name = "pingpong"; };
-    "test/ruby" = { name = "test/ruby"; };
-  };
 
   workflows = dir:
     (lib.mapAttrsToList (name: type:

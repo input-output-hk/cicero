@@ -1,0 +1,36 @@
+{{template "_layout.html" .}}
+
+{{define "main"}}
+<table id="{{scope}}">
+	<tr>
+		<th>Name</th>
+	</tr>
+	{{range .}}
+	<tr>
+		<td>
+			<a href="/workflow/{{.Name}}">
+				{{.Name}}
+			</a>
+		</td>
+	</tr>
+	{{end}}
+</table>
+
+<style>
+table#{{scope}} {
+	margin: 1rem;
+	border-spacing: 0;
+	border-collapse: collapse;
+	--accent: gainsboro;
+}
+
+table#{{scope}} th,
+table#{{scope}} td {
+	border: 3px solid var(--accent);
+	padding: .5em;
+}
+table#{{scope}} tr:nth-child(even) {
+	background: var(--accent);
+}
+</style>
+{{end}}

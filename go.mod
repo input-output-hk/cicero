@@ -9,4 +9,6 @@ require (
 	github.com/uptrace/bun v1.0.11
 	github.com/uptrace/bun/dialect/sqlitedialect v1.0.11
 	github.com/uptrace/bun/driver/sqliteshim v1.0.11
+	github.com/uptrace/bunrouter v1.0.0-rc.2
+	github.com/go-echarts/go-echarts/v2 v2.2.4
 )

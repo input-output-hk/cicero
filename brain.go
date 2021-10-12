@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -12,27 +11,23 @@ import (
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/dialect/sqlitedialect"
-	"github.com/uptrace/bun/driver/sqliteshim"
 )
 
 type BrainCmd struct {
 }
 
 type Workflow struct {
-	ID    uint64
-	Name  string
-	Certs map[string]interface{}
+	ID        uint64
+	Name      string                 `bun:",notnull"`
+	Certs     map[string]interface{} `bun:",notnull"`
+	CreatedAt time.Time              `bun:",nullzero,notnull,default:current_timestamp"`
+	UpdatedAt time.Time              `bun:",nullzero,notnull,default:current_timestamp"`
 }
 
 func runBrain(args *BrainCmd) error {
-	sqldb, err := sql.Open(sqliteshim.ShimName, "db/database.sqlite3")
-	if err != nil {
-		return (errors.WithMessage(err, "While opening the DB"))
-	}
-
-	db := bun.NewDB(sqldb, sqlitedialect.New())
+	db, err := newDb()
 	defer db.Close()
+	if err != nil { return err }
 
 	err = brain(db)
 	if err != nil {
@@ -45,6 +40,74 @@ func runBrain(args *BrainCmd) error {
 }
 
 func brain(db *bun.DB) error {
+	if err := listenToCerts(db); err != nil {
+		return err
+	}
+
+	return listenToStart(db)
+}
+
+func listenToStart(db *bun.DB) error {
+	streamName := "workflow.*.start"
+
+	client := connect([]string{streamName})
+	defer client.Close()
+
+	ctx := context.Background()
+	err := client.Subscribe(
+		ctx,
+		streamName,
+		func(msg *liftbridge.Message, err error) {
+			if err != nil {
+				logger.Printf("error received in %s: %w", streamName, err)
+			}
+
+			fmt.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
+			fmt.Println("subject:", msg.Subject())
+			parts := strings.Split(msg.Subject(), ".")
+			workflowName := parts[1]
+
+			logger.Printf("Received start for workflow %s", workflowName)
+
+			received := map[string]interface{}{}
+			unmarshalErr := json.Unmarshal(msg.Value(), &received)
+			if unmarshalErr != nil {
+				logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
+				return
+			}
+
+			err = db.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
+				return insertWorkflow(tx, &Workflow{Name: workflowName, Certs: received})
+			})
+
+			if err != nil {
+				logger.Printf("Failed to insert new workflow: %s\n", err)
+			}
+		})
+
+	return err
+}
+
+func insertWorkflow(db bun.IDB, workflow *Workflow) error {
+	res, err := db.
+		NewInsert().
+		Model(workflow).
+		Exec(context.Background())
+
+	if err != nil {
+		fmt.Printf("%#v %#v\n", res, err)
+		logger.Printf("Couldn't insert workflow: %s\n", err.Error())
+		return err
+	}
+
+	logger.Printf("Created workflow %#v\n", workflow)
+
+	publish(fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID), "workflow.*.*.invoke", workflow.Certs)
+
+	return nil
+}
+
+func listenToCerts(db *bun.DB) error {
 	streamName := "workflow.*.*.cert"
 
 	client := connect([]string{streamName})
@@ -85,30 +148,8 @@ func brain(db *bun.DB) error {
 					Where("id = ?", id).
 					Scan(context.Background())
 
-				if err == sql.ErrNoRows {
-					workflow := &Workflow{
-						Name:  workflowName,
-						ID:    id,
-						Certs: received,
-					}
-
-					_, err = tx.
-						NewInsert().
-						Model(workflow).
-						Exec(context.Background())
-
-					if err != nil {
-						logger.Printf("Couldn't insert workflow: %s\n", err)
-						return err
-					}
-
-					logger.Printf("Created workflow %#v\n", workflow)
-
-					publish(fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id), "workflow.*.*.invoke", workflow.Certs)
-
-					return nil
-				} else if err != nil {
-					logger.Printf("Couldn't find existing workflow: %s\n", err)
+				if err != nil {
+					logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
 					return err
 				}
 
@@ -123,6 +164,7 @@ func brain(db *bun.DB) error {
 				}
 
 				existing.Certs = merged
+				existing.UpdatedAt = time.Now().UTC()
 
 				_, err = tx.NewUpdate().
 					Where("id = ?", id).

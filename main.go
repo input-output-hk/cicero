@@ -17,6 +17,7 @@ type cicero struct {
 	Debug   bool        `arg:"--debug" help:"debugging output"`
 	Brain   *BrainCmd   `arg:"subcommand:brain"`
 	Invoker *InvokerCmd `arg:"subcommand:invoker"`
+	Web     *WebCmd     `arg:"subcommand:web"`
 	Show    *ShowCmd    `arg:"subcommand:show"`
 }
 
@@ -71,6 +72,8 @@ func run(parser *arg.Parser, args *cicero) error {
 		return runBrain(args.Brain)
 	case args.Invoker != nil:
 		return runInvoker(args.Invoker)
+	case args.Web != nil:
+		return runWeb(args.Web)
 	case args.Show != nil:
 		return runShow(args.Show)
 	default:

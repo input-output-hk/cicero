@@ -17,7 +17,7 @@ func runShow(args *ShowCmd) error {
 }
 
 func show(args *ShowCmd) error {
-	def, err := nixInstantiate(args.WorkflowName, args.ID, args.Inputs)
+	def, err := nixInstantiateWorkflow(args.WorkflowName, args.ID, args.Inputs)
 	if err != nil {
 		return err
 	}

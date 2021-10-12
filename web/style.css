@@ -1,0 +1,12 @@
+html {
+	background: cornsilk;
+}
+
+body > nav > ul {
+	padding: 1em;
+	background: burlywood;
+	list-style: none;
+
+	display: flex;
+	gap: 1em;
+}
