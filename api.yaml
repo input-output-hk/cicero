@@ -1,0 +1,231 @@
+openapi: "3.0.0"
+
+info:
+  version: 0.1.0
+  title: Cicero API
+  description: |
+    # Draft Specification of the Cicero REST API
+    ## *or: trying to come up with a vision*
+
+    *"Am I allowed to deploy this?"* in our system means:  
+    *"Does this **artifact** pass all **gates**?* which translates to:  
+    *"Do all the artifact's gates have their **KRI**s below their defined threshold?"*
+
+    KRIs are calculated from **certificates** which are a special case of **events**.
+
+    So our basic types are:
+    - Artifact
+    - Gate
+    - KRI
+    - Certificate
+    - Event
+    
+    Everything is expressed through these types.
+    
+    What exactly an artifact is is up for debate.
+    Here I assume it could be a build result, test result, or deployment action (still a build result but from another perspective, or a build result with deployment info attached).
+
+servers:
+  - url: https://brain.iohk.io
+
+paths:
+
+  /events:
+    post:
+      summary: '[MQ] Submit raw events (aka "Facts")'
+      responses:
+        '200':
+          description: successfully submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  index:
+                    description: Index or timestamp the server assigned for this event
+                    type: integer
+    get:
+      summary: '[MQ?] Query raw past events (aka "Facts", "Data Lake")'
+      parameters:
+        - $ref: '#/components/parameters/query'
+      responses:
+        '200':
+          description: successful query with result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  index:
+                    description: Index or timestamp that defines the point in time at which this result is valid
+                    type: integer
+                  data:
+                    description: 'Query results'
+                    type: array
+                    items:
+                      description: Event, however it is serialized
+                      type: object
+
+  /state/infrastructure:
+    get:
+      summary: |
+        Query infrastructure (onto which we deploy)
+        (Should possibly just be an event query)
+      parameters:
+        - $ref: '#/components/parameters/query'
+      responses:
+        '200':
+          description: successful query with result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  index:
+                    $ref: '#/components/schemas/index'
+                  data:
+                    type: object
+
+  /state/deployments:
+    get:
+      summary: |
+        Query deployments (on our infrastructure)
+        (Should possibly just be an event query)
+      parameters:
+        - $ref: '#/components/parameters/query'
+      responses:
+        '200':
+          description: successful query with result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  index:
+                    $ref: '#/components/schemas/index'
+                  data:
+                    type: object
+
+  /artifact/{artifact-id}/risk/{KRI-id}:
+    get:
+      summary: Get a KRI for an artifact (such as a binary or deployment)
+      parameters:
+        - name: artifact-id
+          in: path
+          description: ID of an artifact
+          required: true
+          schema:
+            type: string
+        - name: KRI-id
+          in: path
+          description: ID of a KRI calculation
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: calculated KRI
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  index:
+                    $ref: '#/components/schemas/index'
+                  score:
+                    type: number
+
+  /artifact/{artifact-id}/certs:
+    get:
+      summary: Get certificates an artifact has
+      parameters:
+        - $ref: '#/components/parameters/artifact-id'
+      responses:
+        '200':
+          description: All certificates that this artifact has (could alternatively be a query result)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  index:
+                    $ref: '#/components/schemas/index'
+                  score:
+                    type: number
+
+  /artifact/{artifact-id}/gate/{gate-id}:
+    get:
+      summary: Get description and state of a gate/condition (like an artifact having certain certs and low KRI scores)
+      parameters:
+        - $ref: '#/components/parameters/artifact-id'
+        - $ref: '#/components/parameters/gate-id'
+      responses:
+        '200':
+          description: State of the gate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  index:
+                    $ref: '#/components/schemas/index'
+                  passed:
+                    type: boolean
+                  conditions_ok:
+                    description: Conditions that are fulfilled
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/gate-condition'
+                  conditions_nok:
+                    description: Conditions that are NOT yet fulfilled
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/gate-condition'
+
+  /gate/{gate-id}:
+    get:
+      summary: Get description of a gate (by itself, not applied to any artifact)
+      parameters:
+        - $ref: '#/components/parameters/gate-id'
+      responses:
+        '200':
+          description: Gate found
+    put:
+      summary: Create a new gate
+      parameters:
+        - $ref: '#/components/parameters/gate-id'
+      responses:
+        '204':
+          description: successfully created
+
+components:
+  parameters:
+    query:
+      in: query
+      name: q
+      description: |
+        Query in whatever query language (SQL, EdgeQL, …)
+        Depending on the data schema 
+      schema:
+        type: string
+    artifact-id:
+      name: artifact-id
+      in: path
+      description: ID of an artifact (such as a binary or deployment)
+      required: true
+      schema:
+        type: string
+    gate-id:
+      in: path
+      name: gate-id
+      description: ID of a gate (collection of conditions)
+      required: true
+      schema:
+        type: string
+  schemas:
+    index:
+      description: Index or timestamp that defines the point in time at which this result is valid
+      type: integer
+    gate-condition:
+      description: Representation of a conditions, however they are serialized
+      type: object
