@@ -40,7 +40,10 @@ let
       run = ourArgs: taskArgs: mkDerivation (ourArgs // taskArgs);
       makeBinPath = extra: lib.makeBinPath ([ liftbridge-cli ] ++ extra);
     in {
-      bash = run { PATH = makeBinPath [ bash coreutils ]; };
+      bash = run {
+        PATH = makeBinPath [ bash coreutils git ];
+        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+      };
       ruby = run { PATH = makeBinPath [ ruby ]; };
       python = run { PATH = makeBinPath [ python ]; };
       crystal = run { PATH = makeBinPath [ crystal ]; };
@@ -63,7 +66,7 @@ let
       inherit when inputs success failure;
     };
 
-  workflow = { name, tasks ? { }, meta ? { } }:
+  workflow = { name, version ? 0, tasks ? { }, meta ? { } }:
     let
       transformTask = taskName: task:
         let

@@ -17,12 +17,11 @@ type InvokerCmd struct {
 }
 
 func runInvoker(args *InvokerCmd) error {
-	invoker()
-	return nil
+	return invoker()
 }
 
-func invoker() {
-	client := connect([]string{"workflow.*.invoke"})
+func invoker() error {
+	client := connect([]string{"workflow.*.*.invoke"})
 	defer client.Close()
 
 	ctx := context.Background()
@@ -30,6 +29,9 @@ func invoker() {
 		ctx,
 		"workflow.*.*.invoke",
 		func(msg *liftbridge.Message, err error) {
+			if err != nil {
+				logger.Fatalf("error in liftbridge message: %s", err.Error())
+			}
 			inputs := string(msg.Value())
 			logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
 
@@ -63,10 +65,12 @@ func invoker() {
 			}
 		}, liftbridge.StartAtEarliestReceived(), liftbridge.Partition(0))
 
-	fail(errors.WithMessage(err, "failed to subscribe"))
+	if err != nil {
+		return errors.WithMessage(err, "failed to subscribe")
+	}
 
 	for {
-		time.Sleep(10 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 }
 
@@ -77,15 +81,16 @@ func nixBuild(workflowName string, id uint64, name string, inputs string) ([]byt
 		"--argstr", "id", strconv.FormatUint(id, 10),
 		"--argstr", "inputsJSON", inputs,
 		"./lib.nix",
-		"--attr", fmt.Sprintf("workflows.%s.%s.run", workflowName, name),
+		"--attr", fmt.Sprintf("workflows.%s.tasks.%s.run", workflowName, name),
 	).CombinedOutput()
 }
 
 type workflowDefinitions map[string]workflowDefinition
 type workflowDefinition struct {
-	Name  string
-	Meta  map[string]interface{}
-	Tasks map[string]workflowTask
+	Name    string                  `json:"name"`
+	Version uint64                  `json:"version"`
+	Meta    map[string]interface{}  `json:"meta"`
+	Tasks   map[string]workflowTask `json:"tasks"`
 }
 type workflowTask struct {
 	Failure map[string]interface{} `json:"failure"`

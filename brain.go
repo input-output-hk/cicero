@@ -104,6 +104,8 @@ func brain(db *bun.DB) error {
 
 					logger.Printf("Created workflow %#v\n", workflow)
 
+					publish(fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id), "workflow.*.*.invoke", workflow.Certs)
+
 					return nil
 				} else if err != nil {
 					logger.Printf("Couldn't find existing workflow: %s\n", err)
@@ -136,7 +138,7 @@ func brain(db *bun.DB) error {
 
 				logger.Printf("Updated workflow %#v\n", existing)
 
-				publish(fmt.Sprintf("workflow.%d.invoke", id), "workflow.*.invoke", merged)
+				publish(fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id), "workflow.*.*.invoke", merged)
 
 				return err
 			})
@@ -194,4 +196,6 @@ func publish(stream string, key string, msg map[string]interface{}) {
 	)
 
 	fail(errors.WithMessage(err, "While publishing message"))
+
+	logger.Printf("Published message to stream %s\n", stream)
 }

@@ -1,6 +1,7 @@
 { id, workflow }:
 workflow {
   name = "pingpong";
+  version = 0;
 
   meta = {
     private = false;
@@ -19,10 +20,11 @@ workflow {
       '';
     };
 
-    pong = { ping ? false, pong ? false }: {
+    pong = { ping ? false, pong ? false, coverage ? 0 }: {
       when = {
         "ping sent" = ping;
         "pong missing" = !pong;
+        "coverage is over 9000" = coverage > 900;
       };
 
       run = ''
@@ -42,4 +44,3 @@ workflow {
     };
   };
 }
-
