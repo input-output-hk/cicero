@@ -7,8 +7,9 @@ import (
 )
 
 type ShowCmd struct {
-	ID     uint64 `arg:"--id" default:0`
-	Inputs string `arg:"--inputs" default:"{}"`
+	WorkflowName string `arg:"--workflow,required"`
+	ID           uint64 `arg:"--id" default:0`
+	Inputs       string `arg:"--inputs" default:"{}"`
 }
 
 func runShow(args *ShowCmd) error {
@@ -16,7 +17,7 @@ func runShow(args *ShowCmd) error {
 }
 
 func show(args *ShowCmd) error {
-	def, err := nixInstantiate(args.ID, args.Inputs)
+	def, err := nixInstantiate(args.WorkflowName, args.ID, args.Inputs)
 	if err != nil {
 		return err
 	}

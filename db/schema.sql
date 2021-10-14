@@ -1,6 +1,7 @@
 CREATE TABLE IF NOT EXISTS "schema_migrations" (version varchar(255) primary key);
 CREATE TABLE workflows (
   id bigint primary key unique not null,
+  name text not null,
   certs jsonb not null
 );
 -- Dbmate schema migrations

@@ -21,6 +21,7 @@ type BrainCmd struct {
 
 type Workflow struct {
 	ID    uint64
+	Name  string
 	Certs map[string]interface{}
 }
 
@@ -44,7 +45,7 @@ func runBrain(args *BrainCmd) error {
 }
 
 func brain(db *bun.DB) error {
-	streamName := "workflow.*.cert"
+	streamName := "workflow.*.*.cert"
 
 	client := connect([]string{streamName})
 	defer client.Close()
@@ -61,13 +62,14 @@ func brain(db *bun.DB) error {
 			fmt.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
 			fmt.Println("subject:", msg.Subject())
 			parts := strings.Split(msg.Subject(), ".")
-			id, err := strconv.ParseUint(parts[1], 10, 64)
+			workflowName := parts[1]
+			id, err := strconv.ParseUint(parts[2], 10, 64)
 			if err != nil {
 				logger.Printf("Invalid Workflow ID received, ignoring: %s\n", msg.Subject())
 				return
 			}
 
-			logger.Printf("Received update for workflow %d", id)
+			logger.Printf("Received update for workflow %s %d", workflowName, id)
 
 			received := map[string]interface{}{}
 			unmarshalErr := json.Unmarshal(msg.Value(), &received)
@@ -77,7 +79,7 @@ func brain(db *bun.DB) error {
 			}
 
 			err = db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-				existing := &Workflow{}
+				existing := &Workflow{Name: workflowName}
 				err = tx.NewSelect().
 					Model(existing).
 					Where("id = ?", id).
@@ -85,6 +87,7 @@ func brain(db *bun.DB) error {
 
 				if err == sql.ErrNoRows {
 					workflow := &Workflow{
+						Name:  workflowName,
 						ID:    id,
 						Certs: received,
 					}

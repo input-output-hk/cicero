@@ -28,34 +28,35 @@ func invoker() {
 	ctx := context.Background()
 	err := client.Subscribe(
 		ctx,
-		"workflow.*.invoke",
+		"workflow.*.*.invoke",
 		func(msg *liftbridge.Message, err error) {
 			inputs := string(msg.Value())
 			logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
 
 			parts := strings.Split(msg.Subject(), ".")
-			id, err := strconv.ParseUint(parts[1], 10, 64)
+			workflowName := parts[1]
+			id, err := strconv.ParseUint(parts[2], 10, 64)
 			if err != nil {
 				logger.Printf("Invalid Workflow ID received, ignoring: %s\n", msg.Subject())
 				return
 			}
 
-			instantiated, err := nixInstantiate(id, inputs)
+			workflow, err := nixInstantiate(workflowName, id, inputs)
 			if err != nil {
 				logger.Printf("Invalid Workflow Definition, ignoring: %s\n", err)
 				return
 			}
 
-			for key, value := range *instantiated {
-				if value.Run != nil {
-					fmt.Printf("building %s\n", key)
-					output, err := nixBuild(id, key, inputs)
+			for taskName, task := range workflow.Tasks {
+				if task.Run != nil {
+					fmt.Printf("building %s.%s\n", workflowName, taskName)
+					output, err := nixBuild(workflowName, id, taskName, inputs)
 
 					if err == nil {
-						publish(fmt.Sprintf("workflow.%d.cert", id), "workflow.*.cert", value.Success)
+						publish(fmt.Sprintf("workflow.%s.%d.cert", workflowName, id), "workflow.*.*.cert", task.Success)
 					} else {
 						fmt.Println(string(output))
-						publish(fmt.Sprintf("workflow.%d.cert", id), "workflow.*.cert", value.Failure)
+						publish(fmt.Sprintf("workflow.%s.%d.cert", workflowName, id), "workflow.*.*.cert", task.Failure)
 						fail(errors.WithMessage(err, "Failed to run nix-build"))
 					}
 				}
@@ -69,19 +70,24 @@ func invoker() {
 	}
 }
 
-func nixBuild(id uint64, name string, inputs string) ([]byte, error) {
+func nixBuild(workflowName string, id uint64, name string, inputs string) ([]byte, error) {
 	return exec.Command(
 		"nix-build",
 		"--no-out-link",
 		"--argstr", "id", strconv.FormatUint(id, 10),
 		"--argstr", "inputsJSON", inputs,
-		"./workflow.nix",
-		"--attr", name+".run",
+		"./lib.nix",
+		"--attr", fmt.Sprintf("workflows.%s.%s.run", workflowName, name),
 	).CombinedOutput()
 }
 
 type workflowDefinitions map[string]workflowDefinition
 type workflowDefinition struct {
+	Name  string
+	Meta  map[string]interface{}
+	Tasks map[string]workflowTask
+}
+type workflowTask struct {
 	Failure map[string]interface{} `json:"failure"`
 	Success map[string]interface{} `json:"success"`
 	Inputs  []string               `json:"inputs"`
@@ -89,15 +95,16 @@ type workflowDefinition struct {
 	Run     *string                `json:"run"`
 }
 
-func nixInstantiate(id uint64, inputs string) (*workflowDefinitions, error) {
+func nixInstantiate(workflowName string, id uint64, inputs string) (*workflowDefinition, error) {
 	output, err := exec.Command(
 		"nix-instantiate",
 		"--eval",
 		"--strict",
 		"--json",
-		"./workflow.nix",
+		"./lib.nix",
 		"--argstr", "inputsJSON", inputs,
 		"--argstr", "id", strconv.FormatUint(id, 10),
+		"--attr", fmt.Sprintf(`workflows."%s"`, workflowName),
 	).CombinedOutput()
 
 	if err != nil {
@@ -105,7 +112,11 @@ func nixInstantiate(id uint64, inputs string) (*workflowDefinitions, error) {
 		return nil, errors.WithMessage(err, "Failed to run nix-instantiate")
 	}
 
-	result := &workflowDefinitions{}
+	result := &workflowDefinition{}
 	err = json.Unmarshal(output, result)
-	return result, err
+	if err != nil {
+		logger.Println(string(output))
+		return nil, errors.WithMessage(err, "While unmarshaling workflowDefinition")
+	}
+	return result, nil
 }
