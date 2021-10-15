@@ -41,6 +41,7 @@
             ./show.go
             ./web
             ./web.go
+            ./graph.go
           ];
 
           ldflags = [
