@@ -25,7 +25,7 @@
         cicero = prev.buildGoModule rec {
           pname = "cicero";
           version = "2021.10.14.001";
-          vendorSha256 = "sha256-KMtmgsoScz5XmaApxGVNkYplc9nz3Vm7m3mZSfz2jyQ=";
+          vendorSha256 = "sha256-x8/U9I+EgKjyW5gUQyEhJRORTc8g4NJizJVQHESCqN8=";
 
           src = inputs.inclusive.lib.inclusive ./. [
             ./api.go
