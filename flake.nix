@@ -20,6 +20,8 @@
 
         liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
 
+        gouml = prev.callPackage ./pkgs/gouml.nix { };
+
         cicero = prev.buildGoModule rec {
           pname = "cicero";
           version = "2021.10.14.001";
