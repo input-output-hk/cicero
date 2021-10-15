@@ -156,6 +156,9 @@ func connect(streamNames []string) liftbridge.Client {
 	client, err := liftbridge.Connect([]string{"localhost:9292"})
 	fail(errors.WithMessage(err, "Couldn't connect to NATS"))
 
+	// TODO remove this
+	time.Sleep(3 * time.Second)
+
 	for _, streamName := range streamNames {
 		if err := client.CreateStream(
 			context.Background(),

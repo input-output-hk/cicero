@@ -29,6 +29,7 @@ let
         taskName
         (hashString outputHashAlgo script)
       ];
+      requiredSystemFeatures = [ "recursive-nix" ];
       outputHashAlgo = "sha256";
       outputHashMode = "flat";
       outputHash = hashString outputHashAlgo result;
@@ -38,7 +39,7 @@ let
   runners = with pkgs;
     let
       run = ourArgs: taskArgs: mkDerivation (ourArgs // taskArgs);
-      makeBinPath = extra: lib.makeBinPath ([ liftbridge-cli ] ++ extra);
+      makeBinPath = extra: lib.makeBinPath ([ liftbridge-cli nixUnstable gnutar xz ] ++ extra);
     in {
       bash = run {
         PATH = makeBinPath [ bash coreutils git ];

@@ -54,7 +54,7 @@
 
       hydraJobs = { cicero }@pkgs: pkgs;
 
-      devShell = { devshell, go, goimports, gopls, gocode, gcc, dbmate }:
+      devShell = { devshell }:
         devshell.fromTOML ./devshell.toml;
     };
 }

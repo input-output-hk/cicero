@@ -21,6 +21,9 @@ package = "liftbridge-cli"
 [[commands]]
 package = "liftbridge"
 
+[[commands]]
+package = "foreman"
+
 [devshell]
 name = "cicero"
 packages = [

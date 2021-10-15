@@ -50,7 +50,12 @@ func invoker() error {
 			}
 
 			for taskName, task := range workflow.Tasks {
-				if task.Run != nil {
+				fmt.Printf("Checking runnability of %s: %v\n", taskName, task.Run)
+				if task.Run == nil {
+					continue
+				}
+
+				go func(taskName string, task workflowTask) {
 					fmt.Printf("building %s.%s\n", workflowName, taskName)
 					output, err := nixBuild(workflowName, id, taskName, inputs)
 
@@ -61,7 +66,7 @@ func invoker() error {
 						publish(fmt.Sprintf("workflow.%s.%d.cert", workflowName, id), "workflow.*.*.cert", task.Failure)
 						fail(errors.WithMessage(err, "Failed to run nix-build"))
 					}
-				}
+				}(taskName, task)
 			}
 		}, liftbridge.StartAtEarliestReceived(), liftbridge.Partition(0))
 
