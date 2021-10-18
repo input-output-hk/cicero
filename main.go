@@ -15,6 +15,7 @@ var logger = log.New(os.Stderr, "DEBUG: ", log.LstdFlags)
 
 type cicero struct {
 	Debug   bool        `arg:"--debug" help:"debugging output"`
+	All     *AllCmd     `arg:"subcommand:all"`
 	Brain   *BrainCmd   `arg:"subcommand:brain"`
 	Invoker *InvokerCmd `arg:"subcommand:invoker"`
 	Web     *WebCmd     `arg:"subcommand:web"`
@@ -76,6 +77,8 @@ func run(parser *arg.Parser, args *cicero) error {
 		return runWeb(args.Web)
 	case args.Show != nil:
 		return runShow(args.Show)
+	case args.All != nil:
+		return runAll(args.All)
 	default:
 		parser.WriteHelp(os.Stderr)
 	}

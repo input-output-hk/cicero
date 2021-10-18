@@ -27,7 +27,9 @@ type Workflow struct {
 func runBrain(args *BrainCmd) error {
 	db, err := newDb()
 	defer db.Close()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	err = brain(db)
 	if err != nil {
@@ -59,11 +61,11 @@ func listenToStart(db *bun.DB) error {
 		streamName,
 		func(msg *liftbridge.Message, err error) {
 			if err != nil {
-				logger.Printf("error received in %s: %w", streamName, err)
+				logger.Printf("error received in %s: %s", streamName, err.Error())
 			}
 
-			fmt.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
-			fmt.Println("subject:", msg.Subject())
+			logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
+			logger.Println("subject:", msg.Subject())
 			parts := strings.Split(msg.Subject(), ".")
 			workflowName := parts[1]
 
@@ -95,7 +97,7 @@ func insertWorkflow(db bun.IDB, workflow *Workflow) error {
 		Exec(context.Background())
 
 	if err != nil {
-		fmt.Printf("%#v %#v\n", res, err)
+		logger.Printf("%#v %#v\n", res, err)
 		logger.Printf("Couldn't insert workflow: %s\n", err.Error())
 		return err
 	}
@@ -122,8 +124,8 @@ func listenToCerts(db *bun.DB) error {
 				logger.Printf("error received in brain stream: %w", err)
 			}
 
-			fmt.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
-			fmt.Println("subject:", msg.Subject())
+			logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
+			logger.Println("subject:", msg.Subject())
 			parts := strings.Split(msg.Subject(), ".")
 			workflowName := parts[1]
 			id, err := strconv.ParseUint(parts[2], 10, 64)
@@ -223,7 +225,7 @@ func fail(err error) {
 	}
 }
 
-func publish(stream string, key string, msg map[string]interface{}) {
+func publish(stream string, key string, msg map[string]interface{}) error {
 	client := connect([]string{stream})
 	defer client.Close()
 
@@ -231,7 +233,9 @@ func publish(stream string, key string, msg map[string]interface{}) {
 	defer cancel()
 
 	enc, err := json.Marshal(msg)
-	fail(errors.WithMessage(err, "Failed to encode JSON"))
+	if err != nil {
+		return errors.WithMessage(err, "Failed to encode JSON")
+	}
 
 	_, err = client.Publish(ctx, stream,
 		enc,
@@ -240,7 +244,11 @@ func publish(stream string, key string, msg map[string]interface{}) {
 		liftbridge.AckPolicyAll(),
 	)
 
-	fail(errors.WithMessage(err, "While publishing message"))
+	if err != nil {
+		return errors.WithMessage(err, "While publishing message")
+	}
 
 	logger.Printf("Published message to stream %s\n", stream)
+
+	return nil
 }
