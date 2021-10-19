@@ -1,13 +1,7 @@
 { id, workflow }:
 let
-  hasAttrByPath = attrPath: e:
-    let attr = builtins.head attrPath;
-    in if attrPath == [ ] then
-      true
-    else if e ? ${attr} then
-      hasAttrByPath (builtins.tail attrPath) e.${attr}
-    else
-      false;
+  hasCloneUrl = pr: pr ? repository ? clone_url != false;
+  hasGitHash = pr: pr ? sha != false;
 
   install = pkgs:
     builtins.concatStringsSep "\n"
@@ -39,9 +33,8 @@ in workflow {
   tasks = {
     gocritic = { pr ? { } }: {
       when = {
-        "pr.repository.clone_url exists" =
-          hasAttrByPath [ "repository" "clone_url" ];
-        "pr.sha exists" = hasAttrByPath [ "sha" ];
+        "pr.repository.clone_url exists" = hasCloneUrl pr;
+        "pr.sha exists" = hasGitHash pr;
       };
 
       run = ''
@@ -55,9 +48,8 @@ in workflow {
 
     nixfmt = { pr ? { } }: {
       when = {
-        "pr.repository.clone_url exists" =
-          hasAttrByPath [ "repository" "clone_url" ];
-        "pr.sha exists" = hasAttrByPath [ "sha" ];
+        "pr.repository.clone_url exists" = hasCloneUrl pr;
+        "pr.sha exists" = hasGitHash pr;
       };
 
       run = ''
