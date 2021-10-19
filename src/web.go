@@ -14,7 +14,6 @@ import (
 	"path"
 	"strings"
 	"time"
-	"reflect"
 
 	"github.com/uptrace/bunrouter"
 )
@@ -25,11 +24,6 @@ type WebCmd struct {
 }
 
 func (cmd *WebCmd) init() {
-	if len(cmd.Addr) == 0 {
-		field, _ := reflect.TypeOf(cmd).FieldByName("Addr")
-		cmd.Addr = field.Tag.Get("default")
-	}
-
 	if cmd.logger == nil {
 		cmd.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
 	}

@@ -2,7 +2,6 @@ package cicero
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -12,6 +11,7 @@ import (
 )
 
 type AllCmd struct {
+	Addr   string `arg:"--listen" default:":8080"`
 }
 
 func runAll(s *AllCmd) error {
@@ -31,12 +31,12 @@ func runAll(s *AllCmd) error {
 	supervisor.Add((&InvokerCmd{}).start)
 	supervisor.Add(brain.listenToCerts)
 	supervisor.Add(brain.listenToStart)
-	supervisor.Add((&WebCmd{}).start)
+	supervisor.Add((&WebCmd{
+		Addr: s.Addr,
+	}).start)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	fmt.Println("after cancel")
 
 	if err := supervisor.Start(ctx); err != nil {
 		return errors.WithMessage(err, "While starting supervisor")
