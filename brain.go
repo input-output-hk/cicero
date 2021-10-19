@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +16,7 @@ import (
 )
 
 type BrainCmd struct {
+	logger *log.Logger
 }
 
 type Workflow struct {
@@ -24,14 +27,14 @@ type Workflow struct {
 	UpdatedAt time.Time              `bun:",nullzero,notnull,default:current_timestamp"`
 }
 
-func runBrain(args *BrainCmd) error {
-	db, err := newDb()
-	defer db.Close()
-	if err != nil {
-		return err
+func (cmd *BrainCmd) init() {
+	if cmd.logger == nil {
+		cmd.logger = log.New(os.Stderr, "brain: ", log.LstdFlags)
 	}
+}
 
-	err = brain(db)
+func (cmd *BrainCmd) run() error {
+	err := cmd.start(context.Background())
 	if err != nil {
 		return errors.WithMessage(err, "While running brain")
 	}
@@ -41,105 +44,128 @@ func runBrain(args *BrainCmd) error {
 	}
 }
 
-func brain(db *bun.DB) error {
-	if err := listenToCerts(db); err != nil {
+func (cmd *BrainCmd) start(ctx context.Context) error {
+	cmd.init()
+
+	if err := cmd.listenToCerts(ctx); err != nil {
+		cmd.logger.Printf("Failed to listenToCerts %s\n", err.Error())
 		return err
 	}
 
-	return listenToStart(db)
+	if err := cmd.listenToStart(ctx); err != nil {
+		cmd.logger.Printf("Failed to listenToStart %s\n", err.Error())
+		return err
+	}
+
+	<-ctx.Done()
+	cmd.logger.Println("context was cancelled")
+	return nil
 }
 
-func listenToStart(db *bun.DB) error {
+func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
+	cmd.logger.Println("Starting Brain.listenToStart")
 	streamName := "workflow.*.start"
 
-	client := connect([]string{streamName})
+	client, err := connect(cmd.logger, []string{streamName})
+	if err != nil {
+		return err
+	}
 	defer client.Close()
 
-	ctx := context.Background()
-	err := client.Subscribe(
+	cmd.logger.Printf("Subscribing to %s\n", streamName)
+	err = client.Subscribe(
 		ctx,
 		streamName,
 		func(msg *liftbridge.Message, err error) {
 			if err != nil {
-				logger.Printf("error received in %s: %s", streamName, err.Error())
+				cmd.logger.Printf("error received in %s: %s", streamName, err.Error())
 			}
 
-			logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
-			logger.Println("subject:", msg.Subject())
+			cmd.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
+			cmd.logger.Println("subject:", msg.Subject())
 			parts := strings.Split(msg.Subject(), ".")
 			workflowName := parts[1]
 
-			logger.Printf("Received start for workflow %s", workflowName)
+			cmd.logger.Printf("Received start for workflow %s", workflowName)
 
 			received := map[string]interface{}{}
 			unmarshalErr := json.Unmarshal(msg.Value(), &received)
 			if unmarshalErr != nil {
-				logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
+				cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
 				return
 			}
 
 			err = db.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
-				return insertWorkflow(tx, &Workflow{Name: workflowName, Certs: received})
+				return cmd.insertWorkflow(tx, &Workflow{Name: workflowName, Certs: received})
 			})
 
 			if err != nil {
-				logger.Printf("Failed to insert new workflow: %s\n", err)
+				cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
 			}
 		})
 
 	return err
 }
 
-func insertWorkflow(db bun.IDB, workflow *Workflow) error {
+func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *Workflow) error {
 	res, err := db.
 		NewInsert().
 		Model(workflow).
 		Exec(context.Background())
 
 	if err != nil {
-		logger.Printf("%#v %#v\n", res, err)
-		logger.Printf("Couldn't insert workflow: %s\n", err.Error())
+		cmd.logger.Printf("%#v %#v\n", res, err)
+		cmd.logger.Printf("Couldn't insert workflow: %s\n", err.Error())
 		return err
 	}
 
-	logger.Printf("Created workflow %#v\n", workflow)
+	cmd.logger.Printf("Created workflow %#v\n", workflow)
 
-	publish(fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID), "workflow.*.*.invoke", workflow.Certs)
+	publish(
+		cmd.logger,
+		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
+		"workflow.*.*.invoke",
+		workflow.Certs,
+	)
 
 	return nil
 }
 
-func listenToCerts(db *bun.DB) error {
+func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
+	cmd.logger.Println("Starting Brain.listenToCerts")
 	streamName := "workflow.*.*.cert"
 
-	client := connect([]string{streamName})
+	client, err := connect(cmd.logger, []string{streamName})
+	if err != nil {
+		return err
+	}
 	defer client.Close()
 
-	ctx := context.Background()
-	err := client.Subscribe(
+	cmd.logger.Printf("Subscribing to %s\n", streamName)
+	err = client.Subscribe(
 		ctx,
 		streamName,
 		func(msg *liftbridge.Message, err error) {
 			if err != nil {
-				logger.Printf("error received in brain stream: %w", err)
+				cmd.logger.Printf("error received in %s: %s", streamName, err.Error())
 			}
 
-			logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
-			logger.Println("subject:", msg.Subject())
+			cmd.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
+			cmd.logger.Println("subject:", msg.Subject())
 			parts := strings.Split(msg.Subject(), ".")
 			workflowName := parts[1]
 			id, err := strconv.ParseUint(parts[2], 10, 64)
 			if err != nil {
-				logger.Printf("Invalid Workflow ID received, ignoring: %s\n", msg.Subject())
+				cmd.logger.Printf("Invalid Workflow ID received, ignoring: %s\n", msg.Subject())
 				return
 			}
 
-			logger.Printf("Received update for workflow %s %d", workflowName, id)
+			cmd.logger.Printf("Received update for workflow %s %d", workflowName, id)
 
 			received := map[string]interface{}{}
 			unmarshalErr := json.Unmarshal(msg.Value(), &received)
 			if unmarshalErr != nil {
-				logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
+				cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
 				return
 			}
 
@@ -151,7 +177,7 @@ func listenToCerts(db *bun.DB) error {
 					Scan(context.Background())
 
 				if err != nil {
-					logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
+					cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
 					return err
 				}
 
@@ -174,81 +200,29 @@ func listenToCerts(db *bun.DB) error {
 					Exec(context.Background())
 
 				if err != nil {
-					logger.Printf("Error while updating workflow: %s", err)
+					cmd.logger.Printf("Error while updating workflow: %s", err)
 					return err
 				}
 
 				// TODO: only invoke when there was a change to the certs?
 
-				logger.Printf("Updated workflow %#v\n", existing)
+				cmd.logger.Printf("Updated workflow %#v\n", existing)
 
-				publish(fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id), "workflow.*.*.invoke", merged)
+				publish(
+					cmd.logger,
+					fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
+					"workflow.*.*.invoke",
+					merged,
+				)
 
 				return err
 			})
 
 			if err != nil {
-				logger.Printf("Couldn't complete transaction: %s\n", err)
+				cmd.logger.Printf("Couldn't complete transaction: %s\n", err)
 				return
 			}
 		}, liftbridge.StartAtEarliestReceived(), liftbridge.Partition(0))
 
 	return errors.WithMessagef(err, "Couldn't subscribe to stream %s", streamName)
-}
-
-func connect(streamNames []string) liftbridge.Client {
-	client, err := liftbridge.Connect([]string{"localhost:9292"})
-	fail(errors.WithMessage(err, "Couldn't connect to NATS"))
-
-	// TODO remove this
-	time.Sleep(3 * time.Second)
-
-	for _, streamName := range streamNames {
-		if err := client.CreateStream(
-			context.Background(),
-			streamName, streamName,
-			liftbridge.MaxReplication()); err != nil {
-			if err != liftbridge.ErrStreamExists {
-				fail(errors.WithMessage(err, "Failed to Create NATS Stream"))
-			}
-		} else {
-			logger.Printf("Created streams %s\n", streamName)
-		}
-	}
-
-	return client
-}
-
-func fail(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-func publish(stream string, key string, msg map[string]interface{}) error {
-	client := connect([]string{stream})
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	enc, err := json.Marshal(msg)
-	if err != nil {
-		return errors.WithMessage(err, "Failed to encode JSON")
-	}
-
-	_, err = client.Publish(ctx, stream,
-		enc,
-		liftbridge.Key([]byte(key)),
-		liftbridge.PartitionByKey(),
-		liftbridge.AckPolicyAll(),
-	)
-
-	if err != nil {
-		return errors.WithMessage(err, "While publishing message")
-	}
-
-	logger.Printf("Published message to stream %s\n", stream)
-
-	return nil
 }

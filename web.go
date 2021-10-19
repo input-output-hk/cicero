@@ -1,28 +1,45 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"html/template"
+	"log"
 	"math/rand"
 	"mime"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"time"
+
 	"github.com/uptrace/bunrouter"
 )
 
 type WebCmd struct {
-	Addr string `arg:"--listen" default:":80"`
+	Addr   string `arg:"--listen" default:":8080"`
+	logger *log.Logger
 }
 
-func runWeb(args *WebCmd) error {
-	return web(args)
+func (cmd *WebCmd) init() {
+	if cmd.logger == nil {
+		cmd.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
+	}
 }
 
-func web(args *WebCmd) error {
+func (cmd *WebCmd) run() error {
+	return cmd.start(context.Background())
+}
+
+func (cmd *WebCmd) start(ctx context.Context) error {
+	cmd.init()
+	api := Api{}
+	api.init()
+
+	cmd.logger.Println("Starting Web")
+
 	router := bunrouter.New(
 		bunrouter.WithMiddleware(errorHandler),
 	)
@@ -92,7 +109,23 @@ func web(args *WebCmd) error {
 		})
 	})
 
-	return http.ListenAndServe(args.Addr, router)
+	server := &http.Server{Addr: cmd.Addr, Handler: router}
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			// handle err
+		}
+	}()
+
+	<-ctx.Done()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		// handle err
+	}
+
+	return nil
 }
 
 //go:embed web/* web/**/*

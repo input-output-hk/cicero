@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -43,7 +44,7 @@ func nixBuild(ctx context.Context, workflowName string, id uint64, name string, 
 	return cmd.CombinedOutput()
 }
 
-func nixInstantiate(attr string, id uint64, inputs string) (*workflowDefinitions, error) {
+func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (*workflowDefinitions, error) {
 	cmd := exec.Command(
 		"nix-instantiate",
 		"--eval",
@@ -72,8 +73,8 @@ func nixInstantiate(attr string, id uint64, inputs string) (*workflowDefinitions
 	return result, nil
 }
 
-func nixInstantiateWorkflow(workflowName string, id uint64, inputs string) (*workflowDefinition, error) {
-	defs, err := nixInstantiate("workflows", id, inputs)
+func nixInstantiateWorkflow(logger *log.Logger, workflowName string, id uint64, inputs string) (*workflowDefinition, error) {
+	defs, err := nixInstantiate(logger, "workflows", id, inputs)
 	if err != nil {
 		return nil, err
 	}
