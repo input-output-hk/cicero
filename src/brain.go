@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"cirello.io/oversight"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bun"
@@ -17,6 +18,7 @@ import (
 
 type BrainCmd struct {
 	logger *log.Logger
+	tree   *oversight.Tree
 }
 
 type Workflow struct {
@@ -31,6 +33,15 @@ func (cmd *BrainCmd) init() {
 	if cmd.logger == nil {
 		cmd.logger = log.New(os.Stderr, "brain: ", log.LstdFlags)
 	}
+
+	if cmd.tree == nil {
+		cmd.tree = oversight.New(oversight.WithSpecification(
+			10,                    // number of restarts
+			10*time.Minute,        // within this time period
+			oversight.OneForOne(), // restart every task on its own
+		))
+	}
+
 }
 
 func (cmd *BrainCmd) run() error {
@@ -47,14 +58,14 @@ func (cmd *BrainCmd) run() error {
 func (cmd *BrainCmd) start(ctx context.Context) error {
 	cmd.init()
 
-	if err := cmd.listenToCerts(ctx); err != nil {
-		cmd.logger.Printf("Failed to listenToCerts %s\n", err.Error())
-		return err
-	}
+	cmd.tree.Add(cmd.listenToCerts)
+	cmd.tree.Add(cmd.listenToStart)
 
-	if err := cmd.listenToStart(ctx); err != nil {
-		cmd.logger.Printf("Failed to listenToStart %s\n", err.Error())
-		return err
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := cmd.tree.Start(ctx); err != nil {
+		return errors.WithMessage(err, "While starting brain supervisor")
 	}
 
 	<-ctx.Done()
@@ -104,7 +115,13 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 			}
 		})
 
-	return err
+	if err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", streamName)
+	}
+
+	<-ctx.Done()
+	cmd.logger.Println("context was cancelled")
+	return nil
 }
 
 func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *Workflow) error {
@@ -224,5 +241,11 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 			}
 		}, liftbridge.StartAtEarliestReceived(), liftbridge.Partition(0))
 
-	return errors.WithMessagef(err, "Couldn't subscribe to stream %s", streamName)
+	if err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", streamName)
+	}
+
+	<-ctx.Done()
+	cmd.logger.Println("context was cancelled")
+	return nil
 }

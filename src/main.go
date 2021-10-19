@@ -101,12 +101,6 @@ func connect(logger *log.Logger, streamNames []string) (liftbridge.Client, error
 	return client, nil
 }
 
-func fail(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
 func publish(logger *log.Logger, stream, key string, msg map[string]interface{}) error {
 	client, err := connect(logger, []string{stream})
 	if err != nil {
