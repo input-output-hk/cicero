@@ -20,14 +20,10 @@ func (cmd *ShowCmd) init() {
 	}
 }
 
-func runShow(args *ShowCmd) error {
-	return args.show()
-}
+func (cmd *ShowCmd) Run() error {
+	cmd.init()
 
-func (args *ShowCmd) show() error {
-	args.init()
-
-	def, err := nixInstantiateWorkflow(args.logger, args.WorkflowName, args.ID, args.Inputs)
+	def, err := nixInstantiateWorkflow(cmd.logger, cmd.WorkflowName, cmd.ID, cmd.Inputs)
 	if err != nil {
 		return err
 	}

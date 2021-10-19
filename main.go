@@ -9,9 +9,12 @@ import (
 	cicero "github.com/input-output-hk/cicero/src"
 )
 
+var buildVersion = "dev"
+var buildCommit = "dirty"
+
 func main() {
 	logger := log.New(os.Stderr, "main: ", log.LstdFlags)
-	args := &cicero.CLI{}
+	args := &CLI{}
 	parser, err := parseArgs(args)
 	abort(parser, err)
 
@@ -19,7 +22,24 @@ func main() {
 		logger.SetOutput(os.Stderr)
 	}
 
-	abort(parser, cicero.Run(parser, args))
+	abort(parser, Run(parser, args))
+}
+
+type CLI struct {
+	Debug   bool               `arg:"--debug" help:"debugging output"`
+	All     *cicero.AllCmd     `arg:"subcommand:all"`
+	Brain   *cicero.BrainCmd   `arg:"subcommand:brain"`
+	Invoker *cicero.InvokerCmd `arg:"subcommand:invoker"`
+	Web     *cicero.WebCmd     `arg:"subcommand:web"`
+	Show    *cicero.ShowCmd    `arg:"subcommand:show"`
+}
+
+func Version() string {
+	return fmt.Sprintf("%s (%s)", buildVersion, buildCommit)
+}
+
+func (CLI) Version() string {
+	return fmt.Sprintf("cicero %s", Version())
 }
 
 func abort(parser *arg.Parser, err error) {
@@ -30,7 +50,7 @@ func abort(parser *arg.Parser, err error) {
 		parser.WriteHelp(os.Stderr)
 		os.Exit(0)
 	case arg.ErrVersion:
-		fmt.Fprintln(os.Stdout, cicero.Version())
+		fmt.Fprintln(os.Stdout, Version())
 		os.Exit(0)
 	default:
 		fmt.Fprint(os.Stderr, err, "\n")
@@ -38,7 +58,7 @@ func abort(parser *arg.Parser, err error) {
 	}
 }
 
-func parseArgs(args *cicero.CLI) (*arg.Parser, error) {
+func parseArgs(args *CLI) (*arg.Parser, error) {
 	parser, err := arg.NewParser(arg.Config{}, args)
 	if err != nil {
 		return nil, err
@@ -46,4 +66,29 @@ func parseArgs(args *cicero.CLI) (*arg.Parser, error) {
 
 	err = parser.Parse(os.Args[1:])
 	return parser, err
+}
+
+func Run(parser *arg.Parser, args *CLI) error {
+	if err := cicero.Init(); err != nil {
+		return err
+	}
+
+	defer cicero.DB.Close()
+
+	switch {
+	case args.Brain != nil:
+		return args.Brain.Run()
+	case args.Invoker != nil:
+		return args.Invoker.Run()
+	case args.Web != nil:
+		return args.Web.Run()
+	case args.Show != nil:
+		return args.Show.Run()
+	case args.All != nil:
+		return args.All.Run()
+	default:
+		parser.WriteHelp(os.Stderr)
+	}
+
+	return nil
 }

@@ -26,24 +26,16 @@
 
         cicero = prev.buildGoModule rec {
           pname = "cicero";
-          version = "2021.10.14.001";
-          vendorSha256 = "sha256-x8/U9I+EgKjyW5gUQyEhJRORTc8g4NJizJVQHESCqN8=";
+          version = "2021.10.19.001";
+          vendorSha256 = "sha256-F9GgiH55rkiYLYi4K1A0nNxkdzQs/29Ncy5Vp3mY2PY=";
 
           src = inputs.inclusive.lib.inclusive ./. [
-            ./api.go
-            ./brain.go
-            ./builder.sh
+            ./src
             ./db
             ./go.mod
             ./go.sum
-            ./invoker.go
             ./lib.nix
             ./main.go
-            ./nix.go
-            ./show.go
-            ./web
-            ./web.go
-            ./graph.go
           ];
 
           ldflags = [

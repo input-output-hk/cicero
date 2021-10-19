@@ -4,12 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
-	"os"
 	"time"
 
-	"github.com/alexflint/go-arg"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bun"
@@ -17,26 +14,15 @@ import (
 	"github.com/uptrace/bun/driver/sqliteshim"
 )
 
-var buildVersion = "dev"
-var buildCommit = "dirty"
+var DB *bun.DB
 
-var db *bun.DB
-
-type CLI struct {
-	Debug   bool        `arg:"--debug" help:"debugging output"`
-	All     *AllCmd     `arg:"subcommand:all"`
-	Brain   *BrainCmd   `arg:"subcommand:brain"`
-	Invoker *InvokerCmd `arg:"subcommand:invoker"`
-	Web     *WebCmd     `arg:"subcommand:web"`
-	Show    *ShowCmd    `arg:"subcommand:show"`
-}
-
-func Version() string {
-	return fmt.Sprintf("%s (%s)", buildVersion, buildCommit)
-}
-
-func (CLI) Version() string {
-	return fmt.Sprintf("cicero %s", Version())
+func Init() error {
+	openendDb, err := openDb()
+	if err != nil {
+		return err
+	}
+	DB = openendDb
+	return nil
 }
 
 func openDb() (*bun.DB, error) {
@@ -48,32 +34,6 @@ func openDb() (*bun.DB, error) {
 	db := bun.NewDB(sqldb, sqlitedialect.New())
 
 	return db, nil
-}
-
-func Run(parser *arg.Parser, args *CLI) error {
-	openendDb, err := openDb()
-	if err != nil {
-		return err
-	}
-	db = openendDb
-	defer db.Close()
-
-	switch {
-	case args.Brain != nil:
-		return args.Brain.run()
-	case args.Invoker != nil:
-		return args.Invoker.run()
-	case args.Web != nil:
-		return args.Web.run()
-	case args.Show != nil:
-		return runShow(args.Show)
-	case args.All != nil:
-		return runAll(args.All)
-	default:
-		parser.WriteHelp(os.Stderr)
-	}
-
-	return nil
 }
 
 func connect(logger *log.Logger, streamNames []string) (liftbridge.Client, error) {

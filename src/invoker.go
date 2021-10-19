@@ -42,7 +42,7 @@ func (cmd *InvokerCmd) init() {
 	}
 }
 
-func (cmd *InvokerCmd) run() error {
+func (cmd *InvokerCmd) Run() error {
 	cmd.init()
 	cmd.tree.Add(cmd.listenToInvoke)
 

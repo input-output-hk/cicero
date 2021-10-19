@@ -24,7 +24,7 @@ func (a *Api) Workflow(name string) (*workflowDefinition, error) {
 func (a *Api) WorkflowInstances(name string) ([]Workflow, error) {
 	instances := []Workflow{}
 
-	err := db.NewSelect().
+	err := DB.NewSelect().
 		Model(&instances).
 		Where("name = ?", name).
 		Scan(context.Background())

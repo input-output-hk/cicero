@@ -11,10 +11,10 @@ import (
 )
 
 type AllCmd struct {
-	Addr   string `arg:"--listen" default:":8080"`
+	Addr string `arg:"--listen" default:":8080"`
 }
 
-func runAll(s *AllCmd) error {
+func (cmd *AllCmd) Run() error {
 	supervisor := oversight.New(
 		oversight.WithLogger(
 			log.New(os.Stderr, "tree: ", log.LstdFlags),
@@ -32,7 +32,7 @@ func runAll(s *AllCmd) error {
 	supervisor.Add(brain.listenToCerts)
 	supervisor.Add(brain.listenToStart)
 	supervisor.Add((&WebCmd{
-		Addr: s.Addr,
+		Addr: cmd.Addr,
 	}).start)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -45,6 +45,4 @@ func runAll(s *AllCmd) error {
 	for {
 		time.Sleep(time.Hour)
 	}
-
-	return nil
 }

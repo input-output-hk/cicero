@@ -44,7 +44,7 @@ func (cmd *BrainCmd) init() {
 
 }
 
-func (cmd *BrainCmd) run() error {
+func (cmd *BrainCmd) Run() error {
 	err := cmd.start(context.Background())
 	if err != nil {
 		return errors.WithMessage(err, "While running brain")
@@ -106,7 +106,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 				return
 			}
 
-			err = db.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
+			err = DB.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
 				return cmd.insertWorkflow(tx, &Workflow{Name: workflowName, Certs: received})
 			})
 
@@ -186,7 +186,7 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 				return
 			}
 
-			err = db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+			err = DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 				existing := &Workflow{Name: workflowName}
 				err = tx.NewSelect().
 					Model(existing).

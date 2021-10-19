@@ -29,7 +29,8 @@ func (cmd *WebCmd) init() {
 	}
 }
 
-func (cmd *WebCmd) run() error {
+func (cmd *WebCmd) Run() error {
+	cmd.init()
 	return cmd.start(context.Background())
 }
 
