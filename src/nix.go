@@ -1,4 +1,4 @@
-package main
+package cicero
 
 import (
 	"context"
@@ -29,7 +29,7 @@ type workflowTask struct {
 	Run     *string                `json:"run"`
 }
 
-func nixBuild(ctx context.Context, workflowName string, id uint64, name string, inputs string) ([]byte, error) {
+func nixBuild(ctx context.Context, workflowName string, id uint64, name, inputs string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx,
 		"nix-build",
 		"--no-out-link",

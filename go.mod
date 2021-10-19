@@ -11,7 +11,10 @@ require (
 	github.com/kazukousen/gouml v0.0.0-20200217144925-c881f0b0c32d // indirect
 	github.com/kr/logfmt v0.0.0-20210122060352-19f9bcb100e6 // indirect
 	github.com/liftbridge-io/go-liftbridge v1.1.0
+	github.com/liftbridge-io/liftbridge v1.6.0
 	github.com/pkg/errors v0.9.1
+	github.com/sirupsen/logrus v1.8.1
+	github.com/stretchr/testify v1.7.0
 	github.com/uptrace/bun v1.0.11
 	github.com/uptrace/bun/dialect/sqlitedialect v1.0.11
 	github.com/uptrace/bun/driver/sqliteshim v1.0.11

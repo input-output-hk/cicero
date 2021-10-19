@@ -22,6 +22,8 @@
 
         gouml = prev.callPackage ./pkgs/gouml.nix { };
 
+        gocritic = prev.callPackage ./pkgs/gocritic.nix { };
+
         cicero = prev.buildGoModule rec {
           pname = "cicero";
           version = "2021.10.14.001";
@@ -53,7 +55,7 @@
         };
       };
 
-      packages = { cicero, liftbridge-cli, bash, coreutils }@pkgs:
+      packages = { cicero, liftbridge-cli, bash, coreutils, gocritic }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;

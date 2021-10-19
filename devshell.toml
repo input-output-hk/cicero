@@ -27,6 +27,11 @@ package = "foreman"
 [[commands]]
 package = "gouml"
 
+[[commands]]
+name = "lint"
+command = "gocritic check -enableAll ./... && fd -e nix -X nixfmt -c"
+help = "Run code linters"
+
 [devshell]
 name = "cicero"
 packages = [
@@ -37,4 +42,7 @@ packages = [
   "gocode",
   "gcc",
   "sqliteInteractive",
+  "gocritic",
+  "fd",
+  "nixfmt",
 ]

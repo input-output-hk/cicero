@@ -1,4 +1,4 @@
-package main
+package cicero
 
 import (
 	"context"
@@ -56,8 +56,8 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 
 	router.GET("/*route", func(w http.ResponseWriter, req bunrouter.Request) error {
 		route := req.Params().ByName("route")
-		if mime := mime.TypeByExtension(path.Ext(route)); mime != "" {
-			w.Header()["Content-Type"] = []string{mime}
+		if mimeType := mime.TypeByExtension(path.Ext(route)); mimeType != "" {
+			w.Header()["Content-Type"] = []string{mimeType}
 		}
 		return makeViewTemplate(route).Execute(w, req.Params().Map())
 	})

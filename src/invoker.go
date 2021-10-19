@@ -1,4 +1,4 @@
-package main
+package cicero
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func (cmd *InvokerCmd) run() error {
 	defer cancel()
 
 	if err := cmd.tree.Start(ctx); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	for {
@@ -138,7 +138,7 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowTask(ctx context.Context, workflowName string, workflowId uint64, inputs string, taskName string, task workflowTask) error {
+func (cmd *InvokerCmd) invokeWorkflowTask(ctx context.Context, workflowName string, workflowId uint64, inputs, taskName string, task workflowTask) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
