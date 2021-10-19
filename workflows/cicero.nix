@@ -4,22 +4,24 @@ let
   hasGitHash = pr: pr ? sha != false;
 
   install = pkgs:
-    builtins.concatStringsSep "\n"
-    (map (pkg: "nix profile install ${pkg} --profile local") pkgs);
+    let
+      profileInstall = builtins.concatStringsSep "\n"
+        (map (pkg: "nix profile install ${pkg} --profile local") pkgs);
+    in ''
+      export NIX_CONFIG="
+      experimental-features = nix-command flakes
+      "
+
+      ${profileInstall}
+
+      export PATH="$PATH:$PWD/local/bin"
+    '';
 
   clone = pr: ''
     set -exuo pipefail
 
     export HOME=.home
     mkdir $HOME
-
-    export NIX_CONFIG="
-    experimental-features = nix-command flakes
-    "
-
-    nix profile install github:input-output-hk/cicero#gocritic --profile local
-
-    export PATH="$PATH:$PWD/local/bin"
 
     git clone ${pr.repository.clone_url} src
     cd src
