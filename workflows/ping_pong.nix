@@ -5,11 +5,6 @@ workflow {
 
   version = 0;
 
-  meta = {
-    private = false;
-    version = "2021.10.14.001";
-  };
-
   steps = {
     ping = { ping ? false }: {
       when = { "ping missing" = !ping; };

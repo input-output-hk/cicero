@@ -1,11 +1,12 @@
 { id, workflow }:
+
 workflow {
-  version = 0;
   name = "ruby";
-  meta.version = "2021.10.14.001";
+
+  version = 0;
 
   steps = {
-    ruby = { }: {
+    ruby = {}: {
       type = "ruby";
 
       job = ''
