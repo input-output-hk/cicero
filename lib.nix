@@ -19,9 +19,9 @@ let
       }");
 
   mkDerivation = { workflowName, taskName, script, ... }@args:
-    derivation ((rec {
+    derivation (rec {
       name = lib.strings.sanitizeDerivationName "${workflowName}-${taskName}";
-      passAsFile = [ "script" ];
+      passAsFile = [ "script" ] ++ args.passAsFile or [];
       inherit script;
       system = "x86_64-linux";
       result = concatStringsSep "." [
@@ -34,28 +34,54 @@ let
       outputHashMode = "flat";
       outputHash = hashString outputHashAlgo result;
       builder = ./builder.sh;
-    }) // args);
+    } // args);
 
   runners = with pkgs;
     let
-      run = ourArgs: taskArgs: mkDerivation (ourArgs // taskArgs);
+      run = ourArgs: taskArgs: mkDerivation (taskArgs // ourArgs);
       makeBinPath = extra:
         lib.makeBinPath ([ liftbridge-cli nixUnstable gnutar xz ] ++ extra);
+      mkNomadJob = args: {
+        Job.${args.taskName} = lib.recursiveUpdate {
+          TaskGroups = lib.mapAttrs (groupName: group:
+            lib.recursiveUpdate {
+              Tasks = lib.mapAttrs (taskName:
+                lib.recursiveUpdate {
+                  Driver = "cicero";
+
+                  Constraint = {
+                    LTarget = "\${meta.run}";
+                    Operand = "=";
+                    RTarget = "true";
+                  };
+
+                  # TODO probably implement somewhere else
+                  # meta.run = true|false;
+                }
+              ) group.Tasks;
+            } group
+          ) args.script.TaskGroups;
+        } args.script;
+      };
     in {
       bash = run {
         PATH = makeBinPath [ bash coreutils git ];
-        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+        SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
       };
       ruby = run { PATH = makeBinPath [ ruby ]; };
       python = run { PATH = makeBinPath [ python ]; };
       crystal = run { PATH = makeBinPath [ crystal ]; };
+      nomad = args: run {
+        PATH = makeBinPath [ curl ];
+        script = builtins.toJSON (mkNomadJob args);
+        impureEnvVars = [ "NOMAD_API" "NOMAD_TOKEN" ];
+      } args;
     };
 
   mkTask = { workflowName, taskName, task, inputs, run, type ? "bash"
     , when ? { }, success ? { ${taskName} = true; }
     , failure ? { ${taskName} = false; } }:
     let
-      pp = v: builtins.trace (builtins.toJSON v) v;
       ok = all (a: a) (attrValues when);
       runner = findRunner type;
       drv = runner {
@@ -74,8 +100,8 @@ let
         let
           inputs = attrNames (functionArgs task);
           intersection =
-            pkgs.lib.intersectLists inputs (attrNames combinedInputs);
-          filteredInputs = pkgs.lib.listToAttrs (map (input: {
+            lib.intersectLists inputs (attrNames combinedInputs);
+          filteredInputs = lib.listToAttrs (map (input: {
             name = input;
             value = combinedInputs.${input} or null;
           }) intersection);
@@ -83,7 +109,7 @@ let
           workflowName = name;
           inherit taskName task inputs;
         } // (task filteredInputs));
-      transformedTasks = pkgs.lib.mapAttrs transformTask tasks;
+      transformedTasks = lib.mapAttrs transformTask tasks;
     in {
       inherit name meta version;
       tasks = transformedTasks;
@@ -97,7 +123,7 @@ let
             id = toString id;
             inherit workflow;
           };
-        in [ (pkgs.lib.nameValuePair called.name called) ]
+        in [ (lib.nameValuePair called.name called) ]
       else if type == "directory" then
         [ (workflows (dir + "/${name}")) ]
       else
