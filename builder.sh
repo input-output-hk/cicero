@@ -16,12 +16,6 @@ case "${type:-bash}" in
   crystal)
     crystal run "${scriptPath:-}"
     ;;
-  nomad)
-    # TODO get NOMAD_API and NOMAD_TOKEN in here
-    curl "$NOMAD_API/v1/jobs" \
-      --header "X-Nomad-Token: $NOMAD_TOKEN" \
-      --request POST --data "@${scriptPath:-}"
-    ;;
 esac
 
 echo -n "${result:-}" > "${out:-}"

@@ -6,27 +6,26 @@ workflow {
   version = 0;
 
   tasks = {
-    github-pull-requests = {}: {
+    github-pull-requests = { github-pull-requests ? false }: {
+      when.once = !github-pull-requests; # TODO remove or depend on nomad "service" task? must always stay running.
+
       type = "nomad";
 
       run = {
-        Namespace = "cicero";
         Datacenters = [ "eu-west-1" "eu-central-1" "us-east-2" ];
 
-        TaskGroups.prs.Tasks.prs = {
-          Driver = "cicero";
+        TaskGroups = [ {
+          Name = "prs";
 
-          Config = {
-            flake_deps = [ "github:input-output-hk/cicero#listen-github" ];
-            command = "/bin/listen-github";
-          };
+          Tasks = [ {
+            Name = "prs";
 
-          Constraint = {
-            LTarget = "\${meta.run}";
-            Operand = "=";
-            RTarget = "true";
-          };
-        };
+            Config = {
+              flake = "github:input-output-hk/cicero#listen-github";
+              command = "/bin/listen-github";
+            };
+          } ];
+        } ];
       };
     };
   };

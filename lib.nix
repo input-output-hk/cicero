@@ -42,26 +42,28 @@ let
       makeBinPath = extra:
         lib.makeBinPath ([ liftbridge-cli nixUnstable gnutar xz ] ++ extra);
       mkNomadJob = args: {
-        Job.${args.taskName} = lib.recursiveUpdate {
-          TaskGroups = lib.mapAttrs (groupName: group:
-            lib.recursiveUpdate {
-              Tasks = lib.mapAttrs (taskName:
-                lib.recursiveUpdate {
-                  Driver = "cicero";
+        Job = lib.recursiveUpdate args.script {
+          ID = "${args.workflowName}/${args.taskName}";
+          Name = args.taskName;
 
-                  Constraint = {
-                    LTarget = "\${meta.run}";
-                    Operand = "=";
-                    RTarget = "true";
-                  };
+          TaskGroups = map (group: lib.recursiveUpdate group {
+            Name = args.taskName;
 
-                  # TODO probably implement somewhere else
-                  # meta.run = true|false;
-                }
-              ) group.Tasks;
-            } group
-          ) args.script.TaskGroups;
-        } args.script;
+            Tasks = map (lib.recursiveUpdate {
+              Name = args.taskName;
+              Driver = "exec"; # TODO swap out for custom driver
+
+              Constraints = [ {
+                LTarget = "\${meta.run}";
+                Operand = "=";
+                RTarget = "true";
+              } ];
+
+              # TODO probably implement somewhere else
+              # meta.run = true|false;
+            }) group.Tasks;
+          }) args.script.TaskGroups;
+        };
       };
     in {
       bash = run {
@@ -71,11 +73,7 @@ let
       ruby = run { PATH = makeBinPath [ ruby ]; };
       python = run { PATH = makeBinPath [ python ]; };
       crystal = run { PATH = makeBinPath [ crystal ]; };
-      nomad = args: run {
-        PATH = makeBinPath [ curl ];
-        script = builtins.toJSON (mkNomadJob args);
-        impureEnvVars = [ "NOMAD_API" "NOMAD_TOKEN" ];
-      } args;
+      nomad = args: builtins.toJSON (mkNomadJob args);
     };
 
   mkTask = { workflowName, taskName, task, inputs, run, type ? "bash"

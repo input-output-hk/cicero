@@ -8,11 +8,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"encoding/json"
 
 	"cirello.io/oversight"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
+	nomad "github.com/hashicorp/nomad/api"
 )
 
 const invokeStreamName = "workflow.*.*.invoke"
@@ -112,7 +114,7 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 
 		err = cmd.invokeWorkflow(ctx, workflowName, id, inputs)
 		if err != nil {
-			cmd.logger.Println("Failed to invoke workflow")
+			cmd.logger.Println("Failed to invoke workflow", err)
 		}
 	}
 }
@@ -142,25 +144,44 @@ func (cmd *InvokerCmd) invokeWorkflowTask(ctx context.Context, workflowName stri
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
-	cmd.logger.Printf("building %s.%s\n", workflowName, taskName)
-	output, err := nixBuild(ctx, workflowName, workflowId, taskName, inputs)
+	var err error
 
+	switch *task.Type {
+		case "nomad":
+			var job nomad.Job
+			err = json.Unmarshal([]byte(*task.Run), &struct{ Job *nomad.Job }{ Job: &job })
+			if err != nil {
+				return errors.WithMessage(err, "Invalid Nomad JSON Job")
+			}
+
+			var response *nomad.JobRegisterResponse
+			response, _, err = nomadClient.Jobs().Register(&job, &nomad.WriteOptions{})
+			if err == nil && len(response.Warnings) > 0 {
+				cmd.logger.Println(response.Warnings)
+			}
+		default:
+			cmd.logger.Printf("building %s.%s\n", workflowName, taskName)
+			var output []byte
+			output, err = nixBuild(ctx, workflowName, workflowId, taskName, inputs)
+			if err != nil {
+				cmd.logger.Println(string(output))
+			}
+	}
+
+	cert := task.Failure
 	if err == nil {
-		publish(
-			cmd.logger,
-			fmt.Sprintf("workflow.%s.%d.cert", workflowName, workflowId),
-			"workflow.*.*.cert",
-			task.Success,
-		)
-	} else {
-		cmd.logger.Println(string(output))
-		publish(
-			cmd.logger,
-			fmt.Sprintf("workflow.%s.%d.cert", workflowName, workflowId),
-			"workflow.*.*.cert",
-			task.Failure,
-		)
-		return errors.WithMessage(err, "Failed to run nix-build")
+		cert = task.Success
+	}
+
+	publish(
+		cmd.logger,
+		fmt.Sprintf("workflow.%s.%d.cert", workflowName, workflowId),
+		"workflow.*.*.cert",
+		cert,
+	)
+
+	if err != nil {
+		return errors.WithMessage(err, "Failed to run task")
 	}
 
 	return nil

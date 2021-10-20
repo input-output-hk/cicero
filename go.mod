@@ -8,6 +8,8 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
 	github.com/go-echarts/go-echarts/v2 v2.2.4
 	github.com/go-kit/kit v0.12.0 // indirect
+	github.com/hashicorp/nomad v1.1.6
+	github.com/hashicorp/nomad/api v0.0.0-20200529203653-c4416b26d3eb
 	github.com/kazukousen/gouml v0.0.0-20200217144925-c881f0b0c32d // indirect
 	github.com/kr/logfmt v0.0.0-20210122060352-19f9bcb100e6 // indirect
 	github.com/liftbridge-io/go-liftbridge v1.1.0

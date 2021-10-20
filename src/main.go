@@ -12,16 +12,21 @@ import (
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/driver/sqliteshim"
+	nomad "github.com/hashicorp/nomad/api"
 )
 
 var DB *bun.DB
+var nomadClient *nomad.Client
 
 func Init() error {
-	openendDb, err := openDb()
-	if err != nil {
-		return err
-	}
-	DB = openendDb
+	openedDB, err := openDb()
+	if err != nil { return err }
+	DB = openedDB
+
+	openedNomadClient, err := nomad.NewClient(nomad.DefaultConfig())
+	if err != nil { return err }
+	nomadClient = openedNomadClient
+
 	return nil
 }
 

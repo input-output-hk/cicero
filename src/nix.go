@@ -27,6 +27,7 @@ type workflowTask struct {
 	Inputs  []string               `json:"inputs"`
 	When    map[string]bool        `json:"when"`
 	Run     *string                `json:"run"`
+	Type    *string                `json:"type"`
 }
 
 func nixBuild(ctx context.Context, workflowName string, id uint64, name, inputs string) ([]byte, error) {
