@@ -36,45 +36,44 @@ let
       builder = ./builder.sh;
     } // args);
 
-  runners = with pkgs;
-    let
-      run = ourArgs: taskArgs: mkDerivation (taskArgs // ourArgs);
-      makeBinPath = extra:
-        lib.makeBinPath ([ liftbridge-cli nixUnstable gnutar xz ] ++ extra);
-      mkNomadJob = args: {
-        Job = lib.recursiveUpdate args.script {
-          ID = "${args.workflowName}/${args.taskName}";
+  runners = let
+    run = ourArgs: taskArgs: mkDerivation (taskArgs // ourArgs);
+    makeBinPath = extra:
+      lib.makeBinPath (with pkgs; [ liftbridge-cli nixUnstable gnutar xz ] ++ extra);
+    mkNomadJob = args: {
+      Job = lib.recursiveUpdate args.script {
+        ID = "${args.workflowName}/${args.taskName}";
+        Name = args.taskName;
+
+        TaskGroups = map (group: lib.recursiveUpdate group {
           Name = args.taskName;
 
-          TaskGroups = map (group: lib.recursiveUpdate group {
+          Tasks = map (lib.recursiveUpdate {
             Name = args.taskName;
+            Driver = "exec"; # TODO swap out for custom driver
 
-            Tasks = map (lib.recursiveUpdate {
-              Name = args.taskName;
-              Driver = "exec"; # TODO swap out for custom driver
+            Constraints = [ {
+              LTarget = "\${meta.run}";
+              Operand = "=";
+              RTarget = "true";
+            } ];
 
-              Constraints = [ {
-                LTarget = "\${meta.run}";
-                Operand = "=";
-                RTarget = "true";
-              } ];
-
-              # TODO probably implement somewhere else
-              # meta.run = true|false;
-            }) group.Tasks;
-          }) args.script.TaskGroups;
-        };
+            # TODO probably implement somewhere else
+            # Meta.run = true|false;
+          }) group.Tasks;
+        }) args.script.TaskGroups;
       };
-    in {
-      bash = run {
-        PATH = makeBinPath [ bash coreutils git ];
-        SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
-      };
-      ruby = run { PATH = makeBinPath [ ruby ]; };
-      python = run { PATH = makeBinPath [ python ]; };
-      crystal = run { PATH = makeBinPath [ crystal ]; };
-      nomad = args: builtins.toJSON (mkNomadJob args);
     };
+  in (with pkgs; {
+    bash = run {
+      PATH = makeBinPath [ bash coreutils git ];
+      SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+    };
+    ruby = run { PATH = makeBinPath [ ruby ]; };
+    python = run { PATH = makeBinPath [ python ]; };
+    crystal = run { PATH = makeBinPath [ crystal ]; };
+    nomad = args: builtins.toJSON (mkNomadJob args);
+  });
 
   mkTask = { workflowName, taskName, task, inputs, run, type ? "bash"
     , when ? { }, success ? { ${taskName} = true; }
