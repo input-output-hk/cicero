@@ -148,8 +148,7 @@ let
   workflows = dir:
     lib.mapAttrsToList (
       name: type:
-        if type == "regular" && lib.hasSuffix ".nix" name
-        then
+        if type == "regular" && lib.hasSuffix ".nix" name then
           let
             called = import (dir + "/${name}") {
               id = toString id;
