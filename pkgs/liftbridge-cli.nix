@@ -24,4 +24,3 @@ buildGoModule rec {
     maintainers = with maintainers; [ manveru ];
   };
 }
-

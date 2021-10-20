@@ -1,9 +1,9 @@
 { lib, buildGoModule, fetchFromGitHub }:
 
 buildGoModule rec {
-
   pname = "gocritic";
   version = "8ed57f9b24027a2258017778dc059963bacadd4d";
+
   src = fetchFromGitHub {
     owner = "go-critic";
     repo = "go-critic";
@@ -22,4 +22,3 @@ buildGoModule rec {
     maintainers = with maintainers; [ manveru ];
   };
 }
-

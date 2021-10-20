@@ -1,9 +1,9 @@
 { lib, buildGoModule, fetchFromGitHub }:
 
 buildGoModule rec {
-
   pname = "gouml";
   version = "0.2.3";
+
   src = fetchFromGitHub {
     owner = "kazukousen";
     repo = "gouml";
