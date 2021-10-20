@@ -1,128 +1,167 @@
-{ id, inputs ? { }, inputsJSON ? null }:
+{ id, inputs ? {}, inputsJSON ? null }:
 let
   inherit (builtins)
     all attrNames attrValues concatStringsSep fromJSON functionArgs getFlake
-    hashString seq readDir;
+    hashString seq readDir
+    ;
 
-  combinedInputs = inputs
-    // (if inputsJSON != null then (fromJSON inputsJSON) else { });
+  combinedInputs = inputs // (
+    if inputsJSON != null
+    then fromJSON inputsJSON
+    else {}
+  );
 
   flake = getFlake (toString ./.);
-  pkgs = flake.inputs.nixpkgs.legacyPackages.x86_64-linux
+  pkgs =
+    flake.inputs.nixpkgs.legacyPackages.x86_64-linux
     // flake.legacyPackages.x86_64-linux;
+
   inherit (pkgs) lib;
 
   findRunner = type:
-    runners.${type} or (throw
-      "Invalid task type '${type}'. Available types are: ${
+    runners.${type} or (
+      throw
+        "Invalid step type '${type}'. Available types are: ${
         concatStringsSep ", " (attrNames runners)
-      }");
+        }"
+    );
 
-  mkDerivation = { workflowName, taskName, script, ... }@args:
-    derivation (rec {
-      name = lib.strings.sanitizeDerivationName "${workflowName}-${taskName}";
-      passAsFile = [ "script" ] ++ args.passAsFile or [];
-      inherit script;
-      system = "x86_64-linux";
-      result = concatStringsSep "." [
-        workflowName
-        taskName
-        (hashString outputHashAlgo script)
-      ];
-      requiredSystemFeatures = [ "recursive-nix" ];
-      outputHashAlgo = "sha256";
-      outputHashMode = "flat";
-      outputHash = hashString outputHashAlgo result;
-      builder = ./builder.sh;
-    } // args);
+  mkDerivation = { workflowName, stepName, script, ... }@args:
+    derivation (
+      rec {
+        name = lib.strings.sanitizeDerivationName "${workflowName}-${stepName}";
+        passAsFile = [ "script" ] ++ args.passAsFile or [];
+        inherit script;
+        system = "x86_64-linux";
+        result = concatStringsSep "." [
+          workflowName
+          stepName
+          (hashString outputHashAlgo script)
+        ];
+        requiredSystemFeatures = [ "recursive-nix" ];
+        outputHashAlgo = "sha256";
+        outputHashMode = "flat";
+        outputHash = hashString outputHashAlgo result;
+        builder = ./builder.sh;
+      } // args
+    );
 
   runners = let
-    run = ourArgs: taskArgs: mkDerivation (taskArgs // ourArgs);
+    run = ourArgs: stepArgs:
+      mkDerivation (stepArgs // ourArgs);
     makeBinPath = extra:
       lib.makeBinPath (with pkgs; [ liftbridge-cli nixUnstable gnutar xz ] ++ extra);
     mkNomadJob = args: {
       Job = lib.recursiveUpdate args.script {
-        ID = "${args.workflowName}/${args.taskName}";
-        Name = args.taskName;
+        ID = "${args.workflowName}/${args.stepName}";
+        Name = args.stepName;
 
-        TaskGroups = map (group: lib.recursiveUpdate group {
-          Name = args.taskName;
+        TaskGroups = map (
+          group: lib.recursiveUpdate group {
+            Name = args.stepName;
 
-          Tasks = map (lib.recursiveUpdate {
-            Name = args.taskName;
-            Driver = "exec"; # TODO swap out for custom driver
+            Tasks = map (
+              lib.recursiveUpdate {
+                Name = args.stepName;
+                Driver = "exec"; # TODO swap out for custom driver
 
-            Constraints = [ {
-              LTarget = "\${meta.run}";
-              Operand = "=";
-              RTarget = "true";
-            } ];
+                Constraints = [
+                  {
+                    LTarget = "\${meta.run}";
+                    Operand = "=";
+                    RTarget = "true";
+                  }
+                ];
 
-            # TODO probably implement somewhere else
-            # Meta.run = true|false;
-          }) group.Tasks;
-        }) args.script.TaskGroups;
+                # TODO probably implement somewhere else
+                # Meta.run = true|false;
+              }
+            ) group.Tasks;
+          }
+        ) args.script.TaskGroups;
       };
     };
-  in (with pkgs; {
-    bash = run {
-      PATH = makeBinPath [ bash coreutils git ];
-      SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
-    };
-    ruby = run { PATH = makeBinPath [ ruby ]; };
-    python = run { PATH = makeBinPath [ python ]; };
-    crystal = run { PATH = makeBinPath [ crystal ]; };
-    nomad = args: builtins.toJSON (mkNomadJob args);
-  });
-
-  mkTask = { workflowName, taskName, task, inputs, run, type ? "bash"
-    , when ? { }, success ? { ${taskName} = true; }
-    , failure ? { ${taskName} = false; } }:
-    let
-      ok = all (a: a) (attrValues when);
-      runner = findRunner type;
-      drv = runner {
-        inherit workflowName taskName type;
-        script = run;
+  in
+    with pkgs; {
+      bash = run {
+        PATH = makeBinPath [ bash coreutils git ];
+        SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
       };
-    in {
-      run = if ok then drv else null;
-      type = seq runner type;
-      inherit when inputs success failure;
+      ruby = run { PATH = makeBinPath [ ruby ]; };
+      python = run { PATH = makeBinPath [ python ]; };
+      crystal = run { PATH = makeBinPath [ crystal ]; };
+      nomad = args: builtins.toJSON (mkNomadJob args);
     };
 
-  workflow = { name, version ? 0, tasks ? { }, meta ? { } }:
+  mkStep =
+    { workflowName
+    , stepName
+    , inputs
+    , job
+    , type ? "nomad"
+    , when ? {}
+    , success ? { ${stepName} = true; }
+    , failure ? { ${stepName} = false; }
+    }:
+      let
+        ok = all (a: a) (attrValues when);
+        runner = findRunner type;
+        drv = runner {
+          inherit workflowName stepName type;
+          script = job;
+        };
+      in
+        {
+          job = if ok then drv else null;
+          type = seq runner type;
+          inherit when inputs success failure;
+        };
+
+  workflow = { name, version ? 0, steps ? {}, meta ? {} }:
     let
-      transformTask = taskName: task:
+      transformStep = stepName: step:
         let
-          inputs = attrNames (functionArgs task);
-          intersection =
-            lib.intersectLists inputs (attrNames combinedInputs);
-          filteredInputs = lib.listToAttrs (map (input: {
-            name = input;
-            value = combinedInputs.${input} or null;
-          }) intersection);
-        in mkTask ({
-          workflowName = name;
-          inherit taskName task inputs;
-        } // (task filteredInputs));
-      transformedTasks = lib.mapAttrs transformTask tasks;
-    in {
-      inherit name meta version;
-      tasks = transformedTasks;
-    };
+          inputs = attrNames (functionArgs step);
+          intersection = lib.intersectLists inputs (attrNames combinedInputs);
+          filteredInputs = lib.listToAttrs (
+            map (
+              input: {
+                name = input;
+                value = combinedInputs.${input} or null;
+              }
+            ) intersection
+          );
+        in
+          mkStep (
+            {
+              workflowName = name;
+              inherit stepName inputs;
+            } // (step filteredInputs)
+          );
+      transformedSteps = lib.mapAttrs transformStep steps;
+    in
+      {
+        inherit name meta version;
+        steps = transformedSteps;
+      };
 
   workflows = dir:
-    (lib.mapAttrsToList (name: type:
-      if (type == "regular") && (lib.hasSuffix ".nix" name) then
-        let
-          called = import (dir + "/${name}") {
-            id = toString id;
-            inherit workflow;
-          };
-        in [ (lib.nameValuePair called.name called) ]
-      else if type == "directory" then
-        [ (workflows (dir + "/${name}")) ]
-      else
-        { }) (readDir dir));
-in { workflows = lib.listToAttrs (lib.flatten (workflows ./workflows)); }
+    lib.mapAttrsToList (
+      name: type:
+        if type == "regular" && lib.hasSuffix ".nix" name
+        then
+          let
+            called = import (dir + "/${name}") {
+              id = toString id;
+              inherit workflow;
+            };
+          in
+            [ (lib.nameValuePair called.name called) ]
+        else if type == "directory" then
+          [ (workflows (dir + "/${name}")) ]
+        else
+          {}
+    ) (readDir dir);
+in
+
+{ workflows = lib.listToAttrs (lib.flatten (workflows ./workflows)); }

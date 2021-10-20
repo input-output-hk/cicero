@@ -4,11 +4,11 @@ workflow {
   name = "ruby";
   meta.version = "2021.10.14.001";
 
-  tasks = {
+  steps = {
     ruby = { }: {
       type = "ruby";
 
-      run = ''
+      job = ''
         puts "running ruby ${id}"
       '';
     };

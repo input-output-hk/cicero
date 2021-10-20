@@ -4,10 +4,10 @@ workflow {
   name = "test/python";
   meta.version = "2021.10.14.001";
 
-  tasks = {
+  steps = {
     python = { }: {
       type = "python";
-      run = ''
+      job = ''
         print("running python ${id}")
       '';
     };

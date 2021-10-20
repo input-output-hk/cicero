@@ -1,6 +1,8 @@
 { id, workflow }:
+
 workflow {
   name = "pingpong";
+
   version = 0;
 
   meta = {
@@ -8,11 +10,13 @@ workflow {
     version = "2021.10.14.001";
   };
 
-  tasks = {
+  steps = {
     ping = { ping ? false }: {
       when = { "ping missing" = !ping; };
 
-      run = ''
+      type = "bash";
+
+      job = ''
         echo running ping ${id}
       '';
     };
@@ -23,7 +27,9 @@ workflow {
         "pong missing" = !pong;
       };
 
-      run = ''
+      type = "bash";
+
+      job = ''
         echo running pong ${id}
       '';
     };
@@ -34,7 +40,9 @@ workflow {
         "pingpong missing" = !pingpong;
       };
 
-      run = ''
+      type = "bash";
+
+      job = ''
         echo running pingpong ${id}
       '';
     };

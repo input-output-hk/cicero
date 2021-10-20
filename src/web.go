@@ -101,11 +101,11 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 	router.WithGroup("/api", func(group *bunrouter.Group) {
 		group.WithGroup("/workflow", func(group *bunrouter.Group) {
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-				tasks, err := api.Workflow(req.Params().ByName("name"))
+				steps, err := api.Workflow(req.Params().ByName("name"))
 				if err != nil {
 					return err
 				}
-				return bunrouter.JSON(w, tasks)
+				return bunrouter.JSON(w, steps)
 			})
 		})
 	})

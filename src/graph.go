@@ -8,15 +8,15 @@ import (
 )
 
 func RenderWorkflowGraph(wf *workflowDefinition, w io.Writer) error {
-	// XXX nodes := make([]opts.GraphNode, len(*tasks))
+	// XXX nodes := make([]opts.GraphNode, len(*steps))
 	nodes := make([]opts.GraphNode, 0)
-	for name, task := range wf.Tasks {
+	for name, step := range wf.Steps {
 		graphNode := opts.GraphNode{
 			Name:       name,
 			Symbol:     "circle",
 			SymbolSize: 25,
 		}
-		if task.Run != nil {
+		if step.Job != nil {
 			graphNode.Symbol = "triangle"
 			graphNode.Category = 0
 			graphNode.Y = 10
@@ -27,13 +27,13 @@ func RenderWorkflowGraph(wf *workflowDefinition, w io.Writer) error {
 	}
 
 	links := make([]opts.GraphLink, 0)
-	for name, task := range wf.Tasks {
-		for _, input := range task.Inputs {
-			for name2, task2 := range wf.Tasks {
+	for name, step := range wf.Steps {
+		for _, input := range step.Inputs {
+			for name2, step2 := range wf.Steps {
 				if name == name2 {
 					continue
 				}
-				for _, input2 := range task2.Inputs {
+				for _, input2 := range step2.Inputs {
 					if input != input2 {
 						continue
 					}
@@ -51,7 +51,7 @@ func RenderWorkflowGraph(wf *workflowDefinition, w io.Writer) error {
 		charts.WithToolboxOpts(opts.Toolbox{Show: true}),
 	)
 	graph.AddJSFuncs(GraphResponsiveJs)
-	graph.AddSeries("tasks", nodes, links,
+	graph.AddSeries("steps", nodes, links,
 		charts.WithGraphChartOpts(
 			opts.GraphChart{
 				Force:              &opts.GraphForce{Repulsion: 1000},

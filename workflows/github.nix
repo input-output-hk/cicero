@@ -1,21 +1,8 @@
 { id, workflow }:
+
 let
   length = arg: builtins.length (builtins.attrNames arg);
   any = arg: (length arg) > 0;
-
-  /* cache = "https://hydra.p42.at";
-     NIX_CONFIG = ''
-       substituters = ${cache}
-       trusted-public-keys = midnight-testnet-0:DSKrPCP3Ls8wGLvKyBiZB2P8ysMcSNqJRhqGJC+F7wY=
-     '';
-     export NIX_CONFIG="${NIX_CONFIG}"
-     path=$(nix store add-path "$src")
-     nix copy "$path" --to ${cache}
-     liftbridge-cli p -s workflow.github.${id}.cert -c -m "{\"path\":\"$path\"}"
-     export NIX_CONFIG="${NIX_CONFIG}"
-     nix copy --from ${cache} ${path}
-     cp -r ${path} src
-  */
 
   install = ''
     set -exuo pipefail
@@ -32,16 +19,23 @@ let
 
     export PATH="$PATH:$PWD/local/bin"
   '';
-in workflow {
+in
+
+workflow {
   name = "github";
+
   version = 0;
-  tasks = {
-    clone = { pr ? { }, src-hyper ? "" }: {
+
+  steps = {
+    clone = { pr ? {}, src-hyper ? "" }: {
       when = {
         "we got a PR" = any pr;
         "missing hyper" = src-hyper == "";
       };
-      run = ''
+
+      type = "bash";
+
+      job = ''
         git clone ${pr.repository.clone_url} src
 
         ${install}
@@ -53,7 +47,7 @@ in workflow {
       '';
     };
 
-    checkout = { pr ? { }, src-hyper ? "" }: {
+    checkout = { pr ? {}, src-hyper ? "" }: {
       when = {
         "we got a PR" = any pr;
         "repository was cloned" = src-hyper != "";
@@ -61,10 +55,12 @@ in workflow {
 
       success = {
         checkout = true;
-        sha = (pr.commit or { }).sha or "<unknown>";
+        sha = pr.commit.sha or "<unknown>";
       };
 
-      run = ''
+      type = "bash";
+
+      job = ''
         ${install}
         hyp beam ${src-hyper} > src.tar.xz
         tar xJf src.tar.xz src
@@ -75,7 +71,7 @@ in workflow {
       '';
     };
 
-    test = { pr ? { }, test ? false, checkout ? false, sha ? null }: {
+    test = { pr ? {}, test ? false, checkout ? false, sha ? null }: {
       when = {
         "we got a PR" = any pr;
         "is checked out" = checkout;
@@ -83,7 +79,9 @@ in workflow {
         "received a new commit" = sha != null;
       };
 
-      run = ''
+      type = "bash";
+
+      job = ''
         cd ${pr.repository.full_name}.${id}
         git checkout ${pr.commit.sha}
       '';

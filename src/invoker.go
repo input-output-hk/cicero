@@ -125,13 +125,13 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
 
-	for taskName, task := range workflow.Tasks {
-		cmd.logger.Printf("Checking runnability of %s: %v\n", taskName, task.Run)
-		if task.Run == nil {
+	for stepName, step := range workflow.Steps {
+		cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.Job)
+		if step.Job == nil {
 			continue
 		}
 
-		err = cmd.invokeWorkflowTask(ctx, workflowName, workflowId, inputs, taskName, task)
+		err = cmd.invokeWorkflowStep(ctx, workflowName, workflowId, inputs, stepName, step)
 		if err != nil {
 			return err
 		}
@@ -140,16 +140,16 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowTask(ctx context.Context, workflowName string, workflowId uint64, inputs, taskName string, task workflowTask) error {
+func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, workflowId uint64, inputs, stepName string, step workflowStep) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
 	var err error
 
-	switch *task.Type {
+	switch *step.Type {
 		case "nomad":
 			var job nomad.Job
-			err = json.Unmarshal([]byte(*task.Run), &struct{ Job *nomad.Job }{ Job: &job })
+			err = json.Unmarshal([]byte(*step.Job), &struct{ Job *nomad.Job }{ Job: &job })
 			if err != nil {
 				return errors.WithMessage(err, "Invalid Nomad JSON Job")
 			}
@@ -160,17 +160,17 @@ func (cmd *InvokerCmd) invokeWorkflowTask(ctx context.Context, workflowName stri
 				cmd.logger.Println(response.Warnings)
 			}
 		default:
-			cmd.logger.Printf("building %s.%s\n", workflowName, taskName)
+			cmd.logger.Printf("building %s.%s\n", workflowName, stepName)
 			var output []byte
-			output, err = nixBuild(ctx, workflowName, workflowId, taskName, inputs)
+			output, err = nixBuild(ctx, workflowName, workflowId, stepName, inputs)
 			if err != nil {
 				cmd.logger.Println(string(output))
 			}
 	}
 
-	cert := task.Failure
+	cert := step.Failure
 	if err == nil {
-		cert = task.Success
+		cert = step.Success
 	}
 
 	publish(
@@ -181,7 +181,7 @@ func (cmd *InvokerCmd) invokeWorkflowTask(ctx context.Context, workflowName stri
 	)
 
 	if err != nil {
-		return errors.WithMessage(err, "Failed to run task")
+		return errors.WithMessage(err, "Failed to run step")
 	}
 
 	return nil

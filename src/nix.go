@@ -18,15 +18,15 @@ type workflowDefinition struct {
 	Name    string                  `json:"name"`
 	Version uint64                  `json:"version"`
 	Meta    map[string]interface{}  `json:"meta"`
-	Tasks   map[string]workflowTask `json:"tasks"`
+	Steps   map[string]workflowStep `json:"steps"`
 }
 
-type workflowTask struct {
+type workflowStep struct {
 	Failure map[string]interface{} `json:"failure"`
 	Success map[string]interface{} `json:"success"`
 	Inputs  []string               `json:"inputs"`
 	When    map[string]bool        `json:"when"`
-	Run     *string                `json:"run"`
+	Job     *string                `json:"job"`
 	Type    *string                `json:"type"`
 }
 
@@ -37,7 +37,7 @@ func nixBuild(ctx context.Context, workflowName string, id uint64, name, inputs 
 		"--argstr", "id", strconv.FormatUint(id, 10),
 		"--argstr", "inputsJSON", inputs,
 		"./lib.nix",
-		"--attr", fmt.Sprintf("workflows.%s.tasks.%s.run", workflowName, name),
+		"--attr", fmt.Sprintf("workflows.%s.steps.%s.job", workflowName, name),
 	)
 
 	fmt.Printf("running %s\n", strings.Join(cmd.Args, " "))
