@@ -161,24 +161,23 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 			}
 		default:
 			cmd.logger.Printf("building %s.%s\n", workflowName, stepName)
+
 			var output []byte
 			output, err = nixBuild(ctx, workflowName, workflowId, stepName, inputs)
+
+			cert := step.Success
 			if err != nil {
+				cert = step.Failure
 				cmd.logger.Println(string(output))
 			}
-	}
 
-	cert := step.Failure
-	if err == nil {
-		cert = step.Success
+			publish(
+				cmd.logger,
+				fmt.Sprintf("workflow.%s.%d.cert", workflowName, workflowId),
+				"workflow.*.*.cert",
+				cert,
+			)
 	}
-
-	publish(
-		cmd.logger,
-		fmt.Sprintf("workflow.%s.%d.cert", workflowName, workflowId),
-		"workflow.*.*.cert",
-		cert,
-	)
 
 	if err != nil {
 		return errors.WithMessage(err, "Failed to run step")

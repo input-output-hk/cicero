@@ -6,9 +6,7 @@ workflow {
   version = 0;
 
   steps = {
-    github-pull-requests = { github-pull-requests ? false }: {
-      when.once = !github-pull-requests; # TODO remove or depend on nomad "service" task? must always stay running.
-
+    github-pull-requests = {}: {
       job = {
         Datacenters = [ "eu-west-1" "eu-central-1" "us-east-2" ];
 
