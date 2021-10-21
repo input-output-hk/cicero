@@ -1,4 +1,5 @@
 { id, inputs ? {}, inputsJSON ? null }:
+
 let
   inherit (builtins)
     all attrNames attrValues concatStringsSep fromJSON functionArgs getFlake
@@ -145,22 +146,23 @@ let
         steps = transformedSteps;
       };
 
-  workflows = dir:
-    lib.mapAttrsToList (
-      name: type:
-        if type == "regular" && lib.hasSuffix ".nix" name then
-          let
-            called = import (dir + "/${name}") {
-              id = toString id;
-              inherit workflow;
-            };
-          in
-            [ (lib.nameValuePair called.name called) ]
-        else if type == "directory" then
-          [ (workflows (dir + "/${name}")) ]
-        else
-          {}
-    ) (readDir dir);
+  workflows = dir: lib.listToAttrs (
+    map (
+      file: lib.nameValuePair
+        (
+          lib.pipe file [
+            builtins.baseNameOf
+            (lib.removeSuffix ".nix")
+          ]
+        )
+        (
+          import file {
+            id = toString id;
+            inherit workflow;
+          }
+        )
+    ) (lib.filesystem.listFilesRecursive dir)
+  );
 in
 
-{ workflows = lib.listToAttrs (lib.flatten (workflows ./workflows)); }
+{ workflows = workflows ./workflows; }
