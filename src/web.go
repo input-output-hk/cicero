@@ -100,6 +100,13 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 
 	router.WithGroup("/api", func(group *bunrouter.Group) {
 		group.WithGroup("/workflow", func(group *bunrouter.Group) {
+			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+				wfs, err := api.Workflows()
+				if err != nil {
+					return err
+				}
+				return bunrouter.JSON(w, wfs)
+			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
 				steps, err := api.Workflow(req.Params().ByName("name"))
 				if err != nil {
