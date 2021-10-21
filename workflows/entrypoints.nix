@@ -13,8 +13,9 @@
             Name = "prs";
 
             Config = {
-              flake = "github:input-output-hk/cicero#listen-github";
-              command = "/bin/listen-github";
+              # TODO use a NixOS config that has vault access
+              flake = "github:input-output-hk/cicero";
+              command = "/bin/cicero listen --only github";
             };
           } ];
         } ];

@@ -32,6 +32,7 @@ type CLI struct {
 	Invoker *cicero.InvokerCmd `arg:"subcommand:invoker"`
 	Web     *cicero.WebCmd     `arg:"subcommand:web"`
 	Show    *cicero.ShowCmd    `arg:"subcommand:show"`
+	Listen  *cicero.ListenCmd  `arg:"subcommand:listen"`
 }
 
 func Version() string {
@@ -86,6 +87,8 @@ func Run(parser *arg.Parser, args *CLI) error {
 		return args.Show.Run()
 	case args.All != nil:
 		return args.All.Run()
+	case args.Listen != nil:
+		return args.Listen.Run()
 	default:
 		parser.WriteHelp(os.Stderr)
 	}
