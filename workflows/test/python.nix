@@ -1,14 +1,11 @@
-{ id, workflow }:
+{ id, run }:
 
-workflow {
-  name = "test/python";
-
+{
   version = 0;
 
   steps = {
     python = {}: {
-      type = "python";
-      job = ''
+      job = run "python" ''
         print("running python ${id}")
       '';
     };

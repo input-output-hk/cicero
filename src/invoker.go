@@ -2,13 +2,11 @@ package cicero
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"encoding/json"
 
 	"cirello.io/oversight"
 	"github.com/liftbridge-io/go-liftbridge"
@@ -144,43 +142,14 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
-	var err error
-
-	switch *step.Type {
-	case "nomad":
-		var job nomad.Job
-		err = json.Unmarshal([]byte(*step.Job), &struct{ Job *nomad.Job }{ Job: &job })
-		if err != nil {
-			return errors.WithMessage(err, "Invalid Nomad JSON Job")
-		}
-
-		var response *nomad.JobRegisterResponse
-		response, _, err = nomadClient.Jobs().Register(&job, &nomad.WriteOptions{})
-		if err == nil && len(response.Warnings) > 0 {
-			cmd.logger.Println(response.Warnings)
-		}
-	default:
-		cmd.logger.Printf("building %s.%s\n", workflowName, stepName)
-
-		var output []byte
-		output, err = nixBuild(ctx, workflowName, workflowId, stepName, inputs)
-
-		cert := step.Success
-		if err != nil {
-			cert = step.Failure
-			cmd.logger.Println(string(output))
-		}
-
-		publish(
-			cmd.logger,
-			fmt.Sprintf("workflow.%s.%d.cert", workflowName, workflowId),
-			"workflow.*.*.cert",
-			cert,
-		)
-	}
+	response, _, err := nomadClient.Jobs().Register(step.Job, &nomad.WriteOptions{})
 
 	if err != nil {
 		return errors.WithMessage(err, "Failed to run step")
+	}
+
+	if len(response.Warnings) > 0 {
+		cmd.logger.Println(response.Warnings)
 	}
 
 	return nil

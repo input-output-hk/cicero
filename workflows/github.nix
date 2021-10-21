@@ -1,4 +1,4 @@
-{ id, workflow }:
+{ id, run }:
 
 let
   length = arg: builtins.length (builtins.attrNames arg);
@@ -21,9 +21,7 @@ let
   '';
 in
 
-workflow {
-  name = "github";
-
+{
   version = 0;
 
   steps = {
@@ -33,9 +31,7 @@ workflow {
         "missing hyper" = src-hyper == "";
       };
 
-      type = "bash";
-
-      job = ''
+      job = run "bash" ''
         git clone ${pr.repository.clone_url} src
 
         ${install}
@@ -58,9 +54,7 @@ workflow {
         sha = pr.commit.sha or "<unknown>";
       };
 
-      type = "bash";
-
-      job = ''
+      job = run "bash" ''
         ${install}
         hyp beam ${src-hyper} > src.tar.xz
         tar xJf src.tar.xz src
@@ -79,9 +73,7 @@ workflow {
         "received a new commit" = sha != null;
       };
 
-      type = "bash";
-
-      job = ''
+      job = run "bash" ''
         cd ${pr.repository.full_name}.${id}
         git checkout ${pr.commit.sha}
       '';

@@ -1,7 +1,6 @@
 package cicero
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	nomad "github.com/hashicorp/nomad/api"
 )
 
 type workflowDefinitions map[string]*workflowDefinition
@@ -26,23 +26,7 @@ type workflowStep struct {
 	Success map[string]interface{} `json:"success"`
 	Inputs  []string               `json:"inputs"`
 	When    map[string]bool        `json:"when"`
-	Job     *string                `json:"job"`
-	Type    *string                `json:"type"`
-}
-
-func nixBuild(ctx context.Context, workflowName string, id uint64, name, inputs string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx,
-		"nix-build",
-		"--no-out-link",
-		"--argstr", "id", strconv.FormatUint(id, 10),
-		"--argstr", "inputsJSON", inputs,
-		"./lib.nix",
-		"--attr", fmt.Sprintf("workflows.%s.steps.%s.job", workflowName, name),
-	)
-
-	fmt.Printf("running %s\n", strings.Join(cmd.Args, " "))
-
-	return cmd.CombinedOutput()
+	Job     *nomad.Job             `json:"job"`
 }
 
 func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (*workflowDefinitions, error) {

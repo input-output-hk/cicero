@@ -1,17 +1,13 @@
-{ id, workflow }:
+{ id, run }:
 
-workflow {
-  name = "pingpong";
-
+{
   version = 0;
 
   steps = {
     ping = { ping ? false }: {
-      when = { "ping missing" = !ping; };
+      when."ping missing" = !ping;
 
-      type = "bash";
-
-      job = ''
+      job = run "bash" ''
         echo running ping ${id}
       '';
     };
@@ -22,9 +18,7 @@ workflow {
         "pong missing" = !pong;
       };
 
-      type = "bash";
-
-      job = ''
+      job = run "bash" ''
         echo running pong ${id}
       '';
     };
@@ -35,9 +29,7 @@ workflow {
         "pingpong missing" = !pingpong;
       };
 
-      type = "bash";
-
-      job = ''
+      job = run "bash" ''
         echo running pingpong ${id}
       '';
     };

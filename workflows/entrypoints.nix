@@ -1,8 +1,6 @@
-{ id, workflow }:
+{ id, run }:
 
-workflow {
-  name = "entrypoints";
-
+{
   version = 0;
 
   steps = {

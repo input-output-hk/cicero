@@ -1,4 +1,4 @@
-{ id, workflow }:
+{ id, run }:
 
 let
   hasCloneUrl = pr: pr.repository.clone_url or false != false;
@@ -34,9 +34,7 @@ let
   '';
 in
 
-workflow {
-  name = "cicero";
-
+{
   version = 0;
 
   steps = {
@@ -46,9 +44,7 @@ workflow {
         "pr.sha exists" = hasGitHash pr;
       };
 
-      type = "bash";
-
-      job = ''
+      job = run "bash" ''
         ${install [ "github:input-output-hk/cicero#gocritic" ]}
 
         ${clone pr}
@@ -63,9 +59,7 @@ workflow {
         "pr.sha exists" = hasGitHash pr;
       };
 
-      type = "bash";
-
-      job = ''
+      job = run "bash" ''
         ${install [
           "github:nixos/nixpkgs/nixos-21.05#nixfmt"
           "github:nixos/nixpkgs/nixos-21.05#fd"
