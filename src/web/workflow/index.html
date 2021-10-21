@@ -1,14 +1,15 @@
 {{template "_layout.html" .}}
 
 {{define "main"}}
-<table id="{{scope}}">
+{{$scope := "bdc0b94a2700402e9e37061b7b2ac76f"}}
+<table id="{{$scope}}">
 	<tr>
 		<th>Name</th>
 	</tr>
 	{{range .}}
 	<tr>
 		<td>
-			<a href="/workflow/{{.Name}}">
+			<a href="/workflow/{{.Name | pathEscape}}">
 				{{.Name}}
 			</a>
 		</td>
@@ -17,19 +18,19 @@
 </table>
 
 <style>
-table#{{scope}} {
+table#{{$scope}} {
 	margin: 1rem;
 	border-spacing: 0;
 	border-collapse: collapse;
 	--accent: gainsboro;
 }
 
-table#{{scope}} th,
-table#{{scope}} td {
+table#{{$scope}} th,
+table#{{$scope}} td {
 	border: 3px solid var(--accent);
 	padding: .5em;
 }
-table#{{scope}} tr:nth-child(even) {
+table#{{$scope}} tr:nth-child(even) {
 	background: var(--accent);
 }
 </style>

@@ -1,15 +1,16 @@
 {{template "_layout.html" .}}
 
 {{define "main"}}
-<div id="{{scope}}">
+{{$scope := "d2dc0bac8e4747b39b78a49cf274328a"}}
+<div id="{{$scope}}">
 	<h1>{{.Name}}</h1>
 
 	<h2>Actions</h2>
 	<ul>
-		<li><a href="/workflow/{{.Name}}/start">Start</a></li>
+		<li><a href="/workflow/{{.Name | pathEscape}}/start">Start</a></li>
 	</ul>
 
-	<iframe src="/workflow/{{.Name}}/graph">
+	<iframe src="/workflow/{{.Name | pathEscape}}/graph">
 		- [x] https://github.com/go-echarts/go-echarts
 		- [ ] https://github.com/goccy/go-graphviz
 	</iframe>
@@ -36,14 +37,14 @@
 </div>
 
 <style>
-#{{scope}} {
+#{{$scope}} {
 	height: 100%;
 
 	display: flex;
 	flex-direction: column;
 }
 
-#{{scope}} > iframe {
+#{{$scope}} > iframe {
 	flex-grow: 1;
 	border: none;
 }

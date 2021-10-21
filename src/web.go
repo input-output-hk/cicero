@@ -3,13 +3,12 @@ package cicero
 import (
 	"context"
 	"embed"
-	"encoding/base64"
 	"encoding/json"
 	"html/template"
 	"log"
-	"math/rand"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -157,25 +156,14 @@ func makeViewTemplate(route string) *template.Template {
 	root := "web"
 
 	t := template.New("")
-	{
-		// XXX use a stable identifier instead
-		scope := make([]byte, 20)
-		rand.Seed(time.Now().UnixNano())
-		for i := 0; i < len(scope); i++ {
-			scope[i] = byte(rand.Intn(26))
-		}
-
-		t.Funcs(template.FuncMap{
-			"route": func() string { return route },
-			"scope": func() string {
-				return base64.RawURLEncoding.EncodeToString(scope)
-			},
-			"toJson": func(o interface{}) string {
-				enc, _ := json.Marshal(o)
-				return string(enc)
-			},
-		})
-	}
+	t.Funcs(template.FuncMap{
+		"route": func() string { return route },
+		"toJson": func(o interface{}) string {
+			enc, _ := json.Marshal(o)
+			return string(enc)
+		},
+		"pathEscape": url.PathEscape,
+	})
 
 	isDirectory := func(p string) (bool, error) {
 		file, err := viewsFs.Open(root + p)

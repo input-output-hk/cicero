@@ -1,5 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
+	<head>
+		<style>
+		html, body {
+			width: 100%;
+			height: 100%;
+		}
+		html {
+			background: cornsilk;
+		}
+		body {
+			margin: 0;
+
+			display: flex;
+			flex-direction: column;
+		}
+		body > nav .logo {
+			height: max(3rem, 5vh);
+		}
+		body > nav li:hover .logo1 {
+			display: none;
+		}
+		body > nav .logo2 {
+			display: none;
+		}
+		body > nav li:hover .logo2 {
+			display: block;
+		}
+		body > nav > ul {
+			padding: 1rem 3rem;
+			background: burlywood;
+			list-style: none;
+			font-size: 1.5rem;
+
+			display: flex;
+			gap: 2em;
+			align-items: center;
+		}
+		body > main {
+			flex-grow: 1;
+			padding: 1rem;
+		}
+		</style>
+	</head>
 	<body>
 		<nav>
 			<ul>
@@ -15,46 +58,4 @@
 			{{block "main" .}}{{end}}
 		</main>
 	</body>
-
-	<style>
-	html, body {
-		width: 100%;
-		height: 100%;
-	}
-	html {
-		background: cornsilk;
-	}
-	body {
-		margin: 0;
-
-		display: flex;
-		flex-direction: column;
-	}
-	body > nav .logo {
-		height: max(3rem, 5vh);
-	}
-	body > nav li:hover .logo1 {
-		display: none;
-	}
-	body > nav .logo2 {
-		display: none;
-	}
-	body > nav li:hover .logo2 {
-		display: block;
-	}
-	body > nav > ul {
-		padding: 1rem 3rem;
-		background: burlywood;
-		list-style: none;
-		font-size: 1.5rem;
-
-		display: flex;
-		gap: 2em;
-		align-items: center;
-	}
-	body > main {
-		flex-grow: 1;
-		padding: 1rem;
-	}
-	</style>
 </html>
