@@ -121,7 +121,7 @@ let
           inherit stepName;
           inputs = inputNames;
           workflowName = name;
-        } // (step parsedInputs)
+        } // (step filteredInputs)
       );
 
     transformedSteps = lib.mapAttrs transformStep steps;
