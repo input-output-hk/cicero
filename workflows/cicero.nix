@@ -44,13 +44,13 @@ in
         "pr.sha exists" = hasGitHash pr;
       };
 
-      job = run "bash" ''
+      job = (run "bash" ''
         ${install [ "github:input-output-hk/cicero#gocritic" ]}
 
         ${clone pr}
 
         gocritic check -enableAll ./...
-      '';
+      '') // (import ../workflows-nomad.nix);
     };
 
     nixfmt = { pr ? {} }: {
@@ -59,7 +59,7 @@ in
         "pr.sha exists" = hasGitHash pr;
       };
 
-      job = run "bash" ''
+      job = (run "bash" ''
         ${install [
           "github:nixos/nixpkgs/nixos-21.05#nixfmt"
           "github:nixos/nixpkgs/nixos-21.05#fd"
@@ -68,7 +68,7 @@ in
         ${clone pr}
 
         fd -e nix -X nixfmt -c
-      '';
+      '') // (import ../workflows-nomad.nix);
     };
   };
 }

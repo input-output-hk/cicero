@@ -159,5 +159,5 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 }
 
 func (s *workflowStep) IsRunnable() bool {
-	return len(s.Job.TaskGroups) > 0;
+	return len(s.Job.TaskGroups) > 0
 }

@@ -7,9 +7,9 @@
     ping = { ping ? false }: {
       when."ping missing" = !ping;
 
-      job = run "bash" ''
+      job = (run "bash" ''
         echo running ping ${id}
-      '';
+      '') // (import ../workflows-nomad.nix);
     };
 
     pong = { ping ? false, pong ? false }: {
@@ -18,9 +18,9 @@
         "pong missing" = !pong;
       };
 
-      job = run "bash" ''
+      job = (run "bash" ''
         echo running pong ${id}
-      '';
+      '') // (import ../workflows-nomad.nix);
     };
 
     pingpong = { pong ? false, pingpong ? false }: {
@@ -29,9 +29,9 @@
         "pingpong missing" = !pingpong;
       };
 
-      job = run "bash" ''
+      job = (run "bash" ''
         echo running pingpong ${id}
-      '';
+      '') // (import ../workflows-nomad.nix);
     };
   };
 }

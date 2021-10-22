@@ -5,9 +5,7 @@
 
   steps = {
     github-pull-requests = {}: {
-      job = {
-        Datacenters = [ "eu-west-1" "eu-central-1" "us-east-2" ];
-
+      job = (import ../workflows-nomad.nix) // {
         TaskGroups = [ {
           Name = "prs";
 

@@ -31,7 +31,7 @@ in
         "missing hyper" = src-hyper == "";
       };
 
-      job = run "bash" ''
+      job = (run "bash" ''
         git clone ${pr.repository.clone_url} src
 
         ${install}
@@ -40,7 +40,7 @@ in
         (tar cJf - src | hyp beam "$uuid") &
         liftbridge-cli p -s workflow.github.${id}.cert -c -m "{\"src-hyper\":\"$uuid\"}"
         wait
-      '';
+      '') // (import ../workflows-nomad.nix);
     };
 
     checkout = { pr ? {}, src-hyper ? "" }: {
@@ -54,7 +54,7 @@ in
         sha = pr.commit.sha or "<unknown>";
       };
 
-      job = run "bash" ''
+      job = (run "bash" ''
         ${install}
         hyp beam ${src-hyper} > src.tar.xz
         tar xJf src.tar.xz src
@@ -62,7 +62,7 @@ in
         cd src
         git remote update
         git checkout ${pr.commit.sha}
-      '';
+      '') // (import ../workflows-nomad.nix);
     };
 
     test = { pr ? {}, test ? false, checkout ? false, sha ? null }: {
@@ -73,10 +73,10 @@ in
         "received a new commit" = sha != null;
       };
 
-      job = run "bash" ''
+      job = (run "bash" ''
         cd ${pr.repository.full_name}.${id}
         git checkout ${pr.commit.sha}
-      '';
+      '') // (import ../workflows-nomad.nix);
     };
   };
 }
