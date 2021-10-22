@@ -10,13 +10,13 @@
 		<li><a href="/workflow/{{.Name | pathEscape}}/start">Start</a></li>
 	</ul>
 
-	<iframe src="/workflow/{{.Name | pathEscape}}/graph">
+	<iframe src="/workflow/{{.Name | pathEscape}}/graph?instance={{.instance}}">
 		- [x] https://github.com/go-echarts/go-echarts
 		- [ ] https://github.com/goccy/go-graphviz
 	</iframe>
 
 	<h2>Instances</h2>
-	<table>
+	<table class="table">
 		<tr>
 			<th>ID</th>
 			<th>Name</th>
@@ -26,7 +26,7 @@
 		</tr>
 		{{range .Instances}}
 		<tr>
-			<td>{{.ID}}</td>
+			<td><a href="?instance={{.ID}}">{{.ID}}</a></td>
 			<td>{{.Name}}</td>
 			<td>{{.CreatedAt}}</td>
 			<td>{{.UpdatedAt}}</td>

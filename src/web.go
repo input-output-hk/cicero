@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,7 +50,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 	})
 
 	router.GET("/*route", func(w http.ResponseWriter, req bunrouter.Request) error {
-		route := req.Params().ByName("route")
+		route := req.Param("route")
 		if mimeType := mime.TypeByExtension(path.Ext(route)); mimeType != "" {
 			w.Header()["Content-Type"] = []string{mimeType}
 		}
@@ -66,7 +67,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		})
 
 		group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-			name := req.Params().ByName("name")
+			name := req.Param("name")
 
 			instances, err := api.WorkflowInstances(name)
 			if err != nil {
@@ -76,11 +77,12 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 			return makeViewTemplate("workflow/[name].html").Execute(w, map[string]interface{}{
 				"Name":      name,
 				"Instances": instances,
+				"instance":  req.URL.Query().Get("instance"),
 			})
 		})
 
 		group.GET("/:name/start", func(w http.ResponseWriter, req bunrouter.Request) error {
-			name := req.Params().ByName("name")
+			name := req.Param("name")
 			if err := api.WorkflowStart(name); err != nil {
 				return err
 			}
@@ -89,11 +91,35 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		})
 
 		group.GET("/:name/graph", func(w http.ResponseWriter, req bunrouter.Request) error {
-			wf, err := api.Workflow(req.Params().ByName("name"))
-			if err != nil {
-				return err
+			name := req.Param("name")
+			instanceStr := req.URL.Query().Get("instance")
+
+			var def *workflowDefinition
+
+			if len(instanceStr) > 0 {
+				instanceId, err := strconv.ParseUint(instanceStr, 10, 64)
+				if err != nil {
+					return err
+				}
+
+				instance, err := api.WorkflowInstance(name, instanceId)
+				if err != nil {
+					return err
+				}
+
+				def, err = instance.GetDefinition(cmd.logger)
+				if err != nil {
+					return err
+				}
+			} else {
+				var err error
+				def, err = api.Workflow(name, WorkflowCerts{})
+				if err != nil {
+					return err
+				}
 			}
-			return RenderWorkflowGraph(wf, w)
+
+			return RenderWorkflowGraph(def, w)
 		})
 	})
 
@@ -107,7 +133,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return bunrouter.JSON(w, wfs)
 			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-				steps, err := api.Workflow(req.Params().ByName("name"))
+				steps, err := api.Workflow(req.Param("name"), WorkflowCerts{})
 				if err != nil {
 					return err
 				}

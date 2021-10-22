@@ -23,10 +23,29 @@ type BrainCmd struct {
 
 type Workflow struct {
 	ID        uint64
-	Name      string                 `bun:",notnull"`
-	Certs     map[string]interface{} `bun:",notnull"`
-	CreatedAt time.Time              `bun:",nullzero,notnull,default:current_timestamp"`
-	UpdatedAt time.Time              `bun:",nullzero,notnull,default:current_timestamp"`
+	Name      string        `bun:",notnull"`
+	Certs     WorkflowCerts `bun:",notnull"`
+	CreatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
+	UpdatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
+}
+
+type WorkflowCerts map[string]interface{}
+
+func (w *Workflow) GetDefinition(logger *log.Logger) (*workflowDefinition, error) {
+	var def *workflowDefinition
+
+	var certs []byte
+	certs, err := json.Marshal(w.Certs)
+	if err != nil {
+		return nil, err
+	}
+
+	def, err = nixInstantiateWorkflow(logger, w.Name, w.ID, string(certs))
+	if err != nil {
+		return def, err
+	}
+
+	return def, nil
 }
 
 func (cmd *BrainCmd) init() {

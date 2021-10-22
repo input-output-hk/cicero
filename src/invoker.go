@@ -141,7 +141,6 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 
 	if step.IsRunnable() {
 		response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
-
 		if err != nil {
 			return errors.WithMessage(err, "Failed to run step")
 		}
@@ -150,13 +149,10 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 			cmd.logger.Println(response.Warnings)
 		}
 	} else {
-		response, _, err := nomadClient.Jobs().Deregister(*step.Job.ID, false, &nomad.WriteOptions{})
-
+		_, _, err := nomadClient.Jobs().Deregister(*step.Job.ID, false, &nomad.WriteOptions{})
 		if err != nil {
 			return errors.WithMessage(err, "Failed to stop step")
 		}
-
-		cmd.logger.Print("Deregistered:", response)
 	}
 
 	return nil
