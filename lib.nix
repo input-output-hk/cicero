@@ -1,14 +1,12 @@
-{ id, inputs ? {}, inputsJSON ? null }:
+{ id, inputs ? {} }:
 
 let
-  inherit (builtins) all attrNames attrValues fromJSON functionArgs getFlake;
+  inherit (builtins) all attrNames attrValues fromJSON functionArgs getFlake typeOf;
 
-  combinedInputs = inputs // (
-    # TODO inputsJSON ? "{}"
-    if inputsJSON != null
-    then fromJSON inputsJSON
-    else {}
-  );
+  parsedInputs = {
+    "set" = inputs;
+    "string" = builtins.fromJSON inputs;
+  }.${typeOf inputs};
 
   flake = getFlake (toString ./.);
   pkgs =
@@ -104,22 +102,23 @@ let
 
   workflow = { name, version ? 0, steps ? {}, meta ? {} }: let
     transformStep = stepName: step: let
-      inputs = attrNames (functionArgs step);
-      intersection = lib.intersectLists inputs (attrNames combinedInputs);
+      inputNames = attrNames (functionArgs step);
+      intersection = lib.intersectLists inputNames (attrNames parsedInputs);
       filteredInputs = lib.listToAttrs (
         map (
-          input: {
-            name = input;
-            value = combinedInputs.${input} or null;
-          }
+          inputName:
+            lib.nameValuePair
+              inputName
+              (parsedInputs.${inputName} or null)
         ) intersection
       );
     in
       mkStepState (
         {
-          inherit stepName inputs;
+          inherit stepName;
+          inputs = inputNames;
           workflowName = name;
-        } // (step combinedInputs)
+        } // (step parsedInputs)
       );
 
     transformedSteps = lib.mapAttrs transformStep steps;

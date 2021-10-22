@@ -36,7 +36,7 @@ func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (
 		"--strict",
 		"--json",
 		"./lib.nix",
-		"--argstr", "inputsJSON", inputs,
+		"--argstr", "inputs", inputs,
 		"--argstr", "id", strconv.FormatUint(id, 10),
 		"--attr", attr,
 	)
