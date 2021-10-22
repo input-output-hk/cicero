@@ -18,8 +18,8 @@ func (api *Api) init() {
 	}
 }
 
-func (a *Api) WorkflowInstances(name string) ([]Workflow, error) {
-	instances := []Workflow{}
+func (a *Api) WorkflowInstances(name string) ([]WorkflowInstance, error) {
+	instances := []WorkflowInstance{}
 
 	err := DB.NewSelect().
 		Model(&instances).
@@ -32,8 +32,8 @@ func (a *Api) WorkflowInstances(name string) ([]Workflow, error) {
 	return instances, nil
 }
 
-func (a *Api) WorkflowInstance(wfName string, id uint64) (Workflow, error) {
-	var instance Workflow
+func (a *Api) WorkflowInstance(wfName string, id uint64) (WorkflowInstance, error) {
+	var instance WorkflowInstance
 
 	err := DB.NewSelect().
 		Model(&instance).
@@ -46,11 +46,11 @@ func (a *Api) WorkflowInstance(wfName string, id uint64) (Workflow, error) {
 	return instance, nil
 }
 
-func (a *Api) Workflows() (*workflowDefinitions, error) {
+func (a *Api) Workflows() (*WorkflowDefinitions, error) {
 	return nixInstantiate(a.logger, "workflows", 0, "{}")
 }
 
-func (a *Api) Workflow(name string, certs WorkflowCerts) (*workflowDefinition, error) {
+func (a *Api) Workflow(name string, certs WorkflowCerts) (*WorkflowDefinition, error) {
 	certsJson, err := json.Marshal(certs)
 	if err != nil {
 		return nil, err

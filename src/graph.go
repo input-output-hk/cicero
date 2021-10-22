@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-func RenderWorkflowGraph(wf *workflowDefinition, w io.Writer) error {
+func RenderWorkflowGraph(wf *WorkflowDefinition, w io.Writer) error {
 	// XXX nodes := make([]opts.GraphNode, len(*steps))
 	nodes := make([]opts.GraphNode, 0)
 	for name, step := range wf.Steps {

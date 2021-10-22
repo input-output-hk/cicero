@@ -94,7 +94,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 			name := req.Param("name")
 			instanceStr := req.URL.Query().Get("instance")
 
-			var def *workflowDefinition
+			var def *WorkflowDefinition
 
 			if len(instanceStr) > 0 {
 				instanceId, err := strconv.ParseUint(instanceStr, 10, 64)

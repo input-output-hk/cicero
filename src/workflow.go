@@ -5,16 +5,16 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 )
 
-type workflowDefinitions map[string]*workflowDefinition
+type WorkflowDefinitions map[string]*WorkflowDefinition
 
-type workflowDefinition struct {
+type WorkflowDefinition struct {
 	Name    string                  `json:"name"`
 	Version uint64                  `json:"version"`
 	Meta    map[string]interface{}  `json:"meta"`
-	Steps   map[string]workflowStep `json:"steps"`
+	Steps   map[string]WorkflowStep `json:"steps"`
 }
 
-type workflowStep struct {
+type WorkflowStep struct {
 	Failure map[string]interface{} `json:"failure"`
 	Success map[string]interface{} `json:"success"`
 	Inputs  []string               `json:"inputs"`
@@ -22,7 +22,11 @@ type workflowStep struct {
 	Job     nomad.Job              `json:"job"`
 }
 
-type Workflow struct {
+func (s *WorkflowStep) IsRunnable() bool {
+	return len(s.Job.TaskGroups) > 0
+}
+
+type WorkflowInstance struct {
 	ID        uint64
 	Name      string        `bun:",notnull"`
 	Certs     WorkflowCerts `bun:",notnull"`

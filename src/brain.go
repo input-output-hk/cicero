@@ -21,8 +21,8 @@ type BrainCmd struct {
 	tree   *oversight.Tree
 }
 
-func (w *Workflow) GetDefinition(logger *log.Logger) (*workflowDefinition, error) {
-	var def *workflowDefinition
+func (w *WorkflowInstance) GetDefinition(logger *log.Logger) (*WorkflowDefinition, error) {
+	var def *WorkflowDefinition
 
 	var certs []byte
 	certs, err := json.Marshal(w.Certs)
@@ -116,7 +116,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 			}
 
 			err = DB.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
-				return cmd.insertWorkflow(tx, &Workflow{Name: workflowName, Certs: received})
+				return cmd.insertWorkflow(tx, &WorkflowInstance{Name: workflowName, Certs: received})
 			})
 
 			if err != nil {
@@ -133,7 +133,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	return nil
 }
 
-func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *Workflow) error {
+func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *WorkflowInstance) error {
 	res, err := db.
 		NewInsert().
 		Model(workflow).
@@ -196,7 +196,7 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 			}
 
 			err = DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-				existing := &Workflow{Name: workflowName}
+				existing := &WorkflowInstance{Name: workflowName}
 				err = tx.NewSelect().
 					Model(existing).
 					Where("id = ?", id).

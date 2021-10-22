@@ -1,6 +1,6 @@
 -- migrate:up
 
-create table workflows (
+create table workflow_instances (
   id integer primary key unique not null,
   name text not null,
   certs jsonb not null,
@@ -10,4 +10,4 @@ create table workflows (
 
 -- migrate:down
 
-drop table workflows;
+drop table workflow_instances;

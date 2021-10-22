@@ -133,7 +133,7 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, workflowId uint64, inputs, stepName string, step workflowStep) error {
+func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, workflowId uint64, inputs, stepName string, step WorkflowStep) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
@@ -156,8 +156,4 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 	}
 
 	return nil
-}
-
-func (s *workflowStep) IsRunnable() bool {
-	return len(s.Job.TaskGroups) > 0
 }
