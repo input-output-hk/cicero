@@ -1,26 +1,29 @@
 package cicero
 
 import (
-	"io"
 	"github.com/go-echarts/go-echarts/v2/charts"
-	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/go-echarts/go-echarts/v2/components"
+	"github.com/go-echarts/go-echarts/v2/opts"
+	"io"
 )
 
 func RenderWorkflowGraph(wf *workflowDefinition, w io.Writer) error {
 	// XXX nodes := make([]opts.GraphNode, len(*steps))
 	nodes := make([]opts.GraphNode, 0)
 	for name, step := range wf.Steps {
+		const SymbolSize = 50
 		graphNode := opts.GraphNode{
 			Name:       name,
 			Symbol:     "circle",
-			SymbolSize: 25,
+			SymbolSize: SymbolSize,
+			Category:   0,
 		}
 		if step.IsRunnable() {
-			graphNode.Symbol = "triangle"
-			graphNode.Category = 0
-			graphNode.Y = 10
-			graphNode.SymbolSize = 25 * 1.5
+			graphNode.Symbol = "diamond"
+			graphNode.Category = 1
+			graphNode.Y = 0
+			graphNode.X = 0
+			graphNode.SymbolSize = SymbolSize * 1.5
 		}
 
 		nodes = append(nodes, graphNode)
@@ -48,22 +51,26 @@ func RenderWorkflowGraph(wf *workflowDefinition, w io.Writer) error {
 
 	graph := charts.NewGraph()
 	graph.SetGlobalOptions(
-		charts.WithToolboxOpts(opts.Toolbox{Show: true}),
+		charts.WithLegendOpts(
+			opts.Legend{Show: true},
+		),
+		func(bc *charts.BaseConfiguration) {
+			bc.TextStyle = &opts.TextStyle{FontSize: 18}
+		},
 	)
 	graph.AddJSFuncs(GraphResponsiveJs)
 	graph.AddSeries("steps", nodes, links,
+		charts.WithLabelOpts(
+			opts.Label{Show: true},
+		),
 		charts.WithGraphChartOpts(
 			opts.GraphChart{
-				Force:              &opts.GraphForce{Repulsion: 1000},
+				Force:              &opts.GraphForce{Repulsion: 2500},
 				Roam:               true,
 				FocusNodeAdjacency: true,
 				Categories: []*opts.GraphCategory{
-					{
-						Name: "",
-						Label: &opts.Label{
-							Show: true,
-						},
-					},
+					{Name: "Not Runnable"},
+					{Name: "Runnable"},
 				},
 			},
 		),
