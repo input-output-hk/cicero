@@ -124,11 +124,6 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	}
 
 	for stepName, step := range workflow.Steps {
-		cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.Job)
-		if step.Job == nil {
-			continue
-		}
-
 		err = cmd.invokeWorkflowStep(ctx, workflowName, workflowId, inputs, stepName, step)
 		if err != nil {
 			return err
@@ -142,15 +137,31 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
-	response, _, err := nomadClient.Jobs().Register(step.Job, &nomad.WriteOptions{})
+	cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.IsRunnable())
 
-	if err != nil {
-		return errors.WithMessage(err, "Failed to run step")
-	}
+	if step.IsRunnable() {
+		response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
 
-	if len(response.Warnings) > 0 {
-		cmd.logger.Println(response.Warnings)
+		if err != nil {
+			return errors.WithMessage(err, "Failed to run step")
+		}
+
+		if len(response.Warnings) > 0 {
+			cmd.logger.Println(response.Warnings)
+		}
+	} else {
+		response, _, err := nomadClient.Jobs().Deregister(*step.Job.ID, false, &nomad.WriteOptions{})
+
+		if err != nil {
+			return errors.WithMessage(err, "Failed to stop step")
+		}
+
+		cmd.logger.Print("Deregistered:", response)
 	}
 
 	return nil
+}
+
+func (s *workflowStep) IsRunnable() bool {
+	return len(s.Job.TaskGroups) > 0;
 }

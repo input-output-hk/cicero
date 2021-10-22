@@ -16,7 +16,7 @@ func RenderWorkflowGraph(wf *workflowDefinition, w io.Writer) error {
 			Symbol:     "circle",
 			SymbolSize: 25,
 		}
-		if step.Job != nil {
+		if step.IsRunnable() {
 			graphNode.Symbol = "triangle"
 			graphNode.Category = 0
 			graphNode.Y = 10

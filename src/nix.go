@@ -26,7 +26,7 @@ type workflowStep struct {
 	Success map[string]interface{} `json:"success"`
 	Inputs  []string               `json:"inputs"`
 	When    map[string]bool        `json:"when"`
-	Job     *nomad.Job             `json:"job"`
+	Job     nomad.Job              `json:"job"`
 }
 
 func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (*workflowDefinitions, error) {

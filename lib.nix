@@ -30,17 +30,6 @@ let
             lib.recursiveUpdate {
               Name = stepName;
               Driver = "exec"; # TODO swap out for custom driver
-
-              Constraints = [
-                {
-                  LTarget = "\${meta.run}";
-                  Operand = "=";
-                  RTarget = "true";
-                }
-              ];
-
-              # TODO probably implement somewhere else
-              # Meta.run = true|false;
             }
           ) group.Tasks;
         }
@@ -106,10 +95,12 @@ let
     , failure ? { ${stepName} = false; }
     }: {
       inherit when inputs success failure;
-      job =
-        if all lib.id (attrValues when)
-        then hydrateNomadJob { inherit workflowName stepName job; }
-        else null;
+      job = hydrateNomadJob {
+        inherit workflowName stepName;
+        job =
+          { TaskGroups = []; }
+          // lib.optionalAttrs (all lib.id (attrValues when)) job;
+      };
     };
 
   workflow = { name, version ? 0, steps ? {}, meta ? {} }: let
