@@ -5,11 +5,6 @@
 <div id="{{$scope}}">
 	<h1>{{.Name}}</h1>
 
-	<h2>Actions</h2>
-	<ul>
-		<li><a href="/workflow/{{.Name | pathEscape}}/start">Start</a></li>
-	</ul>
-
 	<iframe src="/workflow/{{.Name | pathEscape}}/graph?instance={{.instance}}">
 		- [x] https://github.com/go-echarts/go-echarts
 		- [ ] https://github.com/goccy/go-graphviz
@@ -33,6 +28,15 @@
 			<td><pre>{{.Certs | toJson}}</pre></td>
 		</tr>
 		{{end}}
+		<tr>
+			<td colspan="5" class="new">
+				<em>
+					<a href="/workflow/{{.Name | pathEscape}}/start">
+						Start New Instance
+					</a>
+				</em>
+			</td>
+		</tr>
 	</table>
 </div>
 
@@ -47,6 +51,10 @@
 #{{$scope}} > iframe {
 	flex-grow: 1;
 	border: none;
+}
+
+#{{$scope}} .new {
+	text-align: center;
 }
 </style>
 {{end}}
