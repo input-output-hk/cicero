@@ -47,18 +47,30 @@ let
       ) job.TaskGroups;
     };
 
-  run = interpreter: let
+  run = interpreter: with pkgs.writers; let
     binName = "run-workflow-step";
-    wrap = env: drv: pkgs.buildEnv (
-      env // {
-        name = binName;
-        paths = env.paths or [] ++ [ drv ] ++ (with pkgs; [ liftbridge-cli gnutar xz ]);
-      }
+    wrap = env: drv: writeBashBin binName (
+      let
+        vars = lib.concatStringsSep "\n" (
+          lib.mapAttrsToList
+            (k: v: "export ${k}=${lib.escapeShellArg v}")
+            (removeAttrs env [ "PATH" ])
+        );
+        path = lib.makeBinPath (
+          (with pkgs; [ liftbridge-cli gnutar xz ])
+          ++ env.PATH or []
+        );
+      in
+        ''
+          ${vars}
+          export PATH=${path}
+          exec ${drv}/bin/${binName}
+        ''
     );
-    drv = with pkgs.writers; {
+    drv = {
       bash = script: wrap {
-        paths = with pkgs; [ git ];
-        passthru.SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+        PATH = with pkgs; [ git nodejs ];
+        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
       } (writeBashBin binName script);
       python = script: wrap {} (writePython3Bin binName {} script);
       perl = script: wrap {} (writePerlBin binName {} script);
@@ -75,7 +87,7 @@ let
               Config = {
                 # TODO this is a derivation, not a flake.
                 # waiting for new nomad driver
-                flake = "${drv script}";
+                flake = drv script;
                 command = "/bin/${binName}";
               };
             }
