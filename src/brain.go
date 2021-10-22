@@ -21,16 +21,6 @@ type BrainCmd struct {
 	tree   *oversight.Tree
 }
 
-type Workflow struct {
-	ID        uint64
-	Name      string        `bun:",notnull"`
-	Certs     WorkflowCerts `bun:",notnull"`
-	CreatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
-	UpdatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
-}
-
-type WorkflowCerts map[string]interface{}
-
 func (w *Workflow) GetDefinition(logger *log.Logger) (*workflowDefinition, error) {
 	var def *workflowDefinition
 

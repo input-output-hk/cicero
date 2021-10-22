@@ -9,25 +9,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	nomad "github.com/hashicorp/nomad/api"
 )
-
-type workflowDefinitions map[string]*workflowDefinition
-
-type workflowDefinition struct {
-	Name    string                  `json:"name"`
-	Version uint64                  `json:"version"`
-	Meta    map[string]interface{}  `json:"meta"`
-	Steps   map[string]workflowStep `json:"steps"`
-}
-
-type workflowStep struct {
-	Failure map[string]interface{} `json:"failure"`
-	Success map[string]interface{} `json:"success"`
-	Inputs  []string               `json:"inputs"`
-	When    map[string]bool        `json:"when"`
-	Job     nomad.Job              `json:"job"`
-}
 
 func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (*workflowDefinitions, error) {
 	cmd := exec.Command(
