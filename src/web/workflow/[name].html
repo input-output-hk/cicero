@@ -10,10 +10,10 @@
 		<li>Type:</li>
 		{{range .graphTypes}}
 		<li>
-			{{if eq . $.graph}}
+			{{if or (eq . $.graph) (and (eq $.graph "") (eq . "flow"))}}
 			{{.}}
 			{{else}}
-			<a href="?graph={{.}}">{{.}}</a>
+			<a href="?graph={{.}}&instance={{$.instance}}">{{.}}</a>
 			{{end}}
 		</li>
 		{{end}}
