@@ -30,8 +30,12 @@
 			<th>Certificates</th>
 		</tr>
 		{{range .Instances}}
-		<tr>
-			<td><a href="?instance={{.ID}}">{{.ID}}</a></td>
+		<tr
+			{{if eq (print .ID) $.instance}}
+			class="current"
+			{{end}}
+		>
+			<td><a href="?instance={{.ID}}&graph={{$.graph}}">{{.ID}}</a></td>
 			<td>{{.Name}}</td>
 			<td>{{.CreatedAt}}</td>
 			<td>{{.UpdatedAt}}</td>
@@ -72,6 +76,10 @@
 	display: flex;
 	list-style: none;
 	gap: 1%;
+}
+
+#{{$scope}} table tr.current {
+	background: var(--accent);
 }
 </style>
 {{end}}
