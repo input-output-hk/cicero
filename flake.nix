@@ -27,7 +27,7 @@
         cicero = prev.buildGoModule rec {
           pname = "cicero";
           version = "2021.10.19.001";
-          vendorSha256 = "sha256-F9GgiH55rkiYLYi4K1A0nNxkdzQs/29Ncy5Vp3mY2PY=";
+          vendorSha256 = "sha256-6q5aKCtl1VNuYUQIrIQotbSNa90wB5wFhPaBvLzDZwM=";
 
           src = inputs.inclusive.lib.inclusive ./. [
             ./src
