@@ -5,10 +5,20 @@
 <div id="{{$scope}}">
 	<h1>{{.Name}}</h1>
 
-	<iframe src="/workflow/{{.Name | pathEscape}}/graph?instance={{.instance}}">
-		- [x] https://github.com/go-echarts/go-echarts
-		- [ ] https://github.com/goccy/go-graphviz
-	</iframe>
+	<h2>Graph</h2>
+	<ul class="graph-types">
+		<li>Type:</li>
+		{{range .graphTypes}}
+		<li>
+			{{if eq . $.graph}}
+			{{.}}
+			{{else}}
+			<a href="?graph={{.}}">{{.}}</a>
+			{{end}}
+		</li>
+		{{end}}
+	</ul>
+	<iframe src="/workflow/{{.Name | pathEscape}}/graph?instance={{.instance}}&type={{.graph}}"></iframe>
 
 	<h2>Instances</h2>
 	<table class="table">
@@ -50,11 +60,18 @@
 
 #{{$scope}} > iframe {
 	flex-grow: 1;
-	border: none;
+	border: 5px groove var(--border);
+	padding: 1%;
 }
 
 #{{$scope}} .new {
 	text-align: center;
+}
+
+#{{$scope}} ul.graph-types {
+	display: flex;
+	list-style: none;
+	gap: 1%;
 }
 </style>
 {{end}}

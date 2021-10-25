@@ -6,7 +6,7 @@ require (
 	cirello.io/oversight v1.0.3
 	github.com/alexflint/go-arg v1.4.2
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
-	github.com/go-echarts/go-echarts/v2 v2.2.4
+	github.com/go-echarts/go-echarts/v2 v2.2.5-0.20210610061723-6d2e2d1394de
 	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/hashicorp/nomad v1.1.6
 	github.com/hashicorp/nomad/api v0.0.0-20200529203653-c4416b26d3eb
@@ -24,3 +24,5 @@ require (
 	github.com/urfave/cli v1.22.5 // indirect
 	github.com/vivek-ng/concurrency-limiter v0.8.2
 )
+
+replace github.com/go-echarts/go-echarts/v2 => github.com/dermetfan/go-echarts/v2 v2.2.5-0.20211025121416-b1fadcef4912

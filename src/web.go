@@ -78,6 +78,8 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				"Name":      name,
 				"Instances": instances,
 				"instance":  req.URL.Query().Get("instance"),
+				"graph":     req.URL.Query().Get("graph"),
+				"graphTypes": WorkflowGraphTypeStrings(),
 			})
 		})
 
@@ -93,9 +95,9 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		group.GET("/:name/graph", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.Param("name")
 			instanceStr := req.URL.Query().Get("instance")
+			graphTypeStr := req.URL.Query().Get("type")
 
 			var def *WorkflowDefinition
-
 			if len(instanceStr) > 0 {
 				instanceId, err := strconv.ParseUint(instanceStr, 10, 64)
 				if err != nil {
@@ -119,7 +121,16 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				}
 			}
 
-			return RenderWorkflowGraph(def, w)
+			var graphType WorkflowGraphType
+			if len(graphTypeStr) > 0 {
+				var err error
+				graphType, err = WorkflowGraphTypeFromString(graphTypeStr)
+				if err != nil {
+					return err
+				}
+			}
+
+			return RenderWorkflowGraph(def, graphType, w)
 		})
 	})
 
