@@ -75,10 +75,10 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 			}
 
 			return makeViewTemplate("workflow/[name].html").Execute(w, map[string]interface{}{
-				"Name":      name,
-				"Instances": instances,
-				"instance":  req.URL.Query().Get("instance"),
-				"graph":     req.URL.Query().Get("graph"),
+				"Name":       name,
+				"Instances":  instances,
+				"instance":   req.URL.Query().Get("instance"),
+				"graph":      req.URL.Query().Get("graph"),
 				"graphTypes": WorkflowGraphTypeStrings(),
 			})
 		})
