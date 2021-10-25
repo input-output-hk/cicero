@@ -46,19 +46,43 @@ func (a *Api) WorkflowInstance(wfName string, id uint64) (WorkflowInstance, erro
 	return instance, nil
 }
 
-func (a *Api) Workflows() (*WorkflowDefinitions, error) {
+func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (WorkflowDefinition, error) {
+	if instanceId != nil {
+		var def WorkflowDefinition
+
+		instance, err := a.WorkflowInstance(wfName, *instanceId)
+		if err != nil {
+			return def, err
+		}
+
+		def, err = instance.GetDefinition(logger)
+		if err != nil {
+			return def, err
+		}
+		return def, nil
+	} else {
+		var err error
+		def, err := a.Workflow(wfName, WorkflowCerts{})
+		if err != nil {
+			return def, err
+		}
+		return def, nil
+	}
+}
+
+func (a *Api) Workflows() (WorkflowDefinitions, error) {
 	return nixInstantiate(a.logger, "workflows", 0, "{}")
 }
 
-func (a *Api) Workflow(name string, certs WorkflowCerts) (*WorkflowDefinition, error) {
+func (a *Api) Workflow(name string, certs WorkflowCerts) (WorkflowDefinition, error) {
+	var def WorkflowDefinition
 	certsJson, err := json.Marshal(certs)
 	if err != nil {
-		return nil, err
+		return def, err
 	}
 	return nixInstantiateWorkflow(a.logger, name, 0, string(certsJson))
 }
 
 func (a *Api) WorkflowStart(name string) error {
-	publish(a.logger, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
-	return nil
+	return publish(a.logger, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
 }

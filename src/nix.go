@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (*WorkflowDefinitions, error) {
+func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (WorkflowDefinitions, error) {
 	cmd := exec.Command(
 		"nix-instantiate",
 		"--eval",
@@ -31,8 +31,8 @@ func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (
 		return nil, errors.WithMessage(err, "Failed to run nix-instantiate")
 	}
 
-	result := &WorkflowDefinitions{}
-	err = json.Unmarshal(output, result)
+	result := WorkflowDefinitions{}
+	err = json.Unmarshal(output, &result)
 	if err != nil {
 		logger.Println(string(output))
 		return nil, errors.WithMessage(err, "While unmarshaling workflowDefinitions")
@@ -40,11 +40,12 @@ func nixInstantiate(logger *log.Logger, attr string, id uint64, inputs string) (
 	return result, nil
 }
 
-func nixInstantiateWorkflow(logger *log.Logger, workflowName string, id uint64, inputs string) (*WorkflowDefinition, error) {
+func nixInstantiateWorkflow(logger *log.Logger, workflowName string, id uint64, inputs string) (WorkflowDefinition, error) {
+	var def WorkflowDefinition
 	defs, err := nixInstantiate(logger, "workflows", id, inputs)
 	if err != nil {
-		return nil, err
+		return def, err
 	}
 
-	return (*defs)[workflowName], nil
+	return *defs[workflowName], nil
 }

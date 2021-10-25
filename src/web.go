@@ -97,28 +97,17 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 			instanceStr := req.URL.Query().Get("instance")
 			graphTypeStr := req.URL.Query().Get("type")
 
-			var def *WorkflowDefinition
+			var instanceId *uint64
 			if len(instanceStr) > 0 {
-				instanceId, err := strconv.ParseUint(instanceStr, 10, 64)
+				iid, err := strconv.ParseUint(instanceStr, 10, 64)
 				if err != nil {
 					return err
 				}
-
-				instance, err := api.WorkflowInstance(name, instanceId)
-				if err != nil {
-					return err
-				}
-
-				def, err = instance.GetDefinition(cmd.logger)
-				if err != nil {
-					return err
-				}
-			} else {
-				var err error
-				def, err = api.Workflow(name, WorkflowCerts{})
-				if err != nil {
-					return err
-				}
+				instanceId = &iid
+			}
+			def, err := api.WorkflowForInstance(name, instanceId, cmd.logger)
+			if err != nil {
+				return err
 			}
 
 			var graphType WorkflowGraphType
@@ -130,7 +119,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				}
 			}
 
-			return RenderWorkflowGraph(def, graphType, w)
+			return RenderWorkflowGraph(&def, graphType, w)
 		})
 	})
 

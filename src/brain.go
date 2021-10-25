@@ -21,13 +21,13 @@ type BrainCmd struct {
 	tree   *oversight.Tree
 }
 
-func (w *WorkflowInstance) GetDefinition(logger *log.Logger) (*WorkflowDefinition, error) {
-	var def *WorkflowDefinition
+func (w *WorkflowInstance) GetDefinition(logger *log.Logger) (WorkflowDefinition, error) {
+	var def WorkflowDefinition
 
 	var certs []byte
 	certs, err := json.Marshal(w.Certs)
 	if err != nil {
-		return nil, err
+		return def, err
 	}
 
 	def, err = nixInstantiateWorkflow(logger, w.Name, w.ID, string(certs))
