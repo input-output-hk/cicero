@@ -45,9 +45,15 @@
             "-X main.buildCommit=${self.rev or "dirty"}"
           ];
         };
+
+        run-script = (prev.writers.writeBashBin "run-script" ''
+          exec $(nix-build script.nix --no-out-link --argstr language "$1" --argstr script "$2")
+        '') // {
+          requiredSystemFeatures = [ "recursive-nix" ];
+        };
       };
 
-      packages = { cicero, liftbridge-cli, bash, coreutils, gocritic }@pkgs:
+      packages = { cicero, liftbridge-cli, bash, coreutils, gocritic, run-script }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;

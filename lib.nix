@@ -36,48 +36,16 @@ let
       ) job.TaskGroups;
     };
 
-  run = interpreter: with pkgs.writers; let
-    binName = "run-workflow-step";
-    wrap = env: drv: writeBashBin binName (
-      let
-        vars = lib.concatStringsSep "\n" (
-          lib.mapAttrsToList
-            (k: v: "export ${k}=${lib.escapeShellArg v}")
-            (removeAttrs env [ "PATH" ])
-        );
-        path = lib.makeBinPath (
-          (with pkgs; [ liftbridge-cli gnutar xz ])
-          ++ env.PATH or []
-        );
-      in
-        ''
-          ${vars}
-          export PATH=${path}
-          exec ${drv}/bin/${binName}
-        ''
-    );
-    drv = {
-      bash = script: wrap {
-        PATH = with pkgs; [ git nodejs ];
-        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-      } (writeBashBin binName script);
-      python = script: wrap {} (writePython3Bin binName {} script);
-      perl = script: wrap {} (writePerlBin binName {} script);
-      js = script: wrap {} (writeJSBin binName {} script);
-      haskell = script: wrap {} (writeHaskellBin binName {} script);
-      rust = script: wrap {} (writeRustBin binName {} script);
-    }.${interpreter};
-  in
-    script: {
+  run = language: script:
+    {
       TaskGroups = [
         {
           Tasks = [
             {
               Config = {
-                # TODO this is a derivation, not a flake.
-                # waiting for new nomad driver
-                flake = drv script;
-                command = "/bin/${binName}";
+                flake = "github:input-output-hk/cicero#run-script";
+                command = "/bin/run-script";
+                args = [ language script ];
               };
             }
           ];
