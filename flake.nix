@@ -26,8 +26,8 @@
 
         cicero = prev.buildGoModule rec {
           pname = "cicero";
-          version = "2021.10.19.001";
-          vendorSha256 = "sha256-6q5aKCtl1VNuYUQIrIQotbSNa90wB5wFhPaBvLzDZwM=";
+          version = "2021.10.26.001";
+          vendorSha256 = "sha256-l/3rsRwop6DcBwZX5eE87ReuDl86Yp5A/j8QbDU1jgk=";
 
           src = inputs.inclusive.lib.inclusive ./. [
             ./src
@@ -70,7 +70,8 @@
         };
       };
 
-      packages = { cicero, liftbridge-cli, bash, coreutils, gocritic, run-script }@pkgs:
+      packages =
+        { cicero, liftbridge-cli, bash, coreutils, gocritic, run-script }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;
