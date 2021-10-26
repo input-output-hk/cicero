@@ -52,7 +52,7 @@
           export PATH="$PATH:${prev.git}/bin:${prev.nixUnstable}/bin"
           export SSL_CERT_FILE="${prev.cacert}/etc/ssl/certs/ca-bundle.crt"
 
-          mkdir -p /etc
+          ${prev.coreutils}/bin/mkdir -p /etc
           echo 'nixbld:x:30000:nixbld1' > /etc/group
           echo 'nixbld1:x:30001:30000:Nix build user 1:/var/empty:${prev.shadow}/bin/nologin' > /etc/passwd
 
