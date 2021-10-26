@@ -36,10 +36,7 @@ in
   with pkgs.writers;
 
   {
-    bash = wrap {
-      PATH = with pkgs; [ git ];
-      SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-    } (writeBash drvName script);
+    bash = wrap {} (writeBash drvName script);
 
     python = wrap {} (writePython3 drvName {} script);
 
