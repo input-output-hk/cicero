@@ -28,6 +28,12 @@ package = "foreman"
 package = "gouml"
 
 [[commands]]
+package = "nomad"
+
+[[commands]]
+package = "damon"
+
+[[commands]]
 name = "lint"
 command = "gocritic check -enableAll ./... && fd -e nix -X nixfmt -c"
 help = "Run code linters"
