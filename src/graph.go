@@ -2,11 +2,13 @@ package cicero
 
 import (
 	"errors"
+	"io"
+	"math"
+	"strings"
+
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
 	"github.com/go-echarts/go-echarts/v2/opts"
-	"io"
-	"math"
 )
 
 type WorkflowGraphType uint
@@ -88,9 +90,21 @@ func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w 
 					if name == name2 {
 						continue
 					}
+				Inner:
 					for _, input2 := range step2.Inputs {
 						if input != input2 {
 							continue
+						}
+						for _, link := range links {
+							if link.Source == name2 && link.Target == name {
+								for _, label := range strings.Split(link.Label.Formatter, ", ") {
+									if label == input {
+										continue Inner
+									}
+								}
+								link.Label.Formatter += ", " + input
+								continue Inner
+							}
 						}
 						links = append(links, opts.GraphLink{
 							Source: name,
@@ -106,6 +120,14 @@ func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w 
 		}
 	}
 
+	var edgeSymbol []string
+	switch graphType {
+	case WorkflowGraphTypeInputs:
+		edgeSymbol = []string{"none"}
+	default:
+		edgeSymbol = []string{"none", "arrow"}
+	}
+
 	graph := charts.NewGraph()
 	graph.SetGlobalOptions(
 		charts.WithLegendOpts(
@@ -116,13 +138,6 @@ func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w 
 		},
 	)
 	graph.AddJSFuncs(GraphResponsiveJs)
-	var curveness float32
-	switch graphType {
-	case WorkflowGraphTypeInputs:
-		curveness = .2
-	default:
-		curveness = 0
-	}
 	graph.AddSeries("steps", nodes, links,
 		charts.WithLabelOpts(
 			opts.Label{
@@ -139,12 +154,9 @@ func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w 
 					{Name: "Not Runnable"},
 					{Name: "Runnable"},
 				},
-				EdgeSymbol: []string{"none", "arrow"},
+				EdgeSymbol: edgeSymbol,
 				EdgeLabel:  &opts.EdgeLabel{FontSize: FontSize},
 			},
-		),
-		charts.WithLineStyleOpts(
-			opts.LineStyle{Curveness: curveness},
 		),
 	)
 
