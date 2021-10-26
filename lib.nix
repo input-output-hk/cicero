@@ -22,15 +22,28 @@ let
       inherit ID;
       Name = ID;
 
+      type = "batch";
+
       TaskGroups = map (
         group: lib.recursiveUpdate group {
           Name = stepName;
 
           Tasks = map (
-            lib.recursiveUpdate {
-              Name = stepName;
-              Driver = "exec"; # TODO swap out for custom driver
-            }
+            task:
+              lib.recursiveUpdate {
+                Name = stepName;
+                Driver = "nix";
+                Config = lib.recursiveUpdate {
+                  resolv_conf = "copy-host";
+                  boot = false;
+                  user_namespacing = false;
+                  network_veth = false;
+                  console = "read-only";
+                  ephemeral = true;
+                  process_two = false;
+                  volatile = "overlay";
+                } task.Config;
+              } task
           ) group.Tasks;
         }
       ) job.TaskGroups;
@@ -43,9 +56,8 @@ let
           Tasks = [
             {
               Config = {
-                flake = "github:input-output-hk/cicero#run-script";
-                command = "/bin/run-script";
-                args = [ language script ];
+                packages = [ "github:input-output-hk/cicero#run-script" ];
+                command = [ "/bin/run-script" language script ];
               };
             }
           ];

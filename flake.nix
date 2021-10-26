@@ -47,7 +47,24 @@
         };
 
         run-script = (prev.writers.writeBashBin "run-script" ''
-          exec $(nix-build script.nix --no-out-link --argstr language "$1" --argstr script "$2")
+          set -exuo pipefail
+
+          export PATH="$PATH:${prev.git}/bin:${prev.nixUnstable}/bin"
+          export SSL_CERT_FILE="${prev.cacert}/etc/ssl/certs/ca-bundle.crt"
+
+          mkdir -p /etc
+          echo 'nixbld:x:30000:nixbld1' > /etc/group
+          echo 'nixbld1:x:30001:30000:Nix build user 1:/var/empty:${prev.shadow}/bin/nologin' > /etc/passwd
+
+          nix-store --load-db < /registration
+
+          nix build -f ${./script.nix} \
+              --experimental-features 'nix-command flakes' \
+              --out-link script \
+              --argstr language "$1" \
+              --argstr script "$2"
+
+          exec ./script
         '') // {
           requiredSystemFeatures = [ "recursive-nix" ];
         };

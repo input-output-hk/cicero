@@ -3,7 +3,7 @@
 let
   inherit (builtins) getFlake;
 
-  flake = getFlake (toString ./.);
+  flake = getFlake "github:input-output-hk/cicero";
   pkgs =
     flake.inputs.nixpkgs.legacyPackages.${builtins.currentSystem}
     // flake.legacyPackages.${builtins.currentSystem};
