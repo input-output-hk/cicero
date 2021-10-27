@@ -55,12 +55,14 @@ let
         {
           Tasks = [
             {
-              Config = {
-                packages =
-                  assert pkgs ? "run-${language}";
-                  [ "github:input-output-hk/cicero#run-${language}" ];
-                command = [ "/bin/run-${language}" script ];
-              };
+              Config = let
+                runner = "run-${language}";
+              in
+                assert pkgs ? ${runner};
+                {
+                  packages = [ "github:input-output-hk/cicero#${runner}" ];
+                  command = [ "/bin/${pkgs.${runner}.name}" script ];
+                };
             }
           ];
         }

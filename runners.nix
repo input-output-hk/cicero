@@ -4,7 +4,7 @@ let
   drvName = "workflow-step-script";
 
   runner = drv:
-    prev.writers.writeBash drvName ''
+    prev.writers.writeBashBin drvName ''
       export PATH=${prev.lib.makeBinPath (
         with final; [
           coreutils
