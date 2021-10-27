@@ -12,7 +12,11 @@ nix run github:input-output-hk/bitte#nomad -- agent -dev \
 	-plugin-dir $(nix build --no-link --json github:input-output-hk/nomad-driver-nix | jq -r .[].outputs.out)/bin &
 nix develop -c foreman start
 ```
-# How To build and run the API Documentation
+
+# How To …
+
+See the commands listed by:
+
 ```
-make -f Makefile.swagger serve-swagger
+nix develop
 ```
