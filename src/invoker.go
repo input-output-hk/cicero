@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"cirello.io/oversight"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
-	nomad "github.com/hashicorp/nomad/api"
 )
 
 const invokeStreamName = "workflow.*.*.invoke"
@@ -21,6 +21,7 @@ type InvokerCmd struct {
 	logger  *log.Logger
 	tree    *oversight.Tree
 	limiter *priority.PriorityLimiter
+	bridge  liftbridge.Client
 }
 
 func (cmd *InvokerCmd) init() {
@@ -72,14 +73,13 @@ func (cmd *InvokerCmd) listenToInvoke(ctx context.Context) error {
 	cmd.init()
 	cmd.logger.Println("Starting Invoker.listenToInvoke")
 
-	client, err := connect(cmd.logger, []string{invokeStreamName})
+	err := createStreams(cmd.logger, cmd.bridge, []string{invokeStreamName})
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 
 	cmd.logger.Printf("Subscribing to %s\n", invokeStreamName)
-	err = client.Subscribe(
+	err = cmd.bridge.Subscribe(
 		ctx,
 		invokeStreamName,
 		cmd.invokerSubscriber(ctx),

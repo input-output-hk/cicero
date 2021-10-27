@@ -19,6 +19,7 @@ import (
 type BrainCmd struct {
 	logger *log.Logger
 	tree   *oversight.Tree
+	bridge liftbridge.Client
 }
 
 func (w *WorkflowInstance) GetDefinition(logger *log.Logger) (WorkflowDefinition, error) {
@@ -86,14 +87,13 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToStart")
 	streamName := "workflow.*.start"
 
-	client, err := connect(cmd.logger, []string{streamName})
+	err := createStreams(cmd.logger, cmd.bridge, []string{streamName})
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 
 	cmd.logger.Printf("Subscribing to %s\n", streamName)
-	err = client.Subscribe(
+	err = cmd.bridge.Subscribe(
 		ctx,
 		streamName,
 		func(msg *liftbridge.Message, err error) {
@@ -149,6 +149,7 @@ func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *WorkflowInstance) erro
 
 	publish(
 		cmd.logger,
+		cmd.bridge,
 		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
 		"workflow.*.*.invoke",
 		workflow.Certs,
@@ -161,14 +162,13 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToCerts")
 	streamName := "workflow.*.*.cert"
 
-	client, err := connect(cmd.logger, []string{streamName})
+	err := createStreams(cmd.logger, cmd.bridge, []string{streamName})
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 
 	cmd.logger.Printf("Subscribing to %s\n", streamName)
-	err = client.Subscribe(
+	err = cmd.bridge.Subscribe(
 		ctx,
 		streamName,
 		func(msg *liftbridge.Message, err error) {
@@ -236,6 +236,7 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 
 				publish(
 					cmd.logger,
+					cmd.bridge,
 					fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
 					"workflow.*.*.invoke",
 					merged,

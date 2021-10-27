@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+
+	"github.com/liftbridge-io/go-liftbridge"
 )
 
 type Api struct {
 	logger *log.Logger
+	bridge liftbridge.Client
 }
 
 func (api *Api) init() {
@@ -84,5 +87,5 @@ func (a *Api) Workflow(name string, certs WorkflowCerts) (WorkflowDefinition, er
 }
 
 func (a *Api) WorkflowStart(name string) error {
-	return publish(a.logger, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
+	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
 }
