@@ -1,0 +1,1019 @@
+basePath: /
+consumes:
+- application/json
+definitions:
+  Affinity:
+    description: Affinity is used to serialize task group affinities
+    properties:
+      LTarget:
+        type: string
+      Operand:
+        type: string
+      RTarget:
+        type: string
+      Weight:
+        format: int8
+        type: integer
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  CSIMountOptions:
+    properties:
+      FSType:
+        type: string
+      MountFlags:
+        items:
+          type: string
+        type: array
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  CSIPluginType:
+    description: |-
+      CSIPluginType is an enum string that encapsulates the valid options for a
+      CSIPlugin stanza's Type. These modes will allow the plugin to be used in
+      different ways by the client.
+    type: string
+    x-go-package: github.com/hashicorp/nomad/api
+  CheckRestart:
+    description: |-
+      CheckRestart describes if and when a task should be restarted based on
+      failing health checks.
+    properties:
+      Grace:
+        $ref: '#/definitions/Duration'
+      IgnoreWarnings:
+        type: boolean
+      Limit:
+        format: int64
+        type: integer
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Constraint:
+    properties:
+      LTarget:
+        type: string
+      Operand:
+        type: string
+      RTarget:
+        type: string
+    title: Constraint is used to serialize a job placement constraint.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ConsulConnect:
+    properties:
+      Native:
+        type: boolean
+      SidecarService:
+        $ref: '#/definitions/ConsulSidecarService'
+      SidecarTask:
+        $ref: '#/definitions/SidecarTask'
+    title: ConsulConnect represents a Consul Connect jobspec stanza.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ConsulExposeConfig:
+    properties:
+      Path:
+        items:
+          $ref: '#/definitions/ConsulExposePath'
+        type: array
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ConsulExposePath:
+    properties:
+      ListenerPort:
+        type: string
+      LocalPathPort:
+        format: int64
+        type: integer
+      Path:
+        type: string
+      Protocol:
+        type: string
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ConsulProxy:
+    properties:
+      Config:
+        additionalProperties:
+          type: object
+        type: object
+      ExposeConfig:
+        $ref: '#/definitions/ConsulExposeConfig'
+      LocalServiceAddress:
+        type: string
+      LocalServicePort:
+        format: int64
+        type: integer
+      Upstreams:
+        items:
+          $ref: '#/definitions/ConsulUpstream'
+        type: array
+    title: ConsulProxy represents a Consul Connect sidecar proxy jobspec stanza.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ConsulSidecarService:
+    description: |-
+      ConsulSidecarService represents a Consul Connect SidecarService jobspec
+      stanza.
+    properties:
+      Port:
+        type: string
+      Proxy:
+        $ref: '#/definitions/ConsulProxy'
+      Tags:
+        items:
+          type: string
+        type: array
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ConsulUpstream:
+    properties:
+      DestinationName:
+        type: string
+      LocalBindPort:
+        format: int64
+        type: integer
+    title: ConsulUpstream represents a Consul Connect upstream jobspec stanza.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  DispatchPayloadConfig:
+    description: DispatchPayloadConfig configures how a task gets its input from a
+      job dispatch
+    properties:
+      File:
+        type: string
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Duration:
+    description: |-
+      A Duration represents the elapsed time between two instants
+      as an int64 nanosecond count. The representation limits the
+      largest representable duration to approximately 290 years.
+    format: int64
+    type: integer
+    x-go-package: time
+  EphemeralDisk:
+    description: EphemeralDisk is an ephemeral disk object
+    properties:
+      Migrate:
+        type: boolean
+      SizeMB:
+        format: int64
+        type: integer
+      Sticky:
+        type: boolean
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Job:
+    properties:
+      Affinities:
+        items:
+          $ref: '#/definitions/Affinity'
+        type: array
+      AllAtOnce:
+        type: boolean
+      Constraints:
+        items:
+          $ref: '#/definitions/Constraint'
+        type: array
+      ConsulToken:
+        type: string
+      CreateIndex:
+        format: uint64
+        type: integer
+      Datacenters:
+        items:
+          type: string
+        type: array
+      Dispatched:
+        type: boolean
+      ID:
+        type: string
+      JobModifyIndex:
+        format: uint64
+        type: integer
+      Meta:
+        additionalProperties:
+          type: string
+        type: object
+      Migrate:
+        $ref: '#/definitions/MigrateStrategy'
+      ModifyIndex:
+        format: uint64
+        type: integer
+      Name:
+        type: string
+      Namespace:
+        type: string
+      ParameterizedJob:
+        $ref: '#/definitions/ParameterizedJobConfig'
+      ParentID:
+        type: string
+      Payload:
+        items:
+          format: uint8
+          type: integer
+        type: array
+      Periodic:
+        $ref: '#/definitions/PeriodicConfig'
+      Priority:
+        format: int64
+        type: integer
+      Region:
+        type: string
+      Reschedule:
+        $ref: '#/definitions/ReschedulePolicy'
+      Spreads:
+        items:
+          $ref: '#/definitions/Spread'
+        type: array
+      Stable:
+        type: boolean
+      Status:
+        type: string
+      StatusDescription:
+        type: string
+      Stop:
+        type: boolean
+      SubmitTime:
+        format: int64
+        type: integer
+      TaskGroups:
+        items:
+          $ref: '#/definitions/TaskGroup'
+        type: array
+      Type:
+        type: string
+      Update:
+        $ref: '#/definitions/UpdateStrategy'
+      VaultToken:
+        type: string
+      Version:
+        format: uint64
+        type: integer
+    title: Job is used to serialize a job.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  LogConfig:
+    description: LogConfig provides configuration for log rotation
+    properties:
+      MaxFileSizeMB:
+        format: int64
+        type: integer
+      MaxFiles:
+        format: int64
+        type: integer
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  MigrateStrategy:
+    description: |-
+      MigrateStrategy describes how allocations for a task group should be
+      migrated between nodes (eg when draining).
+    properties:
+      HealthCheck:
+        type: string
+      HealthyDeadline:
+        $ref: '#/definitions/Duration'
+      MaxParallel:
+        format: int64
+        type: integer
+      MinHealthyTime:
+        $ref: '#/definitions/Duration'
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  NetworkResource:
+    description: |-
+      NetworkResource is used to describe required network
+      resources of a given task.
+    properties:
+      CIDR:
+        type: string
+      Device:
+        type: string
+      DynamicPorts:
+        items:
+          $ref: '#/definitions/Port'
+        type: array
+      IP:
+        type: string
+      MBits:
+        format: int64
+        type: integer
+      Mode:
+        type: string
+      ReservedPorts:
+        items:
+          $ref: '#/definitions/Port'
+        type: array
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ParameterizedJobConfig:
+    properties:
+      MetaOptional:
+        items:
+          type: string
+        type: array
+      MetaRequired:
+        items:
+          type: string
+        type: array
+      Payload:
+        type: string
+    title: ParameterizedJobConfig is used to configure the parameterized job.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  PeriodicConfig:
+    properties:
+      Enabled:
+        type: boolean
+      ProhibitOverlap:
+        type: boolean
+      Spec:
+        type: string
+      SpecType:
+        type: string
+      TimeZone:
+        type: string
+    title: PeriodicConfig is for serializing periodic config for a job.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Port:
+    properties:
+      Label:
+        type: string
+      To:
+        format: int64
+        type: integer
+      Value:
+        format: int64
+        type: integer
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  RequestedDevice:
+    properties:
+      Affinities:
+        description: |-
+          Affinities are a set of affinites to apply when selecting the device
+          to use.
+        items:
+          $ref: '#/definitions/Affinity'
+        type: array
+      Constraints:
+        description: |-
+          Constraints are a set of constraints to apply when selecting the device
+          to use.
+        items:
+          $ref: '#/definitions/Constraint'
+        type: array
+      Count:
+        description: Count is the number of requested devices
+        format: uint64
+        type: integer
+      Name:
+        description: |-
+          Name is the request name. The possible values are as follows:
+          <type>: A single value only specifies the type of request.
+          <vendor>/<type>: A single slash delimiter assumes the vendor and type of device is specified.
+          <vendor>/<type>/<name>: Two slash delimiters assume vendor, type and specific model are specified.
+
+          Examples are as follows:
+          "gpu"
+          "nvidia/gpu"
+          "nvidia/gpu/GTX2080Ti"
+        type: string
+    title: RequestedDevice is used to request a device for a task.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ReschedulePolicy:
+    properties:
+      Attempts:
+        description: Attempts limits the number of rescheduling attempts that can
+          occur in an interval.
+        format: int64
+        type: integer
+      Delay:
+        $ref: '#/definitions/Duration'
+      DelayFunction:
+        description: |-
+          DelayFunction determines how the delay progressively changes on subsequent reschedule
+          attempts. Valid values are "exponential", "constant", and "fibonacci".
+        type: string
+      Interval:
+        $ref: '#/definitions/Duration'
+      MaxDelay:
+        $ref: '#/definitions/Duration'
+      Unlimited:
+        description: Unlimited allows rescheduling attempts until they succeed
+        type: boolean
+    title: Reschedule configures how Tasks are rescheduled  when they crash or fail.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Resources:
+    description: |-
+      Resources encapsulates the required resources of
+      a given task or task group.
+    properties:
+      CPU:
+        format: int64
+        type: integer
+      Devices:
+        items:
+          $ref: '#/definitions/RequestedDevice'
+        type: array
+      DiskMB:
+        format: int64
+        type: integer
+      IOPS:
+        description: |-
+          COMPAT(0.10)
+          XXX Deprecated. Please do not use. The field will be removed in Nomad
+          0.10 and is only being kept to allow any references to be removed before
+          then.
+        format: int64
+        type: integer
+      MemoryMB:
+        format: int64
+        type: integer
+      Networks:
+        items:
+          $ref: '#/definitions/NetworkResource'
+        type: array
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  RestartPolicy:
+    description: |-
+      RestartPolicy defines how the Nomad client restarts
+      tasks in a taskgroup when they fail
+    properties:
+      Attempts:
+        format: int64
+        type: integer
+      Delay:
+        $ref: '#/definitions/Duration'
+      Interval:
+        $ref: '#/definitions/Duration'
+      Mode:
+        type: string
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ScalingPolicy:
+    description: ScalingPolicy is the user-specified API object for an autoscaling
+      policy
+    properties:
+      CreateIndex:
+        format: uint64
+        type: integer
+      Enabled:
+        type: boolean
+      ID:
+        type: string
+      Max:
+        format: int64
+        type: integer
+      Min:
+        format: int64
+        type: integer
+      ModifyIndex:
+        format: uint64
+        type: integer
+      Namespace:
+        type: string
+      Policy:
+        additionalProperties:
+          type: object
+        type: object
+      Target:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Service:
+    properties:
+      AddressMode:
+        type: string
+      CanaryMeta:
+        additionalProperties:
+          type: string
+        type: object
+      CanaryTags:
+        items:
+          type: string
+        type: array
+      CheckRestart:
+        $ref: '#/definitions/CheckRestart'
+      Checks:
+        items:
+          $ref: '#/definitions/ServiceCheck'
+        type: array
+      Connect:
+        $ref: '#/definitions/ConsulConnect'
+      EnableTagOverride:
+        type: boolean
+      Id:
+        description: FIXME Id is unused. Remove?
+        type: string
+      Meta:
+        additionalProperties:
+          type: string
+        type: object
+      Name:
+        type: string
+      PortLabel:
+        type: string
+      Tags:
+        items:
+          type: string
+        type: array
+    title: Service represents a Consul service definition.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  ServiceCheck:
+    properties:
+      AddressMode:
+        type: string
+      Args:
+        items:
+          type: string
+        type: array
+      CheckRestart:
+        $ref: '#/definitions/CheckRestart'
+      Command:
+        type: string
+      Expose:
+        type: boolean
+      GRPCService:
+        type: string
+      GRPCUseTLS:
+        type: boolean
+      Header:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      Id:
+        description: FIXME Id is unused. Remove?
+        type: string
+      InitialStatus:
+        type: string
+      Interval:
+        $ref: '#/definitions/Duration'
+      Method:
+        type: string
+      Name:
+        type: string
+      Path:
+        type: string
+      PortLabel:
+        type: string
+      Protocol:
+        type: string
+      TLSSkipVerify:
+        type: boolean
+      TaskName:
+        type: string
+      Timeout:
+        $ref: '#/definitions/Duration'
+      Type:
+        type: string
+    title: ServiceCheck represents the consul health check that Nomad registers.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  SidecarTask:
+    description: |-
+      SidecarTask represents a subset of Task fields that can be set to override
+      the fields of the Task generated for the sidecar
+    properties:
+      Config:
+        additionalProperties:
+          type: object
+        type: object
+      Driver:
+        type: string
+      Env:
+        additionalProperties:
+          type: string
+        type: object
+      KillSignal:
+        type: string
+      KillTimeout:
+        $ref: '#/definitions/Duration'
+      LogConfig:
+        $ref: '#/definitions/LogConfig'
+      Meta:
+        additionalProperties:
+          type: string
+        type: object
+      Name:
+        type: string
+      Resources:
+        $ref: '#/definitions/Resources'
+      ShutdownDelay:
+        $ref: '#/definitions/Duration'
+      User:
+        type: string
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Spread:
+    description: Spread is used to serialize task group allocation spread preferences
+    properties:
+      Attribute:
+        type: string
+      SpreadTarget:
+        items:
+          $ref: '#/definitions/SpreadTarget'
+        type: array
+      Weight:
+        format: int8
+        type: integer
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  SpreadTarget:
+    description: SpreadTarget is used to serialize target allocation spread percentages
+    properties:
+      Percent:
+        format: uint8
+        type: integer
+      Value:
+        type: string
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Task:
+    properties:
+      Affinities:
+        items:
+          $ref: '#/definitions/Affinity'
+        type: array
+      Artifacts:
+        items:
+          $ref: '#/definitions/TaskArtifact'
+        type: array
+      CSIPluginConfig:
+        $ref: '#/definitions/TaskCSIPluginConfig'
+      Config:
+        additionalProperties:
+          type: object
+        type: object
+      Constraints:
+        items:
+          $ref: '#/definitions/Constraint'
+        type: array
+      DispatchPayload:
+        $ref: '#/definitions/DispatchPayloadConfig'
+      Driver:
+        type: string
+      Env:
+        additionalProperties:
+          type: string
+        type: object
+      KillSignal:
+        type: string
+      KillTimeout:
+        $ref: '#/definitions/Duration'
+      Kind:
+        type: string
+      Leader:
+        type: boolean
+      Lifecycle:
+        $ref: '#/definitions/TaskLifecycle'
+      LogConfig:
+        $ref: '#/definitions/LogConfig'
+      Meta:
+        additionalProperties:
+          type: string
+        type: object
+      Name:
+        type: string
+      Resources:
+        $ref: '#/definitions/Resources'
+      RestartPolicy:
+        $ref: '#/definitions/RestartPolicy'
+      Services:
+        items:
+          $ref: '#/definitions/Service'
+        type: array
+      ShutdownDelay:
+        $ref: '#/definitions/Duration'
+      Templates:
+        items:
+          $ref: '#/definitions/Template'
+        type: array
+      User:
+        type: string
+      Vault:
+        $ref: '#/definitions/Vault'
+      VolumeMounts:
+        items:
+          $ref: '#/definitions/VolumeMount'
+        type: array
+    title: Task is a single process in a task group.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  TaskArtifact:
+    properties:
+      GetterMode:
+        type: string
+      GetterOptions:
+        additionalProperties:
+          type: string
+        type: object
+      GetterSource:
+        type: string
+      RelativeDest:
+        type: string
+    title: TaskArtifact is used to download artifacts before running a task.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  TaskCSIPluginConfig:
+    description: |-
+      TaskCSIPluginConfig contains the data that is required to setup a task as a
+      CSI plugin. This will be used by the csi_plugin_supervisor_hook to configure
+      mounts for the plugin and initiate the connection to the plugin catalog.
+    properties:
+      ID:
+        description: |-
+          ID is the identifier of the plugin.
+          Ideally this should be the FQDN of the plugin.
+        type: string
+      MountDir:
+        description: |-
+          MountDir is the destination that nomad should mount in its CSI
+          directory for the plugin. It will then expect a file called CSISocketName
+          to be created by the plugin, and will provide references into
+          "MountDir/CSIIntermediaryDirname/VolumeName/AllocID for mounts.
+
+          Default is /csi.
+        type: string
+      Type:
+        $ref: '#/definitions/CSIPluginType'
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  TaskGroup:
+    properties:
+      Affinities:
+        items:
+          $ref: '#/definitions/Affinity'
+        type: array
+      Constraints:
+        items:
+          $ref: '#/definitions/Constraint'
+        type: array
+      Count:
+        format: int64
+        type: integer
+      EphemeralDisk:
+        $ref: '#/definitions/EphemeralDisk'
+      Meta:
+        additionalProperties:
+          type: string
+        type: object
+      Migrate:
+        $ref: '#/definitions/MigrateStrategy'
+      Name:
+        type: string
+      Networks:
+        items:
+          $ref: '#/definitions/NetworkResource'
+        type: array
+      ReschedulePolicy:
+        $ref: '#/definitions/ReschedulePolicy'
+      RestartPolicy:
+        $ref: '#/definitions/RestartPolicy'
+      Scaling:
+        $ref: '#/definitions/ScalingPolicy'
+      Services:
+        items:
+          $ref: '#/definitions/Service'
+        type: array
+      ShutdownDelay:
+        $ref: '#/definitions/Duration'
+      Spreads:
+        items:
+          $ref: '#/definitions/Spread'
+        type: array
+      StopAfterClientDisconnect:
+        $ref: '#/definitions/Duration'
+      Tasks:
+        items:
+          $ref: '#/definitions/Task'
+        type: array
+      Update:
+        $ref: '#/definitions/UpdateStrategy'
+      Volumes:
+        additionalProperties:
+          $ref: '#/definitions/VolumeRequest'
+        type: object
+    title: TaskGroup is the unit of scheduling.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  TaskLifecycle:
+    properties:
+      Hook:
+        type: string
+      Sidecar:
+        type: boolean
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Template:
+    properties:
+      ChangeMode:
+        type: string
+      ChangeSignal:
+        type: string
+      DestPath:
+        type: string
+      EmbeddedTmpl:
+        type: string
+      Envvars:
+        type: boolean
+      LeftDelim:
+        type: string
+      Perms:
+        type: string
+      RightDelim:
+        type: string
+      SourcePath:
+        type: string
+      Splay:
+        $ref: '#/definitions/Duration'
+      VaultGrace:
+        $ref: '#/definitions/Duration'
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  UpdateStrategy:
+    properties:
+      AutoPromote:
+        type: boolean
+      AutoRevert:
+        type: boolean
+      Canary:
+        format: int64
+        type: integer
+      HealthCheck:
+        type: string
+      HealthyDeadline:
+        $ref: '#/definitions/Duration'
+      MaxParallel:
+        format: int64
+        type: integer
+      MinHealthyTime:
+        $ref: '#/definitions/Duration'
+      ProgressDeadline:
+        $ref: '#/definitions/Duration'
+      Stagger:
+        $ref: '#/definitions/Duration'
+    title: UpdateStrategy defines a task groups update strategy.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  Vault:
+    properties:
+      ChangeMode:
+        type: string
+      ChangeSignal:
+        type: string
+      Env:
+        type: boolean
+      Policies:
+        items:
+          type: string
+        type: array
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  VolumeMount:
+    description: |-
+      VolumeMount represents the relationship between a destination path in a task
+      and the task group volume that should be mounted there.
+    properties:
+      Destination:
+        type: string
+      PropagationMode:
+        type: string
+      ReadOnly:
+        type: boolean
+      Volume:
+        type: string
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  VolumeRequest:
+    properties:
+      MountOptions:
+        $ref: '#/definitions/CSIMountOptions'
+      Name:
+        type: string
+      ReadOnly:
+        type: boolean
+      Source:
+        type: string
+      Type:
+        type: string
+    title: VolumeRequest is a representation of a storage volume that a TaskGroup
+      wishes to use.
+    type: object
+    x-go-package: github.com/hashicorp/nomad/api
+  WorkflowDefinition:
+    properties:
+      meta:
+        additionalProperties:
+          type: object
+        type: object
+        x-go-name: Meta
+      name:
+        type: string
+        x-go-name: Name
+      steps:
+        additionalProperties:
+          $ref: '#/definitions/WorkflowStep'
+        type: object
+        x-go-name: Steps
+      version:
+        format: uint64
+        type: integer
+        x-go-name: Version
+    type: object
+    x-go-package: github.com/input-output-hk/cicero/src
+  WorkflowDefinitions:
+    additionalProperties:
+      $ref: '#/definitions/WorkflowDefinition'
+    type: object
+    x-go-package: github.com/input-output-hk/cicero/src
+  WorkflowStep:
+    properties:
+      failure:
+        additionalProperties:
+          type: object
+        type: object
+        x-go-name: Failure
+      inputs:
+        items:
+          type: string
+        type: array
+        x-go-name: Inputs
+      job:
+        $ref: '#/definitions/Job'
+      success:
+        additionalProperties:
+          type: object
+        type: object
+        x-go-name: Success
+      when:
+        additionalProperties:
+          type: boolean
+        type: object
+        x-go-name: When
+    type: object
+    x-go-package: github.com/input-output-hk/cicero/src
+host: https://brain.iohk.io
+info:
+  description: |-
+    Draft Specification of the Cicero REST API
+
+    "Am I allowed to deploy this?"* in our system means:
+    "Does this **artifact** pass all **gates**?* which translates to:
+    "Do all the artifact's gates have their **KRI**s below their defined threshold?"*
+
+    KRIs are calculated from **certificates** which are a special case of **events**.
+
+    So our basic types are:
+    Artifact
+    Gate
+    KRI
+    Certificate
+    Event
+
+    Everything is expressed through these types.
+
+    What exactly an artifact is is up for debate.
+    Here I assume it could be a build result, test result, or deployment action (still a build result but from another perspective, or a build result with deployment info attached).
+  title: Package classification Cicero API.
+  version: 1.0.0
+paths:
+  /api/workflow/{name}:
+    get:
+      operationId: GetWorkflow
+      parameters:
+      - description: The name of a workflow
+        in: path
+        name: name
+        required: true
+        type: string
+        x-go-name: String
+      responses:
+        "200":
+          $ref: '#/responses/WorkflowDefinition'
+      summary: Build a new workflow instance with certificates.
+      tags:
+      - workflow
+produces:
+- application/json
+responses:
+  WorkflowDefinition:
+    description: This text will appear as description of your response body.
+    schema:
+      $ref: '#/definitions/WorkflowDefinition'
+  WorkflowDefinitions:
+    description: This text will appear as description of your response body.
+    schema:
+      $ref: '#/definitions/WorkflowDefinitions'
+schemes:
+- https
+swagger: "2.0"
