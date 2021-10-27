@@ -56,8 +56,10 @@ let
           Tasks = [
             {
               Config = {
-                packages = [ "github:input-output-hk/cicero#run-script" ];
-                command = [ "/bin/run-script" language script ];
+                packages =
+                  assert pkgs ? "run-${language}";
+                  [ "github:input-output-hk/cicero#run-${language}" ];
+                command = [ "/bin/run-${language}" script ];
               };
             }
           ];
