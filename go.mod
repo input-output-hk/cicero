@@ -8,6 +8,8 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.1 // indirect
 	github.com/go-echarts/go-echarts/v2 v2.2.5-0.20211026072344-dc05f25cd7c2
 	github.com/go-kit/kit v0.12.0 // indirect
+	github.com/go-swagger/go-swagger v0.28.0 // indirect
+	github.com/hashicorp/hcl v1.0.1-vault-3 // indirect
 	github.com/hashicorp/nomad v1.1.6
 	github.com/hashicorp/nomad/api v0.0.0-20200529203653-c4416b26d3eb
 	github.com/kazukousen/gouml v0.0.0-20200217144925-c881f0b0c32d // indirect
@@ -23,4 +25,6 @@ require (
 	github.com/uptrace/bunrouter v1.0.0-rc.2
 	github.com/urfave/cli v1.22.5 // indirect
 	github.com/vivek-ng/concurrency-limiter v0.8.2
+	golang.org/x/net v0.0.0-20211020060615-d418f374d309 // indirect
+	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359 // indirect
 )

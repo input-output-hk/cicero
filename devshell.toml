@@ -38,6 +38,16 @@ name = "lint"
 command = "gocritic check -enableAll ./... && fd -e nix -X nixfmt -c"
 help = "Run code linters"
 
+[[commands]]
+name = "docs"
+command = "swagger generate spec -o swagger.yaml --scan-models"
+help = "Generate API documentation"
+
+[[commands]]
+name = "docs-serve"
+command = "docs && swagger serve --no-open -F=swagger swagger.yaml"
+help = "Generate and serve API documentation"
+
 [devshell]
 name = "cicero"
 packages = [
@@ -51,4 +61,5 @@ packages = [
   "gocritic",
   "fd",
   "nixfmt",
+  "go-swagger",
 ]
