@@ -70,8 +70,8 @@
         };
       };
 
-      packages =
-        { cicero, liftbridge-cli, bash, coreutils, gocritic, run-script }@pkgs:
+      packages = { cicero, liftbridge, liftbridge-cli, bash, coreutils, gocritic
+        , run-script }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;
