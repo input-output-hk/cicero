@@ -1,3 +1,1 @@
-{
-  datacenters = [ "dc1" ];
-}
+{ datacenters = [ "eu-central-1" "us-east-2" ]; }
