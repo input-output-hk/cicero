@@ -25,11 +25,10 @@ func Init() error {
 	}
 	DB = openedDB
 
-	openedNomadClient, err := nomad.NewClient(nomad.DefaultConfig())
+	nomadClient, err = nomad.NewClient(nomad.DefaultConfig())
 	if err != nil {
 		return err
 	}
-	nomadClient = openedNomadClient
 
 	return nil
 }
@@ -46,6 +45,12 @@ func openDb() (*bun.DB, error) {
 }
 
 func createStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []string) error {
+	md, err := bridge.FetchMetadata(context.Background())
+	if err != nil {
+		return errors.WithMessage(err, "Failed to fetch liftbridge metadata")
+	}
+	logger.Printf("Metadata: %v\n", md)
+
 	for _, streamName := range streamNames {
 		if err := bridge.CreateStream(
 			context.Background(),
