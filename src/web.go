@@ -15,12 +15,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/uptrace/bunrouter"
 )
 
 type WebCmd struct {
 	Addr   string `arg:"--listen" default:":8080"`
 	logger *log.Logger
+	bridge liftbridge.Client
 }
 
 func (cmd *WebCmd) init() {
@@ -36,7 +38,7 @@ func (cmd *WebCmd) Run() error {
 
 func (cmd *WebCmd) start(ctx context.Context) error {
 	cmd.init()
-	api := Api{}
+	api := Api{bridge: cmd.bridge}
 	api.init()
 
 	cmd.logger.Println("Starting Web")

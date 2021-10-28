@@ -27,12 +27,16 @@ func (cmd *AllCmd) Run() error {
 	brain := &BrainCmd{bridge: bridge}
 	brain.init()
 
-	supervisor.Add((&InvokerCmd{bridge: bridge}).start)
+	web := &WebCmd{Addr: cmd.Addr, bridge: bridge}
+	web.init()
+
+	invoker := &InvokerCmd{bridge: bridge}
+	invoker.init()
+
+	supervisor.Add(invoker.start)
 	supervisor.Add(brain.listenToCerts)
 	supervisor.Add(brain.listenToStart)
-	supervisor.Add((&WebCmd{
-		Addr: cmd.Addr,
-	}).start)
+	supervisor.Add(web.start)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
