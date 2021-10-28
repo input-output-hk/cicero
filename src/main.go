@@ -45,12 +45,6 @@ func openDb() (*bun.DB, error) {
 }
 
 func createStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []string) error {
-	md, err := bridge.FetchMetadata(context.Background())
-	if err != nil {
-		return errors.WithMessage(err, "Failed to fetch liftbridge metadata")
-	}
-	logger.Printf("Metadata: %v\n", md)
-
 	for _, streamName := range streamNames {
 		if err := bridge.CreateStream(
 			context.Background(),
@@ -71,6 +65,11 @@ func createStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []s
 }
 
 func publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg map[string]interface{}) error {
+	err := createStreams(logger, bridge, []string{stream})
+	if err != nil {
+		return errors.WithMessage(err, "Before publishing message")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
