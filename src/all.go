@@ -61,7 +61,7 @@ func (cmd *AllCmd) newSupervisor() *oversight.Tree {
 			log.New(os.Stderr, "all: ", log.LstdFlags),
 		),
 		oversight.WithSpecification(
-			5,                     // number of restarts
+			10,                    // number of restarts
 			1*time.Minute,         // within this time period
 			oversight.OneForOne(), // restart every task on its own
 		))

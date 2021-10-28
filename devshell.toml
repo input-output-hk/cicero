@@ -62,4 +62,5 @@ packages = [
   "fd",
   "nixfmt",
   "go-swagger",
+  "grafana-loki",
 ]
