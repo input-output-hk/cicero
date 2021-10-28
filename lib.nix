@@ -15,12 +15,10 @@ let
 
   inherit (flake.inputs.nixpkgs) lib;
 
-  hydrateNomadJob = { workflowName, stepName, job }: let
-    ID = "${workflowName}/${stepName}";
-  in
+  hydrateNomadJob = { workflowName, stepName, job }:
+    assert !(job ? ID); # workflow authors must not set an ID
     lib.recursiveUpdate job {
-      inherit ID;
-      Name = ID;
+      Name = "${workflowName}/${stepName}";
 
       type = "batch";
 

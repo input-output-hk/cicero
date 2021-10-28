@@ -2,6 +2,8 @@ package cicero
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"log"
 	"os"
 	"strconv"
@@ -9,9 +11,11 @@ import (
 	"time"
 
 	"cirello.io/oversight"
+	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
+	"github.com/uptrace/bun"
 	"github.com/vivek-ng/concurrency-limiter/priority"
 	"gopkg.in/yaml.v3"
 )
@@ -100,32 +104,36 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 			cmd.logger.Fatalf("error in liftbridge message: %s", err.Error())
 		}
 
-		inputs := string(msg.Value())
-		cmd.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
-
-		parts := strings.Split(msg.Subject(), ".")
-		workflowName := parts[1]
-		id, err := strconv.ParseUint(parts[2], 10, 64)
-		if err != nil {
-			cmd.logger.Printf("Invalid Workflow ID received, ignoring: %s\n", msg.Subject())
+		inputs := map[string]interface{}{}
+		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
+			cmd.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
+			cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", err)
 			return
 		}
 
-		err = cmd.invokeWorkflow(ctx, workflowName, id, inputs)
+		parts := strings.Split(msg.Subject(), ".")
+		workflowName := parts[1]
+		wfInstanceId, err := strconv.ParseUint(parts[2], 10, 64)
+		if err != nil {
+			cmd.logger.Printf("Invalid Workflow Instance ID received, ignoring: %s\n", msg.Subject())
+			return
+		}
+
+		err = cmd.invokeWorkflow(ctx, workflowName, wfInstanceId, inputs)
 		if err != nil {
 			cmd.logger.Println("Failed to invoke workflow", err)
 		}
 	}
 }
 
-func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, workflowId uint64, inputs string) error {
-	workflow, err := nixInstantiateWorkflow(cmd.logger, workflowName, workflowId, inputs)
+func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts) error {
+	workflow, err := nixInstantiateWorkflow(cmd.logger, workflowName, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
 
 	for stepName, step := range workflow.Steps {
-		err = cmd.invokeWorkflowStep(ctx, workflowName, workflowId, inputs, stepName, step)
+		err = cmd.invokeWorkflowStep(ctx, workflowName, wfInstanceId, inputs, stepName, step)
 		if err != nil {
 			return err
 		}
@@ -134,33 +142,102 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, workflowId uint64, inputs, stepName string, step WorkflowStep) error {
+func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts, stepName string, step WorkflowStep) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
 	cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.IsRunnable())
+
+	instance := &StepInstance{}
+	err := DB.NewSelect().
+		Model(instance).
+		Where("name = ? AND workflow_instance_id = ?", stepName, wfInstanceId).
+		Limit(1).
+		Scan(ctx)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return err
+		}
+		instance = nil
+	}
 
 	if step.IsRunnable() {
 		if err := addLogging(&step.Job); err != nil {
 			return err
 		}
 
-		response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
-		if err != nil {
-			return errors.WithMessage(err, "Failed to run step")
+		if instance == nil {
+			instance = &StepInstance{
+				ID:                 uuid.New(),
+				WorkflowInstanceId: wfInstanceId,
+				Name:               stepName,
+				Certs:              inputs,
+			}
 		}
 
-		if len(response.Warnings) > 0 {
-			cmd.logger.Println(response.Warnings)
-		}
-	} else {
-		_, _, err := nomadClient.Jobs().Deregister(*step.Job.ID, false, &nomad.WriteOptions{})
+		stepInstanceIdStr := instance.ID.String()
+		step.Job.ID = &stepInstanceIdStr
+
+		err := DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+			if _, err := cmd.insertStepInstance(ctx, tx, instance); err != nil {
+				return err
+			}
+
+			response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
+			if err != nil {
+				return errors.WithMessage(err, "Failed to run step")
+			}
+
+			if len(response.Warnings) > 0 {
+				cmd.logger.Println(response.Warnings)
+			}
+
+			return nil
+		})
 		if err != nil {
-			return errors.WithMessage(err, "Failed to stop step")
+			return err
+		}
+	} else if instance != nil {
+		err := DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+			_, _, err := nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{})
+			if err != nil {
+				return errors.WithMessage(err, "Failed to stop step")
+			}
+
+			instance.FinishedAt = time.Now().UTC()
+			_, err = DB.NewUpdate().
+				Model(instance).
+				WherePK().
+				Exec(ctx)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+func (cmd *InvokerCmd) insertStepInstance(ctx context.Context, db bun.IDB, instance *StepInstance) (sql.Result, error) {
+	var res sql.Result
+	res, err := db.NewInsert().
+		Model(instance).
+		Exec(ctx)
+
+	if err != nil {
+		cmd.logger.Printf("%#v %#v\n", res, err)
+		cmd.logger.Printf("Couldn't insert step instance: %s\n", err.Error())
+		return res, err
+	}
+
+	cmd.logger.Printf("Created step instance %#v\n", instance)
+
+	return res, nil
 }
 
 func addLogging(job *nomad.Job) error {

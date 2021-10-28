@@ -2,11 +2,11 @@ package cicero
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/google/uuid"
 	"github.com/liftbridge-io/go-liftbridge"
 )
 
@@ -74,18 +74,27 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 }
 
 func (a *Api) Workflows() (WorkflowDefinitions, error) {
-	return nixInstantiate(a.logger, "workflows", 0, "{}")
+	return nixInstantiate(a.logger, "workflows", 0, WorkflowCerts{})
 }
 
 func (a *Api) Workflow(name string, certs WorkflowCerts) (WorkflowDefinition, error) {
-	var def WorkflowDefinition
-	certsJson, err := json.Marshal(certs)
-	if err != nil {
-		return def, err
-	}
-	return nixInstantiateWorkflow(a.logger, name, 0, string(certsJson))
+	return nixInstantiateWorkflow(a.logger, name, 0, certs)
 }
 
 func (a *Api) WorkflowStart(name string) error {
 	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
+}
+
+func (a *Api) Step(id uuid.UUID) (StepInstance, error) {
+	var instance StepInstance
+
+	err := DB.NewSelect().
+		Model(&instance).
+		Where("id = ?", id).
+		Scan(context.Background())
+	if err != nil {
+		return instance, err
+	}
+
+	return instance, nil
 }

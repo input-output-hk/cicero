@@ -2,6 +2,8 @@ package cicero
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 )
 
@@ -35,3 +37,12 @@ type WorkflowInstance struct {
 }
 
 type WorkflowCerts map[string]interface{}
+
+type StepInstance struct {
+	ID                 uuid.UUID     `bun:",notnull,type:blob"` // FIXME still stored as string
+	WorkflowInstanceId uint64        `bun:",notnull"`
+	Name               string        `bun:",notnull"`
+	Certs              WorkflowCerts `bun:",notnull"`
+	CreatedAt          time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
+	FinishedAt         time.Time     `bun:",nullzero"`
+}

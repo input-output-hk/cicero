@@ -64,7 +64,7 @@ func createStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []s
 	return nil
 }
 
-func publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg map[string]interface{}) error {
+func publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg WorkflowCerts) error {
 	err := createStreams(logger, bridge, []string{stream})
 	if err != nil {
 		return errors.WithMessage(err, "Before publishing message")

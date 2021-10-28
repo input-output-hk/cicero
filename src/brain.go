@@ -25,13 +25,7 @@ type BrainCmd struct {
 func (w *WorkflowInstance) GetDefinition(logger *log.Logger) (WorkflowDefinition, error) {
 	var def WorkflowDefinition
 
-	var certs []byte
-	certs, err := json.Marshal(w.Certs)
-	if err != nil {
-		return def, err
-	}
-
-	def, err = nixInstantiateWorkflow(logger, w.Name, w.ID, string(certs))
+	def, err := nixInstantiateWorkflow(logger, w.Name, w.ID, w.Certs)
 	if err != nil {
 		return def, err
 	}

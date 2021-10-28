@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/google/uuid"
 	"github.com/uptrace/bunrouter"
 )
 
@@ -140,6 +141,21 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 					return err
 				}
 				return bunrouter.JSON(w, steps)
+			})
+		})
+		group.WithGroup("/step", func(group *bunrouter.Group) {
+			group.GET("/:id", func(w http.ResponseWriter, req bunrouter.Request) error {
+				id, err := uuid.Parse(req.Param("id"))
+				if err != nil {
+					return err
+				}
+
+				step, err := api.Step(id)
+				if err != nil {
+					return err
+				}
+
+				return bunrouter.JSON(w, step)
 			})
 		})
 	})
