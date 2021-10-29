@@ -14,7 +14,8 @@ import (
 type AllCmd struct {
 	Addr           string `arg:"--listen" default:":8080"`
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	Evaluator      string `arg:"--evaluator" default:"eval-wfs"`
+	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	WorkflowsDir   string `arg:"--workflows" default:"./workflows"`
 }
 
 func (cmd *AllCmd) Run() error {
@@ -25,23 +26,23 @@ func (cmd *AllCmd) Run() error {
 
 	supervisor := cmd.newSupervisor()
 
-	evaluator := NewEvaluator(cmd.Evaluator)
+	evaluator := NewEvaluator(cmd.Evaluator, cmd.WorkflowsDir)
 
 	brain := &BrainCmd{
-		bridge: bridge,
+		bridge:    bridge,
 		evaluator: evaluator,
 	}
 	brain.init()
 
 	web := &WebCmd{
-		Addr: cmd.Addr,
-		bridge: bridge,
+		Addr:      cmd.Addr,
+		bridge:    bridge,
 		evaluator: evaluator,
 	}
 	web.init()
 
 	invoker := &InvokerCmd{
-		bridge: bridge,
+		bridge:    bridge,
 		evaluator: evaluator,
 	}
 	invoker.init()
