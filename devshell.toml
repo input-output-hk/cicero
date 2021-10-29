@@ -48,6 +48,11 @@ name = "docs-serve"
 command = "docs && swagger serve --no-open -F=swagger swagger.yaml"
 help = "Generate and serve API documentation"
 
+[[commands]]
+name = "eval-wfs"
+command = "$(nix build .#cicero-evaluator-nix --json --no-link | jq -r .[].outputs.out)/bin/* \"${1:-}\" ./workflows"
+help = "Workflow Evaluator (Nix)"
+
 [devshell]
 name = "cicero"
 packages = [

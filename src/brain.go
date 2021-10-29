@@ -17,20 +17,10 @@ import (
 )
 
 type BrainCmd struct {
-	logger *log.Logger
-	tree   *oversight.Tree
-	bridge liftbridge.Client
-}
-
-func (w *WorkflowInstance) GetDefinition(logger *log.Logger) (WorkflowDefinition, error) {
-	var def WorkflowDefinition
-
-	def, err := nixInstantiateWorkflow(logger, w.Name, w.ID, w.Certs)
-	if err != nil {
-		return def, err
-	}
-
-	return def, nil
+	logger    *log.Logger
+	tree      *oversight.Tree
+	bridge    liftbridge.Client
+	evaluator Evaluator
 }
 
 func (cmd *BrainCmd) init() {
@@ -45,7 +35,6 @@ func (cmd *BrainCmd) init() {
 			oversight.OneForOne(), // restart every task on its own
 		))
 	}
-
 }
 
 func (cmd *BrainCmd) Run() error {

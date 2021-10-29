@@ -17,7 +17,8 @@
 
       overlay = final: prev:
         {
-          cicero = prev.callPackage ./pkgs/cicero.nix { flake = self; };
+          cicero = prev.callPackage ./pkgs/cicero { flake = self; };
+          cicero-evaluator-nix = prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
           liftbridge = prev.callPackage ./pkgs/liftbridge.nix {};
           liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix {};
           gouml = prev.callPackage ./pkgs/gouml.nix {};
@@ -26,6 +27,7 @@
 
       packages =
         { cicero
+        , cicero-evaluator-nix
         , liftbridge
         , liftbridge-cli
         , gocritic

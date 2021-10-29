@@ -14,6 +14,7 @@ import (
 type AllCmd struct {
 	Addr           string `arg:"--listen" default:":8080"`
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	Evaluator      string `arg:"--evaluator" default:"eval-wfs"`
 }
 
 func (cmd *AllCmd) Run() error {
@@ -24,13 +25,25 @@ func (cmd *AllCmd) Run() error {
 
 	supervisor := cmd.newSupervisor()
 
-	brain := &BrainCmd{bridge: bridge}
+	evaluator := NewEvaluator(cmd.Evaluator)
+
+	brain := &BrainCmd{
+		bridge: bridge,
+		evaluator: evaluator,
+	}
 	brain.init()
 
-	web := &WebCmd{Addr: cmd.Addr, bridge: bridge}
+	web := &WebCmd{
+		Addr: cmd.Addr,
+		bridge: bridge,
+		evaluator: evaluator,
+	}
 	web.init()
 
-	invoker := &InvokerCmd{bridge: bridge}
+	invoker := &InvokerCmd{
+		bridge: bridge,
+		evaluator: evaluator,
+	}
 	invoker.init()
 
 	supervisor.Add(invoker.start)

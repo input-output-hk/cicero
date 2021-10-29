@@ -27,6 +27,7 @@ type InvokerCmd struct {
 	tree    *oversight.Tree
 	limiter *priority.PriorityLimiter
 	bridge  liftbridge.Client
+	evaluator Evaluator
 }
 
 func (cmd *InvokerCmd) init() {
@@ -127,7 +128,7 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 }
 
 func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts) error {
-	workflow, err := nixInstantiateWorkflow(cmd.logger, workflowName, wfInstanceId, inputs)
+	workflow, err := cmd.evaluator.EvaluateWorkflow(workflowName, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}

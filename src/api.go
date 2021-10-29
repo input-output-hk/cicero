@@ -13,6 +13,7 @@ import (
 type Api struct {
 	logger *log.Logger
 	bridge liftbridge.Client
+	evaluator Evaluator
 }
 
 func (api *Api) init() {
@@ -58,14 +59,14 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 			return def, err
 		}
 
-		def, err = instance.GetDefinition(logger)
+		def, err = instance.GetDefinition(logger, a.evaluator)
 		if err != nil {
 			return def, err
 		}
 		return def, nil
 	} else {
 		var err error
-		def, err := a.Workflow(wfName, WorkflowCerts{})
+		def, err := a.Workflow(wfName)
 		if err != nil {
 			return def, err
 		}
@@ -73,12 +74,14 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 	}
 }
 
-func (a *Api) Workflows() (WorkflowDefinitions, error) {
-	return nixInstantiate(a.logger, "workflows", 0, WorkflowCerts{})
+// TODO superfluous?
+func (a *Api) Workflows() ([]string, error) {
+	return a.evaluator.ListWorkflows()
 }
 
-func (a *Api) Workflow(name string, certs WorkflowCerts) (WorkflowDefinition, error) {
-	return nixInstantiateWorkflow(a.logger, name, 0, certs)
+// TODO superfluous?
+func (a *Api) Workflow(name string) (WorkflowDefinition, error) {
+	return a.evaluator.EvaluateWorkflow(name, 0, WorkflowCerts{})
 }
 
 func (a *Api) WorkflowStart(name string) error {

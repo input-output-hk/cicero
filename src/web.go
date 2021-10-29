@@ -24,6 +24,7 @@ type WebCmd struct {
 	Addr   string `arg:"--listen" default:":8080"`
 	logger *log.Logger
 	bridge liftbridge.Client
+	evaluator Evaluator
 }
 
 func (cmd *WebCmd) init() {
@@ -39,7 +40,10 @@ func (cmd *WebCmd) Run() error {
 
 func (cmd *WebCmd) start(ctx context.Context) error {
 	cmd.init()
-	api := Api{bridge: cmd.bridge}
+	api := Api{
+		bridge: cmd.bridge,
+		evaluator: cmd.evaluator,
+	}
 	api.init()
 
 	cmd.logger.Println("Starting Web")
@@ -136,7 +140,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return bunrouter.JSON(w, wfs)
 			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-				steps, err := api.Workflow(req.Param("name"), WorkflowCerts{})
+				steps, err := api.Workflow(req.Param("name"))
 				if err != nil {
 					return err
 				}

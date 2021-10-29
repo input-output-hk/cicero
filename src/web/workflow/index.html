@@ -8,8 +8,8 @@
 	{{range .}}
 	<tr>
 		<td>
-			<a href="/workflow/{{.Name | pathEscape}}">
-				{{.Name}}
+			<a href="/workflow/{{. | pathEscape}}">
+				{{.}}
 			</a>
 		</td>
 	</tr>

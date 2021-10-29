@@ -1,19 +1,18 @@
-{ id, inputs ? {} }:
+{ cicero, id, inputs ? {}, dir }:
 
 let
-  inherit (builtins) all attrNames attrValues fromJSON functionArgs getFlake typeOf;
+  inherit (builtins) all attrNames attrValues fromJSON functionArgs typeOf;
 
   parsedInputs = {
     "set" = inputs;
     "string" = builtins.fromJSON inputs;
   }.${typeOf inputs};
 
-  flake = getFlake (toString ./.);
   pkgs =
-    flake.inputs.nixpkgs.legacyPackages.${builtins.currentSystem}
-    // flake.legacyPackages.${builtins.currentSystem};
+    cicero.inputs.nixpkgs.legacyPackages.${builtins.currentSystem}
+    // cicero.legacyPackages.${builtins.currentSystem};
 
-  inherit (flake.inputs.nixpkgs) lib;
+  inherit (cicero.inputs.nixpkgs) lib;
 
   hydrateNomadJob = { workflowName, stepName, job }:
     assert !(job ? ID); # workflow authors must not set an ID
@@ -134,4 +133,4 @@ let
   );
 in
 
-{ workflows = workflows ./workflows; }
+workflows dir

@@ -1,6 +1,7 @@
 package cicero
 
 import (
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,6 +35,17 @@ type WorkflowInstance struct {
 	Certs     WorkflowCerts `bun:",notnull"`
 	CreatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
 	UpdatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
+}
+
+func (w *WorkflowInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowDefinition, error) {
+	var def WorkflowDefinition
+
+	def, err := evaluator.EvaluateWorkflow(w.Name, w.ID, w.Certs)
+	if err != nil {
+		return def, err
+	}
+
+	return def, nil
 }
 
 type WorkflowCerts map[string]interface{}
