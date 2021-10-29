@@ -49,9 +49,15 @@ command = "docs && swagger serve --no-open -F=swagger swagger.yaml"
 help = "Generate and serve API documentation"
 
 [[commands]]
-name = "eval-wfs"
-command = "$(nix build .#cicero-evaluator-nix --json --no-link | jq -r .[].outputs.out)/bin/* \"${1:-}\" ./workflows"
+name = "wfs-list"
+command = "cicero-evaluator-nix list ./workflows"
+help = "Workflow Evaluator List (Nix)"
+
+[[commands]]
+name = "wfs-eval"
+command = "cicero-evaluator-nix eval ./workflows"
 help = "Workflow Evaluator (Nix)"
+
 
 [devshell]
 name = "cicero"
@@ -68,4 +74,5 @@ packages = [
   "nixfmt",
   "go-swagger",
   "grafana-loki",
+  "cicero-evaluator-nix",
 ]
