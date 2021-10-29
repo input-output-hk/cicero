@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/model"
 	"log"
 	"os"
 	"strconv"
@@ -22,8 +23,8 @@ type BrainCmd struct {
 	bridge liftbridge.Client
 }
 
-func (w *WorkflowInstance) GetDefinition(logger *log.Logger) (WorkflowDefinition, error) {
-	var def WorkflowDefinition
+func GetDefinition(w model.WorkflowInstance, logger *log.Logger) (model.WorkflowDefinition, error) {
+	var def model.WorkflowDefinition
 
 	var certs []byte
 	certs, err := json.Marshal(w.Certs)
@@ -116,7 +117,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 			}
 
 			err = DB.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
-				return cmd.insertWorkflow(tx, &WorkflowInstance{Name: workflowName, Certs: received})
+				return cmd.insertWorkflow(tx, &model.WorkflowInstance{Name: workflowName, Certs: received})
 			})
 
 			if err != nil {
@@ -133,7 +134,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	return nil
 }
 
-func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *WorkflowInstance) error {
+func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *model.WorkflowInstance) error {
 	res, err := db.
 		NewInsert().
 		Model(workflow).
@@ -196,7 +197,7 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 			}
 
 			err = DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-				existing := &WorkflowInstance{Name: workflowName}
+				existing := &model.WorkflowInstance{Name: workflowName}
 				err = tx.NewSelect().
 					Model(existing).
 					Where("id = ?", id).

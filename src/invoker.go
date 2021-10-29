@@ -2,6 +2,7 @@ package cicero
 
 import (
 	"context"
+	"github.com/input-output-hk/cicero/src/model"
 	"log"
 	"os"
 	"strconv"
@@ -133,7 +134,7 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, workflowId uint64, inputs, stepName string, step WorkflowStep) error {
+func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, workflowId uint64, inputs, stepName string, step model.WorkflowStep) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 

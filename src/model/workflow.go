@@ -1,8 +1,8 @@
-package cicero
+package model
 
 import (
-	"time"
 	nomad "github.com/hashicorp/nomad/api"
+	"time"
 )
 
 type WorkflowDefinitions map[string]*WorkflowDefinition

@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/model"
 	"html/template"
 	"log"
 	"mime"
@@ -135,7 +136,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return bunrouter.JSON(w, wfs)
 			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-				steps, err := api.Workflow(req.Param("name"), WorkflowCerts{})
+				steps, err := api.Workflow(req.Param("name"), model.WorkflowCerts{})
 				if err != nil {
 					return err
 				}

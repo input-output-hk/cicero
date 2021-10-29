@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/model"
 	"log"
 	"os"
 
@@ -21,8 +22,8 @@ func (api *Api) init() {
 	}
 }
 
-func (a *Api) WorkflowInstances(name string) ([]WorkflowInstance, error) {
-	instances := []WorkflowInstance{}
+func (a *Api) WorkflowInstances(name string) ([]model.WorkflowInstance, error) {
+	instances := []model.WorkflowInstance{}
 
 	err := DB.NewSelect().
 		Model(&instances).
@@ -35,8 +36,8 @@ func (a *Api) WorkflowInstances(name string) ([]WorkflowInstance, error) {
 	return instances, nil
 }
 
-func (a *Api) WorkflowInstance(wfName string, id uint64) (WorkflowInstance, error) {
-	var instance WorkflowInstance
+func (a *Api) WorkflowInstance(wfName string, id uint64) (model.WorkflowInstance, error) {
+	var instance model.WorkflowInstance
 
 	err := DB.NewSelect().
 		Model(&instance).
@@ -49,23 +50,23 @@ func (a *Api) WorkflowInstance(wfName string, id uint64) (WorkflowInstance, erro
 	return instance, nil
 }
 
-func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (WorkflowDefinition, error) {
+func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (model.WorkflowDefinition, error) {
 	if instanceId != nil {
-		var def WorkflowDefinition
+		var def model.WorkflowDefinition
 
 		instance, err := a.WorkflowInstance(wfName, *instanceId)
 		if err != nil {
 			return def, err
 		}
 
-		def, err = instance.GetDefinition(logger)
+		def, err = GetDefinition(instance, logger)
 		if err != nil {
 			return def, err
 		}
 		return def, nil
 	} else {
 		var err error
-		def, err := a.Workflow(wfName, WorkflowCerts{})
+		def, err := a.Workflow(wfName, model.WorkflowCerts{})
 		if err != nil {
 			return def, err
 		}
@@ -73,12 +74,12 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 	}
 }
 
-func (a *Api) Workflows() (WorkflowDefinitions, error) {
+func (a *Api) Workflows() (model.WorkflowDefinitions, error) {
 	return nixInstantiate(a.logger, "workflows", 0, "{}")
 }
 
-func (a *Api) Workflow(name string, certs WorkflowCerts) (WorkflowDefinition, error) {
-	var def WorkflowDefinition
+func (a *Api) Workflow(name string, certs model.WorkflowCerts) (model.WorkflowDefinition, error) {
+	var def model.WorkflowDefinition
 	certsJson, err := json.Marshal(certs)
 	if err != nil {
 		return def, err
@@ -87,5 +88,5 @@ func (a *Api) Workflow(name string, certs WorkflowCerts) (WorkflowDefinition, er
 }
 
 func (a *Api) WorkflowStart(name string) error {
-	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
+	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", model.WorkflowCerts{})
 }
