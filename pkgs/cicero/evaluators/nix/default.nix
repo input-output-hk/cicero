@@ -29,7 +29,9 @@ writers.writeBashBin "cicero-evaluator-nix" ''
   case "''${1:-}" in
     list )
         evaluate \
-          --expr '{ id, inputs, cicero, dir } @ args: builtins.attrNames (import ${./lib.nix} args)' \
+          --expr '{ id, inputs, cicero, dir } @ args: builtins.attrNames (import ${
+            ./lib.nix
+          } args)' \
           --argstr id 0 \
           --argstr inputs '{}'
         ;;

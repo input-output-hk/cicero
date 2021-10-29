@@ -4,7 +4,7 @@
   version = 0;
 
   steps = {
-    python = {}: {
+    python = { }: {
       job = (run "python" ''
         print("running python ${id}")
       '') // (import ../../workflows-nomad.nix);

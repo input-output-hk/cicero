@@ -6,21 +6,17 @@ let
 
   install = pkgs:
     let
-      profileInstall = builtins.concatStringsSep "\n" (
-        map
-          (pkg: "nix profile install ${pkg} --profile local")
-          pkgs
-      );
-    in
-      ''
-        export NIX_CONFIG="
-        experimental-features = nix-command flakes
-        "
+      profileInstall = builtins.concatStringsSep "\n"
+        (map (pkg: "nix profile install ${pkg} --profile local") pkgs);
+    in ''
+      export NIX_CONFIG="
+      experimental-features = nix-command flakes
+      "
 
-        ${profileInstall}
+      ${profileInstall}
 
-        export PATH="$PATH:$PWD/local/bin"
-      '';
+      export PATH="$PATH:$PWD/local/bin"
+    '';
 
   clone = pr: ''
     set -exuo pipefail
@@ -32,13 +28,12 @@ let
     cd src
     git checkout ${pr.sha}
   '';
-in
 
-{
+in {
   version = 0;
 
   steps = {
-    gocritic = { pr ? {} }: {
+    gocritic = { pr ? { } }: {
       when = {
         "pr.repository.clone_url exists" = hasCloneUrl pr;
         "pr.sha exists" = hasGitHash pr;
@@ -53,7 +48,7 @@ in
       '') // (import ../workflows-nomad.nix);
     };
 
-    nixfmt = { pr ? {} }: {
+    nixfmt = { pr ? { } }: {
       when = {
         "pr.repository.clone_url exists" = hasCloneUrl pr;
         "pr.sha exists" = hasGitHash pr;
