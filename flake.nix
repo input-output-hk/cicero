@@ -24,6 +24,9 @@
           liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
           gouml = prev.callPackage ./pkgs/gouml.nix { };
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
+          wfs = prev.writeShellScriptBin "wfs" ''
+            exec ${final.cicero-evaluator-nix}/bin/cicero-evaluator-nix "''${1:-}" ./workflows
+          '';
           nomad-dev = let
             cfg = builtins.toFile "nomad.hcl" ''
               log_level = "TRACE"
@@ -48,7 +51,8 @@
         } // (import ./runners.nix final prev);
 
       packages = { cicero, cicero-evaluator-nix, liftbridge, liftbridge-cli
-        , gocritic, nomad-dev, run-bash, run-python, run-perl, run-js }@pkgs:
+        , gocritic, nomad-dev, wfs, run-bash, run-python, run-perl, run-js
+        }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;
