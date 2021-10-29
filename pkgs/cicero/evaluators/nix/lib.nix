@@ -28,16 +28,7 @@ let
             lib.recursiveUpdate {
               Name = stepName;
               Driver = "nix";
-              Config = lib.recursiveUpdate {
-                resolv_conf = "copy-host";
-                boot = false;
-                user_namespacing = false;
-                network_veth = false;
-                console = "read-only";
-                ephemeral = true;
-                process_two = false;
-                volatile = "overlay";
-              } task.Config;
+              Config = task.Config;
             } task) group.Tasks;
         }) job.TaskGroups;
     };
