@@ -12,16 +12,14 @@ import (
 )
 
 type Evaluator struct {
-	Command      string
-	WorkflowsDir string
-	logger       *log.Logger
+	Command string
+	logger  *log.Logger
 }
 
-func NewEvaluator(command, workflowsDir string) Evaluator {
+func NewEvaluator(command string) Evaluator {
 	return Evaluator{
-		Command:      command,
-		WorkflowsDir: workflowsDir,
-		logger:       log.New(os.Stderr, "evaluator: ", log.LstdFlags),
+		Command: command,
+		logger:  log.New(os.Stderr, "evaluator: ", log.LstdFlags),
 	}
 }
 
@@ -36,7 +34,6 @@ func (e *Evaluator) EvaluateWorkflow(name string, id uint64, inputs WorkflowCert
 	cmd := exec.Command(
 		e.Command,
 		"eval",
-		e.WorkflowsDir,
 	)
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_NAME="+name)
@@ -66,7 +63,6 @@ func (e *Evaluator) ListWorkflows() ([]string, error) {
 	cmd := exec.Command(
 		e.Command,
 		"list",
-		e.WorkflowsDir,
 	)
 
 	e.logger.Printf("running %s\n", strings.Join(cmd.Args, " "))

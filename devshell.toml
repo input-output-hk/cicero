@@ -49,15 +49,9 @@ command = "docs && swagger serve --no-open -F=swagger swagger.yaml"
 help = "Generate and serve API documentation"
 
 [[commands]]
-name = "wfs-list"
-command = "cicero-evaluator-nix list ./workflows"
-help = "Workflow Evaluator List (Nix)"
-
-[[commands]]
-name = "wfs-eval"
-command = "cicero-evaluator-nix eval ./workflows"
-help = "Workflow Evaluator (Nix)"
-
+name = "wfs"
+command = "cicero-evaluator-nix \"${1:-}\" ./workflows"
+help = "Workflow Evaluator (Nix) (wrapper that reads ./workflows)"
 
 [devshell]
 name = "cicero"
