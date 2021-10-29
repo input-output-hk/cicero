@@ -7,7 +7,7 @@
 # How To Run
 
 ```
-nix run github:input-output-hk/bitte#nomad -- agent -dev \
+sudo nix run github:input-output-hk/bitte#nomad -- agent -dev \
 	-config $(nix eval --impure --raw --expr 'builtins.getFlake "github:input-output-hk/nomad-driver-nix" + "/example/agent.hcl"') \
 	-plugin-dir $(nix build --no-link --json github:input-output-hk/nomad-driver-nix | jq -r .[].outputs.out)/bin &
 nix develop -c foreman start
