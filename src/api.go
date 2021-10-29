@@ -11,8 +11,8 @@ import (
 )
 
 type Api struct {
-	logger *log.Logger
-	bridge liftbridge.Client
+	logger    *log.Logger
+	bridge    liftbridge.Client
 	evaluator Evaluator
 }
 

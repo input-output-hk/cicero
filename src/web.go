@@ -15,15 +15,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/google/uuid"
+	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/uptrace/bunrouter"
 )
 
 type WebCmd struct {
-	Addr   string `arg:"--listen" default:":8080"`
-	logger *log.Logger
-	bridge liftbridge.Client
+	Addr      string `arg:"--listen" default:":8080"`
+	logger    *log.Logger
+	bridge    liftbridge.Client
 	evaluator Evaluator
 }
 
@@ -41,7 +41,7 @@ func (cmd *WebCmd) Run() error {
 func (cmd *WebCmd) start(ctx context.Context) error {
 	cmd.init()
 	api := Api{
-		bridge: cmd.bridge,
+		bridge:    cmd.bridge,
 		evaluator: cmd.evaluator,
 	}
 	api.init()

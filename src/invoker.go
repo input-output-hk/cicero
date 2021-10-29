@@ -23,10 +23,10 @@ import (
 const invokeStreamName = "workflow.*.*.invoke"
 
 type InvokerCmd struct {
-	logger  *log.Logger
-	tree    *oversight.Tree
-	limiter *priority.PriorityLimiter
-	bridge  liftbridge.Client
+	logger    *log.Logger
+	tree      *oversight.Tree
+	limiter   *priority.PriorityLimiter
+	bridge    liftbridge.Client
 	evaluator Evaluator
 }
 
