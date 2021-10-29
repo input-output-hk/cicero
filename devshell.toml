@@ -53,6 +53,10 @@ name = "wfs"
 command = "cicero-evaluator-nix \"${1:-}\" ./workflows"
 help = "Workflow Evaluator (Nix) (wrapper that reads ./workflows)"
 
+[[commands]]
+package = "nomad-dev"
+help = "Run Nomad in development mode with Nix driver"
+
 [devshell]
 name = "cicero"
 packages = [

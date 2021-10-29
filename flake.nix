@@ -18,30 +18,43 @@
       overlay = final: prev:
         {
           cicero = prev.callPackage ./pkgs/cicero { flake = self; };
-          cicero-evaluator-nix = prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
-          liftbridge = prev.callPackage ./pkgs/liftbridge.nix {};
-          liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix {};
-          gouml = prev.callPackage ./pkgs/gouml.nix {};
-          gocritic = prev.callPackage ./pkgs/gocritic.nix {};
+          cicero-evaluator-nix =
+            prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
+          liftbridge = prev.callPackage ./pkgs/liftbridge.nix { };
+          liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
+          gouml = prev.callPackage ./pkgs/gouml.nix { };
+          gocritic = prev.callPackage ./pkgs/gocritic.nix { };
+          nomad-dev = let
+            cfg = builtins.toFile "nomad.hcl" ''
+              log_level = "TRACE"
+              plugin "nix_driver" {}
+            '';
+          in prev.writeShellScriptBin "nomad-dev" ''
+            set -exuo pipefail
+
+            driver="$(
+              nix build github:input-output-hk/nomad-driver-nix \
+              --no-link \
+              --json \
+              | jq -r '.[].outputs.out'
+            )"
+
+            sudo ${prev.nomad}/bin/nomad \
+              agent \
+              -dev \
+              -config ${cfg} \
+              -plugin-dir "$driver/bin"
+          '';
         } // (import ./runners.nix final prev);
 
-      packages =
-        { cicero
-        , cicero-evaluator-nix
-        , liftbridge
-        , liftbridge-cli
-        , gocritic
-        , run-bash
-        , run-python
-        , run-perl
-        , run-js
-        } @ pkgs:
-          pkgs // {
-            lib = nixpkgs.lib;
-            defaultPackage = cicero;
-          };
+      packages = { cicero, cicero-evaluator-nix, liftbridge, liftbridge-cli
+        , gocritic, nomad-dev, run-bash, run-python, run-perl, run-js }@pkgs:
+        pkgs // {
+          lib = nixpkgs.lib;
+          defaultPackage = cicero;
+        };
 
-      hydraJobs = { cicero } @ pkgs: pkgs;
+      hydraJobs = { cicero }@pkgs: pkgs;
 
       devShell = { devshell }: devshell.fromTOML ./devshell.toml;
     };
