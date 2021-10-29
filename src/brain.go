@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
 	"strconv"
@@ -88,7 +89,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToStart")
 	streamName := "workflow.*.start"
 
-	err := createStreams(cmd.logger, cmd.bridge, []string{streamName})
+	err := service.CreateStreams(cmd.logger, cmd.bridge, []string{streamName})
 	if err != nil {
 		return err
 	}
@@ -148,7 +149,7 @@ func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *model.WorkflowInstance
 
 	cmd.logger.Printf("Created workflow %#v\n", workflow)
 
-	publish(
+	service.Publish(
 		cmd.logger,
 		cmd.bridge,
 		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
@@ -163,7 +164,7 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToCerts")
 	streamName := "workflow.*.*.cert"
 
-	err := createStreams(cmd.logger, cmd.bridge, []string{streamName})
+	err := service.CreateStreams(cmd.logger, cmd.bridge, []string{streamName})
 	if err != nil {
 		return err
 	}
@@ -235,7 +236,7 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 
 				cmd.logger.Printf("Updated workflow %#v\n", existing)
 
-				publish(
+				service.Publish(
 					cmd.logger,
 					cmd.bridge,
 					fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),

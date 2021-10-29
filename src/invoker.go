@@ -3,6 +3,7 @@ package cicero
 import (
 	"context"
 	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
 	"strconv"
@@ -74,7 +75,7 @@ func (cmd *InvokerCmd) listenToInvoke(ctx context.Context) error {
 	cmd.init()
 	cmd.logger.Println("Starting Invoker.listenToInvoke")
 
-	err := createStreams(cmd.logger, cmd.bridge, []string{invokeStreamName})
+	err := service.CreateStreams(cmd.logger, cmd.bridge, []string{invokeStreamName})
 	if err != nil {
 		return err
 	}

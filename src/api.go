@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
 
@@ -88,5 +89,5 @@ func (a *Api) Workflow(name string, certs model.WorkflowCerts) (model.WorkflowDe
 }
 
 func (a *Api) WorkflowStart(name string) error {
-	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", model.WorkflowCerts{})
+	return service.Publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", model.WorkflowCerts{})
 }
