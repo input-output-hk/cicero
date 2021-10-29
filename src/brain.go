@@ -91,7 +91,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 
 			cmd.logger.Printf("Received start for workflow %s", workflowName)
 
-			received := map[string]interface{}{}
+			received := WorkflowCerts{}
 			unmarshalErr := json.Unmarshal(msg.Value(), &received)
 			if unmarshalErr != nil {
 				cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
