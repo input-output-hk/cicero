@@ -148,6 +148,13 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 			})
 		})
 		group.WithGroup("/step", func(group *bunrouter.Group) {
+			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+				steps, err := api.Steps()
+				if err != nil {
+					return err
+				}
+				return bunrouter.JSON(w, steps)
+			})
 			group.GET("/:id", func(w http.ResponseWriter, req bunrouter.Request) error {
 				id, err := uuid.Parse(req.Param("id"))
 				if err != nil {

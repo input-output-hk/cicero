@@ -88,6 +88,19 @@ func (a *Api) WorkflowStart(name string) error {
 	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
 }
 
+func (a *Api) Steps() ([]StepInstance, error) {
+	instances := make([]StepInstance, 0)
+
+	err := DB.NewSelect().
+		Model(&instances).
+		Scan(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return instances, nil
+}
+
 func (a *Api) Step(id uuid.UUID) (StepInstance, error) {
 	var instance StepInstance
 
