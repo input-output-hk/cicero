@@ -8,6 +8,7 @@ require (
 	github.com/armon/go-metrics v0.3.9 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/fatih/color v1.12.0 // indirect
+	github.com/georgysavva/scany v0.2.9
 	github.com/go-echarts/go-echarts/v2 v2.2.5-0.20211026072344-dc05f25cd7c2
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/cronexpr v1.1.1 // indirect
@@ -18,6 +19,8 @@ require (
 	github.com/hashicorp/hcl v1.0.1-vault-3 // indirect
 	github.com/hashicorp/nomad/api v0.0.0-20200529203653-c4416b26d3eb
 	github.com/hashicorp/raft v1.1.3-0.20200211192230-365023de17e6 // indirect
+	github.com/jackc/pgtype v1.8.1
+	github.com/jackc/pgx/v4 v4.13.0
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/liftbridge-io/go-liftbridge v1.1.0
@@ -31,7 +34,8 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/viper v1.9.0 // indirect
 	github.com/stretchr/testify v1.7.0
-	github.com/uptrace/bun v1.0.11
+	github.com/uptrace/bun v1.0.15
+	github.com/uptrace/bun/dialect/pgdialect v1.0.15
 	github.com/uptrace/bun/dialect/sqlitedialect v1.0.11
 	github.com/uptrace/bun/driver/sqliteshim v1.0.11
 	github.com/uptrace/bunrouter v1.0.0-rc.2

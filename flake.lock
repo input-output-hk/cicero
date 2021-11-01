@@ -15,6 +15,42 @@
         "type": "github"
       }
     },
+    "devshell_2": {
+      "locked": {
+        "lastModified": 1632436039,
+        "narHash": "sha256-OtITeVWcKXn1SpVEnImpTGH91FycCskGBPqmlxiykv4=",
+        "owner": "numtide",
+        "repo": "devshell",
+        "rev": "7a7a7aa0adebe5488e5abaec688fd9ae0f8ea9c6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "devshell",
+        "type": "github"
+      }
+    },
+    "driver": {
+      "inputs": {
+        "devshell": "devshell_2",
+        "inclusive": "inclusive",
+        "nixpkgs": "nixpkgs",
+        "utils": "utils"
+      },
+      "locked": {
+        "lastModified": 1635773503,
+        "narHash": "sha256-NFDtamq6mpbRuQekkUSXRcwWVo3X00AGIWdaBs5zIQA=",
+        "owner": "input-output-hk",
+        "repo": "nomad-driver-nix",
+        "rev": "a74fef866ffb473dfa954488702f736aa721d6f1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "repo": "nomad-driver-nix",
+        "type": "github"
+      }
+    },
     "inclusive": {
       "inputs": {
         "stdlib": "stdlib"
@@ -33,7 +69,57 @@
         "type": "github"
       }
     },
+    "inclusive_2": {
+      "inputs": {
+        "stdlib": "stdlib_2"
+      },
+      "locked": {
+        "lastModified": 1628098927,
+        "narHash": "sha256-Ft4sdf7VPL8MQtu18AAPiN2s5pUsbv+3RxqzJSa/yzg=",
+        "owner": "input-output-hk",
+        "repo": "nix-inclusive",
+        "rev": "13123eb7a8c3359738a4756b8d645729e8655b27",
+        "type": "github"
+      },
+      "original": {
+        "owner": "input-output-hk",
+        "repo": "nix-inclusive",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
+      "locked": {
+        "lastModified": 1634821460,
+        "narHash": "sha256-JYMDrBX4cn1Je5EOEybZEbNH+uibT7bN5DBPjDddD+4=",
+        "owner": "manveru",
+        "repo": "nixpkgs",
+        "rev": "e629023c0742f2726e1b2bb52d3c04fc28f7c00c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "manveru",
+        "ref": "use-atomic-bind-mounts",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-os": {
+      "locked": {
+        "lastModified": 1634821460,
+        "narHash": "sha256-JYMDrBX4cn1Je5EOEybZEbNH+uibT7bN5DBPjDddD+4=",
+        "owner": "manveru",
+        "repo": "nixpkgs",
+        "rev": "e629023c0742f2726e1b2bb52d3c04fc28f7c00c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "manveru",
+        "ref": "use-atomic-bind-mounts",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
       "locked": {
         "lastModified": 1635214691,
         "narHash": "sha256-65D0Q6fAKzX3ZGlJSTZGj4jbIB7fttZ8FD754AOYeiQ=",
@@ -52,9 +138,11 @@
     "root": {
       "inputs": {
         "devshell": "devshell",
-        "inclusive": "inclusive",
-        "nixpkgs": "nixpkgs",
-        "utils": "utils"
+        "driver": "driver",
+        "inclusive": "inclusive_2",
+        "nixpkgs": "nixpkgs_2",
+        "nixpkgs-os": "nixpkgs-os",
+        "utils": "utils_2"
       }
     },
     "stdlib": {
@@ -72,7 +160,37 @@
         "type": "github"
       }
     },
+    "stdlib_2": {
+      "locked": {
+        "lastModified": 1590026685,
+        "narHash": "sha256-E5INrVvYX/P/UpcoUFDAsuHem+lsqT+/teBs9O7oc9Q=",
+        "owner": "manveru",
+        "repo": "nix-lib",
+        "rev": "99088cf7febcdb21afd375a335dcafa959bef3ed",
+        "type": "github"
+      },
+      "original": {
+        "owner": "manveru",
+        "repo": "nix-lib",
+        "type": "github"
+      }
+    },
     "utils": {
+      "locked": {
+        "lastModified": 1633020561,
+        "narHash": "sha256-4uAiRqL9nP3d/NQ8VBqjQ5iZypHaM+X/FyWpXVXkwTA=",
+        "owner": "kreisys",
+        "repo": "flake-utils",
+        "rev": "2923532a276a5595ee64376ec1b3db6ed8503c52",
+        "type": "github"
+      },
+      "original": {
+        "owner": "kreisys",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "utils_2": {
       "locked": {
         "lastModified": 1633020561,
         "narHash": "sha256-4uAiRqL9nP3d/NQ8VBqjQ5iZypHaM+X/FyWpXVXkwTA=",

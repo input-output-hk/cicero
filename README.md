@@ -24,13 +24,17 @@ Start a development instance of Nomad:
 
     nomad-dev
 
+Run the required services in Nomad:
+
+    cue export -e jobs.cicero | nomad job run -
+
 Migrate the database:
 
     dbmate up
 
 Run the application:
 
-    foreman start
+    go run . all
 
 # How To …
 

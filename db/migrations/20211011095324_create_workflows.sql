@@ -1,11 +1,11 @@
 -- migrate:up
 
 create table workflow_instances (
-  id integer primary key unique not null,
-  name text not null,
-  certs jsonb not null,
-  created_at text not null,
-  updated_at text not null
+  id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  name text NOT NULL,
+  certs jsonb NOT NULL,
+  created_at timestamp NOT NULL DEFAULT NOW(),
+  updated_at timestamp
 );
 
 -- migrate:down

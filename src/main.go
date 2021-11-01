@@ -2,28 +2,29 @@ package cicero
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log"
+	"os"
 	"time"
 
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/jackc/pgtype"
+	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
-	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/dialect/sqlitedialect"
-	"github.com/uptrace/bun/driver/sqliteshim"
 )
 
-var DB *bun.DB
+var DB *pgxpool.Pool
 var nomadClient *nomad.Client
 
 func Init() error {
-	openedDB, err := openDb()
+	var err error
+	DB, err = openDB(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
 	}
-	DB = openedDB
 
 	nomadClient, err = nomad.NewClient(nomad.DefaultConfig())
 	if err != nil {
@@ -33,15 +34,26 @@ func Init() error {
 	return nil
 }
 
-func openDb() (*bun.DB, error) {
-	sqldb, err := sql.Open(sqliteshim.ShimName, "db/database.sqlite3")
-	if err != nil {
-		return nil, errors.WithMessage(err, "While opening the DB")
+func openDB(url string) (*pgxpool.Pool, error) {
+	if url == "" {
+		return nil, errors.New("The DATABASE_URL environment variable is not set or empty")
 	}
 
-	db := bun.NewDB(sqldb, sqlitedialect.New())
+	dbconfig, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, err
+	}
 
-	return db, nil
+	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		conn.ConnInfo().RegisterDataType(pgtype.DataType{
+			Value: &pgtypeuuid.UUID{},
+			Name:  "uuid",
+			OID:   pgtype.UUIDOID,
+		})
+		return nil
+	}
+
+	return pgxpool.ConnectConfig(context.Background(), dbconfig)
 }
 
 func createStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []string) error {

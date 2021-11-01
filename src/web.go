@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
 
@@ -265,13 +266,18 @@ func makeViewTemplate(route string) *template.Template {
 	return t
 }
 
+type stackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
 // copy-pasted error handling from bunrouter's homepage
 
 type HTTPError struct {
 	statusCode int
 
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Trace   errors.StackTrace `json:trace`
 }
 
 func (e HTTPError) Error() string {
@@ -279,12 +285,18 @@ func (e HTTPError) Error() string {
 }
 
 func NewHTTPError(err error) HTTPError {
-	return HTTPError{
+	httpErr := HTTPError{
 		statusCode: http.StatusInternalServerError,
 
 		Code:    "internal",
 		Message: err.Error(),
 	}
+
+	if serr, ok := err.(stackTracer); ok {
+		httpErr.Trace = serr.StackTrace()
+	}
+
+	return httpErr
 }
 
 func errorHandler(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/liftbridge-io/go-liftbridge"
 )
@@ -22,13 +23,15 @@ func (api *Api) init() {
 	}
 }
 
-func (a *Api) WorkflowInstances(name string) ([]WorkflowInstance, error) {
-	instances := []WorkflowInstance{}
+func (a *Api) WorkflowInstances(name string) ([]*WorkflowInstance, error) {
+	instances := []*WorkflowInstance{}
 
-	err := DB.NewSelect().
-		Model(&instances).
-		Where("name = ?", name).
-		Scan(context.Background())
+	err := pgxscan.Select(
+		context.Background(),
+		DB,
+		&instances,
+		`SELECT * FROM workflow_instances WHERE name = $1`,
+		name)
 	if err != nil {
 		return nil, err
 	}
@@ -36,15 +39,18 @@ func (a *Api) WorkflowInstances(name string) ([]WorkflowInstance, error) {
 	return instances, nil
 }
 
-func (a *Api) WorkflowInstance(wfName string, id uint64) (WorkflowInstance, error) {
-	var instance WorkflowInstance
+func (a *Api) WorkflowInstance(name string, id uint64) (*WorkflowInstance, error) {
+	instance := &WorkflowInstance{}
 
-	err := DB.NewSelect().
-		Model(&instance).
-		Where("name = ? AND id = ?", wfName, id).
-		Scan(context.Background())
+	err := pgxscan.Select(
+		context.Background(),
+		DB,
+		instance,
+		`SELECT * FROM workflow_instances WHERE name = $1 AND id = $2`,
+		name,
+		id)
 	if err != nil {
-		return instance, err
+		return nil, err
 	}
 
 	return instance, nil
@@ -88,12 +94,14 @@ func (a *Api) WorkflowStart(name string) error {
 	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
 }
 
-func (a *Api) Steps() ([]StepInstance, error) {
-	instances := make([]StepInstance, 0)
+func (a *Api) Steps() ([]*StepInstance, error) {
+	instances := []*StepInstance{}
 
-	err := DB.NewSelect().
-		Model(&instances).
-		Scan(context.Background())
+	err := pgxscan.Select(
+		context.Background(),
+		DB,
+		&instances,
+		`SELECT * FROM step_instances`)
 	if err != nil {
 		return nil, err
 	}
@@ -101,15 +109,17 @@ func (a *Api) Steps() ([]StepInstance, error) {
 	return instances, nil
 }
 
-func (a *Api) Step(id uuid.UUID) (StepInstance, error) {
-	var instance StepInstance
+func (a *Api) Step(id uuid.UUID) (*StepInstance, error) {
+	instance := &StepInstance{}
 
-	err := DB.NewSelect().
-		Model(&instance).
-		Where("id = ?", id).
-		Scan(context.Background())
+	err := pgxscan.Select(
+		context.Background(),
+		DB,
+		instance,
+		`SELECT * FROM step_instances WHERE id = $1`,
+		id)
 	if err != nil {
-		return instance, err
+		return nil, err
 	}
 
 	return instance, nil

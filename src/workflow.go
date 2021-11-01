@@ -31,10 +31,10 @@ func (s *WorkflowStep) IsRunnable() bool {
 
 type WorkflowInstance struct {
 	ID        uint64
-	Name      string        `bun:",notnull"`
-	Certs     WorkflowCerts `bun:",notnull"`
-	CreatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
-	UpdatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
+	Name      string
+	Certs     WorkflowCerts
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
 }
 
 func (w *WorkflowInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowDefinition, error) {
@@ -51,10 +51,10 @@ func (w *WorkflowInstance) GetDefinition(logger *log.Logger, evaluator Evaluator
 type WorkflowCerts map[string]interface{}
 
 type StepInstance struct {
-	ID                 uuid.UUID     `bun:",notnull,type:blob"` // FIXME still stored as string
-	WorkflowInstanceId uint64        `bun:",notnull"`
-	Name               string        `bun:",notnull"`
-	Certs              WorkflowCerts `bun:",notnull"`
-	CreatedAt          time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
-	FinishedAt         time.Time     `bun:",nullzero"`
+	ID                 uuid.UUID
+	WorkflowInstanceId uint64
+	Name               string
+	Certs              WorkflowCerts
+	CreatedAt          *time.Time
+	FinishedAt         *time.Time
 }

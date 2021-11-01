@@ -2,7 +2,6 @@ package cicero
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log"
 	"os"
@@ -11,11 +10,12 @@ import (
 	"time"
 
 	"cirello.io/oversight"
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
-	"github.com/uptrace/bun"
 	"github.com/vivek-ng/concurrency-limiter/priority"
 	"gopkg.in/yaml.v3"
 )
@@ -150,16 +150,15 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 	cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.IsRunnable())
 
 	instance := &StepInstance{}
-	err := DB.NewSelect().
-		Model(instance).
-		Where("name = ? AND workflow_instance_id = ?", stepName, wfInstanceId).
-		Limit(1).
-		Scan(ctx)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			return err
-		}
-		instance = nil
+	err := pgxscan.Get(
+		context.Background(),
+		DB,
+		instance,
+		`SELECT * FROM step_instances WHERE name = $1 AND workflow_instance_id = $2`,
+		stepName,
+		wfInstanceId)
+	if err != nil && !pgxscan.NotFound(err) {
+		return err
 	}
 
 	if step.IsRunnable() {
@@ -179,43 +178,43 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 		stepInstanceIdStr := instance.ID.String()
 		step.Job.ID = &stepInstanceIdStr
 
-		err := DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-			if _, err := cmd.insertStepInstance(ctx, tx, instance); err != nil {
-				return err
-			}
+		tx, err := DB.Begin(context.Background())
+		if err != nil {
+			return err
+		}
 
-			response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
-			if err != nil {
-				return errors.WithMessage(err, "Failed to run step")
-			}
+		if err = cmd.insertStepInstance(ctx, tx, instance); err != nil {
+			return err
+		}
 
-			if len(response.Warnings) > 0 {
-				cmd.logger.Println(response.Warnings)
-			}
+		response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
+		if err != nil {
+			return errors.WithMessage(err, "Failed to run step")
+		}
 
-			return nil
-		})
+		if len(response.Warnings) > 0 {
+			cmd.logger.Println(response.Warnings)
+		}
+
+		err = tx.Commit(context.Background())
+
 		if err != nil {
 			return err
 		}
 	} else if instance != nil {
-		err := DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-			_, _, err := nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{})
-			if err != nil {
-				return errors.WithMessage(err, "Failed to stop step")
-			}
+		_, _, err = nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{})
+		if err != nil {
+			return errors.WithMessage(err, "Failed to stop step")
+		}
 
-			instance.FinishedAt = time.Now().UTC()
-			_, err = DB.NewUpdate().
-				Model(instance).
-				WherePK().
-				Exec(ctx)
-			if err != nil {
-				return err
-			}
+		finished := time.Now().UTC()
+		instance.FinishedAt = &finished
+		_, err = DB.Exec(
+			context.Background(),
+			`UPDATE step_instances SET finished_at = $2 WHERE id = $1`,
+			instance.ID,
+			finished)
 
-			return nil
-		})
 		if err != nil {
 			return err
 		}
@@ -224,21 +223,22 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 	return nil
 }
 
-func (cmd *InvokerCmd) insertStepInstance(ctx context.Context, db bun.IDB, instance *StepInstance) (sql.Result, error) {
-	var res sql.Result
-	res, err := db.NewInsert().
-		Model(instance).
-		Exec(ctx)
+func (cmd *InvokerCmd) insertStepInstance(ctx context.Context, db pgx.Tx, instance *StepInstance) error {
+	res, err := DB.Exec(context.Background(),
+		`INSERT INTO step_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3)`,
+		instance.WorkflowInstanceId,
+		instance.Name,
+		instance.Certs)
 
 	if err != nil {
 		cmd.logger.Printf("%#v %#v\n", res, err)
 		cmd.logger.Printf("Couldn't insert step instance: %s\n", err.Error())
-		return res, err
+		return err
 	}
 
 	cmd.logger.Printf("Created step instance %#v\n", instance)
 
-	return res, nil
+	return nil
 }
 
 func addLogging(job *nomad.Job) error {

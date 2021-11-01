@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"cirello.io/oversight"
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
-	"github.com/uptrace/bun"
 )
 
 type BrainCmd struct {
@@ -98,11 +98,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 				return
 			}
 
-			err = DB.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
-				return cmd.insertWorkflow(tx, &WorkflowInstance{Name: workflowName, Certs: received})
-			})
-
-			if err != nil {
+			if err = cmd.insertWorkflow(&WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
 				cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
 			}
 		})
@@ -116,11 +112,16 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	return nil
 }
 
-func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *WorkflowInstance) error {
-	res, err := db.
-		NewInsert().
-		Model(workflow).
-		Exec(context.Background())
+func (cmd *BrainCmd) insertWorkflow(workflow *WorkflowInstance) error {
+	res, err := DB.Exec(context.Background(),
+		`INSERT INTO workflow_instances (name, certs) VALUES ($1, $2) RETURNING id`,
+		workflow.Name,
+		workflow.Certs)
+	if err != nil {
+		return err
+	}
+
+	// TODO: get id
 
 	if err != nil {
 		cmd.logger.Printf("%#v %#v\n", res, err)
@@ -178,55 +179,58 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 				return
 			}
 
-			err = DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-				existing := &WorkflowInstance{Name: workflowName}
-				err = tx.NewSelect().
-					Model(existing).
-					Where("id = ?", id).
-					Scan(context.Background())
+			tx, err := DB.Begin(ctx)
+			if err != nil {
+				cmd.logger.Printf("%s\n", err)
+				return
+			}
 
-				if err != nil {
-					cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
-					return err
-				}
+			existing := &WorkflowInstance{Name: workflowName}
+			err = pgxscan.Select(context.Background(), tx, existing,
+				`SELECT * FROM workflow_instances WHERE id = $1 LIMIT 1`,
+				id)
+			if err != nil {
+				cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
+				return
+			}
 
-				merged := map[string]interface{}{}
+			merged := map[string]interface{}{}
 
-				for k, v := range existing.Certs {
-					merged[k] = v
-				}
+			for k, v := range existing.Certs {
+				merged[k] = v
+			}
 
-				for k, v := range received {
-					merged[k] = v
-				}
+			for k, v := range received {
+				merged[k] = v
+			}
 
-				existing.Certs = merged
-				existing.UpdatedAt = time.Now().UTC()
+			now := time.Now().UTC()
+			existing.Certs = merged
+			existing.UpdatedAt = &now
 
-				_, err = tx.NewUpdate().
-					Where("id = ?", id).
-					Model(existing).
-					Exec(context.Background())
+			_, err = tx.Exec(
+				context.Background(),
+				`UPDATE workflow_instances WHERE id = $1 SET certs = $2, updated_at = $3`,
+				id, existing.Certs, now)
 
-				if err != nil {
-					cmd.logger.Printf("Error while updating workflow: %s", err)
-					return err
-				}
+			if err != nil {
+				cmd.logger.Printf("Error while updating workflow: %s", err)
+				return
+			}
 
-				// TODO: only invoke when there was a change to the certs?
+			// TODO: only invoke when there was a change to the certs?
 
-				cmd.logger.Printf("Updated workflow %#v\n", existing)
+			cmd.logger.Printf("Updated workflow %#v\n", existing)
 
-				publish(
-					cmd.logger,
-					cmd.bridge,
-					fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
-					"workflow.*.*.invoke",
-					merged,
-				)
+			publish(
+				cmd.logger,
+				cmd.bridge,
+				fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
+				"workflow.*.*.invoke",
+				merged,
+			)
 
-				return err
-			})
+			err = tx.Commit(context.Background())
 
 			if err != nil {
 				cmd.logger.Printf("Couldn't complete transaction: %s\n", err)

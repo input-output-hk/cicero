@@ -5,10 +5,12 @@
     devshell.url = "github:numtide/devshell";
     inclusive.url = "github:input-output-hk/nix-inclusive";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs-os.url = "github:manveru/nixpkgs/use-atomic-bind-mounts";
     utils.url = "github:kreisys/flake-utils";
+    driver.url = "github:input-output-hk/nomad-driver-nix";
   };
 
-  outputs = { self, nixpkgs, utils, devshell, ... }:
+  outputs = { self, nixpkgs, nixpkgs-os, utils, devshell, driver, ... }:
     utils.lib.simpleFlake {
       systems = [ "x86_64-linux" ];
       inherit nixpkgs;
@@ -27,6 +29,9 @@
           wfs = prev.writeShellScriptBin "wfs" ''
             exec ${final.cicero-evaluator-nix}/bin/cicero-evaluator-nix "''${1:-}" ./workflows
           '';
+
+          inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
+
           nomad-dev = let
             cfg = builtins.toFile "nomad.hcl" ''
               log_level = "TRACE"
@@ -35,18 +40,11 @@
           in prev.writeShellScriptBin "nomad-dev" ''
             set -exuo pipefail
 
-            driver="$(
-              nix build github:input-output-hk/nomad-driver-nix \
-              --no-link \
-              --json \
-              | jq -r '.[].outputs.out'
-            )"
-
             sudo ${prev.nomad}/bin/nomad \
               agent \
               -dev \
               -config ${cfg} \
-              -plugin-dir "$driver/bin"
+              -plugin-dir "${final.nomad-driver-nix}/bin"
           '';
         } // (import ./runners.nix final prev);
 
@@ -57,6 +55,125 @@
           lib = nixpkgs.lib;
           defaultPackage = cicero;
         };
+
+      extraOutputs.nixosConfigurations = {
+        postgres = nixpkgs-os.lib.nixosSystem {
+          system = "x86_64-linux";
+          specialArgs = { inherit self; };
+          modules = [
+            ({ pkgs, config, lib, ... }: {
+              nixpkgs.overlays = [ self.overlay ];
+              system.build.closure = pkgs.buildPackages.closureInfo {
+                rootPaths = [ config.system.build.toplevel ];
+              };
+
+              imports = [
+                (nixpkgs-os + /nixos/modules/misc/version.nix)
+                (nixpkgs-os + /nixos/modules/profiles/base.nix)
+                (nixpkgs-os + /nixos/modules/profiles/headless.nix)
+                (nixpkgs-os + /nixos/modules/profiles/minimal.nix)
+                (nixpkgs-os + /nixos/modules/profiles/qemu-guest.nix)
+              ];
+
+              boot.isContainer = true;
+              networking.useDHCP = false;
+              networking.hostName = lib.mkDefault "postgres";
+
+              boot.postBootCommands = ''
+                # After booting, register the contents of the Nix store in the container in the Nix database in the tmpfs.
+                ${config.nix.package.out}/bin/nix-store --load-db < /registration
+                # nixos-rebuild also requires a "system" profile and an /etc/NIXOS tag.
+                touch /etc/NIXOS
+                ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
+              '';
+
+              services.postgresql = {
+                enable = true;
+                enableTCPIP = true;
+                package = pkgs.postgresql_12;
+
+                authentication = ''
+                  local all all trust
+                  host all all 127.0.0.1/32 trust
+                  host all all ::1/128 trust
+                '';
+
+                initialScript = pkgs.writeText "init.sql" ''
+                  CREATE DATABASE cicero;
+                  CREATE USER cicero;
+                  GRANT ALL PRIVILEGES ON DATABASE cicero to cicero;
+                  ALTER USER cicero WITH SUPERUSER;
+                '';
+              };
+            })
+          ];
+        };
+
+        cicero = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          specialArgs = { inherit self; };
+          modules = [
+            (nixpkgs + /nixos/modules/misc/version.nix)
+            (nixpkgs + /nixos/modules/profiles/base.nix)
+            (nixpkgs + /nixos/modules/profiles/headless.nix)
+            (nixpkgs + /nixos/modules/profiles/minimal.nix)
+            (nixpkgs + /nixos/modules/profiles/qemu-guest.nix)
+            ({ pkgs, config, lib, ... }: {
+              # boot.isContainer = true;
+              networking.useDHCP = false;
+              networking.hostName = "cicero";
+              nixpkgs.overlays = [ self.overlay ];
+
+              nix = {
+                package = pkgs.nixUnstable;
+                systemFeatures = [ "recursive-nix" "nixos-test" ];
+                extraOptions = ''
+                  experimental-features = nix-command flakes ca-references recursive-nix
+                '';
+              };
+
+              users.users = {
+                nixos = {
+                  isNormalUser = true;
+                  extraGroups = [ "wheel" ];
+                  initialHashedPassword = "";
+                };
+
+                root.initialHashedPassword = "";
+              };
+
+              security.sudo = {
+                enable = lib.mkDefault true;
+                wheelNeedsPassword = lib.mkForce false;
+              };
+
+              services.getty.autologinUser = "nixos";
+
+              services.openssh = {
+                enable = true;
+                permitRootLogin = "yes";
+              };
+
+              boot.postBootCommands = ''
+                # After booting, register the contents of the Nix store in the container in the Nix database in the tmpfs.
+                ${config.nix.package.out}/bin/nix-store --load-db < /registration
+                # nixos-rebuild also requires a "system" profile and an /etc/NIXOS tag.
+                touch /etc/NIXOS
+                ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
+              '';
+
+              systemd.services.cicero = {
+                wantedBy = [ "multi-user.target" ];
+                after = [ "network.target" ];
+                path = with pkgs; [ cicero ];
+                script = ''
+                  exec cicero all
+                '';
+              };
+            })
+          ];
+        };
+      };
 
       hydraJobs = { cicero }@pkgs: pkgs;
 

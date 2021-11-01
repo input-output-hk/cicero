@@ -4,7 +4,7 @@ imports = [
 
 [[env]]
 name = "DATABASE_URL"
-value = "sqlite:db/database.sqlite3"
+value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 
 [[commands]]
 package = "go"
@@ -66,10 +66,12 @@ packages = [
   "gocode",
   "gcc",
   "sqliteInteractive",
+  "postgresql_12",
   "gocritic",
   "fd",
   "nixfmt",
   "go-swagger",
   "grafana-loki",
   "cicero-evaluator-nix",
+  "cue",
 ]
