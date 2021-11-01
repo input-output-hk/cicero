@@ -149,7 +149,7 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 
 	cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.IsRunnable())
 
-	instance := &StepInstance{}
+	var instance *StepInstance
 	err := pgxscan.Get(
 		context.Background(),
 		DB,
