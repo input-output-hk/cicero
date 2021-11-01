@@ -17,7 +17,7 @@ require (
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/hcl v1.0.1-vault-3 // indirect
-	github.com/hashicorp/nomad/api v0.0.0-20200529203653-c4416b26d3eb
+	github.com/hashicorp/nomad/api v0.0.0-20211029074458-906d94c76fa2
 	github.com/hashicorp/raft v1.1.3-0.20200211192230-365023de17e6 // indirect
 	github.com/jackc/pgtype v1.8.1
 	github.com/jackc/pgx/v4 v4.13.0

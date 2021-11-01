@@ -12,6 +12,7 @@ import (
 
 	"cirello.io/oversight"
 	"github.com/georgysavva/scany/pgxscan"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 )
@@ -48,11 +49,16 @@ func (cmd *BrainCmd) Run() error {
 	}
 }
 
+func (cmd *BrainCmd) addToTree(tree *oversight.Tree) {
+	tree.Add(cmd.listenToCerts)
+	tree.Add(cmd.listenToStart)
+	tree.Add(cmd.listenToNomadEvents)
+}
+
 func (cmd *BrainCmd) start(ctx context.Context) error {
 	cmd.init()
 
-	cmd.tree.Add(cmd.listenToCerts)
-	cmd.tree.Add(cmd.listenToStart)
+	cmd.addToTree(cmd.tree)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -245,4 +251,43 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 	<-ctx.Done()
 	cmd.logger.Println("context was cancelled")
 	return nil
+}
+
+func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
+	cmd.logger.Println("Starting Brain.listenToNomadEvents")
+
+	var index uint64
+	index = 0
+
+	stream, err := nomadClient.EventStream().Stream(
+		ctx,
+		map[nomad.Topic][]string{
+			nomad.TopicAll: {string(nomad.TopicAll)},
+		},
+		index,
+		nil,
+	)
+
+	if err != nil {
+		return errors.WithMessagef(err, "Couldn't listen to Nomad events")
+	}
+
+	for {
+		events := <-stream
+		if events.Err != nil {
+			return err
+		}
+
+		for _, event := range events.Events {
+			_, err := DB.Exec(context.Background(),
+				`INSERT INTO nomad_events (topic, "type", "key", filter_keys, "index", payload) VALUES ($1, $2, $3, $4, $5, $6)`,
+				event.Topic, event.Type, event.Key, event.FilterKeys, event.Index, event.Payload,
+			)
+			if err != nil {
+				return err
+			}
+
+			index = event.Index
+		}
+	}
 }

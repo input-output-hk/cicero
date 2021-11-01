@@ -47,8 +47,7 @@ func (cmd *AllCmd) Run() error {
 	invoker.init()
 
 	supervisor.Add(invoker.start)
-	supervisor.Add(brain.listenToCerts)
-	supervisor.Add(brain.listenToStart)
+	brain.addToTree(supervisor)
 	supervisor.Add(web.start)
 
 	ctx, cancel := context.WithCancel(context.Background())
