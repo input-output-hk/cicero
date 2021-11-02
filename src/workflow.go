@@ -1,11 +1,14 @@
 package cicero
 
 import (
+	"context"
 	"log"
 	"time"
 
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/pkg/errors"
 )
 
 type WorkflowDefinitions map[string]*WorkflowDefinition
@@ -18,11 +21,11 @@ type WorkflowDefinition struct {
 }
 
 type WorkflowStep struct {
-	Failure map[string]interface{} `json:"failure"`
-	Success map[string]interface{} `json:"success"`
-	Inputs  []string               `json:"inputs"`
-	When    map[string]bool        `json:"when"`
-	Job     nomad.Job              `json:"job"`
+	Failure WorkflowCerts   `json:"failure"`
+	Success WorkflowCerts   `json:"success"`
+	Inputs  []string        `json:"inputs"`
+	When    map[string]bool `json:"when"`
+	Job     nomad.Job       `json:"job"`
 }
 
 func (s *WorkflowStep) IsRunnable() bool {
@@ -57,4 +60,35 @@ type StepInstance struct {
 	Certs              WorkflowCerts
 	CreatedAt          *time.Time
 	FinishedAt         *time.Time
+}
+
+func (s *StepInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowStep, error) {
+	var def WorkflowStep
+
+	wf, err := s.GetWorkflow()
+	if err != nil {
+		return def, err
+	}
+
+	wfDef, err := wf.GetDefinition(logger, evaluator)
+	if err != nil {
+		return def, err
+	}
+
+	return wfDef.Steps[s.Name], nil
+}
+
+func (s *StepInstance) GetWorkflow() (WorkflowInstance, error) {
+	var instance WorkflowInstance
+
+	err := pgxscan.Get(
+		context.Background(), DB, &instance,
+		`SELECT * FROM workflow_instances WHERE id = $1`,
+		s.WorkflowInstanceId,
+	)
+	if err != nil {
+		return instance, errors.WithMessagef(err, "Could not get workflow instance for step %s", s.ID)
+	}
+
+	return instance, nil
 }

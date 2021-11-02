@@ -28,7 +28,7 @@ func (e *Evaluator) EvaluateWorkflow(name string, id uint64, inputs WorkflowCert
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
-		return def, err
+		return def, errors.WithMessagef(err, "Could not marshal workflow inputs to json: %s", inputs)
 	}
 
 	cmd := exec.Command(

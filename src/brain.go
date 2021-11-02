@@ -257,7 +257,14 @@ func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToNomadEvents")
 
 	var index uint64
-	index = 0
+	err := DB.QueryRow(context.Background(),
+		`SELECT COALESCE(MAX("index") + 1, 0) FROM nomad_events`).
+		Scan(&index)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return errors.WithMessage(err, "Could not get last Nomad event index")
+	}
+
+	cmd.logger.Println("Listening to Nomad events starting at index", index)
 
 	stream, err := nomadClient.EventStream().Stream(
 		ctx,
@@ -267,27 +274,115 @@ func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
 		index,
 		nil,
 	)
-
 	if err != nil {
-		return errors.WithMessagef(err, "Couldn't listen to Nomad events")
+		return errors.WithMessage(err, "Could not listen to Nomad events")
 	}
 
 	for {
 		events := <-stream
 		if events.Err != nil {
-			return err
+			return errors.WithMessage(err, "Error getting next events from Nomad event stream")
 		}
 
 		for _, event := range events.Events {
-			_, err := DB.Exec(context.Background(),
+			if err := cmd.handleNomadEvent(event); err != nil {
+				return errors.WithMessage(err, "Error handling Nomad event")
+			}
+
+			_, err := DB.Exec(
+				context.Background(),
 				`INSERT INTO nomad_events (topic, "type", "key", filter_keys, "index", payload) VALUES ($1, $2, $3, $4, $5, $6)`,
 				event.Topic, event.Type, event.Key, event.FilterKeys, event.Index, event.Payload,
 			)
 			if err != nil {
-				return err
+				return errors.WithMessage(err, "Could not insert Nomad event into database")
 			}
 
 			index = event.Index
 		}
 	}
+}
+
+func (cmd *BrainCmd) handleNomadEvent(event nomad.Event) error {
+	switch {
+	case event.Topic == "Job" && event.Type == "AllocationUpdated":
+		job, err := event.Job()
+		if err != nil {
+			return errors.WithMessage(err, "Error getting Nomad event's Job")
+		}
+		return cmd.handleNomadJobEvent(job)
+	}
+	return nil
+}
+
+func (cmd *BrainCmd) handleNomadJobEvent(job *nomad.Job) error {
+	step := &StepInstance{}
+	err := pgxscan.Get(
+		context.Background(), DB, step,
+		`SELECT * FROM step_instances WHERE id = $1`,
+		job.ID,
+	)
+	if err != nil {
+		if pgxscan.NotFound(err) {
+			cmd.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such step instance)\n", *job.ID)
+			return nil
+		}
+		return errors.WithMessage(err, "Error finding step instance for Nomad event's Job")
+	}
+
+	var certs *WorkflowCerts
+
+	def, err := step.GetDefinition(cmd.logger, cmd.evaluator)
+	if err != nil {
+		return errors.WithMessagef(err, "Could not get definition for step instance %s", step.ID)
+	}
+
+	switch *job.Status {
+	case "dead":
+		certs = &def.Success
+	case "failed":
+		// FIXME there is no such state in topic:Job,type:AllocationUpdated events
+		// in fact such events do not contain any information about whether the job failed or succeeded,
+		// they just say whether it is running. => Failure cert needs to be sent on another event.
+		certs = &def.Failure
+	}
+
+	if certs == nil {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	step.FinishedAt = &now
+
+	wf, err := step.GetWorkflow()
+	if err != nil {
+		return err
+	}
+
+	err = DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		_, err = tx.Exec(context.Background(),
+			`UPDATE step_instances SET finished_at = $2 WHERE id = $1`,
+			step.ID, step.FinishedAt)
+		if err != nil {
+			return errors.WithMessage(err, "Could not update step instance")
+		}
+
+		err = publish(
+			cmd.logger,
+			cmd.bridge,
+			fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
+			"workflow.*.*.cert",
+			*certs,
+		)
+		if err != nil {
+			return errors.WithMessage(err, "Could not publish certificate")
+		}
+
+		return nil
+	})
+	if err != nil {
+		return errors.WithMessage(err, "Could not complete db transaction")
+	}
+
+	return nil
 }
