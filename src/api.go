@@ -1,7 +1,6 @@
 package cicero
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/input-output-hk/cicero/src/model"
@@ -15,6 +14,7 @@ import (
 type Api struct {
 	logger *log.Logger
 	bridge liftbridge.Client
+	workflowService service.WorkflowService
 }
 
 func (api *Api) init() {
@@ -23,39 +23,11 @@ func (api *Api) init() {
 	}
 }
 
-func (a *Api) WorkflowInstances(name string) ([]model.WorkflowInstance, error) {
-	instances := []model.WorkflowInstance{}
-
-	err := DB.NewSelect().
-		Model(&instances).
-		Where("name = ?", name).
-		Scan(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	return instances, nil
-}
-
-func (a *Api) WorkflowInstance(wfName string, id uint64) (model.WorkflowInstance, error) {
-	var instance model.WorkflowInstance
-
-	err := DB.NewSelect().
-		Model(&instance).
-		Where("name = ? AND id = ?", wfName, id).
-		Scan(context.Background())
-	if err != nil {
-		return instance, err
-	}
-
-	return instance, nil
-}
-
 func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (model.WorkflowDefinition, error) {
 	if instanceId != nil {
 		var def model.WorkflowDefinition
 
-		instance, err := a.WorkflowInstance(wfName, *instanceId)
+		instance, err := a.workflowService.GetAllByNameAndId(wfName, *instanceId)
 		if err != nil {
 			return def, err
 		}

@@ -5,6 +5,8 @@ import (
 	"embed"
 	"encoding/json"
 	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/repository"
+	"github.com/input-output-hk/cicero/src/service"
 	"html/template"
 	"log"
 	"mime"
@@ -39,7 +41,12 @@ func (cmd *WebCmd) Run() error {
 
 func (cmd *WebCmd) start(ctx context.Context) error {
 	cmd.init()
-	api := Api{bridge: cmd.bridge}
+
+	//TODO: pending dependency injection
+	workflowRepository := repository.NewWorkflowRepository(DB)
+	workflowService := service.NewWorkflowService(workflowRepository)
+
+	api := Api{bridge: cmd.bridge, workflowService: workflowService}
 	api.init()
 
 	cmd.logger.Println("Starting Web")
@@ -72,7 +79,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.Param("name")
 
-			instances, err := api.WorkflowInstances(name)
+			instances, err := workflowService.GetAllByName(name)
 			if err != nil {
 				return err
 			}
