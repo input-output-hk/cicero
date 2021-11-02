@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"mime"
@@ -156,18 +157,53 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				}
 				return bunrouter.JSON(w, steps)
 			})
-			group.GET("/:id", func(w http.ResponseWriter, req bunrouter.Request) error {
-				id, err := uuid.Parse(req.Param("id"))
-				if err != nil {
-					return err
-				}
+			group.WithGroup("/:id", func(group *bunrouter.Group) {
+				const (
+					ctxKeyStep = iota
+				)
+				group = group.WithMiddleware(func(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
+					return func(w http.ResponseWriter, req bunrouter.Request) error {
+						id, err := uuid.Parse(req.Param("id"))
+						if err != nil {
+							return err
+						}
 
-				step, err := api.Step(id)
-				if err != nil {
-					return err
-				}
+						step, err := api.Step(id)
+						if err != nil {
+							return err
+						}
 
-				return bunrouter.JSON(w, step)
+						return next(w, req.WithContext(
+							context.WithValue(req.Context(), ctxKeyStep, *step),
+						))
+					}
+				})
+				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+					return bunrouter.JSON(w, req.Context().Value(ctxKeyStep))
+				})
+				group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
+					step := req.Context().Value(ctxKeyStep).(StepInstance)
+					wf, err := step.GetWorkflow()
+					if err != nil {
+						return err
+					}
+
+					certs := WorkflowCerts{}
+					if err := json.NewDecoder(req.Body).Decode(&certs); err != nil {
+						return errors.WithMessage(err, "Could not unmarshal certs from request body")
+					}
+
+					if err := publish(
+						cmd.logger,
+						cmd.bridge,
+						fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
+						"workflow.*.*.cert",
+						certs,
+					); err != nil {
+						return errors.WithMessage(err, "Could not publish certificate")
+					}
+					return nil
+				})
 			})
 		})
 	})
