@@ -1,32 +1,39 @@
 { id, run }:
-let bash = script: (run "bash" script) // (import ../workflows-nomad.nix);
-in {
+
+let
+  bash = script:
+    (run "bash" script)
+    // (import ../workflows-nomad.nix);
+in
+
+{
   version = 0;
 
   steps = {
-    ping = { ping ? false }: {
-      when."ping missing" = !ping;
+    ping = { ping ? null }: {
+      when."ping missing" = ping == null;
 
       job = bash ''
         echo running ping ${id}
       '';
     };
 
-    pong = { ping ? false, pong ? false }: {
+    pong = { ping ? null, pong ? null }: {
       when = {
-        "ping sent" = ping;
-        "pong missing" = !pong;
+        "ping sent" = ping == true;
+        "pong missing" = pong == null;
       };
 
       job = bash ''
+        exit 1
         echo running pong ${id}
       '';
     };
 
-    pingpong = { pong ? false, pingpong ? false }: {
+    pingpong = { pong ? null, pingpong ? null }: {
       when = {
-        "pong sent" = pong;
-        "pingpong missing" = !pingpong;
+        "pong sent" = pong == true;
+        "pingpong missing" = pingpong == null;
       };
 
       job = bash ''
