@@ -17,21 +17,26 @@ type WorkflowService interface {
 	Update(*bun.Tx, uint64, *model.WorkflowInstance)(sql.Result, error)
 }
 
-type workflowService struct {
+type WorkflowServiceCmd struct {
 	logger *log.Logger
 	workflowRepository repository.WorkflowRepository
 }
 
-func NewWorkflowService(repository repository.WorkflowRepository) WorkflowService {
-	return workflowService{workflowRepository: repository, logger: log.New(os.Stderr, "brain: ", log.LstdFlags)}
+func (cmd *WorkflowServiceCmd) Init(db *bun.DB) {
+	if cmd.logger == nil {
+		cmd.logger = log.New(os.Stderr, "WorkflowService: ", log.LstdFlags)
+	}
+	if cmd.workflowRepository == nil {
+		cmd.workflowRepository = repository.NewWorkflowRepository(db)
+	}
 }
 
-func (w workflowService) GetAllByName(name string) ([]model.WorkflowInstance, error) {
+func (w *WorkflowServiceCmd) GetAllByName(name string) ([]model.WorkflowInstance, error) {
 	log.Printf("Get all Workflows by name %s", name)
 	return w.workflowRepository.GetAllByName(name)
 }
 
-func (w workflowService) GetByNameAndId(name string, id uint64) (workflow model.WorkflowInstance, err error) {
+func (w *WorkflowServiceCmd) GetByNameAndId(name string, id uint64) (workflow model.WorkflowInstance, err error) {
 	log.Printf("Get all Workflows by name %s and id %d", name, id)
 	workflow, err = w.workflowRepository.GetByNameAndId(name, id)
 	if err != nil {
@@ -39,7 +44,7 @@ func (w workflowService) GetByNameAndId(name string, id uint64) (workflow model.
 	}
 	return workflow, err
 }
-func (w workflowService) GetById(id uint64) (workflow model.WorkflowInstance, err error) {
+func (w *WorkflowServiceCmd) GetById(id uint64) (workflow model.WorkflowInstance, err error) {
 	log.Printf("Get all Workflows by id %d", id)
 	workflow, err = w.workflowRepository.GetById(id)
 	if err != nil {
@@ -48,7 +53,7 @@ func (w workflowService) GetById(id uint64) (workflow model.WorkflowInstance, er
 	return workflow, err
 }
 
-func (w workflowService) Save(tx *bun.Tx, workflow *model.WorkflowInstance) (result sql.Result, err error) {
+func (w *WorkflowServiceCmd) Save(tx *bun.Tx, workflow *model.WorkflowInstance) (result sql.Result, err error) {
 	log.Printf("Saving new workflow %#v", workflow)
 	result, err = w.workflowRepository.Save(tx, workflow)
 	if err != nil {
@@ -60,7 +65,7 @@ func (w workflowService) Save(tx *bun.Tx, workflow *model.WorkflowInstance) (res
 	return result, err
 }
 
-func (w workflowService) Update(tx *bun.Tx, id uint64, workflow *model.WorkflowInstance) (result sql.Result, err error) {
+func (w *WorkflowServiceCmd) Update(tx *bun.Tx, id uint64, workflow *model.WorkflowInstance) (result sql.Result, err error) {
 	log.Printf("Update workflow %#v with id %d", workflow, id)
 	result, err = w.workflowRepository.Update(tx, id, workflow)
 	if err != nil {

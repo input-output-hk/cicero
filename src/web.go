@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/input-output-hk/cicero/src/service"
 	"html/template"
 	"log"
@@ -26,11 +25,17 @@ type WebCmd struct {
 	Addr   string `arg:"--listen" default:":8080"`
 	logger *log.Logger
 	bridge liftbridge.Client
+	workflowService service.WorkflowService
 }
 
 func (cmd *WebCmd) init() {
 	if cmd.logger == nil {
 		cmd.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
+	}
+	if cmd.workflowService == nil {
+		wfService := &service.WorkflowServiceCmd{}
+		wfService.Init(DB)
+		cmd.workflowService = wfService
 	}
 }
 
@@ -42,11 +47,7 @@ func (cmd *WebCmd) Run() error {
 func (cmd *WebCmd) start(ctx context.Context) error {
 	cmd.init()
 
-	//TODO: pending dependency injection
-	workflowRepository := repository.NewWorkflowRepository(DB)
-	workflowService := service.NewWorkflowService(workflowRepository)
-
-	api := Api{bridge: cmd.bridge, workflowService: workflowService}
+	api := Api{bridge: cmd.bridge, workflowService: cmd.workflowService}
 	api.init()
 
 	cmd.logger.Println("Starting Web")
@@ -79,7 +80,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.Param("name")
 
-			instances, err := workflowService.GetAllByName(name)
+			instances, err := cmd.workflowService.GetAllByName(name)
 			if err != nil {
 				return err
 			}

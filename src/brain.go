@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
@@ -47,11 +46,10 @@ func (cmd *BrainCmd) init() {
 	if cmd.logger == nil {
 		cmd.logger = log.New(os.Stderr, "brain: ", log.LstdFlags)
 	}
-
 	if cmd.workflowService == nil {
-		//TODO: pending dependency injection
-		workflowRepository := repository.NewWorkflowRepository(DB)
-		cmd.workflowService = service.NewWorkflowService(workflowRepository)
+		wfService := &service.WorkflowServiceCmd{}
+		wfService.Init(DB)
+		cmd.workflowService = wfService
 	}
 	if cmd.tree == nil {
 		cmd.tree = oversight.New(oversight.WithSpecification(
