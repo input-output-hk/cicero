@@ -175,7 +175,7 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 
 			cmd.logger.Printf("Received update for workflow %s %d", workflowName, id)
 
-			received := map[string]interface{}{}
+			received := WorkflowCerts{}
 			unmarshalErr := json.Unmarshal(msg.Value(), &received)
 			if unmarshalErr != nil {
 				cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
