@@ -39,28 +39,16 @@ func (a *Api) WorkflowInstances(name string) ([]*WorkflowInstance, error) {
 	return instances, nil
 }
 
-func (a *Api) WorkflowInstance(name string, id uint64) (*WorkflowInstance, error) {
-	instance := &WorkflowInstance{}
-
-	err := pgxscan.Select(
-		context.Background(),
-		DB,
-		instance,
-		`SELECT * FROM workflow_instances WHERE name = $1 AND id = $2`,
-		name,
-		id)
-	if err != nil {
-		return nil, err
-	}
-
-	return instance, nil
-}
-
 func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (WorkflowDefinition, error) {
 	if instanceId != nil {
 		var def WorkflowDefinition
 
-		instance, err := a.WorkflowInstance(wfName, *instanceId)
+		instance := &WorkflowInstance{}
+		err := pgxscan.Get(
+			context.Background(), DB, instance,
+			`SELECT * FROM workflow_instances WHERE id = $1`,
+			*instanceId,
+		)
 		if err != nil {
 			return def, err
 		}
@@ -112,12 +100,11 @@ func (a *Api) Steps() ([]*StepInstance, error) {
 func (a *Api) Step(id uuid.UUID) (*StepInstance, error) {
 	instance := &StepInstance{}
 
-	err := pgxscan.Select(
-		context.Background(),
-		DB,
-		instance,
+	err := pgxscan.Get(
+		context.Background(), DB, instance,
 		`SELECT * FROM step_instances WHERE id = $1`,
-		id)
+		id,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -13,6 +13,7 @@ import (
 	"cirello.io/oversight"
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 )
@@ -119,23 +120,19 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 }
 
 func (cmd *BrainCmd) insertWorkflow(workflow *WorkflowInstance) error {
-	res, err := DB.Exec(context.Background(),
+	err := DB.QueryRow(context.Background(),
 		`INSERT INTO workflow_instances (name, certs) VALUES ($1, $2) RETURNING id`,
-		workflow.Name,
-		workflow.Certs)
+		workflow.Name, workflow.Certs).
+		Scan(&workflow.ID)
 	if err != nil {
 		return err
 	}
 
-	// TODO: get id
-
 	if err != nil {
-		cmd.logger.Printf("%#v %#v\n", res, err)
-		cmd.logger.Printf("Couldn't insert workflow: %s\n", err.Error())
-		return err
+		return errors.WithMessage(err, "Could not insert workflow instance")
 	}
 
-	cmd.logger.Printf("Created workflow %#v\n", workflow)
+	cmd.logger.Printf("Created workflow with ID %d\n", workflow.ID)
 
 	publish(
 		cmd.logger,
@@ -192,15 +189,17 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 			}
 
 			existing := &WorkflowInstance{Name: workflowName}
-			err = pgxscan.Select(context.Background(), tx, existing,
-				`SELECT * FROM workflow_instances WHERE id = $1 LIMIT 1`,
-				id)
+			err = pgxscan.Get(
+				context.Background(), tx, existing,
+				`SELECT * FROM workflow_instances WHERE id = $1`,
+				id,
+			)
 			if err != nil {
 				cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
 				return
 			}
 
-			merged := map[string]interface{}{}
+			merged := WorkflowCerts{}
 
 			for k, v := range existing.Certs {
 				merged[k] = v
@@ -216,8 +215,9 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 
 			_, err = tx.Exec(
 				context.Background(),
-				`UPDATE workflow_instances WHERE id = $1 SET certs = $2, updated_at = $3`,
-				id, existing.Certs, now)
+				`UPDATE workflow_instances SET certs = $2, updated_at = $3 WHERE id = $1`,
+				id, existing.Certs, now,
+			)
 
 			if err != nil {
 				cmd.logger.Printf("Error while updating workflow: %s", err)

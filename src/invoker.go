@@ -11,7 +11,6 @@ import (
 
 	"cirello.io/oversight"
 	"github.com/georgysavva/scany/pgxscan"
-	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge"
@@ -147,19 +146,20 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
-	cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.IsRunnable())
-
-	var instance *StepInstance
+	instance := &StepInstance{}
 	err := pgxscan.Get(
-		context.Background(),
-		DB,
-		instance,
+		context.Background(), DB, instance,
 		`SELECT * FROM step_instances WHERE name = $1 AND workflow_instance_id = $2`,
-		stepName,
-		wfInstanceId)
-	if err != nil && !pgxscan.NotFound(err) {
-		return err
+		stepName, wfInstanceId,
+	)
+	if err != nil {
+		if !pgxscan.NotFound(err) {
+			return err
+		}
+		instance = nil
 	}
+
+	cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.IsRunnable())
 
 	if step.IsRunnable() {
 		if err := addLogging(&step.Job); err != nil {
@@ -168,36 +168,31 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 
 		if instance == nil {
 			instance = &StepInstance{
-				ID:                 uuid.New(),
 				WorkflowInstanceId: wfInstanceId,
 				Name:               stepName,
 				Certs:              inputs,
 			}
 		}
 
-		stepInstanceIdStr := instance.ID.String()
-		step.Job.ID = &stepInstanceIdStr
+		err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			if err = cmd.insertStepInstance(ctx, tx, instance); err != nil {
+				return errors.WithMessage(err, "Could not insert step instance")
+			}
 
-		tx, err := DB.Begin(context.Background())
-		if err != nil {
-			return err
-		}
+			stepInstanceId := instance.ID.String()
+			step.Job.ID = &stepInstanceId
 
-		if err = cmd.insertStepInstance(ctx, tx, instance); err != nil {
-			return err
-		}
+			response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
+			if err != nil {
+				return errors.WithMessage(err, "Failed to run step")
+			}
 
-		response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
-		if err != nil {
-			return errors.WithMessage(err, "Failed to run step")
-		}
+			if len(response.Warnings) > 0 {
+				cmd.logger.Println(response.Warnings)
+			}
 
-		if len(response.Warnings) > 0 {
-			cmd.logger.Println(response.Warnings)
-		}
-
-		err = tx.Commit(context.Background())
-
+			return nil
+		})
 		if err != nil {
 			return err
 		}
@@ -209,34 +204,32 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 
 		finished := time.Now().UTC()
 		instance.FinishedAt = &finished
+
 		_, err = DB.Exec(
 			context.Background(),
 			`UPDATE step_instances SET finished_at = $2 WHERE id = $1`,
-			instance.ID,
-			finished)
-
+			instance.ID, *instance.FinishedAt,
+		)
 		if err != nil {
-			return err
+			return errors.WithMessage(err, "Failed to update step instance")
 		}
 	}
 
 	return nil
 }
 
+// Sets the generated ID on the passed instance.
 func (cmd *InvokerCmd) insertStepInstance(ctx context.Context, db pgx.Tx, instance *StepInstance) error {
-	res, err := DB.Exec(context.Background(),
-		`INSERT INTO step_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3)`,
-		instance.WorkflowInstanceId,
-		instance.Name,
-		instance.Certs)
-
+	err := DB.QueryRow(
+		context.Background(),
+		`INSERT INTO step_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING id`,
+		instance.WorkflowInstanceId, instance.Name, instance.Certs,
+	).Scan(&instance.ID)
 	if err != nil {
-		cmd.logger.Printf("%#v %#v\n", res, err)
-		cmd.logger.Printf("Couldn't insert step instance: %s\n", err.Error())
-		return err
+		return errors.WithMessage(err, "Could not insert step instance")
 	}
 
-	cmd.logger.Printf("Created step instance %#v\n", instance)
+	cmd.logger.Println("Created step instance with ID", instance.ID)
 
 	return nil
 }
