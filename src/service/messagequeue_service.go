@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//TODO: refactor to lowercase
+//TODO: change to lowercase when service module refactoring is complete.
 func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []string) error {
 	for _, streamName := range streamNames {
 		if err := bridge.CreateStream(
@@ -30,7 +30,7 @@ func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []s
 	return nil
 }
 
-//TODO: refactor to lowercase
+//TODO: change to lowercase when service module refactoring is complete.
 func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg map[string]interface{}) error {
 	err := CreateStreams(logger, bridge, []string{stream})
 	if err != nil {

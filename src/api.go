@@ -27,7 +27,7 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 	if instanceId != nil {
 		var def model.WorkflowDefinition
 
-		instance, err := a.workflowService.GetAllByNameAndId(wfName, *instanceId)
+		instance, err := a.workflowService.GetByNameAndId(wfName, *instanceId)
 		if err != nil {
 			return def, err
 		}

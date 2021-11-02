@@ -2,15 +2,17 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/uptrace/bun"
-	"log"
 )
 
 type WorkflowRepository interface {
 	GetAllByName(string)([]model.WorkflowInstance, error)
-	GetAllByNameAndId(string, uint64)(model.WorkflowInstance, error)
-	WithTrx(*bun.DB) workflowRepository
+	GetByNameAndId(string, uint64)(model.WorkflowInstance, error)
+	GetById(uint64)(model.WorkflowInstance, error)
+	Save(*bun.Tx, *model.WorkflowInstance)(sql.Result, error)
+	Update(*bun.Tx, uint64, *model.WorkflowInstance)(sql.Result, error)
 }
 
 type workflowRepository struct {
@@ -22,10 +24,18 @@ func NewWorkflowRepository(db *bun.DB) WorkflowRepository {
 }
 
 //TODO: why by name? Id is primary key
-func (w workflowRepository) GetAllByNameAndId(name string, id uint64) (instance model.WorkflowInstance, err error) {
+func (w workflowRepository) GetByNameAndId(name string, id uint64) (instance model.WorkflowInstance, err error) {
 	err = w.DB.NewSelect().
 		Model(&instance).
 		Where("name = ? AND id = ?", name, id).
+		Scan(context.Background())
+	return instance, err
+}
+
+func (w workflowRepository) GetById(id uint64) (instance model.WorkflowInstance, err error) {
+	err = w.DB.NewSelect().
+		Model(&instance).
+		Where("id = ?", id).
 		Scan(context.Background())
 	return instance, err
 }
@@ -38,11 +48,19 @@ func (w workflowRepository) GetAllByName(name string) (instances []model.Workflo
 	return instances, err
 }
 
-func (w workflowRepository) WithTrx(trxHandle *bun.DB) workflowRepository {
-	if trxHandle == nil {
-		log.Print("Transaction DataBase not found")
-		return w
-	}
-	w.DB = trxHandle
-	return w
+func (w workflowRepository) Update(tx *bun.Tx, id uint64, workflow *model.WorkflowInstance) (result sql.Result, err error) {
+	result, err = tx.NewUpdate().
+		Where("id = ?", id).
+		Model(workflow).
+		Exec(context.Background())
+
+	return result, err
+}
+
+func (w workflowRepository) Save(tx *bun.Tx, workflow *model.WorkflowInstance) (result sql.Result, err error) {
+	result, err = tx.NewInsert().
+		Model(workflow).
+		Exec(context.Background())
+
+	return result, err
 }

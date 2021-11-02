@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
@@ -22,6 +23,7 @@ type BrainCmd struct {
 	logger *log.Logger
 	tree   *oversight.Tree
 	bridge liftbridge.Client
+	workflowService service.WorkflowService
 }
 
 func GetDefinition(w model.WorkflowInstance, logger *log.Logger) (model.WorkflowDefinition, error) {
@@ -46,6 +48,11 @@ func (cmd *BrainCmd) init() {
 		cmd.logger = log.New(os.Stderr, "brain: ", log.LstdFlags)
 	}
 
+	if cmd.workflowService == nil {
+		//TODO: pending dependency injection
+		workflowRepository := repository.NewWorkflowRepository(DB)
+		cmd.workflowService = service.NewWorkflowService(workflowRepository)
+	}
 	if cmd.tree == nil {
 		cmd.tree = oversight.New(oversight.WithSpecification(
 			10,                    // number of restarts
@@ -135,19 +142,11 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	return nil
 }
 
-func (cmd *BrainCmd) insertWorkflow(db bun.IDB, workflow *model.WorkflowInstance) error {
-	res, err := db.
-		NewInsert().
-		Model(workflow).
-		Exec(context.Background())
-
+func (cmd *BrainCmd) insertWorkflow(tx bun.Tx, workflow *model.WorkflowInstance) error {
+	_, err := cmd.workflowService.Save(&tx, workflow)
 	if err != nil {
-		cmd.logger.Printf("%#v %#v\n", res, err)
-		cmd.logger.Printf("Couldn't insert workflow: %s\n", err.Error())
 		return err
 	}
-
-	cmd.logger.Printf("Created workflow %#v\n", workflow)
 
 	service.Publish(
 		cmd.logger,
@@ -198,12 +197,8 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 			}
 
 			err = DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-				existing := &model.WorkflowInstance{Name: workflowName}
-				err = tx.NewSelect().
-					Model(existing).
-					Where("id = ?", id).
-					Scan(context.Background())
-
+				wf, err := cmd.workflowService.GetByNameAndId(workflowName, id)
+				var existing = &wf
 				if err != nil {
 					cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
 					return err
@@ -222,11 +217,7 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 				existing.Certs = merged
 				existing.UpdatedAt = time.Now().UTC()
 
-				_, err = tx.NewUpdate().
-					Where("id = ?", id).
-					Model(existing).
-					Exec(context.Background())
-
+				_, err = cmd.workflowService.Update(&tx, id, existing)
 				if err != nil {
 					cmd.logger.Printf("Error while updating workflow: %s", err)
 					return err
