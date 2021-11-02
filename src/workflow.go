@@ -59,6 +59,7 @@ type StepInstance struct {
 	Name               string
 	Certs              WorkflowCerts
 	CreatedAt          *time.Time
+	UpdatedAt          *time.Time
 	FinishedAt         *time.Time
 }
 

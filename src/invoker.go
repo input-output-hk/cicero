@@ -166,17 +166,28 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 			return err
 		}
 
-		if instance == nil {
-			instance = &StepInstance{
-				WorkflowInstanceId: wfInstanceId,
-				Name:               stepName,
-				Certs:              inputs,
-			}
-		}
+		if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			if instance == nil {
+				instance = &StepInstance{}
+				if err := pgxscan.Get(
+					context.Background(), DB, instance,
+					`INSERT INTO step_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING *`,
+					wfInstanceId, stepName, inputs,
+				); err != nil {
+					return errors.WithMessage(err, "Could not insert step instance")
+				}
+			} else {
+				updatedAt := time.Now().UTC()
+				instance.UpdatedAt = &updatedAt
+				instance.Certs = inputs
 
-		err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-			if err = cmd.insertStepInstance(ctx, tx, instance); err != nil {
-				return errors.WithMessage(err, "Could not insert step instance")
+				if err := pgxscan.Get(
+					context.Background(), DB, instance,
+					`UPDATE step_instances SET updated_at = $2, certs = $3 WHERE id = $1 RETURNING *`,
+					instance.ID, instance.UpdatedAt, instance.Certs,
+				); err != nil {
+					return errors.WithMessage(err, "Could not update step instance")
+				}
 			}
 
 			stepInstanceId := instance.ID.String()
@@ -214,22 +225,6 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 			return errors.WithMessage(err, "Failed to update step instance")
 		}
 	}
-
-	return nil
-}
-
-// Sets the generated ID on the passed instance.
-func (cmd *InvokerCmd) insertStepInstance(ctx context.Context, db pgx.Tx, instance *StepInstance) error {
-	err := DB.QueryRow(
-		context.Background(),
-		`INSERT INTO step_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING id`,
-		instance.WorkflowInstanceId, instance.Name, instance.Certs,
-	).Scan(&instance.ID)
-	if err != nil {
-		return errors.WithMessage(err, "Could not insert step instance")
-	}
-
-	cmd.logger.Println("Created step instance with ID", instance.ID)
 
 	return nil
 }

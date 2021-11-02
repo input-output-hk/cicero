@@ -8,6 +8,7 @@ create table step_instances (
   name text NOT NULL,
   certs jsonb NOT NULL,
   created_at timestamp NOT NULL DEFAULT NOW(),
+  updated_at timestamp,
   finished_at timestamp
 );
 

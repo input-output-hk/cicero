@@ -305,26 +305,30 @@ func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
 
 func (cmd *BrainCmd) handleNomadEvent(event nomad.Event) error {
 	switch {
-	case event.Topic == "Job" && event.Type == "AllocationUpdated":
-		job, err := event.Job()
+	case event.Topic == "Allocation" && event.Type == "AllocationUpdated":
+		allocation, err := event.Allocation()
 		if err != nil {
-			return errors.WithMessage(err, "Error getting Nomad event's Job")
+			return errors.WithMessage(err, "Error getting Nomad event's allocation")
 		}
-		return cmd.handleNomadJobEvent(job)
+		return cmd.handleNomadAllocationEvent(allocation)
 	}
 	return nil
 }
 
-func (cmd *BrainCmd) handleNomadJobEvent(job *nomad.Job) error {
+func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) error {
+	if !allocation.ClientTerminalStatus() {
+		cmd.logger.Printf("Ignoring allocation event with non-terminal client status \"%s\"", allocation.ClientStatus)
+		return nil
+	}
+
 	step := &StepInstance{}
-	err := pgxscan.Get(
+	if err := pgxscan.Get(
 		context.Background(), DB, step,
 		`SELECT * FROM step_instances WHERE id = $1`,
-		job.ID,
-	)
-	if err != nil {
+		allocation.JobID,
+	); err != nil {
 		if pgxscan.NotFound(err) {
-			cmd.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such step instance)\n", *job.ID)
+			cmd.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such step instance)\n", allocation.JobID)
 			return nil
 		}
 		return errors.WithMessage(err, "Error finding step instance for Nomad event's Job")
@@ -337,13 +341,10 @@ func (cmd *BrainCmd) handleNomadJobEvent(job *nomad.Job) error {
 		return errors.WithMessagef(err, "Could not get definition for step instance %s", step.ID)
 	}
 
-	switch *job.Status {
-	case "dead":
+	switch allocation.ClientStatus {
+	case "complete":
 		certs = &def.Success
 	case "failed":
-		// FIXME there is no such state in topic:Job,type:AllocationUpdated events
-		// in fact such events do not contain any information about whether the job failed or succeeded,
-		// they just say whether it is running. => Failure cert needs to be sent on another event.
 		certs = &def.Failure
 	}
 
@@ -351,8 +352,11 @@ func (cmd *BrainCmd) handleNomadJobEvent(job *nomad.Job) error {
 		return nil
 	}
 
-	now := time.Now().UTC()
-	step.FinishedAt = &now
+	modifyTime := time.Unix(
+		allocation.ModifyTime/int64(time.Second),
+		allocation.ModifyTime%int64(time.Second),
+	).UTC()
+	step.FinishedAt = &modifyTime
 
 	wf, err := step.GetWorkflow()
 	if err != nil {
