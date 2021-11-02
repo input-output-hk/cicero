@@ -151,7 +151,7 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 		stepName, wfInstanceId,
 	); err != nil {
 		if !pgxscan.NotFound(err) {
-			return err
+			return errors.WithMessage(err, "While getting last step instance")
 		}
 		instance = nil
 	}
