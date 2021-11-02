@@ -41,14 +41,7 @@ type WorkflowInstance struct {
 }
 
 func (w *WorkflowInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowDefinition, error) {
-	var def WorkflowDefinition
-
-	def, err := evaluator.EvaluateWorkflow(w.Name, w.ID, w.Certs)
-	if err != nil {
-		return def, err
-	}
-
-	return def, nil
+	return evaluator.EvaluateWorkflow(w.Name, w.ID, w.Certs)
 }
 
 type WorkflowCerts map[string]interface{}
@@ -64,16 +57,14 @@ type StepInstance struct {
 }
 
 func (s *StepInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowStep, error) {
-	var def WorkflowStep
-
 	wf, err := s.GetWorkflow()
 	if err != nil {
-		return def, err
+		return WorkflowStep{}, err
 	}
 
 	wfDef, err := wf.GetDefinition(logger, evaluator)
 	if err != nil {
-		return def, err
+		return WorkflowStep{}, err
 	}
 
 	return wfDef.Steps[s.Name], nil
@@ -82,12 +73,11 @@ func (s *StepInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (W
 func (s *StepInstance) GetWorkflow() (WorkflowInstance, error) {
 	var instance WorkflowInstance
 
-	err := pgxscan.Get(
+	if err := pgxscan.Get(
 		context.Background(), DB, &instance,
 		`SELECT * FROM workflow_instances WHERE id = $1`,
 		s.WorkflowInstanceId,
-	)
-	if err != nil {
+	); err != nil {
 		return instance, errors.WithMessagef(err, "Could not get workflow instance for step %s", s.ID)
 	}
 

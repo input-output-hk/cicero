@@ -257,10 +257,10 @@ func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToNomadEvents")
 
 	var index uint64
-	err := DB.QueryRow(context.Background(),
-		`SELECT COALESCE(MAX("index") + 1, 0) FROM nomad_events`).
-		Scan(&index)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err := DB.QueryRow(
+		context.Background(),
+		`SELECT COALESCE(MAX("index") + 1, 0) FROM nomad_events`,
+	).Scan(&index); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return errors.WithMessage(err, "Could not get last Nomad event index")
 	}
 
@@ -289,12 +289,11 @@ func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
 				return errors.WithMessage(err, "Error handling Nomad event")
 			}
 
-			_, err := DB.Exec(
+			if _, err := DB.Exec(
 				context.Background(),
 				`INSERT INTO nomad_events (topic, "type", "key", filter_keys, "index", payload) VALUES ($1, $2, $3, $4, $5, $6)`,
 				event.Topic, event.Type, event.Key, event.FilterKeys, event.Index, event.Payload,
-			)
-			if err != nil {
+			); err != nil {
 				return errors.WithMessage(err, "Could not insert Nomad event into database")
 			}
 
@@ -363,28 +362,27 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 		return err
 	}
 
-	err = DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		_, err = tx.Exec(context.Background(),
+	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if _, err := tx.Exec(
+			context.Background(),
 			`UPDATE step_instances SET finished_at = $2 WHERE id = $1`,
-			step.ID, step.FinishedAt)
-		if err != nil {
+			step.ID, step.FinishedAt,
+		); err != nil {
 			return errors.WithMessage(err, "Could not update step instance")
 		}
 
-		err = publish(
+		if err := publish(
 			cmd.logger,
 			cmd.bridge,
 			fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
 			"workflow.*.*.cert",
 			*certs,
-		)
-		if err != nil {
+		); err != nil {
 			return errors.WithMessage(err, "Could not publish certificate")
 		}
 
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return errors.WithMessage(err, "Could not complete db transaction")
 	}
 

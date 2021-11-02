@@ -104,7 +104,7 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 			cmd.logger.Fatalf("error in liftbridge message: %s", err.Error())
 		}
 
-		inputs := map[string]interface{}{}
+		inputs := WorkflowCerts{}
 		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
 			cmd.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
 			cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", err)
@@ -119,8 +119,7 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 			return
 		}
 
-		err = cmd.invokeWorkflow(ctx, workflowName, wfInstanceId, inputs)
-		if err != nil {
+		if err := cmd.invokeWorkflow(ctx, workflowName, wfInstanceId, inputs); err != nil {
 			cmd.logger.Println("Failed to invoke workflow", err)
 		}
 	}
@@ -133,8 +132,7 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	}
 
 	for stepName, step := range workflow.Steps {
-		err = cmd.invokeWorkflowStep(ctx, workflowName, wfInstanceId, inputs, stepName, step)
-		if err != nil {
+		if err = cmd.invokeWorkflowStep(ctx, workflowName, wfInstanceId, inputs, stepName, step); err != nil {
 			return err
 		}
 	}
@@ -147,12 +145,11 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 	defer cmd.limiter.Finish()
 
 	instance := &StepInstance{}
-	err := pgxscan.Get(
+	if err := pgxscan.Get(
 		context.Background(), DB, instance,
 		`SELECT * FROM step_instances WHERE name = $1 AND workflow_instance_id = $2`,
 		stepName, wfInstanceId,
-	)
-	if err != nil {
+	); err != nil {
 		if !pgxscan.NotFound(err) {
 			return err
 		}
@@ -193,35 +190,29 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 			stepInstanceId := instance.ID.String()
 			step.Job.ID = &stepInstanceId
 
-			response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{})
-			if err != nil {
+			if response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run step")
-			}
-
-			if len(response.Warnings) > 0 {
+			} else if len(response.Warnings) > 0 {
 				cmd.logger.Println(response.Warnings)
 			}
 
 			return nil
-		})
-		if err != nil {
+		}); err != nil {
 			return err
 		}
 	} else if instance != nil {
-		_, _, err = nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{})
-		if err != nil {
+		if _, _, err := nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
 			return errors.WithMessage(err, "Failed to stop step")
 		}
 
 		finished := time.Now().UTC()
 		instance.FinishedAt = &finished
 
-		_, err = DB.Exec(
+		if _, err := DB.Exec(
 			context.Background(),
 			`UPDATE step_instances SET finished_at = $2 WHERE id = $1`,
 			instance.ID, *instance.FinishedAt,
-		)
-		if err != nil {
+		); err != nil {
 			return errors.WithMessage(err, "Failed to update step instance")
 		}
 	}
