@@ -58,7 +58,7 @@ help = "Run Nomad in development mode with Nix driver"
 
 [[commands]]
 name = "psqlc"
-command = "psql -d \"$DATABASE_URL\""
+command = "psql -d \"$DATABASE_URL\" \"$@\""
 help = "psql into Cicero DB"
 
 [devshell]
