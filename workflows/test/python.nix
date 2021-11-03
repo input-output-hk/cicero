@@ -5,7 +5,7 @@
 
   actions = {
     python = { }: {
-      job = (run "python" ''
+      job = (run "python" {} ''
         print("running python ${id}")
       '') // (import ../../workflows-nomad.nix);
     };

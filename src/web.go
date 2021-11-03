@@ -102,9 +102,16 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 
 		group.GET("/:name/start", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.Param("name")
-			if err := api.WorkflowStart(name); err != nil {
-				return err
+
+			var version *string
+			if v := req.URL.Query().Get("version"); v != "" {
+				version = &v
 			}
+
+			if err := api.WorkflowStart(name, version); err != nil {
+				return errors.WithMessagef(err, "Could not start workflow \"%s\" at version \"%s\"", name, version)
+			}
+
 			http.Redirect(w, req.Request, "/workflow/"+name, 302)
 			return nil
 		})
@@ -150,11 +157,17 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return bunrouter.JSON(w, wfs)
 			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-				actions, err := api.Workflow(req.Param("name"))
+				var version *string
+				if v := req.URL.Query().Get("version"); v != "" {
+					version = &v
+				}
+
+				wf, err := api.Workflow(req.Param("name"), version)
 				if err != nil {
 					return err
 				}
-				return bunrouter.JSON(w, actions)
+
+				return bunrouter.JSON(w, wf)
 			})
 		})
 		group.WithGroup("/action", func(group *bunrouter.Group) {

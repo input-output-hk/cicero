@@ -57,8 +57,8 @@ func (w workflowRepository) Update(tx pgx.Tx, id uint64, workflow *model.Workflo
 
 func (w workflowRepository) Save(tx pgx.Tx, workflow *model.WorkflowInstance) (err error) {
 	err = tx.QueryRow(context.Background(),
-		`INSERT INTO workflow_instances (name, certs) VALUES ($1, $2) RETURNING id`,
-		&workflow.Name, &workflow.Certs).
+		`INSERT INTO workflow_instances (name, version, certs) VALUES ($1, $2, $3) RETURNING id`,
+		&workflow.Name, &workflow.Version, &workflow.Certs).
 		Scan(&workflow.ID)
 
 	return err

@@ -4,44 +4,39 @@ writers.writeBashBin "cicero-evaluator-nix" ''
   PATH="$PATH:"${coreutils}/bin
 
   function usage {
-    {
-      echo    "Usage: $(basename "$0") <list|eval> <workflows-dir>"
-      echo
-      echo    'For eval, the following env vars must be set:'
-      echo -e '\t- CICERO_WORKFLOW_NAME'
-      echo -e '\t- CICERO_WORKFLOW_INSTANCE_ID'
-      echo -e '\t- CICERO_WORKFLOW_INPUTS'
-    } >&2
+      {
+          echo    "Usage: $(basename "$0") <list|eval>"
+          echo
+          echo    'The following env vars must be set:'
+          echo -e '\t- CICERO_EVALUATOR_NIX_FLAKE'
+          echo
+          echo    'The following env var is optional:'
+          echo -e '\t- CICERO_WORKFLOW_VERSION'
+          echo
+          echo    'For eval, the following env vars must be set:'
+          echo -e '\t- CICERO_WORKFLOW_NAME'
+          echo -e '\t- CICERO_WORKFLOW_INSTANCE_ID'
+          echo -e '\t- CICERO_WORKFLOW_INPUTS'
+      } >&2
   }
 
-  dir="''${2:-}"
-
   function evaluate {
-      nix-instantiate \
-          --eval \
-          --strict \
-          --json \
-          --arg cicero 'builtins.getFlake (toString ${flake})' \
-          --argstr dir "$(realpath "$dir")" \
-          "$@"
+      local version=''${CICERO_WORKFLOW_VERSION:-}
+      if [[ -n "''${version:-}" ]]; then
+          version="?rev=$version"
+      fi
+      nix eval --json "$CICERO_EVALUATOR_NIX_FLAKE$version"#ciceroWorkflows "$@"
   }
 
   case "''${1:-}" in
     list )
-        evaluate \
-          --expr '{ id, inputs, cicero, dir } @ args: builtins.attrNames (import ${
-            ./lib.nix
-          } args)' \
-          --argstr id 0 \
-          --argstr inputs '{}'
+        evaluate --apply builtins.attrNames
         ;;
     eval )
-        evaluate \
-            ${./lib.nix} \
-            --argstr id "$CICERO_WORKFLOW_INSTANCE_ID" \
-            --argstr inputs "$CICERO_WORKFLOW_INPUTS" \
-            --attr "$CICERO_WORKFLOW_NAME"
-        ;;
+        # XXX get rid of --impure
+        evaluate --impure \
+            --apply 'wfs: wfs.''${builtins.getEnv "CICERO_WORKFLOW_NAME"} { id = builtins.getEnv "CICERO_WORKFLOW_INSTANCE_ID"; inputs = builtins.getEnv "CICERO_WORKFLOW_INPUTS"; }'
+       ;;
     ''' )
         >&2 echo 'No command given'
         >&2 echo

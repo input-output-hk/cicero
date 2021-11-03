@@ -11,7 +11,7 @@ type WorkflowDefinitions map[string]*WorkflowDefinition
 
 type WorkflowDefinition struct {
 	Name    string                     `json:"name"`
-	Version uint64                     `json:"version"`
+	Version string                    `json:"version"`
 	Meta    map[string]interface{}     `json:"meta"`
 	Actions map[string]*WorkflowAction `json:"actions"`
 }
@@ -31,6 +31,7 @@ func (s *WorkflowAction) IsRunnable() bool {
 type WorkflowInstance struct {
 	ID        uint64
 	Name      string
+	Version   string
 	Certs     WorkflowCerts
 	CreatedAt *time.Time
 	UpdatedAt *time.Time

@@ -3,8 +3,6 @@
 let bash = script: run "bash" (import ../workflows-nomad.nix) script;
 
 in {
-  version = 0;
-
   actions = {
     ping = { ping ? null }: {
       when."ping missing" = ping == null;

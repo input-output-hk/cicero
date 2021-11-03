@@ -15,7 +15,7 @@ import (
 type AllCmd struct {
 	Addr           string `arg:"--listen" default:":8080"`
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	Evaluator      string `arg:"--evaluator" default:"wfs"`
+	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
 func (cmd *AllCmd) Run() error {

@@ -138,8 +138,24 @@ func (cmd *BrainCmd) onStartMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
+	var version string
+	if versionFromMsg, versionGiven := msg.Headers()["version"]; versionGiven {
+		version = string(versionFromMsg)
+	} else if def, err := cmd.evaluator.EvaluateWorkflow(workflowName, nil, 0, model.WorkflowCerts{}); err != nil {
+		cmd.logger.Printf("Could not evaluate workflow %s to get latest version", workflowName)
+		return
+	} else {
+		version = def.Version
+	}
+
+	workflow := model.WorkflowInstance{
+		Name:    workflowName,
+		Version: version,
+		Certs:   received,
+	}
+
 	//TODO: FIXME this context to be transactional
-	if err = cmd.insertWorkflow(context.Background(), &model.WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
+	if err = cmd.insertWorkflow(context.Background(), &workflow); err != nil {
 		cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
 	}
 }

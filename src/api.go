@@ -42,7 +42,7 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 		return def, nil
 	} else {
 		var err error
-		def, err := a.Workflow(wfName)
+		def, err := a.Workflow(wfName, nil)
 		if err != nil {
 			return def, err
 		}
@@ -52,16 +52,28 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 
 // TODO superfluous?
 func (a *Api) Workflows() ([]string, error) {
-	return a.evaluator.ListWorkflows()
+	return a.evaluator.ListWorkflows(nil)
 }
 
 // TODO superfluous?
-func (a *Api) Workflow(name string) (model.WorkflowDefinition, error) {
-	return a.evaluator.EvaluateWorkflow(name, 0, model.WorkflowCerts{})
+func (a *Api) Workflow(name string, version *string) (model.WorkflowDefinition, error) {
+	return a.evaluator.EvaluateWorkflow(name, version, 0, model.WorkflowCerts{})
 }
 
-func (a *Api) WorkflowStart(name string) error {
-	return service.Publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", model.WorkflowCerts{})
+func (a *Api) WorkflowStart(name string, version *string) error {
+	opts := []liftbridge.MessageOption{}
+	if version != nil {
+		opts = append(opts, liftbridge.Header("version", []byte(*version)))
+	}
+
+	return service.Publish(
+		a.logger,
+		a.bridge,
+		fmt.Sprintf("workflow.%s.start", name),
+		"workflow.*.start",
+		model.WorkflowCerts{},
+		opts...,
+	)
 }
 
 func (a *Api) Actions() ([]*model.ActionInstance, error) {
