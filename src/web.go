@@ -142,20 +142,20 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return bunrouter.JSON(w, wfs)
 			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-				steps, err := api.Workflow(req.Param("name"))
+				actions, err := api.Workflow(req.Param("name"))
 				if err != nil {
 					return err
 				}
-				return bunrouter.JSON(w, steps)
+				return bunrouter.JSON(w, actions)
 			})
 		})
-		group.WithGroup("/step", func(group *bunrouter.Group) {
+		group.WithGroup("/action", func(group *bunrouter.Group) {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				steps, err := api.Actions()
+				actions, err := api.Actions()
 				if err != nil {
 					return err
 				}
-				return bunrouter.JSON(w, steps)
+				return bunrouter.JSON(w, actions)
 			})
 			group.WithGroup("/:id", func(group *bunrouter.Group) {
 				const (
@@ -168,13 +168,13 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 							return err
 						}
 
-						step, err := api.Action(id)
+						action, err := api.Action(id)
 						if err != nil {
 							return err
 						}
 
 						return next(w, req.WithContext(
-							context.WithValue(req.Context(), ctxKeyAction, *step),
+							context.WithValue(req.Context(), ctxKeyAction, *action),
 						))
 					}
 				})
@@ -182,8 +182,8 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 					return bunrouter.JSON(w, req.Context().Value(ctxKeyAction))
 				})
 				group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
-					step := req.Context().Value(ctxKeyAction).(ActionInstance)
-					wf, err := step.GetWorkflow()
+					action := req.Context().Value(ctxKeyAction).(ActionInstance)
+					wf, err := action.GetWorkflow()
 					if err != nil {
 						return err
 					}

@@ -131,8 +131,8 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
 
-	for actionName, action := range workflow.Steps {
-		if err = cmd.invokeWorkflowStep(ctx, workflowName, wfInstanceId, inputs, actionName, action); err != nil {
+	for actionName, action := range workflow.Actions {
+		if err = cmd.invokeWorkflowAction(ctx, workflowName, wfInstanceId, inputs, actionName, action); err != nil {
 			return err
 		}
 	}
@@ -140,11 +140,11 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts, actionName string, action WorkflowStep) error {
+func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts, actionName string, action WorkflowAction) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
-	instance := &StepInstance{}
+	instance := &ActionInstance{}
 	if err := pgxscan.Get(
 		context.Background(), DB, instance,
 		`SELECT * FROM action_instances WHERE name = $1 AND workflow_instance_id = $2`,
@@ -165,7 +165,7 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 
 		if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 			if instance == nil {
-				instance = &StepInstance{}
+				instance = &ActionInstance{}
 				if err := pgxscan.Get(
 					context.Background(), DB, instance,
 					`INSERT INTO action_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING *`,
