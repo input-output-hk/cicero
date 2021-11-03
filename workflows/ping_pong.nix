@@ -1,6 +1,6 @@
 { id, run }:
 
-let bash = script: (run "bash" script) // (import ../workflows-nomad.nix);
+let bash = script: (run "bash" {} script) // (import ../workflows-nomad.nix);
 
 in {
   version = 0;
@@ -21,7 +21,6 @@ in {
       };
 
       job = bash ''
-        exit 1
         echo running pong ${id}
       '';
     };
