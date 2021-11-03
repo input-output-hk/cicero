@@ -39,15 +39,15 @@ func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w 
 	const SymbolSize = 50
 	const FontSize = 14
 
-	// XXX nodes := make([]opts.GraphNode, len(*steps))
+	// XXX nodes := make([]opts.GraphNode, len(*actions))
 	nodes := make([]opts.GraphNode, 0)
-	for name, step := range wf.Steps {
+	for name, action := range wf.Actions {
 		graphNode := opts.GraphNode{
 			Name:       name,
 			Symbol:     "circle",
 			SymbolSize: SymbolSize,
 		}
-		if step.IsRunnable() {
+		if action.IsRunnable() {
 			graphNode.Symbol = "diamond"
 			graphNode.Category = 1
 			graphNode.Y = 0
@@ -61,13 +61,13 @@ func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w 
 	links := make([]opts.GraphLink, 0)
 	switch graphType {
 	case WorkflowGraphTypeFlow:
-		for name, step := range wf.Steps {
-			for _, input := range step.Inputs {
-				for name2, step2 := range wf.Steps {
+		for name, action := range wf.Actions {
+			for _, input := range action.Inputs {
+				for name2, action2 := range wf.Actions {
 					if name == name2 {
 						continue
 					}
-					for success := range step2.Success {
+					for success := range action2.Success {
 						if input != success {
 							continue
 						}
@@ -84,14 +84,14 @@ func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w 
 			}
 		}
 	case WorkflowGraphTypeInputs:
-		for name, step := range wf.Steps {
-			for _, input := range step.Inputs {
-				for name2, step2 := range wf.Steps {
+		for name, action := range wf.Actions {
+			for _, input := range action.Inputs {
+				for name2, action2 := range wf.Actions {
 					if name == name2 {
 						continue
 					}
 				Inner:
-					for _, input2 := range step2.Inputs {
+					for _, input2 := range action2.Inputs {
 						if input != input2 {
 							continue
 						}
@@ -138,7 +138,7 @@ func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w 
 		},
 	)
 	graph.AddJSFuncs(GraphResponsiveJs)
-	graph.AddSeries("steps", nodes, links,
+	graph.AddSeries("actions", nodes, links,
 		charts.WithLabelOpts(
 			opts.Label{
 				Show:     true,

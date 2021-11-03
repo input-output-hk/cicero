@@ -131,8 +131,8 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
 
-	for stepName, step := range workflow.Steps {
-		if err = cmd.invokeWorkflowStep(ctx, workflowName, wfInstanceId, inputs, stepName, step); err != nil {
+	for actionName, action := range workflow.Steps {
+		if err = cmd.invokeWorkflowStep(ctx, workflowName, wfInstanceId, inputs, actionName, action); err != nil {
 			return err
 		}
 	}
@@ -140,26 +140,26 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts, stepName string, step WorkflowStep) error {
+func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts, actionName string, action WorkflowStep) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
 	instance := &StepInstance{}
 	if err := pgxscan.Get(
 		context.Background(), DB, instance,
-		`SELECT * FROM step_instances WHERE name = $1 AND workflow_instance_id = $2`,
-		stepName, wfInstanceId,
+		`SELECT * FROM action_instances WHERE name = $1 AND workflow_instance_id = $2`,
+		actionName, wfInstanceId,
 	); err != nil {
 		if !pgxscan.NotFound(err) {
-			return errors.WithMessage(err, "While getting last step instance")
+			return errors.WithMessage(err, "While getting last action instance")
 		}
 		instance = nil
 	}
 
-	cmd.logger.Printf("Checking runnability of %s: %v\n", stepName, step.IsRunnable())
+	cmd.logger.Printf("Checking runnability of %s: %v\n", actionName, action.IsRunnable())
 
-	if step.IsRunnable() {
-		if err := addLogging(&step.Job); err != nil {
+	if action.IsRunnable() {
+		if err := addLogging(&action.Job); err != nil {
 			return err
 		}
 
@@ -168,10 +168,10 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 				instance = &StepInstance{}
 				if err := pgxscan.Get(
 					context.Background(), DB, instance,
-					`INSERT INTO step_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING *`,
-					wfInstanceId, stepName, inputs,
+					`INSERT INTO action_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING *`,
+					wfInstanceId, actionName, inputs,
 				); err != nil {
-					return errors.WithMessage(err, "Could not insert step instance")
+					return errors.WithMessage(err, "Could not insert action instance")
 				}
 			} else {
 				updatedAt := time.Now().UTC()
@@ -180,18 +180,18 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 
 				if err := pgxscan.Get(
 					context.Background(), DB, instance,
-					`UPDATE step_instances SET updated_at = $2, certs = $3 WHERE id = $1 RETURNING *`,
+					`UPDATE action_instances SET updated_at = $2, certs = $3 WHERE id = $1 RETURNING *`,
 					instance.ID, instance.UpdatedAt, instance.Certs,
 				); err != nil {
-					return errors.WithMessage(err, "Could not update step instance")
+					return errors.WithMessage(err, "Could not update action instance")
 				}
 			}
 
-			stepInstanceId := instance.ID.String()
-			step.Job.ID = &stepInstanceId
+			actionInstanceId := instance.ID.String()
+			action.Job.ID = &actionInstanceId
 
-			if response, _, err := nomadClient.Jobs().Register(&step.Job, &nomad.WriteOptions{}); err != nil {
-				return errors.WithMessage(err, "Failed to run step")
+			if response, _, err := nomadClient.Jobs().Register(&action.Job, &nomad.WriteOptions{}); err != nil {
+				return errors.WithMessage(err, "Failed to run action")
 			} else if len(response.Warnings) > 0 {
 				cmd.logger.Println(response.Warnings)
 			}
@@ -202,7 +202,7 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 		}
 	} else if instance != nil {
 		if _, _, err := nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
-			return errors.WithMessage(err, "Failed to stop step")
+			return errors.WithMessage(err, "Failed to stop action")
 		}
 
 		finished := time.Now().UTC()
@@ -210,10 +210,10 @@ func (cmd *InvokerCmd) invokeWorkflowStep(ctx context.Context, workflowName stri
 
 		if _, err := DB.Exec(
 			context.Background(),
-			`UPDATE step_instances SET finished_at = $2 WHERE id = $1`,
+			`UPDATE action_instances SET finished_at = $2 WHERE id = $1`,
 			instance.ID, *instance.FinishedAt,
 		); err != nil {
-			return errors.WithMessage(err, "Failed to update step instance")
+			return errors.WithMessage(err, "Failed to update action instance")
 		}
 	}
 

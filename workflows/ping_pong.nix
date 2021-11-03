@@ -1,15 +1,11 @@
 { id, run }:
 
-let
-  bash = script:
-    (run "bash" script)
-    // (import ../workflows-nomad.nix);
-in
+let bash = script: (run "bash" script) // (import ../workflows-nomad.nix);
 
-{
+in {
   version = 0;
 
-  steps = {
+  actions = {
     ping = { ping ? null }: {
       when."ping missing" = ping == null;
 

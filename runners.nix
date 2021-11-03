@@ -1,7 +1,7 @@
 final: prev:
 
 let
-  drvName = "workflow-step-script";
+  drvName = "workflow-action-script";
 
   runner = drv:
     prev.writers.writeBashBin drvName ''

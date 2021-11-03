@@ -82,14 +82,14 @@ func (a *Api) WorkflowStart(name string) error {
 	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
 }
 
-func (a *Api) Steps() ([]*StepInstance, error) {
-	instances := []*StepInstance{}
+func (a *Api) Actions() ([]*ActionInstance, error) {
+	instances := []*ActionInstance{}
 
 	err := pgxscan.Select(
 		context.Background(),
 		DB,
 		&instances,
-		`SELECT * FROM step_instances`)
+		`SELECT * FROM action_instances`)
 	if err != nil {
 		return nil, err
 	}
@@ -97,12 +97,12 @@ func (a *Api) Steps() ([]*StepInstance, error) {
 	return instances, nil
 }
 
-func (a *Api) Step(id uuid.UUID) (*StepInstance, error) {
-	instance := &StepInstance{}
+func (a *Api) Action(id uuid.UUID) (*ActionInstance, error) {
+	instance := &ActionInstance{}
 
 	err := pgxscan.Get(
 		context.Background(), DB, instance,
-		`SELECT * FROM step_instances WHERE id = $1`,
+		`SELECT * FROM action_instances WHERE id = $1`,
 		id,
 	)
 	if err != nil {

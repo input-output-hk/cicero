@@ -320,24 +320,24 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 		return nil
 	}
 
-	step := &StepInstance{}
+	action := &ActionInstance{}
 	if err := pgxscan.Get(
-		context.Background(), DB, step,
-		`SELECT * FROM step_instances WHERE id = $1`,
+		context.Background(), DB, action,
+		`SELECT * FROM action_instances WHERE id = $1`,
 		allocation.JobID,
 	); err != nil {
 		if pgxscan.NotFound(err) {
-			cmd.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such step instance)\n", allocation.JobID)
+			cmd.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)\n", allocation.JobID)
 			return nil
 		}
-		return errors.WithMessage(err, "Error finding step instance for Nomad event's Job")
+		return errors.WithMessage(err, "Error finding action instance for Nomad event's Job")
 	}
 
 	var certs *WorkflowCerts
 
-	def, err := step.GetDefinition(cmd.logger, cmd.evaluator)
+	def, err := action.GetDefinition(cmd.logger, cmd.evaluator)
 	if err != nil {
-		return errors.WithMessagef(err, "Could not get definition for step instance %s", step.ID)
+		return errors.WithMessagef(err, "Could not get definition for action instance %s", action.ID)
 	}
 
 	switch allocation.ClientStatus {
@@ -355,9 +355,9 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 		allocation.ModifyTime/int64(time.Second),
 		allocation.ModifyTime%int64(time.Second),
 	).UTC()
-	step.FinishedAt = &modifyTime
+	action.FinishedAt = &modifyTime
 
-	wf, err := step.GetWorkflow()
+	wf, err := action.GetWorkflow()
 	if err != nil {
 		return err
 	}
@@ -365,10 +365,10 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if _, err := tx.Exec(
 			context.Background(),
-			`UPDATE step_instances SET finished_at = $2 WHERE id = $1`,
-			step.ID, step.FinishedAt,
+			`UPDATE action_instances SET finished_at = $2 WHERE id = $1`,
+			action.ID, action.FinishedAt,
 		); err != nil {
-			return errors.WithMessage(err, "Could not update step instance")
+			return errors.WithMessage(err, "Could not update action instance")
 		}
 
 		if err := publish(

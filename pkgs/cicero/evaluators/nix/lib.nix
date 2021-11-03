@@ -13,68 +13,71 @@ let
 
   inherit (cicero.inputs.nixpkgs) lib;
 
-  hydrateNomadJob = { workflowName, stepName, job }:
+  hydrateNomadJob = { workflowName, actionName, job }:
     assert !(job ? ID); # workflow authors must not set an ID
     lib.recursiveUpdate job {
-      Name = "${workflowName}/${stepName}";
+      Name = "${workflowName}/${actionName}";
 
       type = "batch";
 
       TaskGroups = map (group:
         lib.recursiveUpdate group {
-          Name = stepName;
+          Name = actionName;
 
           Tasks = map (task:
             lib.recursiveUpdate {
-              Name = stepName;
+              Name = actionName;
               Driver = "nix";
               Config = task.Config;
             } task) group.Tasks;
         }) job.TaskGroups;
     };
 
-  run = language: script: {
+  run = language: options: script: {
+    inherit (options) Datacenters;
     TaskGroups = [{
       Tasks = [{
         Config = let runner = "run-${language}";
         in assert pkgs ? ${runner}; {
-          packages = [ "github:input-output-hk/cicero#${runner}" ];
+          packages = [ "github:input-output-hk/cicero#${runner}" ]
+            ++ (options.packages or [ ]);
           command = [ "/bin/${pkgs.${runner}.name}" script ];
         };
       }];
     }];
   };
 
-  mkStepState = { workflowName, stepName, job, inputs, when ? { }
-    , success ? { ${stepName} = true; }, failure ? { ${stepName} = false; } }: {
+  mkActionState = { workflowName, actionName, job, inputs, when ? { }
+    , success ? { ${actionName} = true; }, failure ? { ${actionName} = false; }
+    }: {
       inherit when inputs success failure;
       job = hydrateNomadJob {
-        inherit workflowName stepName;
+        inherit workflowName actionName;
         job = {
           TaskGroups = [ ];
         } // lib.optionalAttrs (all lib.id (attrValues when)) job;
       };
     };
 
-  workflow = { name, version ? 0, steps ? { }, meta ? { } }:
+  workflow = { name, version ? 0, actions ? { }, meta ? { } }:
     let
-      transformStep = stepName: step:
+      transformAction = actionName: action:
         let
-          inputNames = attrNames (functionArgs step);
+          inputNames = attrNames (functionArgs action);
           intersection = lib.intersectLists inputNames (attrNames parsedInputs);
           filteredInputs = lib.listToAttrs (map (inputName:
             lib.nameValuePair inputName (parsedInputs.${inputName} or null))
             intersection);
-        in mkStepState ({
-          inherit stepName;
+        in mkActionState ({
+          inherit actionName;
           inputs = inputNames;
           workflowName = name;
-        } // (step filteredInputs));
+        } // (action filteredInputs));
 
-      transformedSteps = lib.mapAttrs transformStep steps;
+      transformedActions = lib.mapAttrs transformAction actions;
     in {
       inherit name meta version;
-      steps = transformedSteps;
+      actions = transformedActions;
     };
 
   workflows = dir:

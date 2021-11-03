@@ -32,7 +32,7 @@ let
 in {
   version = 0;
 
-  steps = {
+  actions = {
     gocritic = { pr ? { } }: {
       when = {
         "pr.repository.clone_url exists" = hasCloneUrl pr;

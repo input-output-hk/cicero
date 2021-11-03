@@ -2,7 +2,7 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-create table step_instances (
+create table action_instances (
   id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
   workflow_instance_id integer NOT NULL,
   name text NOT NULL,
@@ -14,4 +14,4 @@ create table step_instances (
 
 -- migrate:down
 
-drop table step_instances;
+drop table action_instances;

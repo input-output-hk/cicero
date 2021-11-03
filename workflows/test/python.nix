@@ -3,7 +3,7 @@
 {
   version = 0;
 
-  steps = {
+  actions = {
     python = { }: {
       job = (run "python" ''
         print("running python ${id}")

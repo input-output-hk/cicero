@@ -32,6 +32,19 @@
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
 
+          edgedb-cli = let
+            src = builtins.fetchurl {
+              url =
+                "https://packages.edgedb.com/archive/linux-x86_64/edgedb-cli_1.0.0-rc.1_202109302039";
+              sha256 =
+                "sha256:1vljq8az2fcy8h4fwk840irhc47xn0hkngjfa2hsby3ryqdbp60b";
+            };
+          in final.runCommand "edgedb" { } ''
+            mkdir -p $out/bin
+            cp ${src} $out/bin/edgedb
+            chmod +x $out/bin/edgedb
+          '';
+
           nomad-dev = let
             cfg = builtins.toFile "nomad.hcl" ''
               log_level = "TRACE"
@@ -49,8 +62,8 @@
         } // (import ./runners.nix final prev);
 
       packages = { cicero, cicero-evaluator-nix, liftbridge, liftbridge-cli
-        , gocritic, nomad-dev, wfs, run-bash, run-python, run-perl, run-js
-        }@pkgs:
+        , gocritic, edgedb-cli, nomad-dev, wfs, run-bash, run-python, run-perl
+        , run-js }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;

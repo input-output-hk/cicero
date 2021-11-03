@@ -3,7 +3,7 @@
 {
   version = 0;
 
-  steps = {
+  actions = {
     github-pull-requests = { }: {
       job = (import ../workflows-nomad.nix) // {
         TaskGroups = [{

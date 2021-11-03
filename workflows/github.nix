@@ -23,7 +23,7 @@ let
 in {
   version = 0;
 
-  steps = {
+  actions = {
     clone = { pr ? { }, src-hyper ? "" }: {
       when = {
         "we got a PR" = any pr;
