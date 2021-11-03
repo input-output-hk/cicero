@@ -1,37 +1,86 @@
 package model
 
 import (
+	"context"
+	"log"
 	nomad "github.com/hashicorp/nomad/api"
 	"time"
+
+	"github.com/georgysavva/scany/pgxscan"
+	"github.com/google/uuid"
+	nomad "github.com/hashicorp/nomad/api"
+	"github.com/pkg/errors"
 )
 
 type WorkflowDefinitions map[string]*WorkflowDefinition
 
 type WorkflowDefinition struct {
-	Name    string                  `json:"name"`
-	Version uint64                  `json:"version"`
-	Meta    map[string]interface{}  `json:"meta"`
-	Steps   map[string]WorkflowStep `json:"steps"`
+	Name    string                    `json:"name"`
+	Version uint64                    `json:"version"`
+	Meta    map[string]interface{}    `json:"meta"`
+	Actions map[string]WorkflowAction `json:"actions"`
 }
 
-type WorkflowStep struct {
-	Failure map[string]interface{} `json:"failure"`
-	Success map[string]interface{} `json:"success"`
-	Inputs  []string               `json:"inputs"`
-	When    map[string]bool        `json:"when"`
-	Job     nomad.Job              `json:"job"`
+type WorkflowAction struct {
+	Failure WorkflowCerts   `json:"failure"`
+	Success WorkflowCerts   `json:"success"`
+	Inputs  []string        `json:"inputs"`
+	When    map[string]bool `json:"when"`
+	Job     nomad.Job       `json:"job"`
 }
 
-func (s *WorkflowStep) IsRunnable() bool {
+func (s *WorkflowAction) IsRunnable() bool {
 	return len(s.Job.TaskGroups) > 0
 }
 
 type WorkflowInstance struct {
 	ID        uint64
-	Name      string        `bun:",notnull"`
-	Certs     WorkflowCerts `bun:",notnull"`
-	CreatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
-	UpdatedAt time.Time     `bun:",nullzero,notnull,default:current_timestamp"`
+	Name      string
+	Certs     WorkflowCerts
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+}
+
+func (w *WorkflowInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowDefinition, error) {
+	return evaluator.EvaluateWorkflow(w.Name, w.ID, w.Certs)
 }
 
 type WorkflowCerts map[string]interface{}
+
+type ActionInstance struct {
+	ID                 uuid.UUID
+	WorkflowInstanceId uint64
+	Name               string
+	Certs              WorkflowCerts
+	CreatedAt          *time.Time
+	UpdatedAt          *time.Time
+	FinishedAt         *time.Time
+}
+
+func (s *ActionInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowAction, error) {
+	wf, err := s.GetWorkflow()
+	if err != nil {
+		return WorkflowAction{}, err
+	}
+
+	wfDef, err := wf.GetDefinition(logger, evaluator)
+	if err != nil {
+		return WorkflowAction{}, err
+	}
+
+	return wfDef.Actions[s.Name], nil
+}
+
+func (s *ActionInstance) GetWorkflow() (WorkflowInstance, error) {
+	var instance WorkflowInstance
+
+	if err := pgxscan.Get(
+		context.Background(), DB, &instance,
+		`SELECT * FROM workflow_instances WHERE id = $1`,
+		s.WorkflowInstanceId,
+	); err != nil {
+		return instance, errors.WithMessagef(err, "Could not get workflow instance for action %s", s.ID)
+	}
+
+	return instance, nil
+}

@@ -3,21 +3,21 @@
 {
   version = 0;
 
-  steps = {
-    github-pull-requests = {}: {
+  actions = {
+    github-pull-requests = { }: {
       job = (import ../workflows-nomad.nix) // {
-        TaskGroups = [ {
+        TaskGroups = [{
           Name = "prs";
 
-          Tasks = [ {
+          Tasks = [{
             Name = "prs";
 
             Config = {
               flake = "github:input-output-hk/cicero#listen-github";
               command = "/bin/listen-github";
             };
-          } ];
-        } ];
+          }];
+        }];
       };
     };
   };

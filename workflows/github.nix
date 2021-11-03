@@ -19,13 +19,12 @@ let
 
     export PATH="$PATH:$PWD/local/bin"
   '';
-in
 
-{
+in {
   version = 0;
 
-  steps = {
-    clone = { pr ? {}, src-hyper ? "" }: {
+  actions = {
+    clone = { pr ? { }, src-hyper ? "" }: {
       when = {
         "we got a PR" = any pr;
         "missing hyper" = src-hyper == "";
@@ -43,7 +42,7 @@ in
       '') // (import ../workflows-nomad.nix);
     };
 
-    checkout = { pr ? {}, src-hyper ? "" }: {
+    checkout = { pr ? { }, src-hyper ? "" }: {
       when = {
         "we got a PR" = any pr;
         "repository was cloned" = src-hyper != "";
@@ -65,7 +64,7 @@ in
       '') // (import ../workflows-nomad.nix);
     };
 
-    test = { pr ? {}, test ? false, checkout ? false, sha ? null }: {
+    test = { pr ? { }, test ? false, checkout ? false, sha ? null }: {
       when = {
         "we got a PR" = any pr;
         "is checked out" = checkout;

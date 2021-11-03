@@ -4,8 +4,12 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+<<<<<<< HEAD
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
+=======
+	"fmt"
+>>>>>>> main
 	"html/template"
 	"log"
 	"mime"
@@ -17,15 +21,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
 
 type WebCmd struct {
+<<<<<<< HEAD
 	Addr   string `arg:"--listen" default:":8080"`
 	logger *log.Logger
 	bridge liftbridge.Client
 	workflowService service.WorkflowService
+=======
+	Addr      string `arg:"--listen" default:":8080"`
+	logger    *log.Logger
+	bridge    liftbridge.Client
+	evaluator Evaluator
+>>>>>>> main
 }
 
 func (cmd *WebCmd) init() {
@@ -46,8 +59,15 @@ func (cmd *WebCmd) Run() error {
 
 func (cmd *WebCmd) start(ctx context.Context) error {
 	cmd.init()
+<<<<<<< HEAD
 
 	api := Api{bridge: cmd.bridge, workflowService: cmd.workflowService}
+=======
+	api := Api{
+		bridge:    cmd.bridge,
+		evaluator: cmd.evaluator,
+	}
+>>>>>>> main
 	api.init()
 
 	cmd.logger.Println("Starting Web")
@@ -144,11 +164,72 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return bunrouter.JSON(w, wfs)
 			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
+<<<<<<< HEAD
 				steps, err := api.Workflow(req.Param("name"), model.WorkflowCerts{})
+=======
+				actions, err := api.Workflow(req.Param("name"))
+>>>>>>> main
 				if err != nil {
 					return err
 				}
-				return bunrouter.JSON(w, steps)
+				return bunrouter.JSON(w, actions)
+			})
+		})
+		group.WithGroup("/action", func(group *bunrouter.Group) {
+			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+				actions, err := api.Actions()
+				if err != nil {
+					return err
+				}
+				return bunrouter.JSON(w, actions)
+			})
+			group.WithGroup("/:id", func(group *bunrouter.Group) {
+				const (
+					ctxKeyAction = iota
+				)
+				group = group.WithMiddleware(func(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
+					return func(w http.ResponseWriter, req bunrouter.Request) error {
+						id, err := uuid.Parse(req.Param("id"))
+						if err != nil {
+							return err
+						}
+
+						action, err := api.Action(id)
+						if err != nil {
+							return err
+						}
+
+						return next(w, req.WithContext(
+							context.WithValue(req.Context(), ctxKeyAction, *action),
+						))
+					}
+				})
+				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+					return bunrouter.JSON(w, req.Context().Value(ctxKeyAction))
+				})
+				group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
+					action := req.Context().Value(ctxKeyAction).(ActionInstance)
+					wf, err := action.GetWorkflow()
+					if err != nil {
+						return err
+					}
+
+					certs := WorkflowCerts{}
+					if err := json.NewDecoder(req.Body).Decode(&certs); err != nil {
+						return errors.WithMessage(err, "Could not unmarshal certs from request body")
+					}
+
+					if err := publish(
+						cmd.logger,
+						cmd.bridge,
+						fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
+						"workflow.*.*.cert",
+						certs,
+					); err != nil {
+						return errors.WithMessage(err, "Could not publish certificate")
+					}
+					return nil
+				})
 			})
 		})
 	})
@@ -247,13 +328,18 @@ func makeViewTemplate(route string) *template.Template {
 	return t
 }
 
+type stackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
 // copy-pasted error handling from bunrouter's homepage
 
 type HTTPError struct {
 	statusCode int
 
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Trace   errors.StackTrace `json:trace`
 }
 
 func (e HTTPError) Error() string {
@@ -261,12 +347,18 @@ func (e HTTPError) Error() string {
 }
 
 func NewHTTPError(err error) HTTPError {
-	return HTTPError{
+	httpErr := HTTPError{
 		statusCode: http.StatusInternalServerError,
 
 		Code:    "internal",
 		Message: err.Error(),
 	}
+
+	if serr, ok := err.(stackTracer); ok {
+		httpErr.Trace = serr.StackTrace()
+	}
+
+	return httpErr
 }
 
 func errorHandler(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {

@@ -13,33 +13,20 @@ import (
 	"time"
 
 	"cirello.io/oversight"
+	"github.com/georgysavva/scany/pgxscan"
+	nomad "github.com/hashicorp/nomad/api"
+	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bun"
 )
 
 type BrainCmd struct {
-	logger *log.Logger
-	tree   *oversight.Tree
-	bridge liftbridge.Client
+	logger    *log.Logger
+	tree      *oversight.Tree
+	bridge    liftbridge.Client
 	workflowService service.WorkflowService
-}
-
-func GetDefinition(w model.WorkflowInstance, logger *log.Logger) (model.WorkflowDefinition, error) {
-	var def model.WorkflowDefinition
-
-	var certs []byte
-	certs, err := json.Marshal(w.Certs)
-	if err != nil {
-		return def, err
-	}
-
-	def, err = nixInstantiateWorkflow(logger, w.Name, w.ID, string(certs))
-	if err != nil {
-		return def, err
-	}
-
-	return def, nil
+	evaluator Evaluator
 }
 
 func (cmd *BrainCmd) init() {
@@ -58,7 +45,6 @@ func (cmd *BrainCmd) init() {
 			oversight.OneForOne(), // restart every task on its own
 		))
 	}
-
 }
 
 func (cmd *BrainCmd) Run() error {
@@ -72,11 +58,16 @@ func (cmd *BrainCmd) Run() error {
 	}
 }
 
+func (cmd *BrainCmd) addToTree(tree *oversight.Tree) {
+	tree.Add(cmd.listenToCerts)
+	tree.Add(cmd.listenToStart)
+	tree.Add(cmd.listenToNomadEvents)
+}
+
 func (cmd *BrainCmd) start(ctx context.Context) error {
 	cmd.init()
 
-	cmd.tree.Add(cmd.listenToCerts)
-	cmd.tree.Add(cmd.listenToStart)
+	cmd.addToTree(cmd.tree)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -115,18 +106,14 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 
 			cmd.logger.Printf("Received start for workflow %s", workflowName)
 
-			received := map[string]interface{}{}
+			received := WorkflowCerts{}
 			unmarshalErr := json.Unmarshal(msg.Value(), &received)
 			if unmarshalErr != nil {
 				cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
 				return
 			}
 
-			err = DB.RunInTx(context.Background(), nil, func(ctx context.Context, tx bun.Tx) error {
-				return cmd.insertWorkflow(tx, &model.WorkflowInstance{Name: workflowName, Certs: received})
-			})
-
-			if err != nil {
+			if err = cmd.insertWorkflow(&WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
 				cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
 			}
 		})
@@ -140,11 +127,20 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	return nil
 }
 
-func (cmd *BrainCmd) insertWorkflow(tx bun.Tx, workflow *model.WorkflowInstance) error {
-	_, err := cmd.workflowService.Save(&tx, workflow)
+func (cmd *BrainCmd) insertWorkflow(workflow *WorkflowInstance) error {
+	err := DB.QueryRow(context.Background(),
+		`INSERT INTO workflow_instances (name, certs) VALUES ($1, $2) RETURNING id`,
+		workflow.Name, workflow.Certs).
+		Scan(&workflow.ID)
 	if err != nil {
 		return err
 	}
+
+	if err != nil {
+		return errors.WithMessage(err, "Could not insert workflow instance")
+	}
+
+	cmd.logger.Printf("Created workflow with ID %d\n", workflow.ID)
 
 	service.Publish(
 		cmd.logger,
@@ -187,54 +183,68 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 
 			cmd.logger.Printf("Received update for workflow %s %d", workflowName, id)
 
-			received := map[string]interface{}{}
+			received := WorkflowCerts{}
 			unmarshalErr := json.Unmarshal(msg.Value(), &received)
 			if unmarshalErr != nil {
 				cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
 				return
 			}
 
-			err = DB.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-				wf, err := cmd.workflowService.GetByNameAndId(workflowName, id)
-				var existing = &wf
-				if err != nil {
-					cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
-					return err
-				}
+			tx, err := DB.Begin(ctx)
+			if err != nil {
+				cmd.logger.Printf("%s\n", err)
+				return
+			}
 
-				merged := map[string]interface{}{}
+			existing := &WorkflowInstance{Name: workflowName}
+			err = pgxscan.Get(
+				context.Background(), tx, existing,
+				`SELECT * FROM workflow_instances WHERE id = $1`,
+				id,
+			)
+			if err != nil {
+				cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
+				return
+			}
 
-				for k, v := range existing.Certs {
-					merged[k] = v
-				}
+			merged := WorkflowCerts{}
 
-				for k, v := range received {
-					merged[k] = v
-				}
+			for k, v := range existing.Certs {
+				merged[k] = v
+			}
 
-				existing.Certs = merged
-				existing.UpdatedAt = time.Now().UTC()
+			for k, v := range received {
+				merged[k] = v
+			}
 
-				_, err = cmd.workflowService.Update(&tx, id, existing)
-				if err != nil {
-					cmd.logger.Printf("Error while updating workflow: %s", err)
-					return err
-				}
+			now := time.Now().UTC()
+			existing.Certs = merged
+			existing.UpdatedAt = &now
 
-				// TODO: only invoke when there was a change to the certs?
+			_, err = tx.Exec(
+				context.Background(),
+				`UPDATE workflow_instances SET certs = $2, updated_at = $3 WHERE id = $1`,
+				id, existing.Certs, now,
+			)
 
-				cmd.logger.Printf("Updated workflow %#v\n", existing)
+			if err != nil {
+				cmd.logger.Printf("Error while updating workflow: %s", err)
+				return
+			}
 
-				service.Publish(
-					cmd.logger,
-					cmd.bridge,
-					fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
-					"workflow.*.*.invoke",
-					merged,
-				)
+			// TODO: only invoke when there was a change to the certs?
 
-				return err
-			})
+			cmd.logger.Printf("Updated workflow %#v\n", existing)
+
+			service.Publish(
+				cmd.logger,
+				cmd.bridge,
+				fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
+				"workflow.*.*.invoke",
+				merged,
+			)
+
+			err = tx.Commit(context.Background())
 
 			if err != nil {
 				cmd.logger.Printf("Couldn't complete transaction: %s\n", err)
@@ -248,5 +258,141 @@ func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 
 	<-ctx.Done()
 	cmd.logger.Println("context was cancelled")
+	return nil
+}
+
+func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
+	cmd.logger.Println("Starting Brain.listenToNomadEvents")
+
+	var index uint64
+	if err := DB.QueryRow(
+		context.Background(),
+		`SELECT COALESCE(MAX("index") + 1, 0) FROM nomad_events`,
+	).Scan(&index); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return errors.WithMessage(err, "Could not get last Nomad event index")
+	}
+
+	cmd.logger.Println("Listening to Nomad events starting at index", index)
+
+	stream, err := nomadClient.EventStream().Stream(
+		ctx,
+		map[nomad.Topic][]string{
+			nomad.TopicAll: {string(nomad.TopicAll)},
+		},
+		index,
+		nil,
+	)
+	if err != nil {
+		return errors.WithMessage(err, "Could not listen to Nomad events")
+	}
+
+	for {
+		events := <-stream
+		if events.Err != nil {
+			return errors.WithMessage(err, "Error getting next events from Nomad event stream")
+		}
+
+		for _, event := range events.Events {
+			if err := cmd.handleNomadEvent(event); err != nil {
+				return errors.WithMessage(err, "Error handling Nomad event")
+			}
+
+			if _, err := DB.Exec(
+				context.Background(),
+				`INSERT INTO nomad_events (topic, "type", "key", filter_keys, "index", payload) VALUES ($1, $2, $3, $4, $5, $6)`,
+				event.Topic, event.Type, event.Key, event.FilterKeys, event.Index, event.Payload,
+			); err != nil {
+				return errors.WithMessage(err, "Could not insert Nomad event into database")
+			}
+
+			index = event.Index
+		}
+	}
+}
+
+func (cmd *BrainCmd) handleNomadEvent(event nomad.Event) error {
+	switch {
+	case event.Topic == "Allocation" && event.Type == "AllocationUpdated":
+		allocation, err := event.Allocation()
+		if err != nil {
+			return errors.WithMessage(err, "Error getting Nomad event's allocation")
+		}
+		return cmd.handleNomadAllocationEvent(allocation)
+	}
+	return nil
+}
+
+func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) error {
+	if !allocation.ClientTerminalStatus() {
+		cmd.logger.Printf("Ignoring allocation event with non-terminal client status \"%s\"", allocation.ClientStatus)
+		return nil
+	}
+
+	action := &ActionInstance{}
+	if err := pgxscan.Get(
+		context.Background(), DB, action,
+		`SELECT * FROM action_instances WHERE id = $1`,
+		allocation.JobID,
+	); err != nil {
+		if pgxscan.NotFound(err) {
+			cmd.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)\n", allocation.JobID)
+			return nil
+		}
+		return errors.WithMessage(err, "Error finding action instance for Nomad event's Job")
+	}
+
+	var certs *WorkflowCerts
+
+	def, err := action.GetDefinition(cmd.logger, cmd.evaluator)
+	if err != nil {
+		return errors.WithMessagef(err, "Could not get definition for action instance %s", action.ID)
+	}
+
+	switch allocation.ClientStatus {
+	case "complete":
+		certs = &def.Success
+	case "failed":
+		certs = &def.Failure
+	}
+
+	if certs == nil {
+		return nil
+	}
+
+	modifyTime := time.Unix(
+		allocation.ModifyTime/int64(time.Second),
+		allocation.ModifyTime%int64(time.Second),
+	).UTC()
+	action.FinishedAt = &modifyTime
+
+	wf, err := action.GetWorkflow()
+	if err != nil {
+		return err
+	}
+
+	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if _, err := tx.Exec(
+			context.Background(),
+			`UPDATE action_instances SET finished_at = $2 WHERE id = $1`,
+			action.ID, action.FinishedAt,
+		); err != nil {
+			return errors.WithMessage(err, "Could not update action instance")
+		}
+
+		if err := publish(
+			cmd.logger,
+			cmd.bridge,
+			fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
+			"workflow.*.*.cert",
+			*certs,
+		); err != nil {
+			return errors.WithMessage(err, "Could not publish certificate")
+		}
+
+		return nil
+	}); err != nil {
+		return errors.WithMessage(err, "Could not complete db transaction")
+	}
+
 	return nil
 }

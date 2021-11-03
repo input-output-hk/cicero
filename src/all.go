@@ -15,6 +15,7 @@ import (
 type AllCmd struct {
 	Addr           string `arg:"--listen" default:":8080"`
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	Evaluator      string `arg:"--evaluator" default:"wfs"`
 }
 
 func (cmd *AllCmd) Run() error {
@@ -25,21 +26,33 @@ func (cmd *AllCmd) Run() error {
 
 	supervisor := cmd.newSupervisor()
 
+	evaluator := NewEvaluator(cmd.Evaluator)
 	workflowService := &service.WorkflowServiceCmd{}
 	workflowService.Init(DB)
 
-	brain := &BrainCmd{bridge: bridge, workflowService: workflowService}
+	brain := &BrainCmd{
+		bridge:    bridge,
+		workflowService: workflowService,
+		evaluator: evaluator,
+	}
 	brain.init()
 
-	web := &WebCmd{Addr: cmd.Addr, bridge: bridge, workflowService: workflowService}
+	web := &WebCmd{
+		Addr:      cmd.Addr,
+		bridge:    bridge,
+		workflowService: workflowService,
+		evaluator: evaluator,
+	}
 	web.init()
 
-	invoker := &InvokerCmd{bridge: bridge}
+	invoker := &InvokerCmd{
+		bridge:    bridge,
+		evaluator: evaluator,
+	}
 	invoker.init()
 
 	supervisor.Add(invoker.start)
-	supervisor.Add(brain.listenToCerts)
-	supervisor.Add(brain.listenToStart)
+	brain.addToTree(supervisor)
 	supervisor.Add(web.start)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -65,7 +78,7 @@ func (cmd *AllCmd) newSupervisor() *oversight.Tree {
 			log.New(os.Stderr, "all: ", log.LstdFlags),
 		),
 		oversight.WithSpecification(
-			5,                     // number of restarts
+			10,                    // number of restarts
 			1*time.Minute,         // within this time period
 			oversight.OneForOne(), // restart every task on its own
 		))

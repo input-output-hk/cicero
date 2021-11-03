@@ -12,6 +12,7 @@ type ShowCmd struct {
 	ID           uint64 `arg:"--id" default:0`
 	Inputs       string `arg:"--inputs" default:"{}"`
 	logger       *log.Logger
+	evaluator    Evaluator
 }
 
 func (cmd *ShowCmd) init() {
@@ -23,7 +24,12 @@ func (cmd *ShowCmd) init() {
 func (cmd *ShowCmd) Run() error {
 	cmd.init()
 
-	def, err := nixInstantiateWorkflow(cmd.logger, cmd.WorkflowName, cmd.ID, cmd.Inputs)
+	inputs := WorkflowCerts{}
+	if err := json.Unmarshal([]byte(cmd.Inputs), &inputs); err != nil {
+		return err
+	}
+
+	def, err := cmd.evaluator.EvaluateWorkflow(cmd.WorkflowName, cmd.ID, inputs)
 	if err != nil {
 		return err
 	}

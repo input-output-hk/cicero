@@ -4,7 +4,7 @@ imports = [
 
 [[env]]
 name = "DATABASE_URL"
-value = "sqlite:db/database.sqlite3"
+value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 
 [[commands]]
 package = "go"
@@ -48,6 +48,19 @@ name = "docs-serve"
 command = "docs && swagger serve --no-open -F=swagger swagger.yaml"
 help = "Generate and serve API documentation"
 
+[[commands]]
+package = "wfs"
+help = "Workflow Evaluator (Nix) (wrapper that reads ./workflows)"
+
+[[commands]]
+package = "nomad-dev"
+help = "Run Nomad in development mode with Nix driver"
+
+[[commands]]
+name = "psqlc"
+command = "psql -d \"$DATABASE_URL\" \"$@\""
+help = "psql into Cicero DB"
+
 [devshell]
 name = "cicero"
 packages = [
@@ -58,8 +71,12 @@ packages = [
   "gocode",
   "gcc",
   "sqliteInteractive",
+  "postgresql_12",
   "gocritic",
   "fd",
   "nixfmt",
   "go-swagger",
+  "grafana-loki",
+  "cicero-evaluator-nix",
+  "cue",
 ]
