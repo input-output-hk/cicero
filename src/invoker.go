@@ -2,9 +2,9 @@ package cicero
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
-	"encoding/json"
 	"log"
 	"os"
 	"strconv"
@@ -106,7 +106,7 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 			cmd.logger.Fatalf("error in liftbridge message: %s", err.Error())
 		}
 
-		inputs := WorkflowCerts{}
+		inputs := model.WorkflowCerts{}
 		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
 			cmd.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
 			cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", err)
@@ -127,7 +127,7 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 	}
 }
 
-func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts) error {
+func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts) error {
 	workflow, err := cmd.evaluator.EvaluateWorkflow(workflowName, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
@@ -142,11 +142,11 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts, actionName string, action WorkflowAction) error {
+func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts, actionName string, action model.WorkflowAction) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
-	instance := &ActionInstance{}
+	instance := &model.ActionInstance{}
 	if err := pgxscan.Get(
 		context.Background(), DB, instance,
 		`SELECT * FROM action_instances WHERE name = $1 AND workflow_instance_id = $2`,
@@ -167,7 +167,7 @@ func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName st
 
 		if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 			if instance == nil {
-				instance = &ActionInstance{}
+				instance = &model.ActionInstance{}
 				if err := pgxscan.Get(
 					context.Background(), DB, instance,
 					`INSERT INTO action_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING *`,

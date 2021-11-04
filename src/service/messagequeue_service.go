@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 	"log"
 	"time"
+	model "github.com/input-output-hk/cicero/src/model"
 )
 
 //TODO: change to lowercase when service module refactoring is complete.
@@ -31,7 +32,7 @@ func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []s
 }
 
 //TODO: change to lowercase when service module refactoring is complete.
-func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg map[string]interface{}) error {
+func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg model.WorkflowCerts) error {
 	err := CreateStreams(logger, bridge, []string{stream})
 	if err != nil {
 		return errors.WithMessage(err, "Before publishing message")

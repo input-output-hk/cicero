@@ -3,6 +3,7 @@ package cicero
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/model"
 	"log"
 	"os"
 )
@@ -24,7 +25,7 @@ func (cmd *ShowCmd) init() {
 func (cmd *ShowCmd) Run() error {
 	cmd.init()
 
-	inputs := WorkflowCerts{}
+	inputs := model.WorkflowCerts{}
 	if err := json.Unmarshal([]byte(cmd.Inputs), &inputs); err != nil {
 		return err
 	}

@@ -4,12 +4,13 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
-<<<<<<< HEAD
+	"fmt"
+	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
-=======
-	"fmt"
->>>>>>> main
+	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/pkg/errors"
+	"github.com/uptrace/bunrouter"
 	"html/template"
 	"log"
 	"mime"
@@ -20,25 +21,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
-	"github.com/liftbridge-io/go-liftbridge"
-	"github.com/pkg/errors"
-	"github.com/uptrace/bunrouter"
 )
 
 type WebCmd struct {
-<<<<<<< HEAD
-	Addr   string `arg:"--listen" default:":8080"`
-	logger *log.Logger
-	bridge liftbridge.Client
-	workflowService service.WorkflowService
-=======
 	Addr      string `arg:"--listen" default:":8080"`
 	logger    *log.Logger
 	bridge    liftbridge.Client
+	workflowService service.WorkflowService
 	evaluator Evaluator
->>>>>>> main
 }
 
 func (cmd *WebCmd) init() {
@@ -59,15 +49,11 @@ func (cmd *WebCmd) Run() error {
 
 func (cmd *WebCmd) start(ctx context.Context) error {
 	cmd.init()
-<<<<<<< HEAD
-
-	api := Api{bridge: cmd.bridge, workflowService: cmd.workflowService}
-=======
 	api := Api{
 		bridge:    cmd.bridge,
+		workflowService: cmd.workflowService,
 		evaluator: cmd.evaluator,
 	}
->>>>>>> main
 	api.init()
 
 	cmd.logger.Println("Starting Web")
@@ -164,11 +150,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return bunrouter.JSON(w, wfs)
 			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-<<<<<<< HEAD
-				steps, err := api.Workflow(req.Param("name"), model.WorkflowCerts{})
-=======
 				actions, err := api.Workflow(req.Param("name"))
->>>>>>> main
 				if err != nil {
 					return err
 				}
@@ -208,18 +190,18 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 					return bunrouter.JSON(w, req.Context().Value(ctxKeyAction))
 				})
 				group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
-					action := req.Context().Value(ctxKeyAction).(ActionInstance)
-					wf, err := action.GetWorkflow()
+					action := req.Context().Value(ctxKeyAction).(model.ActionInstance)
+					wf, err := GetWorkflow(&action)
 					if err != nil {
 						return err
 					}
 
-					certs := WorkflowCerts{}
+					certs := model.WorkflowCerts{}
 					if err := json.NewDecoder(req.Body).Decode(&certs); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal certs from request body")
 					}
 
-					if err := publish(
+					if err := service.Publish(
 						cmd.logger,
 						cmd.bridge,
 						fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),

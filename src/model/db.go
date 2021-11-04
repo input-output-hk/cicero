@@ -1,20 +1,33 @@
 package model
 
 import (
-	"database/sql"
+	"context"
+	
+	"github.com/jackc/pgtype"
+	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
-	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/dialect/sqlitedialect"
-	"github.com/uptrace/bun/driver/sqliteshim"
 )
 
-func DBConnection() (*bun.DB, error) {
-	sqldb, err := sql.Open(sqliteshim.ShimName, "db/database.sqlite3")
-	if err != nil {
-		return nil, errors.WithMessage(err, "While opening the DB")
+func DBConnection(url string) (*pgxpool.Pool, error) {
+	if url == "" {
+		return nil, errors.New("The DATABASE_URL environment variable is not set or empty")
 	}
 
-	db := bun.NewDB(sqldb, sqlitedialect.New())
+	dbconfig, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, err
+	}
 
-	return db, nil
+	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		conn.ConnInfo().RegisterDataType(pgtype.DataType{
+			Value: &pgtypeuuid.UUID{},
+			Name:  "uuid",
+			OID:   pgtype.UUIDOID,
+		})
+		return nil
+	}
+
+	return pgxpool.ConnectConfig(context.Background(), dbconfig)
 }

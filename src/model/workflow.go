@@ -1,15 +1,10 @@
 package model
 
 import (
-	"context"
-	"log"
 	nomad "github.com/hashicorp/nomad/api"
 	"time"
 
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
-	nomad "github.com/hashicorp/nomad/api"
-	"github.com/pkg/errors"
 )
 
 type WorkflowDefinitions map[string]*WorkflowDefinition
@@ -41,10 +36,6 @@ type WorkflowInstance struct {
 	UpdatedAt *time.Time
 }
 
-func (w *WorkflowInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowDefinition, error) {
-	return evaluator.EvaluateWorkflow(w.Name, w.ID, w.Certs)
-}
-
 type WorkflowCerts map[string]interface{}
 
 type ActionInstance struct {
@@ -57,30 +48,3 @@ type ActionInstance struct {
 	FinishedAt         *time.Time
 }
 
-func (s *ActionInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowAction, error) {
-	wf, err := s.GetWorkflow()
-	if err != nil {
-		return WorkflowAction{}, err
-	}
-
-	wfDef, err := wf.GetDefinition(logger, evaluator)
-	if err != nil {
-		return WorkflowAction{}, err
-	}
-
-	return wfDef.Actions[s.Name], nil
-}
-
-func (s *ActionInstance) GetWorkflow() (WorkflowInstance, error) {
-	var instance WorkflowInstance
-
-	if err := pgxscan.Get(
-		context.Background(), DB, &instance,
-		`SELECT * FROM workflow_instances WHERE id = $1`,
-		s.WorkflowInstanceId,
-	); err != nil {
-		return instance, errors.WithMessagef(err, "Could not get workflow instance for action %s", s.ID)
-	}
-
-	return instance, nil
-}
