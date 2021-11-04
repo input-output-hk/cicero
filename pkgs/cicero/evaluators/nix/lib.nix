@@ -39,7 +39,7 @@ let
       Tasks = [{
         Config = let runner = "run-${language}";
         in assert pkgs ? ${runner}; {
-          packages = [ "github:input-output-hk/cicero#${runner}" ]
+          packages = [ "github:input-output-hk/cicero/main#${runner}" ]
             ++ (options.packages or [ ]);
           command = [ "/bin/${pkgs.${runner}.name}" script ];
         };

@@ -1,6 +1,6 @@
 { id, run }:
 
-let bash = script: (run "bash" {} script) // (import ../workflows-nomad.nix);
+let bash = script: run "bash" (import ../workflows-nomad.nix) script;
 
 in {
   version = 0;

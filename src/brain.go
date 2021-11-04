@@ -330,7 +330,8 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 			cmd.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)\n", allocation.JobID)
 			return nil
 		}
-		return errors.WithMessage(err, "Error finding action instance for Nomad event's Job")
+		return nil
+		// return errors.WithMessage(err, "Error finding action instance for Nomad event's Job")
 	}
 
 	var certs *WorkflowCerts

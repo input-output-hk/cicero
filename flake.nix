@@ -32,18 +32,8 @@
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
 
-          edgedb-cli = let
-            src = builtins.fetchurl {
-              url =
-                "https://packages.edgedb.com/archive/linux-x86_64/edgedb-cli_1.0.0-rc.1_202109302039";
-              sha256 =
-                "sha256:1vljq8az2fcy8h4fwk840irhc47xn0hkngjfa2hsby3ryqdbp60b";
-            };
-          in final.runCommand "edgedb" { } ''
-            mkdir -p $out/bin
-            cp ${src} $out/bin/edgedb
-            chmod +x $out/bin/edgedb
-          '';
+          cicero-entrypoint =
+            final.callPackage ./pkgs/cicero/entrypoint.nix { };
 
           nomad-dev = let
             cfg = builtins.toFile "nomad.hcl" ''
@@ -61,9 +51,9 @@
           '';
         } // (import ./runners.nix final prev);
 
-      packages = { cicero, cicero-evaluator-nix, liftbridge, liftbridge-cli
-        , gocritic, edgedb-cli, nomad-dev, wfs, run-bash, run-python, run-perl
-        , run-js }@pkgs:
+      packages = { cicero, cicero-evaluator-nix, cicero-entrypoint, liftbridge
+        , liftbridge-cli, gocritic, nomad-dev, wfs, run-bash, run-python
+        , run-perl, run-js }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;
@@ -75,12 +65,8 @@
           specialArgs = { inherit self; };
           modules = [
             ({ pkgs, config, lib, ... }: {
-              nixpkgs.overlays = [ self.overlay ];
-              system.build.closure = pkgs.buildPackages.closureInfo {
-                rootPaths = [ config.system.build.toplevel ];
-              };
-
               imports = [
+                driver.nixosModules.nix-driver-nomad
                 (nixpkgs-os + /nixos/modules/misc/version.nix)
                 (nixpkgs-os + /nixos/modules/profiles/base.nix)
                 (nixpkgs-os + /nixos/modules/profiles/headless.nix)
@@ -88,17 +74,8 @@
                 (nixpkgs-os + /nixos/modules/profiles/qemu-guest.nix)
               ];
 
-              boot.isContainer = true;
-              networking.useDHCP = false;
+              nixpkgs.overlays = [ self.overlay ];
               networking.hostName = lib.mkDefault "postgres";
-
-              boot.postBootCommands = ''
-                # After booting, register the contents of the Nix store in the container in the Nix database in the tmpfs.
-                ${config.nix.package.out}/bin/nix-store --load-db < /registration
-                # nixos-rebuild also requires a "system" profile and an /etc/NIXOS tag.
-                touch /etc/NIXOS
-                ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
-              '';
 
               services.postgresql = {
                 enable = true;
