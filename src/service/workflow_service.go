@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/repository"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"log"
 	"os"
 )
@@ -13,7 +13,7 @@ import (
 type WorkflowService interface {
 	GetAllByName(string)([]model.WorkflowInstance, error)
 	GetById(uint64)(model.WorkflowInstance, error)
-	Save(*model.WorkflowInstance) error
+	Save(pgx.Tx, *model.WorkflowInstance) error
 	Update(pgx.Tx, uint64, *model.WorkflowInstance)(sql.Result, error)
 }
 
@@ -46,9 +46,9 @@ func (cmd *WorkflowServiceCmd) GetById(id uint64) (workflow model.WorkflowInstan
 	return workflow, err
 }
 
-func (cmd *WorkflowServiceCmd) Save(workflow *model.WorkflowInstance) error {
+func (cmd *WorkflowServiceCmd) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
 	log.Printf("Saving new workflow %#v", workflow)
-	err := cmd.workflowRepository.Save(workflow)
+	err := cmd.workflowRepository.Save(tx, workflow)
 	if err != nil {
 		log.Printf("Couldn't insert workflow: %s", err.Error())
 	} else {

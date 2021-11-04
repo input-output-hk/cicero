@@ -16,11 +16,9 @@ type workflowRepository struct {
 type WorkflowRepository interface {
 	GetAllByName(string)([]model.WorkflowInstance, error)
 	GetById(uint64)(model.WorkflowInstance, error)
-	Save(*model.WorkflowInstance) error
+	Save(pgx.Tx, *model.WorkflowInstance) error
 	Update(pgx.Tx, uint64, *model.WorkflowInstance)(sql.Result, error)
 }
-
-
 
 func NewWorkflowRepository(db *pgxpool.Pool) WorkflowRepository {
 	return workflowRepository{
@@ -57,9 +55,8 @@ func (w workflowRepository) Update(tx pgx.Tx, id uint64, workflow *model.Workflo
 	return result, err
 }
 
-//TODO: add tx pgx.Tx
-func (w workflowRepository) Save(workflow *model.WorkflowInstance) (err error) {
-	err = w.DB.QueryRow(context.Background(),
+func (w workflowRepository) Save(tx pgx.Tx, workflow *model.WorkflowInstance) (err error) {
+	err = tx.QueryRow(context.Background(),
 		`INSERT INTO workflow_instances (name, certs) VALUES ($1, $2) RETURNING id`,
 		workflow.Name, workflow.Certs).
 		Scan(&workflow.ID)

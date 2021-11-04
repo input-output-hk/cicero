@@ -112,7 +112,7 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 				return
 			}
 
-			if err = cmd.insertWorkflow(&model.WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
+			if err = cmd.insertWorkflow(ctx, &model.WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
 				cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
 			}
 		})
@@ -126,11 +126,13 @@ func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	return nil
 }
 
-func (cmd *BrainCmd) insertWorkflow(workflow *model.WorkflowInstance) error {
-	err := cmd.workflowService.Save(workflow)
+func (cmd *BrainCmd) insertWorkflow(ctx context.Context, workflow *model.WorkflowInstance) error {
+	tx, err := DB.Begin(ctx)
 	if err != nil {
+		cmd.logger.Printf("%s\n", err)
 		return err
 	}
+	err = cmd.workflowService.Save(tx, workflow)
 
 	if err != nil {
 		return errors.WithMessage(err, "Could not insert workflow instance")
@@ -146,7 +148,13 @@ func (cmd *BrainCmd) insertWorkflow(workflow *model.WorkflowInstance) error {
 		workflow.Certs,
 	)
 
-	return nil
+	err = tx.Commit(context.Background())
+
+	if err != nil {
+		cmd.logger.Printf("Couldn't complete transaction: %s\n", err)
+	}
+
+	return err
 }
 
 func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
