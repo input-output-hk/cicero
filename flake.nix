@@ -52,7 +52,7 @@
         } // (import ./runners.nix final prev);
 
       packages = { cicero, cicero-evaluator-nix, cicero-entrypoint, liftbridge
-        , liftbridge-cli, gocritic, nomad-dev, wfs, run-bash, run-python
+        , liftbridge-cli, gocritic, go, nomad-dev, wfs, run-bash, run-python
         , run-perl, run-js }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;

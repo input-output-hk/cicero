@@ -41,8 +41,10 @@ in {
 
       job = run "bash" {
         inherit Datacenters;
-        packages = defaultPackages
-          ++ [ "github:input-output-hk/cicero#gocritic" ];
+        packages = defaultPackages ++ [
+          "github:input-output-hk/cicero#gocritic"
+          "github:input-output-hk/cicero#go"
+        ];
       } ''
         ${clone pr}
 
