@@ -37,6 +37,10 @@ let
     inherit (options) Datacenters;
     TaskGroups = [{
       Tasks = [{
+        Resources = {
+          MemoryMB = options.memory or 300;
+          CPU = options.cpu or 100;
+        };
         Config = let runner = "run-${language}";
         in assert pkgs ? ${runner}; {
           packages = [ "github:input-output-hk/cicero/main#${runner}" ]

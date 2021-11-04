@@ -17,15 +17,14 @@ let
   clone = pr: ''
     set -exuo pipefail
 
-    env
-
     export NIX_CONFIG="experimental-features = nix-command flakes"
     export SSL_CERT_FILE="/current-profile/etc/ssl/certs/ca-bundle.crt"
     export HOME="$PWD/.home"
 
     mkdir "$HOME"
 
-    git clone ${pr.repository.clone_url} src
+    git config --global advice.detachedHead false
+    git clone --quiet ${pr.repository.clone_url} src
     cd src
     git checkout ${pr.commit.sha}
   '';
@@ -41,9 +40,10 @@ in {
 
       job = run "bash" {
         inherit Datacenters;
+        memory = 1024;
         packages = defaultPackages ++ [
-          "github:input-output-hk/cicero#gocritic"
-          "github:input-output-hk/cicero#go"
+          "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#gocritic"
+          "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#go"
         ];
       } ''
         ${clone pr}
@@ -60,6 +60,7 @@ in {
 
       job = run "bash" {
         inherit Datacenters;
+        memory = 2 * 1024;
         packages = defaultPackages ++ [
           "github:nixos/nixpkgs/nixpkgs-unstable#fd"
           "github:nixos/nixpkgs/nixpkgs-unstable#nixfmt"
@@ -79,11 +80,14 @@ in {
 
       job = run "bash" {
         inherit Datacenters;
+        memory = 2 * 1024;
+        cpu = 3000;
         packages = defaultPackages
           ++ [ "github:nixos/nixpkgs/nixpkgs-unstable#nixUnstable" ];
       } ''
         ${clone pr}
 
+        nix-store --load-db < /registration
         nix build
       '';
     };
@@ -93,6 +97,7 @@ in {
 
       job = run "bash" {
         inherit Datacenters;
+        memory = 1024;
         packages = defaultPackages ++ [
           "github:nixos/nixpkgs/nixpkgs-unstable#cue"
           "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
