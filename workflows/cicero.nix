@@ -32,10 +32,11 @@ in {
   version = 0;
 
   actions = {
-    gocritic = { pr ? { } }: {
+    gocritic = { pr ? { }, gocritic ? null }: {
       when = {
         "pr.repository.clone_url exists" = hasCloneUrl pr;
         "pr.commit.sha exists" = hasGitHash pr;
+        "gocritic hasn't run yet" = gocritic == null;
       };
 
       job = run "bash" {
@@ -52,10 +53,11 @@ in {
       '';
     };
 
-    nixfmt = { pr ? { } }: {
+    nixfmt = { pr ? { }, nixfmt ? null }: {
       when = {
         "pr.repository.clone_url exists" = hasCloneUrl pr;
         "pr.commit.sha exists" = hasGitHash pr;
+        "nixfmt hasn't run yet" = nixfmt == null;
       };
 
       job = run "bash" {
@@ -72,10 +74,11 @@ in {
       '';
     };
 
-    build = { pr ? { }, gocritic ? false, nixfmt ? false }: {
+    build = { pr ? { }, gocritic ? null, nixfmt ? null, build ? null }: {
       when = {
-        "gocritic passes" = gocritic;
-        "nixfmt passes" = nixfmt;
+        "gocritic passes" = gocritic == true;
+        "nixfmt passes" = nixfmt == true;
+        "build hasn't run yet" = build == null;
       };
 
       job = run "bash" {
@@ -92,23 +95,27 @@ in {
       '';
     };
 
-    deploy = { build ? false, pr ? { } }: {
-      when = { "nix build passes" = build; };
+    deploy = { pr ? { }, gocritic ? null, nixfmt ? null, build ? null
+      , deploy ? null }: {
+        when = {
+          "build passes" = build == true;
+          "deploy hasn't run yet" = deploy == null;
+        };
 
-      job = run "bash" {
-        inherit Datacenters;
-        memory = 1024;
-        packages = defaultPackages ++ [
-          "github:nixos/nixpkgs/nixpkgs-unstable#cue"
-          "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
-        ];
-      } ''
-        ${clone pr}
+        job = run "bash" {
+          inherit Datacenters;
+          memory = 1024;
+          packages = defaultPackages ++ [
+            "github:nixos/nixpkgs/nixpkgs-unstable#cue"
+            "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
+          ];
+        } ''
+          ${clone pr}
 
-        flake="github:input-output-hk/cicero/${pr.commit.sha}#cicero-entrypoint"
-        cue export -e jobs.cicero -t ciceroFlake="$flake" > job.json
-        nomad run job.json
-      '';
-    };
+          flake="github:input-output-hk/cicero/${pr.commit.sha}#cicero-entrypoint"
+          cue export -e jobs.cicero -t ciceroFlake="$flake" > job.json
+          nomad run job.json
+        '';
+      };
   };
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgtype"
 	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
 	"github.com/jackc/pgx/v4"
@@ -104,4 +105,22 @@ func publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, m
 	logger.Printf("Published message to stream %s\n", stream)
 
 	return nil
+}
+
+type DBExec interface {
+	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+}
+
+func insertLiftbridgeMessage(logger *log.Logger, db DBExec, msg *liftbridge.Message) error {
+	_, err := DB.Exec(
+		context.Background(),
+		`INSERT INTO liftbridge_messages ("offset", stream, subject, created_at, value) VALUES ($1, $2, $3, $4, $5)`,
+		msg.Offset(), msg.Stream(), msg.Subject(), msg.Timestamp(), msg.Value(),
+	)
+
+	if err != nil {
+		logger.Printf("Couldn't insert liftbridge message into database: %s\n", err.Error())
+	}
+
+	return err
 }

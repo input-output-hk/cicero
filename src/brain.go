@@ -18,6 +18,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+const startStreamName = "workflow.*.start"
+const certStreamName = "workflow.*.*.cert"
+
 type BrainCmd struct {
 	logger    *log.Logger
 	tree      *oversight.Tree
@@ -75,48 +78,62 @@ func (cmd *BrainCmd) start(ctx context.Context) error {
 
 func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToStart")
-	streamName := "workflow.*.start"
 
-	err := createStreams(cmd.logger, cmd.bridge, []string{streamName})
+	err := createStreams(cmd.logger, cmd.bridge, []string{startStreamName})
 	if err != nil {
 		return err
 	}
 
-	cmd.logger.Printf("Subscribing to %s\n", streamName)
-	err = cmd.bridge.Subscribe(
-		ctx,
-		streamName,
-		func(msg *liftbridge.Message, err error) {
-			if err != nil {
-				cmd.logger.Printf("error received in %s: %s", streamName, err.Error())
-			}
+	var offset int64
+	pgxscan.Get(context.Background(), DB, &offset,
+		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
+		startStreamName)
 
-			cmd.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
-			cmd.logger.Println("subject:", msg.Subject())
-			parts := strings.Split(msg.Subject(), ".")
-			workflowName := parts[1]
-
-			cmd.logger.Printf("Received start for workflow %s", workflowName)
-
-			received := WorkflowCerts{}
-			unmarshalErr := json.Unmarshal(msg.Value(), &received)
-			if unmarshalErr != nil {
-				cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
-				return
-			}
-
-			if err = cmd.insertWorkflow(&WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
-				cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
-			}
-		})
+	cmd.logger.Printf("Subscribing to %s at offset %d\n", startStreamName, offset)
+	err = cmd.bridge.Subscribe(ctx, startStreamName, cmd.onStartMessage,
+		liftbridge.StartAtOffset(offset), liftbridge.Partition(0),
+	)
 
 	if err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", streamName)
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", startStreamName)
 	}
 
 	<-ctx.Done()
 	cmd.logger.Println("context was cancelled")
 	return nil
+}
+
+func (cmd *BrainCmd) onStartMessage(msg *liftbridge.Message, err error) {
+	if err != nil {
+		cmd.logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
+	}
+
+	parts := strings.Split(msg.Subject(), ".")
+	workflowName := parts[1]
+
+	cmd.logger.Printf("Received start for workflow %s", workflowName)
+	cmd.logger.Println(
+		"stream:", msg.Stream(),
+		"subject:", msg.Subject(),
+		"offset:", msg.Offset(),
+		"value:", string(msg.Value()),
+		"time:", msg.Timestamp(),
+	)
+
+	received := WorkflowCerts{}
+	unmarshalErr := json.Unmarshal(msg.Value(), &received)
+	if unmarshalErr != nil {
+		cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
+		return
+	}
+
+	if err := insertLiftbridgeMessage(cmd.logger, DB, msg); err != nil {
+		return
+	}
+
+	if err = cmd.insertWorkflow(&WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
+		cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
+	}
 }
 
 func (cmd *BrainCmd) insertWorkflow(workflow *WorkflowInstance) error {
@@ -147,110 +164,123 @@ func (cmd *BrainCmd) insertWorkflow(workflow *WorkflowInstance) error {
 
 func (cmd *BrainCmd) listenToCerts(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToCerts")
-	streamName := "workflow.*.*.cert"
 
-	err := createStreams(cmd.logger, cmd.bridge, []string{streamName})
+	err := createStreams(cmd.logger, cmd.bridge, []string{certStreamName})
 	if err != nil {
 		return err
 	}
 
-	cmd.logger.Printf("Subscribing to %s\n", streamName)
-	err = cmd.bridge.Subscribe(
-		ctx,
-		streamName,
-		func(msg *liftbridge.Message, err error) {
-			if err != nil {
-				cmd.logger.Printf("error received in %s: %s", streamName, err.Error())
-			}
+	var offset int64
+	pgxscan.Get(context.Background(), DB, &offset,
+		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
+		certStreamName)
 
-			cmd.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), string(msg.Value()))
-			cmd.logger.Println("subject:", msg.Subject())
-			parts := strings.Split(msg.Subject(), ".")
-			workflowName := parts[1]
-			id, err := strconv.ParseUint(parts[2], 10, 64)
-			if err != nil {
-				cmd.logger.Printf("Invalid Workflow ID received, ignoring: %s\n", msg.Subject())
-				return
-			}
-
-			cmd.logger.Printf("Received update for workflow %s %d", workflowName, id)
-
-			received := WorkflowCerts{}
-			unmarshalErr := json.Unmarshal(msg.Value(), &received)
-			if unmarshalErr != nil {
-				cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
-				return
-			}
-
-			tx, err := DB.Begin(ctx)
-			if err != nil {
-				cmd.logger.Printf("%s\n", err)
-				return
-			}
-
-			existing := &WorkflowInstance{Name: workflowName}
-			err = pgxscan.Get(
-				context.Background(), tx, existing,
-				`SELECT * FROM workflow_instances WHERE id = $1`,
-				id,
-			)
-			if err != nil {
-				cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
-				return
-			}
-
-			merged := WorkflowCerts{}
-
-			for k, v := range existing.Certs {
-				merged[k] = v
-			}
-
-			for k, v := range received {
-				merged[k] = v
-			}
-
-			now := time.Now().UTC()
-			existing.Certs = merged
-			existing.UpdatedAt = &now
-
-			_, err = tx.Exec(
-				context.Background(),
-				`UPDATE workflow_instances SET certs = $2, updated_at = $3 WHERE id = $1`,
-				id, existing.Certs, now,
-			)
-
-			if err != nil {
-				cmd.logger.Printf("Error while updating workflow: %s", err)
-				return
-			}
-
-			// TODO: only invoke when there was a change to the certs?
-
-			cmd.logger.Printf("Updated workflow %#v\n", existing)
-
-			publish(
-				cmd.logger,
-				cmd.bridge,
-				fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
-				"workflow.*.*.invoke",
-				merged,
-			)
-
-			err = tx.Commit(context.Background())
-
-			if err != nil {
-				cmd.logger.Printf("Couldn't complete transaction: %s\n", err)
-				return
-			}
-		}, liftbridge.StartAtEarliestReceived(), liftbridge.Partition(0))
+	cmd.logger.Printf("Subscribing to %s at offset %d\n", certStreamName, offset)
+	err = cmd.bridge.Subscribe(ctx, certStreamName, cmd.onCertMessage,
+		liftbridge.StartAtOffset(offset), liftbridge.Partition(0))
 
 	if err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", streamName)
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", certStreamName)
 	}
 
 	<-ctx.Done()
 	cmd.logger.Println("context was cancelled")
 	return nil
+}
+
+func (cmd *BrainCmd) onCertMessage(msg *liftbridge.Message, err error) {
+	if err != nil {
+		cmd.logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
+	}
+
+	parts := strings.Split(msg.Subject(), ".")
+	workflowName := parts[1]
+	id, err := strconv.ParseUint(parts[2], 10, 64)
+	if err != nil {
+		cmd.logger.Printf("Invalid Workflow ID received, ignoring: %s\n", msg.Subject())
+		return
+	}
+
+	cmd.logger.Printf("Received update for workflow %s %d", workflowName, id)
+	cmd.logger.Println(
+		"stream:", msg.Stream(),
+		"subject:", msg.Subject(),
+		"offset:", msg.Offset(),
+		"value:", string(msg.Value()),
+		"time:", msg.Timestamp(),
+	)
+
+	received := WorkflowCerts{}
+	unmarshalErr := json.Unmarshal(msg.Value(), &received)
+	if unmarshalErr != nil {
+		cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
+		return
+	}
+
+	tx, err := DB.Begin(context.Background())
+	if err != nil {
+		cmd.logger.Printf("%s\n", err)
+		return
+	}
+
+	if err := insertLiftbridgeMessage(cmd.logger, tx, msg); err != nil {
+		return
+	}
+
+	existing := &WorkflowInstance{Name: workflowName}
+	err = pgxscan.Get(
+		context.Background(), tx, existing,
+		`SELECT * FROM workflow_instances WHERE id = $1`,
+		id,
+	)
+	if err != nil {
+		cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
+		return
+	}
+
+	merged := WorkflowCerts{}
+
+	for k, v := range existing.Certs {
+		merged[k] = v
+	}
+
+	for k, v := range received {
+		merged[k] = v
+	}
+
+	now := time.Now().UTC()
+	existing.Certs = merged
+	existing.UpdatedAt = &now
+
+	_, err = tx.Exec(
+		context.Background(),
+		`UPDATE workflow_instances SET certs = $2, updated_at = $3 WHERE id = $1`,
+		id, existing.Certs, now,
+	)
+
+	if err != nil {
+		cmd.logger.Printf("Error while updating workflow: %s", err)
+		return
+	}
+
+	// TODO: only invoke when there was a change to the certs?
+
+	cmd.logger.Printf("Updated workflow %#v\n", existing)
+
+	publish(
+		cmd.logger,
+		cmd.bridge,
+		fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
+		"workflow.*.*.invoke",
+		merged,
+	)
+
+	err = tx.Commit(context.Background())
+
+	if err != nil {
+		cmd.logger.Printf("Couldn't complete transaction: %s\n", err)
+		return
+	}
 }
 
 func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {

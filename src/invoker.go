@@ -83,12 +83,17 @@ func (cmd *InvokerCmd) listenToInvoke(ctx context.Context) error {
 		return err
 	}
 
-	cmd.logger.Printf("Subscribing to %s\n", invokeStreamName)
+	var offset int64
+	pgxscan.Get(context.Background(), DB, &offset,
+		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
+		invokeStreamName)
+
+	cmd.logger.Printf("Subscribing to %s at offset %d\n", invokeStreamName, offset)
 	err = cmd.bridge.Subscribe(
 		ctx,
 		invokeStreamName,
 		cmd.invokerSubscriber(ctx),
-		liftbridge.StartAtLatestReceived(),
+		liftbridge.StartAtOffset(offset),
 		liftbridge.Partition(0))
 
 	if err != nil {
@@ -116,6 +121,10 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 		wfInstanceId, err := strconv.ParseUint(parts[2], 10, 64)
 		if err != nil {
 			cmd.logger.Printf("Invalid Workflow Instance ID received, ignoring: %s\n", msg.Subject())
+			return
+		}
+
+		if err := insertLiftbridgeMessage(cmd.logger, DB, msg); err != nil {
 			return
 		}
 
