@@ -5,10 +5,12 @@ let
 
   runner = drv:
     prev.writers.writeBashBin drvName ''
-      export PATH=${
+      set -exuo pipefail
+
+      export PATH="$PATH:${
         prev.lib.makeBinPath
         (with final; [ coreutils gnutar xz liftbridge-cli ])
-      }
+      }"
       export CICERO_SCRIPT="$1"
       exec ${drv}
     '';

@@ -4,25 +4,69 @@ import (
 	"context"
 	"github.com/input-output-hk/cicero/src/model"
 	"log"
+	"time"
 
 	"github.com/georgysavva/scany/pgxscan"
+	"github.com/google/uuid"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/pkg/errors"
 )
 //TODO: WIP move to service and repository
 
-func GetDefinition(w *model.WorkflowInstance, logger *log.Logger, evaluator Evaluator) (model.WorkflowDefinition, error) {
+type WorkflowDefinitions map[string]*WorkflowDefinition
+
+type WorkflowDefinition struct {
+	Name    string                     `json:"name"`
+	Version uint64                     `json:"version"`
+	Meta    map[string]interface{}     `json:"meta"`
+	Actions map[string]*WorkflowAction `json:"actions"`
+}
+
+type WorkflowAction struct {
+	Failure WorkflowCerts   `json:"failure"`
+	Success WorkflowCerts   `json:"success"`
+	Inputs  []string        `json:"inputs"`
+	When    map[string]bool `json:"when"`
+	Job     nomad.Job       `json:"job"`
+}
+
+func (s *WorkflowAction) IsRunnable() bool {
+	return len(s.Job.TaskGroups) > 0
+}
+
+type WorkflowInstance struct {
+	ID        uint64
+	Name      string
+	Certs     WorkflowCerts
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+}
+
+func (w *WorkflowInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowDefinition, error) {
 	return evaluator.EvaluateWorkflow(w.Name, w.ID, w.Certs)
 }
 
-func GetDefinitionByAction(s *model.ActionInstance, logger *log.Logger, evaluator Evaluator) (model.WorkflowAction, error) {
-	wf, err := GetWorkflow(s)
+type WorkflowCerts map[string]interface{}
+
+type ActionInstance struct {
+	ID                 uuid.UUID
+	WorkflowInstanceId uint64
+	Name               string
+	Certs              WorkflowCerts
+	CreatedAt          *time.Time
+	UpdatedAt          *time.Time
+	FinishedAt         *time.Time
+}
+
+func (s *ActionInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (*WorkflowAction, error) {
+	wf, err := s.GetWorkflow()
 	if err != nil {
-		return model.WorkflowAction{}, err
+		return nil, err
 	}
 
-	wfDef, err := GetDefinition(&wf, logger, evaluator)
+	wfDef, err := wf.GetDefinition(logger, evaluator)
 	if err != nil {
-		return model.WorkflowAction{}, err
+		return nil, err
 	}
 
 	return wfDef.Actions[s.Name], nil

@@ -71,7 +71,7 @@ func (a *Api) Actions() ([]*model.ActionInstance, error) {
 		context.Background(),
 		DB,
 		&instances,
-		`SELECT * FROM action_instances`)
+		`SELECT * FROM action_instances ORDER BY id DESC`)
 	if err != nil {
 		return nil, err
 	}

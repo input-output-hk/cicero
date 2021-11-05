@@ -40,7 +40,6 @@ func RenderWorkflowGraph(wf *model.WorkflowDefinition, graphType WorkflowGraphTy
 	const SymbolSize = 50
 	const FontSize = 14
 
-	// XXX nodes := make([]opts.GraphNode, len(*actions))
 	nodes := make([]opts.GraphNode, 0)
 	for name, action := range wf.Actions {
 		graphNode := opts.GraphNode{

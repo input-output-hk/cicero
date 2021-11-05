@@ -85,12 +85,17 @@ func (cmd *InvokerCmd) listenToInvoke(ctx context.Context) error {
 		return err
 	}
 
-	cmd.logger.Printf("Subscribing to %s\n", invokeStreamName)
+	var offset int64
+	pgxscan.Get(context.Background(), DB, &offset,
+		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
+		invokeStreamName)
+
+	cmd.logger.Printf("Subscribing to %s at offset %d\n", invokeStreamName, offset)
 	err = cmd.bridge.Subscribe(
 		ctx,
 		invokeStreamName,
 		cmd.invokerSubscriber(ctx),
-		liftbridge.StartAtLatestReceived(),
+		liftbridge.StartAtOffset(offset),
 		liftbridge.Partition(0))
 
 	if err != nil {
@@ -121,6 +126,10 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 			return
 		}
 
+		if err := insertLiftbridgeMessage(cmd.logger, DB, msg); err != nil {
+			return
+		}
+
 		if err := cmd.invokeWorkflow(ctx, workflowName, wfInstanceId, inputs); err != nil {
 			cmd.logger.Println("Failed to invoke workflow", err)
 		}
@@ -134,7 +143,7 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	}
 
 	for actionName, action := range workflow.Actions {
-		if err = cmd.invokeWorkflowAction(ctx, workflowName, wfInstanceId, inputs, actionName, action); err != nil {
+		if err := cmd.invokeWorkflowAction(ctx, workflowName, wfInstanceId, inputs, actionName, action); err != nil {
 			return err
 		}
 	}
@@ -142,7 +151,7 @@ func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, 
 	return nil
 }
 
-func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts, actionName string, action model.WorkflowAction) error {
+func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs WorkflowCerts, actionName string, action *WorkflowAction) error {
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 

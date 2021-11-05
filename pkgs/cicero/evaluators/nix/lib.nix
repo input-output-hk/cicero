@@ -37,9 +37,14 @@ let
     inherit (options) Datacenters;
     TaskGroups = [{
       Tasks = [{
+        Resources = {
+          MemoryMB = options.memory or 300;
+          CPU = options.cpu or null;
+          Cores = options.cores or null;
+        };
         Config = let runner = "run-${language}";
         in assert pkgs ? ${runner}; {
-          packages = [ "github:input-output-hk/cicero#${runner}" ]
+          packages = [ "github:input-output-hk/cicero/main#${runner}" ]
             ++ (options.packages or [ ]);
           command = [ "/bin/${pkgs.${runner}.name}" script ];
         };
