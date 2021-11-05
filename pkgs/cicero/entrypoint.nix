@@ -1,5 +1,6 @@
 { lib, cicero, cicero-evaluator-nix, writeShellScriptBin, wfs, nixUnstable
-, bashInteractive, coreutils, shadow, git, cacert, dbmate, vault-bin, ... }:
+, bashInteractive, coreutils, shadow, git, cacert, dbmate, vault-bin, netcat
+, ... }:
 writeShellScriptBin "entrypoint" ''
   set -exuo pipefail
 
@@ -14,6 +15,7 @@ writeShellScriptBin "entrypoint" ''
       coreutils
       dbmate
       vault-bin
+      netcat
     ]
   }"
 
@@ -23,8 +25,24 @@ writeShellScriptBin "entrypoint" ''
   mkdir -p /etc
   echo 'nixbld:x:30000:nixbld1' > /etc/group
   echo 'nixbld1:x:30001:30000:Nix build user 1:/var/empty:${shadow}/bin/nologin' > /etc/passwd
-  echo "nameserver ''${NAMESERVER:-172.17.0.1}" > /etc/resolv.conf
   nix-store --load-db < /registration
+
+  echo "nameserver ''${NAMESERVER:-172.17.0.1}" > /etc/resolv.conf
+
+  if [ -n "''${NAMESERVER:-}" ]; then
+    echo "nameserver ''${NAMESERVER:-}" > /etc/resolv.conf
+  else
+    defaultNameservers=(172.17.0.1 127.0.0.1 1.1.1.1)
+
+    for ns in "''${defaultNameservers[@]}"; do
+      if nc -z -w 3 "$ns" 53; then
+        echo "nameserver ''${NAMESERVER:-$ns}" > /etc/resolv.conf
+        break
+      fi
+    done
+  fi
+
+  echo "nameserver ''${NAMESERVER:-172.17.0.1}" > /etc/resolv.conf
 
   if [ -d cicero ]; then
     git -C cicero pull
