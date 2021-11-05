@@ -5,6 +5,7 @@ import (
 )
 
 #ciceroFlake: string | *"path:.#cicero-entrypoint" @tag(ciceroFlake)
+#nomadAddr:   string | *"http://127.0.0.1:4646"    @tag(nomadAddr)
 
 for jobName, jobValue in job {
 	jobs: "\(jobName)": job: "\(jobName)": jobValue
@@ -23,7 +24,7 @@ job: [string]: {
 }
 
 job: {
-	cicero: {
+	dev: {
 		group: {
 			liftbridge: {
 				network: {
@@ -121,49 +122,54 @@ job: {
 					}
 				}
 			}
+		}
+	}
 
-			//   cicero: {
-			//    restart: {
-			//     attempts: 5
-			//     delay:    "10s"
-			//     interval: "1m"
-			//     mode:     "delay"
-			//    }
-			//
-			//    reschedule: {
-			//     delay:          "10s"
-			//     delay_function: "exponential"
-			//     max_delay:      "1m"
-			//     unlimited:      true
-			//    }
-			//
-			//    network: {
-			//     mode: "host"
-			//     port: http: static: "8080"
-			//    }
-			//
-			//    task: cicero: {
-			//     driver: "nix"
-			//
-			//     resources: {
-			//      memory: 1024
-			//      cpu:    300
-			//     }
-			//
-			//     env: {
-			//      DATABASE_URL: "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
-			//      NOMAD_ADDR:   "https://nomad.infra.aws.iohkdev.io"
-			//     }
-			//
-			//     config: [{
-			//      packages: [#ciceroFlake]
-			//      command: [
-			//       "/bin/entrypoint",
-			//       "--liftbridge-addr", "liftbridge.service.consul:9292",
-			//      ]
-			//     }]
-			//    }
-			//   }
+	cicero: {
+		group: {
+			cicero: {
+				restart: {
+					attempts: 5
+					delay:    "10s"
+					interval: "1m"
+					mode:     "delay"
+				}
+
+				reschedule: {
+					delay:          "10s"
+					delay_function: "exponential"
+					max_delay:      "1m"
+					unlimited:      true
+				}
+
+				network: {
+					mode: "host"
+					port: http: static: "8888"
+				}
+
+				task: cicero: {
+					driver: "nix"
+
+					resources: {
+						memory: 1024
+						cpu:    300
+					}
+
+					env: {
+						DATABASE_URL: "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
+						NOMAD_ADDR:   #nomadAddr
+					}
+
+					config: [{
+						packages: [#ciceroFlake]
+						command: [
+							"/bin/entrypoint",
+							"--liftbridge-addr", "liftbridge.service.consul:9292",
+							"--listen", ":8888",
+						]
+					}]
+				}
+			}
 		}
 	}
 }

@@ -5,6 +5,7 @@ writeShellScriptBin "entrypoint" ''
 
   export PATH="${
     lib.makeBinPath [
+      git
       cicero
       cicero-evaluator-nix
       wfs

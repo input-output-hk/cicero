@@ -39,7 +39,8 @@ let
       Tasks = [{
         Resources = {
           MemoryMB = options.memory or 300;
-          CPU = options.cpu or 100;
+          CPU = options.cpu or null;
+          Cores = options.cores or null;
         };
         Config = let runner = "run-${language}";
         in assert pkgs ? ${runner}; {

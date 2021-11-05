@@ -26,7 +26,7 @@ Start a development instance of Nomad:
 
 Run the required services in Nomad:
 
-    cue export -e jobs.cicero | nomad job run -
+    cue export -e jobs.dev | nomad job run -
 
 Migrate the database:
 

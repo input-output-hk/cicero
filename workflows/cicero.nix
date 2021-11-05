@@ -83,13 +83,17 @@ in {
 
       job = run "bash" {
         inherit Datacenters;
-        memory = 2 * 1024;
-        cpu = 3000;
+        memory = 4 * 1024;
+        cpu = 16000;
         packages = defaultPackages
           ++ [ "github:nixos/nixpkgs/nixpkgs-unstable#nixUnstable" ];
       } ''
         ${clone pr}
 
+        mkdir -p /etc
+        echo 'nixbld:x:30000:nixbld1' > /etc/group
+        echo 'nixbld1:x:30001:30000:Nix build user 1:/var/empty:/bin/nologin' > /etc/passwd
+        echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
         nix-store --load-db < /registration
         nix build
       '';
