@@ -4,8 +4,34 @@ import (
 	"encoding/yaml"
 )
 
-#ciceroFlake: string | *"path:.#cicero-entrypoint" @tag(ciceroFlake)
-#nomadAddr:   string | *"http://127.0.0.1:4646"    @tag(nomadAddr)
+#environment: string | *"development" @tag(env)
+#sha:         string                  @tag(sha)
+
+#defaultEnvironments: {
+	local: {
+		ciceroFlake:    "path:.#cicero-entrypoint"
+		nomadAddr:      "http://127.0.0.1:4646"
+		liftbridgeAddr: "http://127.0.0.1:9292"
+	}
+
+	development: {
+		ciceroFlake:    "github:input-output-hk/cicero/\(#sha)#cicero-entrypoint"
+		nomadAddr:      local.nomadAddr
+		liftbridgeAddr: local.liftbridgeAddr
+	}
+
+	production: {
+		ciceroFlake:    "github:input-output-hk/cicero/\(#sha)#cicero-entrypoint"
+		nomadAddr:      "https://nomad.infra.aws.iohkdev.io"
+		liftbridgeAddr: "http://liftbridge.service.consul:9292"
+	}
+}
+
+#defaultEnvironment: #defaultEnvironments[#environment]
+
+#ciceroFlake:    string | *#defaultEnvironment.ciceroFlake    @tag(ciceroFlake)
+#nomadAddr:      string | *#defaultEnvironment.nomadAddr      @tag(nomadAddr)
+#liftbridgeAddr: string | *#defaultEnvironment.liftbridgeAddr @tag(liftbridgeAddr)
 
 for jobName, jobValue in job {
 	jobs: "\(jobName)": job: "\(jobName)": jobValue
@@ -164,7 +190,7 @@ job: {
 						packages: [#ciceroFlake]
 						command: [
 							"/bin/entrypoint",
-							"--liftbridge-addr", "liftbridge.service.consul:9292",
+							"--liftbridge-addr", #liftbridgeAddr,
 							"--listen", ":8888",
 						]
 					}]

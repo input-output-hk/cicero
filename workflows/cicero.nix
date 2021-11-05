@@ -99,8 +99,8 @@ in {
       '';
     };
 
-    deploy = { pr ? { }, gocritic ? null, nixfmt ? null, build ? null
-      , deploy ? null }: {
+    deploy = { pr ? { }, environment ? null, gocritic ? null, nixfmt ? null
+      , build ? null, deploy ? null }: {
         when = {
           "build passes" = build == true;
           "deploy hasn't run yet" = deploy == null;
@@ -116,8 +116,15 @@ in {
         } ''
           ${clone pr}
 
-          flake="github:input-output-hk/cicero/${pr.commit.sha}#cicero-entrypoint"
-          cue export -e jobs.cicero -t ciceroFlake="$flake" > job.json
+          cue export -e jobs.cicero \
+            ${
+              if environment == null then
+                ""
+              else
+                "-t environment=${environment}"
+            } \
+            -t 'sha=${pr.commit.sha}' \
+            > job.json
           nomad run job.json
         '';
       };
