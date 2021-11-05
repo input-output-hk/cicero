@@ -58,5 +58,5 @@ writeShellScriptBin "entrypoint" ''
     echo "No VAULT_TOKEN set, skipped obtaining a Nomad token"
   fi
 
-  exec /bin/cicero all "$@"
+  exec cicero all "$@"
 ''
