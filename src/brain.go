@@ -315,7 +315,7 @@ func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
 		}
 
 		for _, event := range events.Events {
-			if err := cmd.handleNomadEvent(event); err != nil {
+			if err := cmd.handleNomadEvent(&event); err != nil {
 				return errors.WithMessage(err, "Error handling Nomad event")
 			}
 
@@ -332,9 +332,8 @@ func (cmd *BrainCmd) listenToNomadEvents(ctx context.Context) error {
 	}
 }
 
-func (cmd *BrainCmd) handleNomadEvent(event nomad.Event) error {
-	switch {
-	case event.Topic == "Allocation" && event.Type == "AllocationUpdated":
+func (cmd *BrainCmd) handleNomadEvent(event *nomad.Event) error {
+	if event.Topic == "Allocation" && event.Type == "AllocationUpdated" {
 		allocation, err := event.Allocation()
 		if err != nil {
 			return errors.WithMessage(err, "Error getting Nomad event's allocation")
@@ -361,7 +360,6 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 			return nil
 		}
 		return nil
-		// return errors.WithMessage(err, "Error finding action instance for Nomad event's Job")
 	}
 
 	var certs *WorkflowCerts

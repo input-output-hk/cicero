@@ -36,9 +36,10 @@ func (e *Evaluator) EvaluateWorkflow(name string, id uint64, inputs WorkflowCert
 		"eval",
 	)
 	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_NAME="+name)
-	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id))
-	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_INPUTS="+string(inputsJson))
+	cmd.Env = append(cmd.Env,
+		"CICERO_WORKFLOW_NAME="+name,
+		"CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id),
+		"CICERO_WORKFLOW_INPUTS="+string(inputsJson))
 
 	e.logger.Printf("running %s\n", strings.Join(cmd.Args, " "))
 	output, err := cmd.Output()

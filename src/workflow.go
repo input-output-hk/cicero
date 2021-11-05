@@ -14,10 +14,10 @@ import (
 type WorkflowDefinitions map[string]*WorkflowDefinition
 
 type WorkflowDefinition struct {
-	Name    string                    `json:"name"`
-	Version uint64                    `json:"version"`
-	Meta    map[string]interface{}    `json:"meta"`
-	Actions map[string]WorkflowAction `json:"actions"`
+	Name    string                     `json:"name"`
+	Version uint64                     `json:"version"`
+	Meta    map[string]interface{}     `json:"meta"`
+	Actions map[string]*WorkflowAction `json:"actions"`
 }
 
 type WorkflowAction struct {
@@ -56,15 +56,15 @@ type ActionInstance struct {
 	FinishedAt         *time.Time
 }
 
-func (s *ActionInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (WorkflowAction, error) {
+func (s *ActionInstance) GetDefinition(logger *log.Logger, evaluator Evaluator) (*WorkflowAction, error) {
 	wf, err := s.GetWorkflow()
 	if err != nil {
-		return WorkflowAction{}, err
+		return nil, err
 	}
 
 	wfDef, err := wf.GetDefinition(logger, evaluator)
 	if err != nil {
-		return WorkflowAction{}, err
+		return nil, err
 	}
 
 	return wfDef.Actions[s.Name], nil
