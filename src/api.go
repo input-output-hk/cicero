@@ -30,7 +30,7 @@ func (a *Api) WorkflowInstances(name string) ([]*WorkflowInstance, error) {
 		context.Background(),
 		DB,
 		&instances,
-		`SELECT * FROM workflow_instances WHERE name = $1`,
+		`SELECT * FROM workflow_instances WHERE name = $1 ORDER BY id DESC`,
 		name)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (a *Api) Actions() ([]*ActionInstance, error) {
 		context.Background(),
 		DB,
 		&instances,
-		`SELECT * FROM action_instances`)
+		`SELECT * FROM action_instances ORDER BY id DESC`)
 	if err != nil {
 		return nil, err
 	}
