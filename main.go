@@ -31,7 +31,6 @@ type CLI struct {
 	Brain   *cicero.BrainCmd   `arg:"subcommand:brain"`
 	Invoker *cicero.InvokerCmd `arg:"subcommand:invoker"`
 	Web     *cicero.WebCmd     `arg:"subcommand:web"`
-	Show    *cicero.ShowCmd    `arg:"subcommand:show"`
 }
 
 func Version() string {
@@ -82,8 +81,6 @@ func Run(parser *arg.Parser, args *CLI) error {
 		return args.Invoker.Run()
 	case args.Web != nil:
 		return args.Web.Run()
-	case args.Show != nil:
-		return args.Show.Run()
 	case args.All != nil:
 		return args.All.Run()
 	default:
