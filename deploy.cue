@@ -4,8 +4,8 @@ import (
 	"encoding/yaml"
 )
 
-#environment: string | *"development" @tag(env)
-#sha:         string                  @tag(sha)
+#environment: string | *"local" @tag(env)
+#sha:         string            @tag(sha)
 
 #defaultEnvironments: {
 	local: {
