@@ -60,7 +60,7 @@
         };
 
       extraOutputs.nixosConfigurations = {
-        postgres = nixpkgs-os.lib.nixosSystem {
+        dev = nixpkgs-os.lib.nixosSystem {
           system = "x86_64-linux";
           specialArgs = { inherit self; };
           modules = [
@@ -68,14 +68,102 @@
               imports = [
                 driver.nixosModules.nix-driver-nomad
                 (nixpkgs-os + /nixos/modules/misc/version.nix)
-                (nixpkgs-os + /nixos/modules/profiles/base.nix)
                 (nixpkgs-os + /nixos/modules/profiles/headless.nix)
                 (nixpkgs-os + /nixos/modules/profiles/minimal.nix)
-                (nixpkgs-os + /nixos/modules/profiles/qemu-guest.nix)
               ];
 
               nixpkgs.overlays = [ self.overlay ];
-              networking.hostName = lib.mkDefault "postgres";
+              networking.hostName = lib.mkDefault "dev";
+
+              systemd.services.liftbridge = {
+                wantedBy = [ "multi-user.target" ];
+                after = [ "network.target" ];
+
+                serviceConfig = let
+                  cfg = builtins.toFile "liftbridge.yaml" (builtins.toJSON {
+                    listen = "0.0.0.0:9292";
+                    host = "127.0.0.1";
+                    port = "9292";
+                    data.dir = "/local/server";
+                    activity.stream.enabled = true;
+                    logging = {
+                      level = "debug";
+                      raft = true;
+                      nats = true;
+                      recovery = true;
+                    };
+                    nats = {
+                      embedded = true;
+                      servers = [ ];
+                    };
+                    streams = {
+                      retention.max = {
+                        age = "24h";
+                        messages = 1000;
+                      };
+                      compact.enabled = true;
+                    };
+                    clustering = {
+                      server.id = "voter";
+                      raft.bootstrap.seed = true;
+                      replica.max.lag.time = "20s";
+                    };
+                  });
+                in {
+                  ExecStart =
+                    "${pkgs.liftbridge}/bin/liftbridge --config ${cfg}";
+                  Restart = "on-failure";
+                  RestartSec = "5s";
+                };
+              };
+
+              services.loki = {
+                enable = true;
+                configuration = {
+                  auth_enabled = false;
+
+                  ingester = {
+                    chunk_idle_period = "5m";
+                    chunk_retain_period = "30s";
+                    lifecycler = {
+                      address = "127.0.0.1";
+                      final_sleep = "0s";
+                      ring = {
+                        kvstore = { store = "inmemory"; };
+                        replication_factor = 1;
+                      };
+                    };
+                  };
+
+                  limits_config = {
+                    enforce_metric_name = false;
+                    reject_old_samples = true;
+                    reject_old_samples_max_age = "168h";
+                    ingestion_rate_mb = 160;
+                    ingestion_burst_size_mb = 160;
+                  };
+
+                  schema_config = {
+                    configs = [{
+                      from = "2020-05-15";
+                      index = {
+                        period = "168h";
+                        prefix = "index_";
+                      };
+                      object_store = "filesystem";
+                      schema = "v11";
+                      store = "boltdb";
+                    }];
+                  };
+
+                  server = { http_listen_port = 3100; };
+
+                  storage_config = {
+                    boltdb = { directory = "/var/lib/loki/index"; };
+                    filesystem = { directory = "/var/lib/loki/chunks"; };
+                  };
+                };
+              };
 
               services.postgresql = {
                 enable = true;
