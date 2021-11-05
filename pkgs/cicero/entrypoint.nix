@@ -42,8 +42,6 @@ writeShellScriptBin "entrypoint" ''
     done
   fi
 
-  echo "nameserver ''${NAMESERVER:-172.17.0.1}" > /etc/resolv.conf
-
   if [ -d cicero ]; then
     git -C cicero pull
   else
