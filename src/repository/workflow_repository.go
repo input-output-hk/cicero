@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/input-output-hk/cicero/src/model"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type workflowRepository struct {
@@ -40,7 +40,7 @@ func (w workflowRepository) GetAllByName(name string) (instances []model.Workflo
 		context.Background(),
 		w.DB,
 		instances,
-		`SELECT * FROM workflow_instances WHERE name = $1`,
+		`SELECT * FROM workflow_instances WHERE name = $1 ORDER BY id DESC`,
 		name)
 	return instances, err
 }

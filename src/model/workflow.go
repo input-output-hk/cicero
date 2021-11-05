@@ -10,10 +10,10 @@ import (
 type WorkflowDefinitions map[string]*WorkflowDefinition
 
 type WorkflowDefinition struct {
-	Name    string                    `json:"name"`
-	Version uint64                    `json:"version"`
-	Meta    map[string]interface{}    `json:"meta"`
-	Actions map[string]WorkflowAction `json:"actions"`
+	Name    string                     `json:"name"`
+	Version uint64                     `json:"version"`
+	Meta    map[string]interface{}     `json:"meta"`
+	Actions map[string]*WorkflowAction `json:"actions"`
 }
 
 type WorkflowAction struct {
@@ -47,4 +47,3 @@ type ActionInstance struct {
 	UpdatedAt          *time.Time
 	FinishedAt         *time.Time
 }
-

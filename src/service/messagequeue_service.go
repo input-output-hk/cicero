@@ -3,11 +3,12 @@ package service
 import (
 	"context"
 	"encoding/json"
+	model "github.com/input-output-hk/cicero/src/model"
+	"github.com/jackc/pgconn"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"log"
 	"time"
-	model "github.com/input-output-hk/cicero/src/model"
 )
 
 //TODO: change to lowercase when service module refactoring is complete.
@@ -60,4 +61,23 @@ func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, m
 	logger.Printf("Published message to stream %s\n", stream)
 
 	return nil
+}
+
+type DBExec interface {
+	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+}
+
+//TODO: change to lowercase when service module refactoring is complete.
+func InsertLiftbridgeMessage(logger *log.Logger, db DBExec, msg *liftbridge.Message) error {
+	_, err := db.Exec(
+		context.Background(),
+		`INSERT INTO liftbridge_messages ("offset", stream, subject, created_at, value) VALUES ($1, $2, $3, $4, $5)`,
+		msg.Offset(), msg.Stream(), msg.Subject(), msg.Timestamp(), msg.Value(),
+	)
+
+	if err != nil {
+		logger.Printf("Couldn't insert liftbridge message into database: %s\n", err.Error())
+	}
+
+	return err
 }

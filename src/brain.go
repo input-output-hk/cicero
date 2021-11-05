@@ -86,7 +86,7 @@ func (cmd *BrainCmd) start(ctx context.Context) error {
 func (cmd *BrainCmd) listenToStart(ctx context.Context) error {
 	cmd.logger.Println("Starting Brain.listenToStart")
 
-	err := service.CrreateStreams(cmd.logger, cmd.bridge, []string{startStreamName})
+	err := service.CreateStreams(cmd.logger, cmd.bridge, []string{startStreamName})
 	if err != nil {
 		return err
 	}
@@ -127,30 +127,34 @@ func (cmd *BrainCmd) onStartMessage(msg *liftbridge.Message, err error) {
 		"time:", msg.Timestamp(),
 	)
 
-	received := WorkflowCerts{}
+	received := model.WorkflowCerts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
 		cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
 		return
 	}
 
-	if err := insertLiftbridgeMessage(cmd.logger, DB, msg); err != nil {
+	if err := service.InsertLiftbridgeMessage(cmd.logger, DB, msg); err != nil {
 		return
 	}
 
-	if err = cmd.insertWorkflow(&WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
+	//TODO: FIXME this context to be transactional
+	if err = cmd.insertWorkflow(context.Background(), &model.WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
 		cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
 	}
 }
 
-func (cmd *BrainCmd) insertWorkflow(workflow *WorkflowInstance) error {
-	err := DB.QueryRow(context.Background(),
-		`INSERT INTO workflow_instances (name, certs) VALUES ($1, $2) RETURNING id`,
-		workflow.Name, workflow.Certs).
-		Scan(&workflow.ID)
+func (cmd *BrainCmd) insertWorkflow(ctx context.Context, workflow *model.WorkflowInstance) error {
+	tx, err := DB.Begin(ctx)
+
 	if err != nil {
+		cmd.logger.Printf("%s\n", err)
 		return err
 	}
+
+	defer tx.Rollback(ctx)
+
+	err = cmd.workflowService.Save(tx, workflow)
 
 	if err != nil {
 		return errors.WithMessage(err, "Could not insert workflow instance")
@@ -223,35 +227,34 @@ func (cmd *BrainCmd) onCertMessage(msg *liftbridge.Message, err error) {
 		"time:", msg.Timestamp(),
 	)
 
-	received := WorkflowCerts{}
+	received := model.WorkflowCerts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
 		cmd.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
 		return
 	}
 
-	tx, err := DB.Begin(context.Background())
+	ctx := context.Background()
+	tx, err := DB.Begin(ctx)
 	if err != nil {
 		cmd.logger.Printf("%s\n", err)
 		return
 	}
 
-	if err := insertLiftbridgeMessage(cmd.logger, tx, msg); err != nil {
+	defer tx.Rollback(ctx)
+
+	if err := service.InsertLiftbridgeMessage(cmd.logger, tx, msg); err != nil {
 		return
 	}
 
-	existing := &WorkflowInstance{Name: workflowName}
-	err = pgxscan.Get(
-		context.Background(), tx, existing,
-		`SELECT * FROM workflow_instances WHERE id = $1`,
-		id,
-	)
+	wf, err := cmd.workflowService.GetById(id)
+	var existing = &wf
+
 	if err != nil {
-		cmd.logger.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
 		return
 	}
 
-	merged := WorkflowCerts{}
+	merged := model.WorkflowCerts{}
 
 	for k, v := range existing.Certs {
 		merged[k] = v
@@ -265,11 +268,7 @@ func (cmd *BrainCmd) onCertMessage(msg *liftbridge.Message, err error) {
 	existing.Certs = merged
 	existing.UpdatedAt = &now
 
-	_, err = tx.Exec(
-		context.Background(),
-		`UPDATE workflow_instances SET certs = $2, updated_at = $3 WHERE id = $1`,
-		id, existing.Certs, now,
-	)
+	_, err = cmd.workflowService.Update(tx, id, existing)
 
 	if err != nil {
 		cmd.logger.Printf("Error while updating workflow: %s", err)
@@ -280,7 +279,7 @@ func (cmd *BrainCmd) onCertMessage(msg *liftbridge.Message, err error) {
 
 	cmd.logger.Printf("Updated workflow %#v\n", existing)
 
-	publish(
+	service.Publish(
 		cmd.logger,
 		cmd.bridge,
 		fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
@@ -362,7 +361,7 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 		return nil
 	}
 
-	action := &ActionInstance{}
+	action := &model.ActionInstance{}
 	if err := pgxscan.Get(
 		context.Background(), DB, action,
 		`SELECT * FROM action_instances WHERE id = $1`,
@@ -375,9 +374,9 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 		return nil
 	}
 
-	var certs *WorkflowCerts
+	var certs *model.WorkflowCerts
 
-	def, err := action.GetDefinition(cmd.logger, cmd.evaluator)
+	def, err := GetDefinitionByAction(action, cmd.logger, cmd.evaluator)
 	if err != nil {
 		return errors.WithMessagef(err, "Could not get definition for action instance %s", action.ID)
 	}
@@ -399,7 +398,7 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 	).UTC()
 	action.FinishedAt = &modifyTime
 
-	wf, err := action.GetWorkflow()
+	wf, err := GetWorkflow(action)
 	if err != nil {
 		return err
 	}
@@ -413,7 +412,7 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 			return errors.WithMessage(err, "Could not update action instance")
 		}
 
-		if err := publish(
+		if err := service.Publish(
 			cmd.logger,
 			cmd.bridge,
 			fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
