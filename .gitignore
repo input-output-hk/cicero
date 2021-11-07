@@ -4,3 +4,4 @@
 /db/schema.sql
 /swagger.yaml
 /.direnv
+.idea/

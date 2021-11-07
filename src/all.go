@@ -9,6 +9,7 @@ import (
 	"cirello.io/oversight"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
+	service "github.com/input-output-hk/cicero/src/service"
 )
 
 type AllCmd struct {
@@ -26,9 +27,12 @@ func (cmd *AllCmd) Run() error {
 	supervisor := cmd.newSupervisor()
 
 	evaluator := NewEvaluator(cmd.Evaluator)
+	workflowService := &service.WorkflowServiceCmd{}
+	workflowService.Init(DB)
 
 	brain := &BrainCmd{
 		bridge:    bridge,
+		workflowService: workflowService,
 		evaluator: evaluator,
 	}
 	brain.init()
@@ -36,6 +40,7 @@ func (cmd *AllCmd) Run() error {
 	web := &WebCmd{
 		Addr:      cmd.Addr,
 		bridge:    bridge,
+		workflowService: workflowService,
 		evaluator: evaluator,
 	}
 	web.init()

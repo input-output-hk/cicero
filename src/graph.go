@@ -2,6 +2,7 @@ package cicero
 
 import (
 	"errors"
+	"github.com/input-output-hk/cicero/src/model"
 	"io"
 	"math"
 	"strings"
@@ -35,7 +36,7 @@ func WorkflowGraphTypeFromString(s string) (WorkflowGraphType, error) {
 	return 0, errors.New("no such WorkflowGraphType: " + s)
 }
 
-func RenderWorkflowGraph(wf *WorkflowDefinition, graphType WorkflowGraphType, w io.Writer) error {
+func RenderWorkflowGraph(wf *model.WorkflowDefinition, graphType WorkflowGraphType, w io.Writer) error {
 	const SymbolSize = 50
 	const FontSize = 14
 

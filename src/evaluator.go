@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
+	"github.com/input-output-hk/cicero/src/model"
 	"github.com/pkg/errors"
 )
 
@@ -23,8 +23,8 @@ func NewEvaluator(command string) Evaluator {
 	}
 }
 
-func (e *Evaluator) EvaluateWorkflow(name string, id uint64, inputs WorkflowCerts) (WorkflowDefinition, error) {
-	var def WorkflowDefinition
+func (e *Evaluator) EvaluateWorkflow(name string, id uint64, inputs model.WorkflowCerts) (model.WorkflowDefinition, error) {
+	var def model.WorkflowDefinition
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {

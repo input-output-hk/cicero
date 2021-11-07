@@ -3,6 +3,8 @@ package cicero
 import (
 	"context"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
 
@@ -14,6 +16,7 @@ import (
 type Api struct {
 	logger    *log.Logger
 	bridge    liftbridge.Client
+	workflowService service.WorkflowService
 	evaluator Evaluator
 }
 
@@ -23,37 +26,16 @@ func (api *Api) init() {
 	}
 }
 
-func (a *Api) WorkflowInstances(name string) ([]*WorkflowInstance, error) {
-	instances := []*WorkflowInstance{}
-
-	err := pgxscan.Select(
-		context.Background(),
-		DB,
-		&instances,
-		`SELECT * FROM workflow_instances WHERE name = $1 ORDER BY id DESC`,
-		name)
-	if err != nil {
-		return nil, err
-	}
-
-	return instances, nil
-}
-
-func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (WorkflowDefinition, error) {
+func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (model.WorkflowDefinition, error) {
 	if instanceId != nil {
-		var def WorkflowDefinition
+		var def model.WorkflowDefinition
+		instance, err := a.workflowService.GetById(*instanceId)
 
-		instance := &WorkflowInstance{}
-		err := pgxscan.Get(
-			context.Background(), DB, instance,
-			`SELECT * FROM workflow_instances WHERE id = $1`,
-			*instanceId,
-		)
 		if err != nil {
 			return def, err
 		}
 
-		def, err = instance.GetDefinition(logger, a.evaluator)
+		def, err = GetDefinition(&instance, logger, a.evaluator)
 		if err != nil {
 			return def, err
 		}
@@ -74,16 +56,16 @@ func (a *Api) Workflows() ([]string, error) {
 }
 
 // TODO superfluous?
-func (a *Api) Workflow(name string) (WorkflowDefinition, error) {
-	return a.evaluator.EvaluateWorkflow(name, 0, WorkflowCerts{})
+func (a *Api) Workflow(name string) (model.WorkflowDefinition, error) {
+	return a.evaluator.EvaluateWorkflow(name, 0, model.WorkflowCerts{})
 }
 
 func (a *Api) WorkflowStart(name string) error {
-	return publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", WorkflowCerts{})
+	return service.Publish(a.logger, a.bridge, fmt.Sprintf("workflow.%s.start", name), "workflow.*.start", model.WorkflowCerts{})
 }
 
-func (a *Api) Actions() ([]*ActionInstance, error) {
-	instances := []*ActionInstance{}
+func (a *Api) Actions() ([]*model.ActionInstance, error) {
+	instances := []*model.ActionInstance{}
 
 	err := pgxscan.Select(
 		context.Background(),
@@ -97,8 +79,8 @@ func (a *Api) Actions() ([]*ActionInstance, error) {
 	return instances, nil
 }
 
-func (a *Api) Action(id uuid.UUID) (*ActionInstance, error) {
-	instance := &ActionInstance{}
+func (a *Api) Action(id uuid.UUID) (*model.ActionInstance, error) {
+	instance := &model.ActionInstance{}
 
 	err := pgxscan.Get(
 		context.Background(), DB, instance,
