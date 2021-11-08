@@ -36,7 +36,7 @@ func (cmd *BrainCmd) init() {
 		cmd.logger = log.New(os.Stderr, "brain: ", log.LstdFlags)
 	}
 	if cmd.workflowService == nil {
-		wfService := &service.WorkflowServiceCmd{}
+		wfService := &service.WorkflowServiceImpl{}
 		wfService.Init(DB)
 		cmd.workflowService = wfService
 	}

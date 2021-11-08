@@ -17,12 +17,12 @@ type WorkflowService interface {
 	Update(pgx.Tx, uint64, *model.WorkflowInstance) (sql.Result, error)
 }
 
-type WorkflowServiceCmd struct {
+type WorkflowServiceImpl struct {
 	logger             *log.Logger
 	workflowRepository repository.WorkflowRepository
 }
 
-func (cmd *WorkflowServiceCmd) Init(db *pgxpool.Pool) WorkflowService {
+func (cmd *WorkflowServiceImpl) Init(db *pgxpool.Pool) WorkflowService {
 	if cmd.logger == nil {
 		cmd.logger = log.New(os.Stderr, "WorkflowService: ", log.LstdFlags)
 	}
@@ -32,12 +32,12 @@ func (cmd *WorkflowServiceCmd) Init(db *pgxpool.Pool) WorkflowService {
 	return cmd
 }
 
-func (cmd *WorkflowServiceCmd) GetAllByName(name string) ([]*model.WorkflowInstance, error) {
+func (cmd *WorkflowServiceImpl) GetAllByName(name string) ([]*model.WorkflowInstance, error) {
 	log.Printf("Get all Workflows by name %s", name)
 	return cmd.workflowRepository.GetAllByName(name)
 }
 
-func (cmd *WorkflowServiceCmd) GetById(id uint64) (workflow model.WorkflowInstance, err error) {
+func (cmd *WorkflowServiceImpl) GetById(id uint64) (workflow model.WorkflowInstance, err error) {
 	log.Printf("Get orkflow by id %d", id)
 	workflow, err = cmd.workflowRepository.GetById(id)
 	if err != nil {
@@ -46,7 +46,7 @@ func (cmd *WorkflowServiceCmd) GetById(id uint64) (workflow model.WorkflowInstan
 	return workflow, err
 }
 
-func (cmd *WorkflowServiceCmd) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
+func (cmd *WorkflowServiceImpl) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
 	log.Printf("Saving new workflow %#v", &workflow)
 	err := cmd.workflowRepository.Save(tx, workflow)
 	if err != nil {
@@ -57,7 +57,7 @@ func (cmd *WorkflowServiceCmd) Save(tx pgx.Tx, workflow *model.WorkflowInstance)
 	return err
 }
 
-func (cmd *WorkflowServiceCmd) Update(tx pgx.Tx, id uint64, workflow *model.WorkflowInstance) (result sql.Result, err error) {
+func (cmd *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow *model.WorkflowInstance) (result sql.Result, err error) {
 	log.Printf("Update workflow %#v with id %d", workflow, id)
 	result, err = cmd.workflowRepository.Update(tx, id, workflow)
 	if err != nil {

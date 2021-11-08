@@ -27,7 +27,7 @@ func (cmd *AllCmd) Run() error {
 	supervisor := cmd.newSupervisor()
 
 	evaluator := NewEvaluator(cmd.Evaluator)
-	workflowService := &service.WorkflowServiceCmd{}
+	workflowService := &service.WorkflowServiceImpl{}
 	workflowService.Init(DB)
 
 	brain := &BrainCmd{
