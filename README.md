@@ -26,7 +26,7 @@ Start a development instance of Nomad:
 
 Run the required services in Nomad:
 
-    cue export -e jobs.dev | nomad job run -
+    cue export -e jobs.dev -t env=local | nomad run -
 
 Migrate the database:
 
@@ -36,10 +36,28 @@ Run the application:
 
     go run . all
 
+Access WebUI:
+
+    open localhost:8080 in browser
+
 # How To …
 
 See the commands listed by:
 
 ```
 nix develop
+```
+
+# Which ports are in use?
+
+```
+8080 - Cicero, WebUI
+4646 - Nomad, HTTP
+4647 - Nomad, RPC
+4648 - Nomad, Serf WAN
+5432 - PostgreSQL
+4222 - Liftbridge, NATS client connections
+9292 - Liftbridge, standard client connections
+3100 - Loki, HTTP
+9095 - Loki, GRPC
 ```
