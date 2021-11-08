@@ -22,14 +22,11 @@ type WorkflowServiceImpl struct {
 	workflowRepository repository.WorkflowRepository
 }
 
-func (cmd *WorkflowServiceImpl) Init(db *pgxpool.Pool) WorkflowService {
-	if cmd.logger == nil {
-		cmd.logger = log.New(os.Stderr, "WorkflowService: ", log.LstdFlags)
+func NewWorkflowService(db *pgxpool.Pool) WorkflowService {
+	return &WorkflowServiceImpl{
+		logger:             log.New(os.Stderr, "WorkflowService: ", log.LstdFlags),
+		workflowRepository: repository.NewWorkflowRepository(db),
 	}
-	if cmd.workflowRepository == nil {
-		cmd.workflowRepository = repository.NewWorkflowRepository(db)
-	}
-	return cmd
 }
 
 func (cmd *WorkflowServiceImpl) GetAllByName(name string) ([]*model.WorkflowInstance, error) {

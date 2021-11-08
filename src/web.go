@@ -36,9 +36,7 @@ func (cmd *WebCmd) init() {
 		cmd.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
 	}
 	if cmd.workflowService == nil {
-		wfService := &service.WorkflowServiceImpl{}
-		wfService.Init(DB)
-		cmd.workflowService = wfService
+		cmd.workflowService = service.NewWorkflowService(DB)
 	}
 }
 
