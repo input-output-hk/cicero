@@ -35,7 +35,7 @@ func (cmd *WorkflowServiceImpl) GetAllByName(name string) ([]*model.WorkflowInst
 }
 
 func (cmd *WorkflowServiceImpl) GetById(id uint64) (workflow model.WorkflowInstance, err error) {
-	log.Printf("Get orkflow by id %d", id)
+	log.Printf("Get Workflow by id %d", id)
 	workflow, err = cmd.workflowRepository.GetById(id)
 	if err != nil {
 		log.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
