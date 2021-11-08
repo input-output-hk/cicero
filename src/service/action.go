@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/jackc/pgconn"
@@ -11,11 +12,11 @@ import (
 )
 
 type ActionService interface {
-	GetById(uint64)(model.ActionInstance, error)
-	GetByNameAndWorkflowId(string, uint64)(model.ActionInstance, error)
+	GetById(uuid.UUID)(*model.ActionInstance, error)
+	GetByNameAndWorkflowId(string, uint64)(*model.ActionInstance, error)
 	GetAll()([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, uint64, *model.ActionInstance)(pgconn.CommandTag, error)
+	Update(pgx.Tx, uuid.UUID, *model.ActionInstance)(pgconn.CommandTag, error)
 }
 
 type ActionServiceCmd struct {
@@ -33,16 +34,16 @@ func (cmd * ActionServiceCmd) Init(db *pgxpool.Pool) ActionService {
 	return cmd
 }
 
-func (cmd *ActionServiceCmd) GetById(id uint64) (action model.ActionInstance, err error) {
-	log.Printf("Get Action by id %d", id)
+func (cmd *ActionServiceCmd) GetById(id uuid.UUID) (action *model.ActionInstance, err error) {
+	log.Printf("Get Action by id %s", id)
 	action, err = cmd.actionRepository.GetById(id)
 	if err != nil {
-		log.Printf("Couldn't select existing Action for id %d: %s", id, err)
+		log.Printf("Couldn't select existing Action for id %s: %s", id, err)
 	}
 	return action, err
 }
 
-func (cmd *ActionServiceCmd) GetByNameAndWorkflowId(name string, workflowId uint64) (action model.ActionInstance, err error) {
+func (cmd *ActionServiceCmd) GetByNameAndWorkflowId(name string, workflowId uint64) (action *model.ActionInstance, err error) {
 	log.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = cmd.actionRepository.GetByNameAndWorkflowId(name, workflowId)
 	if err != nil {
@@ -67,13 +68,13 @@ func (cmd *ActionServiceCmd) Save(tx pgx.Tx, action *model.ActionInstance) error
 	return err
 }
 
-func (cmd *ActionServiceCmd) Update(tx pgx.Tx, id uint64, action *model.ActionInstance) (pgconn.CommandTag, error) {
-	log.Printf("Update Action %#v with id %d", action, id)
+func (cmd *ActionServiceCmd) Update(tx pgx.Tx, id uuid.UUID, action *model.ActionInstance) (pgconn.CommandTag, error) {
+	log.Printf("Update Action %#v with id %s", action, id)
 	commandTag, err := cmd.actionRepository.Update(tx, id, action)
 	if err != nil {
-		log.Printf("Couldn't update Action with id: %d, error: %s", id, err.Error())
+		log.Printf("Couldn't update Action with id: %s, error: %s", id, err.Error())
 	} else {
-		log.Printf("Updated Action %#v with id %d, commandTag %s", action, id, commandTag)
+		log.Printf("Updated Action %#v with id %s, commandTag %s", action, id, commandTag)
 	}
 	return commandTag, err
 }

@@ -28,6 +28,7 @@ type WebCmd struct {
 	logger    *log.Logger
 	bridge    liftbridge.Client
 	workflowService service.WorkflowService
+	actionService service.ActionService
 	evaluator Evaluator
 }
 
@@ -39,6 +40,11 @@ func (cmd *WebCmd) init() {
 		wfService := &service.WorkflowServiceCmd{}
 		wfService.Init(DB)
 		cmd.workflowService = wfService
+	}
+	if cmd.actionService == nil {
+		aService := &service.ActionServiceCmd{}
+		aService.Init(DB)
+		cmd.actionService = aService
 	}
 }
 
@@ -159,7 +165,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		})
 		group.WithGroup("/action", func(group *bunrouter.Group) {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				actions, err := api.Actions()
+				actions, err := cmd.actionService.GetAll()
 				if err != nil {
 					return err
 				}
@@ -176,7 +182,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 							return err
 						}
 
-						action, err := api.Action(id)
+						action, err := cmd.actionService.GetById(id)
 						if err != nil {
 							return err
 						}
@@ -191,8 +197,9 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				})
 				group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
 					action := req.Context().Value(ctxKeyAction).(model.ActionInstance)
-					wf, err := GetWorkflow(&action)
+					wf, err := cmd.workflowService.GetById(action.WorkflowInstanceId)
 					if err != nil {
+						errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
 						return err
 					}
 

@@ -29,6 +29,7 @@ type InvokerCmd struct {
 	limiter   *priority.PriorityLimiter
 	bridge    liftbridge.Client
 	evaluator Evaluator
+	actionService service.ActionService
 }
 
 func (cmd *InvokerCmd) init() {
@@ -43,7 +44,11 @@ func (cmd *InvokerCmd) init() {
 			oversight.OneForOne(), // restart every task on its own
 		))
 	}
-
+	if cmd.actionService == nil {
+		aService := &service.ActionServiceCmd{}
+		aService.Init(DB)
+		cmd.actionService = aService
+	}
 	if cmd.limiter == nil {
 		// Increase priority of waiting goroutines every second.
 		cmd.limiter = priority.NewLimiter(1, priority.WithDynamicPriority(1000))
@@ -155,12 +160,8 @@ func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName st
 	cmd.limiter.Wait(context.Background(), priority.High)
 	defer cmd.limiter.Finish()
 
-	instance := &model.ActionInstance{}
-	if err := pgxscan.Get(
-		context.Background(), DB, instance,
-		`SELECT * FROM action_instances WHERE name = $1 AND workflow_instance_id = $2`,
-		actionName, wfInstanceId,
-	); err != nil {
+	instance, err := cmd.actionService.GetByNameAndWorkflowId(actionName, wfInstanceId)
+	if err != nil {
 		if !pgxscan.NotFound(err) {
 			return errors.WithMessage(err, "While getting last action instance")
 		}
@@ -169,31 +170,27 @@ func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName st
 
 	cmd.logger.Printf("Checking runnability of %s: %v\n", actionName, action.IsRunnable())
 
-	if action.IsRunnable() {
-		if err := addLogging(&action.Job); err != nil {
-			return err
-		}
-
-		if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if action.IsRunnable() {
+			if err := addLogging(&action.Job); err != nil {
+				return err
+			}
 			if instance == nil {
 				instance = &model.ActionInstance{}
-				if err := pgxscan.Get(
-					context.Background(), DB, instance,
-					`INSERT INTO action_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING *`,
-					wfInstanceId, actionName, inputs,
-				); err != nil {
+				instance.WorkflowInstanceId = wfInstanceId
+				instance.Name = actionName
+				instance.Certs = inputs
+
+				err := cmd.actionService.Save(tx, instance)
+				if err != nil {
 					return errors.WithMessage(err, "Could not insert action instance")
 				}
 			} else {
 				updatedAt := time.Now().UTC()
 				instance.UpdatedAt = &updatedAt
 				instance.Certs = inputs
-
-				if err := pgxscan.Get(
-					context.Background(), DB, instance,
-					`UPDATE action_instances SET updated_at = $2, certs = $3 WHERE id = $1 RETURNING *`,
-					instance.ID, instance.UpdatedAt, instance.Certs,
-				); err != nil {
+				_, err := cmd.actionService.Update(tx, instance.ID, instance)
+				if err != nil {
 					return errors.WithMessage(err, "Could not update action instance")
 				}
 			}
@@ -207,25 +204,22 @@ func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName st
 				cmd.logger.Println(response.Warnings)
 			}
 
-			return nil
-		}); err != nil {
-			return err
-		}
-	} else if instance != nil {
-		if _, _, err := nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
-			return errors.WithMessage(err, "Failed to stop action")
-		}
+		} else if instance != nil {
+			if _, _, err := nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
+				return errors.WithMessage(err, "Failed to stop action")
+			}
 
-		finished := time.Now().UTC()
-		instance.FinishedAt = &finished
+			finished := time.Now().UTC()
+			instance.FinishedAt = &finished
 
-		if _, err := DB.Exec(
-			context.Background(),
-			`UPDATE action_instances SET finished_at = $2 WHERE id = $1`,
-			instance.ID, *instance.FinishedAt,
-		); err != nil {
-			return errors.WithMessage(err, "Failed to update action instance")
+			_, err := cmd.actionService.Update(tx, instance.ID, instance)
+			if err != nil {
+				return errors.WithMessage(err, "Failed to update action instance")
+			}
 		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	return nil
