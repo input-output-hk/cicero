@@ -24,11 +24,11 @@ const startStreamName = "workflow.*.start"
 const certStreamName = "workflow.*.*.cert"
 
 type BrainCmd struct {
-	logger    *log.Logger
-	tree      *oversight.Tree
-	bridge    liftbridge.Client
+	logger          *log.Logger
+	tree            *oversight.Tree
+	bridge          liftbridge.Client
 	workflowService service.WorkflowService
-	evaluator Evaluator
+	evaluator       Evaluator
 }
 
 func (cmd *BrainCmd) init() {

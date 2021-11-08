@@ -11,14 +11,14 @@ import (
 )
 
 type WorkflowService interface {
-	GetAllByName(string)([]*model.WorkflowInstance, error)
-	GetById(uint64)(model.WorkflowInstance, error)
+	GetAllByName(string) ([]*model.WorkflowInstance, error)
+	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
-	Update(pgx.Tx, uint64, *model.WorkflowInstance)(sql.Result, error)
+	Update(pgx.Tx, uint64, *model.WorkflowInstance) (sql.Result, error)
 }
 
 type WorkflowServiceCmd struct {
-	logger *log.Logger
+	logger             *log.Logger
 	workflowRepository repository.WorkflowRepository
 }
 

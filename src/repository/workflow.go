@@ -14,10 +14,10 @@ type workflowRepository struct {
 }
 
 type WorkflowRepository interface {
-	GetAllByName(string)([]*model.WorkflowInstance, error)
-	GetById(uint64)(model.WorkflowInstance, error)
+	GetAllByName(string) ([]*model.WorkflowInstance, error)
+	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
-	Update(pgx.Tx, uint64, *model.WorkflowInstance)(sql.Result, error)
+	Update(pgx.Tx, uint64, *model.WorkflowInstance) (sql.Result, error)
 }
 
 func NewWorkflowRepository(db *pgxpool.Pool) WorkflowRepository {

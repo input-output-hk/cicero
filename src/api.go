@@ -14,10 +14,10 @@ import (
 )
 
 type Api struct {
-	logger    *log.Logger
-	bridge    liftbridge.Client
+	logger          *log.Logger
+	bridge          liftbridge.Client
 	workflowService service.WorkflowService
-	evaluator Evaluator
+	evaluator       Evaluator
 }
 
 func (api *Api) init() {
