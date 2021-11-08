@@ -2,14 +2,16 @@ package cicero
 
 import (
 	"errors"
-	"github.com/input-output-hk/cicero/src/model"
 	"io"
 	"math"
 	"strings"
 
+	"github.com/input-output-hk/cicero/src/model"
+
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
 	"github.com/go-echarts/go-echarts/v2/opts"
+	"github.com/thoas/go-funk"
 )
 
 type WorkflowGraphType uint
@@ -41,26 +43,27 @@ func RenderWorkflowGraph(wf *model.WorkflowDefinition, graphType WorkflowGraphTy
 	const FontSize = 14
 
 	nodes := make([]opts.GraphNode, 0)
-	for name, action := range wf.Actions {
-		graphNode := opts.GraphNode{
-			Name:       name,
-			Symbol:     "circle",
-			SymbolSize: SymbolSize,
-		}
-		if action.IsRunnable() {
-			graphNode.Symbol = "diamond"
-			graphNode.Category = 1
-			graphNode.Y = 0
-			graphNode.X = 0
-			graphNode.SymbolSize = SymbolSize * 1.5
-		}
-
-		nodes = append(nodes, graphNode)
-	}
-
 	links := make([]opts.GraphLink, 0)
+
 	switch graphType {
 	case WorkflowGraphTypeFlow:
+		for name, action := range wf.Actions {
+			graphNode := opts.GraphNode{
+				Name:       name,
+				Symbol:     "circle",
+				SymbolSize: SymbolSize,
+			}
+			if action.IsRunnable() {
+				graphNode.Symbol = "diamond"
+				graphNode.Category = 1
+				graphNode.Y = 0
+				graphNode.X = 0
+				graphNode.SymbolSize = SymbolSize * 1.5
+			}
+
+			nodes = append(nodes, graphNode)
+		}
+
 		for name, action := range wf.Actions {
 			for _, input := range action.Inputs {
 				for name2, action2 := range wf.Actions {
@@ -84,37 +87,53 @@ func RenderWorkflowGraph(wf *model.WorkflowDefinition, graphType WorkflowGraphTy
 			}
 		}
 	case WorkflowGraphTypeInputs:
-		for name, action := range wf.Actions {
+		for _, action := range wf.Actions {
+		Node:
 			for _, input := range action.Inputs {
+				for _, node := range nodes {
+					if node.Name == input {
+						continue Node
+					}
+				}
+				nodes = append(nodes, opts.GraphNode{
+					Name:       input,
+					Symbol:     "roundRect",
+					SymbolSize: SymbolSize,
+				})
+			}
+		}
+
+		for _, node := range nodes {
+			for name, action := range wf.Actions {
+				if !funk.ContainsString(action.Inputs, node.Name) {
+					continue
+				}
+			Inner:
 				for name2, action2 := range wf.Actions {
-					if name == name2 {
+					if name == name2 || !funk.ContainsString(action2.Inputs, node.Name) {
 						continue
 					}
-				Inner:
-					for _, input2 := range action2.Inputs {
-						if input != input2 {
-							continue
-						}
-						for _, link := range links {
-							if link.Source == name2 && link.Target == name {
-								for _, label := range strings.Split(link.Label.Formatter, ", ") {
-									if label == input {
-										continue Inner
-									}
+
+					for _, link := range links {
+						if link.Source == name2 && link.Target == name {
+							for _, label := range strings.Split(link.Label.Formatter, ", ") {
+								if label == node.Name {
+									continue Inner
 								}
-								link.Label.Formatter += ", " + input
-								continue Inner
 							}
+							link.Label.Formatter += ", " + node.Name
+							continue Inner
 						}
-						links = append(links, opts.GraphLink{
-							Source: name,
-							Target: name2,
-							Label: &opts.EdgeLabel{
-								Show:      true,
-								Formatter: input, // FIXME escape placeholders
-							},
-						})
 					}
+
+					links = append(links, opts.GraphLink{
+						Source: name,
+						Target: name2,
+						Label: &opts.EdgeLabel{
+							Show:      true,
+							Formatter: name + ", " + name2, // FIXME escape placeholders
+						},
+					})
 				}
 			}
 		}
