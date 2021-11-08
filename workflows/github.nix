@@ -13,8 +13,6 @@ let
     }) script;
 
 in {
-  version = 0;
-
   actions = {
     clone = { pr ? { }, src-hyper ? "" }: {
       when = {

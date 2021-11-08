@@ -1,8 +1,6 @@
 { id, run }:
 
 {
-  version = 0;
-
   actions = {
     python = { }: {
       job = (run "python" {} ''
