@@ -26,27 +26,20 @@ func (api *Api) init() {
 	}
 }
 
-func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (model.WorkflowDefinition, error) {
+func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log.Logger) (def model.WorkflowDefinition, instance *model.WorkflowInstance, err error) {
 	if instanceId != nil {
-		var def model.WorkflowDefinition
-		instance, err := a.workflowService.GetById(*instanceId)
-
-		if err != nil {
-			return def, err
+		var inst model.WorkflowInstance
+		if inst, err = a.workflowService.GetById(*instanceId); err != nil {
+			return
+		} else {
+			instance = &inst
 		}
 
-		def, err = GetDefinition(&instance, logger, a.evaluator)
-		if err != nil {
-			return def, err
-		}
-		return def, nil
+		def, err = GetDefinition(instance, logger, a.evaluator)
+		return
 	} else {
-		var err error
-		def, err := a.Workflow(wfName, nil)
-		if err != nil {
-			return def, err
-		}
-		return def, nil
+		def, err = a.Workflow(wfName, nil)
+		return
 	}
 }
 

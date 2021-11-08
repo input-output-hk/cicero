@@ -5,12 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
-	"github.com/liftbridge-io/go-liftbridge"
-	"github.com/pkg/errors"
-	"github.com/uptrace/bunrouter"
 	"html/template"
 	"log"
 	"mime"
@@ -21,6 +15,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
+	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/pkg/errors"
+	"github.com/uptrace/bunrouter"
 )
 
 type WebCmd struct {
@@ -127,7 +128,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				}
 				instanceId = &iid
 			}
-			def, err := api.WorkflowForInstance(name, instanceId, cmd.logger)
+			def, instance, err := api.WorkflowForInstance(name, instanceId, cmd.logger)
 			if err != nil {
 				return err
 			}
@@ -135,13 +136,21 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 			var graphType WorkflowGraphType
 			if len(graphTypeStr) > 0 {
 				var err error
-				graphType, err = WorkflowGraphTypeFromString(graphTypeStr)
-				if err != nil {
+				if graphType, err = WorkflowGraphTypeFromString(graphTypeStr); err != nil {
 					return err
 				}
 			}
 
-			return RenderWorkflowGraph(&def, graphType, w)
+			switch graphType {
+			case WorkflowGraphTypeFlow:
+				return RenderWorkflowGraphFlow(def, w)
+			case WorkflowGraphTypeInputs:
+				return RenderWorkflowGraphInputs(def, instance, w)
+			default:
+				// should have already exited when parsing the graph type
+				cmd.logger.Panic("reached code that should be unreachable")
+				return nil
+			}
 		})
 	})
 
