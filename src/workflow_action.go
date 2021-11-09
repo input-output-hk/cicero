@@ -8,7 +8,7 @@ import (
 )
 
 type WorkflowActionService interface {
-	GetWorkflowAction(*model.ActionInstance) (*model.WorkflowAction, error)
+	GetWorkflowAction(model.ActionInstance) (*model.WorkflowAction, error)
 }
 
 type WorkflowActionServiceImpl struct {
@@ -25,7 +25,7 @@ func NewWorkflowActionService(evaluator Evaluator, workflowService service.Workf
 	}
 }
 
-func (w *WorkflowActionServiceImpl) GetWorkflowAction(action *model.ActionInstance) (*model.WorkflowAction, error) {
+func (w *WorkflowActionServiceImpl) GetWorkflowAction(action model.ActionInstance) (*model.WorkflowAction, error) {
 	wf, err := w.workflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
 		log.Printf("Could not get workflow instance for WorkflowInstanceId %d", action.WorkflowInstanceId)

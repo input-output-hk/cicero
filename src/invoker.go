@@ -79,6 +79,7 @@ type Invoker struct {
 	bridge        *liftbridge.Client
 	evaluator     *Evaluator
 	actionService *service.ActionService
+	workflowService *service.WorkflowService
 }
 
 func (self *Invoker) start(ctx context.Context) error {
@@ -160,7 +161,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 }
 
 func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts) error {
-	wf, err := self.workflowService.GetById(wfInstanceId)
+	wf, err := (*self.workflowService).GetById(wfInstanceId)
 	if err != nil {
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
 	}
