@@ -10,34 +10,33 @@ import (
 
 //TODO: WIP move to service and repository
 
-func GetDefinition(w *model.WorkflowInstance, logger *log.Logger, evaluator Evaluator) (model.WorkflowDefinition, error) {
+func GetDefinition(w model.WorkflowInstance, logger *log.Logger, evaluator Evaluator) (model.WorkflowDefinition, error) {
 	return evaluator.EvaluateWorkflow(w.Name, &w.Version, w.ID, w.Certs)
 }
 
-func GetDefinitionByAction(s *model.ActionInstance, logger *log.Logger, evaluator Evaluator) (*model.WorkflowAction, error) {
-	wf, err := GetWorkflow(s)
+func GetDefinitionByAction(actionInstance model.ActionInstance, logger *log.Logger, evaluator Evaluator) (def model.WorkflowAction, err error) {
+	wf, err := GetWorkflow(actionInstance)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	wfDef, err := GetDefinition(&wf, logger, evaluator)
+	wfDef, err := GetDefinition(wf, logger, evaluator)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	return wfDef.Actions[s.Name], nil
+	def = *wfDef.Actions[actionInstance.Name]
+	return
 }
 
-func GetWorkflow(s *model.ActionInstance) (model.WorkflowInstance, error) {
-	var instance model.WorkflowInstance
-
-	if err := pgxscan.Get(
+func GetWorkflow(actionInstance model.ActionInstance) (instance model.WorkflowInstance, err error) {
+	err = pgxscan.Get(
 		context.Background(), DB, &instance,
 		`SELECT * FROM workflow_instances WHERE id = $1`,
-		s.WorkflowInstanceId,
-	); err != nil {
-		return instance, errors.WithMessagef(err, "Could not get workflow instance for action %s", s.ID)
+		actionInstance.WorkflowInstanceId,
+	)
+	if err != nil {
+		err = errors.WithMessagef(err, "Could not get workflow instance for action %s", actionInstance.ID)
 	}
-
-	return instance, nil
+	return
 }

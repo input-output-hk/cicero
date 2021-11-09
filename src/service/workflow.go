@@ -1,66 +1,82 @@
 package service
 
 import (
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/repository"
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"fmt"
 	"log"
 	"os"
+
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/repository"
+	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/pkg/errors"
 )
 
 type WorkflowService interface {
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
-	Update(pgx.Tx, uint64, *model.WorkflowInstance) (pgconn.CommandTag, error)
+	Update(pgx.Tx, uint64, model.WorkflowInstance) error
+	Start(string, *string) error
 }
 
 type WorkflowServiceImpl struct {
 	logger             *log.Logger
 	workflowRepository repository.WorkflowRepository
+	bridge             liftbridge.Client
 }
 
-func NewWorkflowService(db *pgxpool.Pool) WorkflowService {
+func NewWorkflowService(db *pgxpool.Pool, bridge liftbridge.Client) WorkflowService {
 	return &WorkflowServiceImpl{
 		logger:             log.New(os.Stderr, "WorkflowService: ", log.LstdFlags),
 		workflowRepository: repository.NewWorkflowRepository(db),
+		bridge:             bridge,
 	}
 }
 
-func (cmd *WorkflowServiceImpl) GetAllByName(name string) ([]*model.WorkflowInstance, error) {
+func (s *WorkflowServiceImpl) GetAllByName(name string) ([]*model.WorkflowInstance, error) {
 	log.Printf("Get all Workflows by name %s", name)
-	return cmd.workflowRepository.GetAllByName(name)
+	return s.workflowRepository.GetAllByName(name)
 }
 
-func (cmd *WorkflowServiceImpl) GetById(id uint64) (workflow model.WorkflowInstance, err error) {
+func (s *WorkflowServiceImpl) GetById(id uint64) (workflow model.WorkflowInstance, err error) {
 	log.Printf("Get Workflow by id %d", id)
-	workflow, err = cmd.workflowRepository.GetById(id)
-	if err != nil {
-		log.Printf("Couldn't select existing workflow for id %d: %s\n", id, err)
-	}
-	return workflow, err
+	workflow, err = s.workflowRepository.GetById(id)
+	err = errors.WithMessagef(err, "Couldn't select existing workflow for id %d", id)
+	return
 }
 
-func (cmd *WorkflowServiceImpl) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
+func (s *WorkflowServiceImpl) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
 	log.Printf("Saving new Workflow %#v", workflow)
-	err := cmd.workflowRepository.Save(tx, workflow)
-	if err != nil {
-		log.Printf("Couldn't insert workflow: %s", err.Error())
-	} else {
-		log.Printf("Created workflow %#v", workflow)
+	if err := s.workflowRepository.Save(tx, workflow); err != nil {
+		return errors.WithMessagef(err, "Couldn't insert workflow")
 	}
-	return err
+	log.Printf("Created workflow %#v", workflow)
+	return nil
 }
 
-func (cmd *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow *model.WorkflowInstance) (commandTag pgconn.CommandTag, err error) {
+func (s *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow model.WorkflowInstance) error {
 	log.Printf("Update workflow %#v with id %d", workflow, id)
-	commandTag, err = cmd.workflowRepository.Update(tx, id, workflow)
-	if err != nil {
-		log.Printf("Couldn't update workflow with id: %d, error: %s", id, err.Error())
-	} else {
-		log.Printf("Updated workflow %#v with id %d, commandTag %s", workflow, id, commandTag)
+	if err := s.workflowRepository.Update(tx, id, workflow); err != nil {
+		return errors.WithMessagef(err, "Couldn't update workflow with id: %d, error: %s", id)
 	}
-	return commandTag, err
+	log.Printf("Updated workflow %#v with id %d", workflow, id)
+	return nil
+}
+
+func (s *WorkflowServiceImpl) Start(name string, version *string) error {
+	opts := []liftbridge.MessageOption{}
+	if version != nil {
+		opts = append(opts, liftbridge.Header("version", []byte(*version)))
+	}
+
+	return Publish(
+		s.logger,
+		s.bridge,
+		fmt.Sprintf("workflow.%s.start", name),
+		StartStreamName,
+		model.WorkflowCerts{},
+		opts...,
+	)
 }

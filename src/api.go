@@ -1,18 +1,14 @@
 package cicero
 
 import (
-	"fmt"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
-
-	"github.com/liftbridge-io/go-liftbridge"
 )
 
 type Api struct {
 	logger          *log.Logger
-	bridge          liftbridge.Client
 	workflowService service.WorkflowService
 	evaluator       Evaluator
 }
@@ -32,7 +28,7 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 			instance = &inst
 		}
 
-		def, err = GetDefinition(instance, logger, a.evaluator)
+		def, err = GetDefinition(*instance, logger, a.evaluator)
 		return
 	} else {
 		def, err = a.Workflow(wfName, nil)
@@ -48,20 +44,4 @@ func (a *Api) Workflows() ([]string, error) {
 // TODO superfluous?
 func (a *Api) Workflow(name string, version *string) (model.WorkflowDefinition, error) {
 	return a.evaluator.EvaluateWorkflow(name, version, 0, model.WorkflowCerts{})
-}
-
-func (a *Api) WorkflowStart(name string, version *string) error {
-	opts := []liftbridge.MessageOption{}
-	if version != nil {
-		opts = append(opts, liftbridge.Header("version", []byte(*version)))
-	}
-
-	return service.Publish(
-		a.logger,
-		a.bridge,
-		fmt.Sprintf("workflow.%s.start", name),
-		"workflow.*.start",
-		model.WorkflowCerts{},
-		opts...,
-	)
 }
