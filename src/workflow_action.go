@@ -1,14 +1,16 @@
 package cicero
 
 import (
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
+
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
+	"github.com/pkg/errors"
 )
 
 type WorkflowActionService interface {
-	GetWorkflowAction(model.ActionInstance) (*model.WorkflowAction, error)
+	GetWorkflowAction(model.ActionInstance) (model.WorkflowAction, error)
 }
 
 type WorkflowActionServiceImpl struct {
@@ -25,18 +27,19 @@ func NewWorkflowActionService(evaluator Evaluator, workflowService service.Workf
 	}
 }
 
-func (w *WorkflowActionServiceImpl) GetWorkflowAction(action model.ActionInstance) (*model.WorkflowAction, error) {
+func (w *WorkflowActionServiceImpl) GetWorkflowAction(action model.ActionInstance) (def model.WorkflowAction, err error) {
 	wf, err := w.workflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
-		log.Printf("Could not get workflow instance for WorkflowInstanceId %d", action.WorkflowInstanceId)
-		return nil, err
+		err = errors.WithMessagef(err, "Could not get workflow instance for WorkflowInstanceId %d", action.WorkflowInstanceId)
+		return
 	}
 
 	wfDef, err := w.evaluator.EvaluateWorkflow(wf.Name, &wf.Version, wf.ID, wf.Certs)
 	if err != nil {
-		log.Printf("Could Evaluate Workflow for Workflow %#v", wf)
-		return nil, err
+		err = errors.WithMessagef(err, "Could Evaluate Workflow for Workflow %#v", wf)
+		return
 	}
 
-	return wfDef.Actions[action.Name], nil
+	def = *wfDef.Actions[action.Name]
+	return
 }
