@@ -1,4 +1,4 @@
-{ lib, cicero, cicero-evaluator-nix, writeShellScriptBin, wfs, nixUnstable
+{ lib, cicero, cicero-evaluator-nix, writeShellScriptBin, nixUnstable
 , bashInteractive, coreutils, shadow, git, cacert, dbmate, vault-bin, netcat
 , ... }:
 writeShellScriptBin "entrypoint" ''
@@ -9,7 +9,6 @@ writeShellScriptBin "entrypoint" ''
       git
       cicero
       cicero-evaluator-nix
-      wfs
       nixUnstable
       bashInteractive
       coreutils

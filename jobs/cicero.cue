@@ -145,7 +145,6 @@ job: {
 			//    packages: [
 			//     "path:.#cicero",
 			//     "path:.#cicero-evaluator-nix",
-			//     "path:.#wfs",
 			//     "github:nixos/nixpkgs/nixpkgs-unstable#nixUnstable",
 			//     "github:nixos/nixpkgs/nixpkgs-unstable#bash",
 			//     "github:nixos/nixpkgs/nixpkgs-unstable#coreutils",
