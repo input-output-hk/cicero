@@ -30,7 +30,8 @@ type BrainCmd struct {
 	bridge          liftbridge.Client
 	workflowService service.WorkflowService
 	actionService   service.ActionService
-	evaluator       Evaluator
+	evaluator             Evaluator
+	workflowActionService WorkflowActionService
 }
 
 func (cmd *BrainCmd) init() {
@@ -42,6 +43,9 @@ func (cmd *BrainCmd) init() {
 	}
 	if cmd.actionService == nil {
 		cmd.actionService = service.NewActionService(DB)
+	}
+	if cmd.workflowActionService == nil {
+		cmd.workflowActionService = NewWorkflowActionService(cmd.evaluator, cmd.workflowService)
 	}
 	if cmd.tree == nil {
 		cmd.tree = oversight.New(oversight.WithSpecification(
@@ -391,7 +395,7 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 
 	var certs *model.WorkflowCerts
 
-	def, err := GetDefinitionByAction(action, cmd.logger, cmd.evaluator)
+	def, err := cmd.workflowActionService.GetWorkflowAction(action)
 	if err != nil {
 		return errors.WithMessagef(err, "Could not get definition for action instance %s", action.ID)
 	}

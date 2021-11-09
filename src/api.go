@@ -32,7 +32,7 @@ func (a *Api) WorkflowForInstance(wfName string, instanceId *uint64, logger *log
 			instance = &inst
 		}
 
-		def, err = GetDefinition(instance, logger, a.evaluator)
+		def, err = a.evaluator.EvaluateWorkflow(instance.Name, &instance.Version, instance.ID, instance.Certs)
 		return
 	} else {
 		def, err = a.Workflow(wfName, nil)

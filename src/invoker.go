@@ -24,12 +24,13 @@ import (
 const invokeStreamName = "workflow.*.*.invoke"
 
 type InvokerCmd struct {
-	logger        *log.Logger
-	tree          *oversight.Tree
-	limiter       *priority.PriorityLimiter
-	bridge        liftbridge.Client
-	evaluator     Evaluator
-	actionService service.ActionService
+	logger        	*log.Logger
+	tree          	*oversight.Tree
+	limiter       	*priority.PriorityLimiter
+	bridge        	liftbridge.Client
+	evaluator     	Evaluator
+	actionService 	service.ActionService
+	workflowService service.WorkflowService
 }
 
 func (cmd *InvokerCmd) init() {
@@ -46,6 +47,9 @@ func (cmd *InvokerCmd) init() {
 	}
 	if cmd.actionService == nil {
 		cmd.actionService = service.NewActionService(DB)
+	}
+	if cmd.workflowService == nil {
+		cmd.workflowService = service.NewWorkflowService(DB)
 	}
 	if cmd.limiter == nil {
 		// Increase priority of waiting goroutines every second.
@@ -140,16 +144,12 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 }
 
 func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts) error {
-	var version string
-	if err := DB.QueryRow(
-		context.Background(),
-		`SELECT version FROM workflow_instances WHERE id = $1`,
-		wfInstanceId,
-	).Scan(&version); err != nil {
+	wf, err := cmd.workflowService.GetById(wfInstanceId)
+	if err != nil {
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
 	}
 
-	workflow, err := cmd.evaluator.EvaluateWorkflow(workflowName, &version, wfInstanceId, inputs)
+	workflow, err := cmd.evaluator.EvaluateWorkflow(workflowName, &wf.Version, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
