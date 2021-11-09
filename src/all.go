@@ -28,10 +28,12 @@ func (cmd *AllCmd) Run() error {
 
 	evaluator := NewEvaluator(cmd.Evaluator)
 	workflowService := service.NewWorkflowService(DB)
+	actionService := service.NewActionService(DB)
 
 	brain := &BrainCmd{
 		bridge:          bridge,
 		workflowService: workflowService,
+		actionService:   actionService,
 		evaluator:       evaluator,
 	}
 	brain.init()
@@ -40,6 +42,7 @@ func (cmd *AllCmd) Run() error {
 		Addr:            cmd.Addr,
 		bridge:          bridge,
 		workflowService: workflowService,
+		actionService:   actionService,
 		evaluator:       evaluator,
 	}
 	web.init()
@@ -47,6 +50,7 @@ func (cmd *AllCmd) Run() error {
 	invoker := &InvokerCmd{
 		bridge:    bridge,
 		evaluator: evaluator,
+		actionService: actionService,
 	}
 	invoker.init()
 

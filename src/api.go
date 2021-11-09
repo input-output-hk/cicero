@@ -1,15 +1,12 @@
 package cicero
 
 import (
-	"context"
 	"fmt"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
 
-	"github.com/georgysavva/scany/pgxscan"
-	"github.com/google/uuid"
 	"github.com/liftbridge-io/go-liftbridge"
 )
 
@@ -67,34 +64,4 @@ func (a *Api) WorkflowStart(name string, version *string) error {
 		model.WorkflowCerts{},
 		opts...,
 	)
-}
-
-func (a *Api) Actions() ([]*model.ActionInstance, error) {
-	instances := []*model.ActionInstance{}
-
-	err := pgxscan.Select(
-		context.Background(),
-		DB,
-		&instances,
-		`SELECT * FROM action_instances ORDER BY id DESC`)
-	if err != nil {
-		return nil, err
-	}
-
-	return instances, nil
-}
-
-func (a *Api) Action(id uuid.UUID) (*model.ActionInstance, error) {
-	instance := &model.ActionInstance{}
-
-	err := pgxscan.Get(
-		context.Background(), DB, instance,
-		`SELECT * FROM action_instances WHERE id = $1`,
-		id,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return instance, nil
 }

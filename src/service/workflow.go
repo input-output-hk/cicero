@@ -1,9 +1,9 @@
 package service
 
 import (
-	"database/sql"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/repository"
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"log"
@@ -14,7 +14,7 @@ type WorkflowService interface {
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
-	Update(pgx.Tx, uint64, *model.WorkflowInstance) (sql.Result, error)
+	Update(pgx.Tx, uint64, *model.WorkflowInstance)(pgconn.CommandTag, error)
 }
 
 type WorkflowServiceImpl struct {
@@ -44,7 +44,7 @@ func (cmd *WorkflowServiceImpl) GetById(id uint64) (workflow model.WorkflowInsta
 }
 
 func (cmd *WorkflowServiceImpl) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
-	log.Printf("Saving new workflow %#v", &workflow)
+	log.Printf("Saving new Workflow %#v", workflow)
 	err := cmd.workflowRepository.Save(tx, workflow)
 	if err != nil {
 		log.Printf("Couldn't insert workflow: %s", err.Error())
@@ -54,13 +54,13 @@ func (cmd *WorkflowServiceImpl) Save(tx pgx.Tx, workflow *model.WorkflowInstance
 	return err
 }
 
-func (cmd *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow *model.WorkflowInstance) (result sql.Result, err error) {
+func (cmd *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow *model.WorkflowInstance) (commandTag pgconn.CommandTag, err error) {
 	log.Printf("Update workflow %#v with id %d", workflow, id)
-	result, err = cmd.workflowRepository.Update(tx, id, workflow)
+	commandTag, err = cmd.workflowRepository.Update(tx, id, workflow)
 	if err != nil {
 		log.Printf("Couldn't update workflow with id: %d, error: %s", id, err.Error())
 	} else {
-		log.Printf("Updated workflow %#v with id %d", workflow, id)
+		log.Printf("Updated workflow %#v with id %d, commandTag %s", workflow, id, commandTag)
 	}
-	return result, err
+	return commandTag, err
 }

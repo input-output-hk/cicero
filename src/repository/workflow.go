@@ -2,9 +2,9 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/input-output-hk/cicero/src/model"
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
@@ -17,7 +17,7 @@ type WorkflowRepository interface {
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
-	Update(pgx.Tx, uint64, *model.WorkflowInstance) (sql.Result, error)
+	Update(pgx.Tx, uint64, *model.WorkflowInstance)(pgconn.CommandTag, error)
 }
 
 func NewWorkflowRepository(db *pgxpool.Pool) WorkflowRepository {
@@ -45,14 +45,14 @@ func (w workflowRepository) GetAllByName(name string) (instances []*model.Workfl
 	return instances, err
 }
 
-func (w workflowRepository) Update(tx pgx.Tx, id uint64, workflow *model.WorkflowInstance) (result sql.Result, err error) {
-	_, err = tx.Exec(
+func (w workflowRepository) Update(tx pgx.Tx, id uint64, workflow *model.WorkflowInstance) (commandTag pgconn.CommandTag, err error) {
+	commandTag, err = tx.Exec(
 		context.Background(),
 		`UPDATE workflow_instances SET certs = $2, updated_at = $3 WHERE id = $1`,
 		&id, &workflow.Certs, &workflow.UpdatedAt,
 	)
 
-	return result, err
+	return commandTag, err
 }
 
 func (w workflowRepository) Save(tx pgx.Tx, workflow *model.WorkflowInstance) (err error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
 	"log"
@@ -28,6 +29,7 @@ type BrainCmd struct {
 	tree            *oversight.Tree
 	bridge          liftbridge.Client
 	workflowService service.WorkflowService
+	actionService   service.ActionService
 	evaluator       Evaluator
 }
 
@@ -37,6 +39,9 @@ func (cmd *BrainCmd) init() {
 	}
 	if cmd.workflowService == nil {
 		cmd.workflowService = service.NewWorkflowService(DB)
+	}
+	if cmd.actionService == nil {
+		cmd.actionService = service.NewActionService(DB)
 	}
 	if cmd.tree == nil {
 		cmd.tree = oversight.New(oversight.WithSpecification(
@@ -375,12 +380,8 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 		return nil
 	}
 
-	action := &model.ActionInstance{}
-	if err := pgxscan.Get(
-		context.Background(), DB, action,
-		`SELECT * FROM action_instances WHERE id = $1`,
-		allocation.JobID,
-	); err != nil {
+	action, err := cmd.actionService.GetById(uuid.MustParse(allocation.JobID))
+	if err != nil {
 		if pgxscan.NotFound(err) {
 			cmd.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)\n", allocation.JobID)
 			return nil
@@ -412,17 +413,14 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 	).UTC()
 	action.FinishedAt = &modifyTime
 
-	wf, err := GetWorkflow(action)
+	wf, err := cmd.workflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
-		return err
+		return errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
 	}
 
 	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if _, err := tx.Exec(
-			context.Background(),
-			`UPDATE action_instances SET finished_at = $2 WHERE id = $1`,
-			action.ID, action.FinishedAt,
-		); err != nil {
+		_, err := cmd.actionService.Update(tx, action.ID, action)
+		if err != nil {
 			return errors.WithMessage(err, "Could not update action instance")
 		}
 
