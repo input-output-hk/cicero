@@ -41,9 +41,7 @@ func (cmd *WebCmd) init() {
 		cmd.workflowService = service.NewWorkflowService(DB)
 	}
 	if cmd.actionService == nil {
-		aService := &service.ActionServiceCmd{}
-		aService.Init(DB)
-		cmd.actionService = aService
+		cmd.actionService = service.NewActionService(DB)
 	}
 }
 

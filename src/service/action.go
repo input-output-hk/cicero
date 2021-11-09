@@ -19,22 +19,19 @@ type ActionService interface {
 	Update(pgx.Tx, uuid.UUID, *model.ActionInstance)(pgconn.CommandTag, error)
 }
 
-type ActionServiceCmd struct {
+type ActionServiceImpl struct {
 	logger *log.Logger
 	actionRepository repository.ActionRepository
 }
 
-func (cmd * ActionServiceCmd) Init(db *pgxpool.Pool) ActionService {
-	if cmd.logger == nil {
-		cmd.logger = log.New(os.Stderr, "ActionService: ", log.LstdFlags)
+func NewActionService(db *pgxpool.Pool) ActionService {
+	return &ActionServiceImpl{
+		logger:           log.New(os.Stderr, "ActionService: ", log.LstdFlags),
+		actionRepository: repository.NewActionRepository(db),
 	}
-	if cmd.actionRepository == nil {
-		cmd.actionRepository = repository.NewActionRepository(db)
-	}
-	return cmd
 }
 
-func (cmd *ActionServiceCmd) GetById(id uuid.UUID) (action *model.ActionInstance, err error) {
+func (cmd *ActionServiceImpl) GetById(id uuid.UUID) (action *model.ActionInstance, err error) {
 	log.Printf("Get Action by id %s", id)
 	action, err = cmd.actionRepository.GetById(id)
 	if err != nil {
@@ -43,7 +40,7 @@ func (cmd *ActionServiceCmd) GetById(id uuid.UUID) (action *model.ActionInstance
 	return action, err
 }
 
-func (cmd *ActionServiceCmd) GetByNameAndWorkflowId(name string, workflowId uint64) (action *model.ActionInstance, err error) {
+func (cmd *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId uint64) (action *model.ActionInstance, err error) {
 	log.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = cmd.actionRepository.GetByNameAndWorkflowId(name, workflowId)
 	if err != nil {
@@ -52,12 +49,12 @@ func (cmd *ActionServiceCmd) GetByNameAndWorkflowId(name string, workflowId uint
 	return action, err
 }
 
-func (cmd *ActionServiceCmd) GetAll() ([]*model.ActionInstance, error) {
+func (cmd *ActionServiceImpl) GetAll() ([]*model.ActionInstance, error) {
 	log.Printf("Get all Actions")
 	return cmd.actionRepository.GetAll()
 }
 
-func (cmd *ActionServiceCmd) Save(tx pgx.Tx, action *model.ActionInstance) error {
+func (cmd *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) error {
 	log.Printf("Saving new Action %#v", action)
 	err := cmd.actionRepository.Save(tx, action)
 	if err != nil {
@@ -68,7 +65,7 @@ func (cmd *ActionServiceCmd) Save(tx pgx.Tx, action *model.ActionInstance) error
 	return err
 }
 
-func (cmd *ActionServiceCmd) Update(tx pgx.Tx, id uuid.UUID, action *model.ActionInstance) (pgconn.CommandTag, error) {
+func (cmd *ActionServiceImpl) Update(tx pgx.Tx, id uuid.UUID, action *model.ActionInstance) (pgconn.CommandTag, error) {
 	log.Printf("Update Action %#v with id %s", action, id)
 	commandTag, err := cmd.actionRepository.Update(tx, id, action)
 	if err != nil {

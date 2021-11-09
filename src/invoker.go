@@ -45,9 +45,7 @@ func (cmd *InvokerCmd) init() {
 		))
 	}
 	if cmd.actionService == nil {
-		aService := &service.ActionServiceCmd{}
-		aService.Init(DB)
-		cmd.actionService = aService
+		cmd.actionService = service.NewActionService(DB)
 	}
 	if cmd.limiter == nil {
 		// Increase priority of waiting goroutines every second.

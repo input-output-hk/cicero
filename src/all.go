@@ -28,8 +28,7 @@ func (cmd *AllCmd) Run() error {
 
 	evaluator := NewEvaluator(cmd.Evaluator)
 	workflowService := service.NewWorkflowService(DB)
-	actionService := &service.ActionServiceCmd{}
-	actionService.Init(DB)
+	actionService := service.NewActionService(DB)
 
 	brain := &BrainCmd{
 		bridge:          bridge,
