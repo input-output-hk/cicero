@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/repository"
@@ -44,7 +45,9 @@ func (cmd *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId uin
 	log.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = cmd.actionRepository.GetByNameAndWorkflowId(name, workflowId)
 	if err != nil {
-		log.Printf("Couldn't select existing Action for name %s and workflow_instance_id %d: %s", name, workflowId, err)
+		if !pgxscan.NotFound(err) {
+			log.Printf("Couldn't select existing Action for name %s and workflow_instance_id %d: %s", name, workflowId, err)
+		}
 	}
 	return action, err
 }
