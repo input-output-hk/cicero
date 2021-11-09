@@ -73,12 +73,12 @@ func (self InvokerCmd) Run() error {
 }
 
 type Invoker struct {
-	logger        *log.Logger
-	tree          *oversight.Tree
-	limiter       *priority.PriorityLimiter
-	bridge        *liftbridge.Client
-	evaluator     *Evaluator
-	actionService *service.ActionService
+	logger          *log.Logger
+	tree            *oversight.Tree
+	limiter         *priority.PriorityLimiter
+	bridge          *liftbridge.Client
+	evaluator       *Evaluator
+	actionService   *service.ActionService
 	workflowService *service.WorkflowService
 }
 

@@ -19,8 +19,8 @@ type WorkflowActionServiceImpl struct {
 
 func NewWorkflowActionService(evaluator Evaluator, workflowService service.WorkflowService) WorkflowActionService {
 	return &WorkflowActionServiceImpl{
-		logger: log.New(os.Stderr, "WorkflowActionService: ", log.LstdFlags),
-		evaluator: evaluator,
+		logger:          log.New(os.Stderr, "WorkflowActionService: ", log.LstdFlags),
+		evaluator:       evaluator,
 		workflowService: workflowService,
 	}
 }

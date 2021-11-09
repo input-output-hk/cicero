@@ -73,13 +73,13 @@ func (self BrainCmd) Run() error {
 }
 
 type Brain struct {
-	logger          *log.Logger
-	tree            *oversight.Tree
-	bridge          *liftbridge.Client
-	workflowService *service.WorkflowService
-	actionService   *service.ActionService
+	logger                *log.Logger
+	tree                  *oversight.Tree
+	bridge                *liftbridge.Client
+	workflowService       *service.WorkflowService
+	actionService         *service.ActionService
 	workflowActionService *WorkflowActionService
-	evaluator       *Evaluator
+	evaluator             *Evaluator
 }
 
 func (self *Brain) addToTree(tree *oversight.Tree) {
