@@ -73,12 +73,13 @@ func (self InvokerCmd) Run() error {
 }
 
 type Invoker struct {
-	logger        *log.Logger
-	tree          *oversight.Tree
-	limiter       *priority.PriorityLimiter
-	bridge        *liftbridge.Client
-	evaluator     *Evaluator
-	actionService *service.ActionService
+	logger          *log.Logger
+	tree            *oversight.Tree
+	limiter         *priority.PriorityLimiter
+	bridge          *liftbridge.Client
+	evaluator       *Evaluator
+	actionService   *service.ActionService
+	workflowService *service.WorkflowService
 }
 
 func (self *Invoker) start(ctx context.Context) error {
@@ -160,16 +161,12 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 }
 
 func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts) error {
-	var version string
-	if err := DB.QueryRow(
-		context.Background(),
-		`SELECT version FROM workflow_instances WHERE id = $1`,
-		wfInstanceId,
-	).Scan(&version); err != nil {
+	wf, err := (*self.workflowService).GetById(wfInstanceId)
+	if err != nil {
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
 	}
 
-	workflow, err := self.evaluator.EvaluateWorkflow(workflowName, &version, wfInstanceId, inputs)
+	workflow, err := self.evaluator.EvaluateWorkflow(workflowName, &wf.Version, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}

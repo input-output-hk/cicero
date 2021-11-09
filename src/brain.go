@@ -73,12 +73,13 @@ func (self BrainCmd) Run() error {
 }
 
 type Brain struct {
-	logger          *log.Logger
-	tree            *oversight.Tree
-	bridge          *liftbridge.Client
-	workflowService *service.WorkflowService
-	actionService   *service.ActionService
-	evaluator       *Evaluator
+	logger                *log.Logger
+	tree                  *oversight.Tree
+	bridge                *liftbridge.Client
+	workflowService       *service.WorkflowService
+	actionService         *service.ActionService
+	workflowActionService *WorkflowActionService
+	evaluator             *Evaluator
 }
 
 func (self *Brain) addToTree(tree *oversight.Tree) {
@@ -405,7 +406,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		return err
 	}
 
-	def, err := GetDefinitionByAction(action, self.logger, *self.evaluator)
+	def, err := (*self.workflowActionService).GetWorkflowAction(action)
 	if err != nil {
 		return errors.WithMessagef(err, "Could not get definition for action instance %s", action.ID)
 	}
