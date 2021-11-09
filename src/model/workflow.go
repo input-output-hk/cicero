@@ -1,8 +1,9 @@
 package model
 
 import (
-	nomad "github.com/hashicorp/nomad/api"
 	"time"
+
+	nomad "github.com/hashicorp/nomad/api"
 
 	"github.com/google/uuid"
 )

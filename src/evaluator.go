@@ -3,12 +3,13 @@ package cicero
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/pkg/errors"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/pkg/errors"
 )
 
 type Evaluator struct {
