@@ -419,8 +419,7 @@ func (cmd *BrainCmd) handleNomadAllocationEvent(allocation *nomad.Allocation) er
 	}
 
 	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		_, err := cmd.actionService.Update(tx, action.ID, action)
-		if err != nil {
+		if err := cmd.actionService.Update(tx, action.ID, action); err != nil {
 			return errors.WithMessage(err, "Could not update action instance")
 		}
 

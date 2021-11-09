@@ -24,11 +24,11 @@ import (
 const invokeStreamName = "workflow.*.*.invoke"
 
 type InvokerCmd struct {
-	logger    *log.Logger
-	tree      *oversight.Tree
-	limiter   *priority.PriorityLimiter
-	bridge    liftbridge.Client
-	evaluator Evaluator
+	logger        *log.Logger
+	tree          *oversight.Tree
+	limiter       *priority.PriorityLimiter
+	bridge        liftbridge.Client
+	evaluator     Evaluator
 	actionService service.ActionService
 }
 
@@ -196,8 +196,7 @@ func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName st
 				updatedAt := time.Now().UTC()
 				instance.UpdatedAt = &updatedAt
 				instance.Certs = inputs
-				_, err := cmd.actionService.Update(tx, instance.ID, instance)
-				if err != nil {
+				if err := cmd.actionService.Update(tx, instance.ID, instance); err != nil {
 					return errors.WithMessage(err, "Could not update action instance")
 				}
 			}
@@ -219,8 +218,7 @@ func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName st
 			finished := time.Now().UTC()
 			instance.FinishedAt = &finished
 
-			_, err := cmd.actionService.Update(tx, instance.ID, instance)
-			if err != nil {
+			if err := cmd.actionService.Update(tx, instance.ID, instance); err != nil {
 				return errors.WithMessage(err, "Failed to update action instance")
 			}
 		}

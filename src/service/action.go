@@ -1,27 +1,28 @@
 package service
 
 import (
+	"log"
+	"os"
+
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/repository"
-	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"log"
-	"os"
+	"github.com/pkg/errors"
 )
 
 type ActionService interface {
-	GetById(uuid.UUID)(*model.ActionInstance, error)
-	GetByNameAndWorkflowId(string, uint64)(*model.ActionInstance, error)
-	GetAll()([]*model.ActionInstance, error)
+	GetById(uuid.UUID) (*model.ActionInstance, error)
+	GetByNameAndWorkflowId(string, uint64) (*model.ActionInstance, error)
+	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, uuid.UUID, *model.ActionInstance)(pgconn.CommandTag, error)
+	Update(pgx.Tx, uuid.UUID, *model.ActionInstance) error
 }
 
 type ActionServiceImpl struct {
-	logger *log.Logger
+	logger           *log.Logger
 	actionRepository repository.ActionRepository
 }
 
@@ -36,20 +37,18 @@ func (cmd *ActionServiceImpl) GetById(id uuid.UUID) (action *model.ActionInstanc
 	log.Printf("Get Action by id %s", id)
 	action, err = cmd.actionRepository.GetById(id)
 	if err != nil {
-		log.Printf("Couldn't select existing Action for id %s: %s", id, err)
+		err = errors.WithMessagef(err, "Couldn't select existing Action for id %s: %s", id)
 	}
-	return action, err
+	return
 }
 
 func (cmd *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId uint64) (action *model.ActionInstance, err error) {
 	log.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = cmd.actionRepository.GetByNameAndWorkflowId(name, workflowId)
-	if err != nil {
-		if !pgxscan.NotFound(err) {
-			log.Printf("Couldn't select existing Action for name %s and workflow_instance_id %d: %s", name, workflowId, err)
-		}
+	if err != nil && !pgxscan.NotFound(err) {
+		err = errors.WithMessagef(err, "Couldn't select existing Action for name %s and workflow_instance_id %d", name, workflowId)
 	}
-	return action, err
+	return
 }
 
 func (cmd *ActionServiceImpl) GetAll() ([]*model.ActionInstance, error) {
@@ -59,22 +58,18 @@ func (cmd *ActionServiceImpl) GetAll() ([]*model.ActionInstance, error) {
 
 func (cmd *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) error {
 	log.Printf("Saving new Action %#v", action)
-	err := cmd.actionRepository.Save(tx, action)
-	if err != nil {
-		log.Printf("Couldn't insert Action: %s", err.Error())
-	} else {
-		log.Printf("Created Action %#v", action)
+	if err := cmd.actionRepository.Save(tx, action); err != nil {
+		return errors.WithMessagef(err, "Couldn't insert Action")
 	}
-	return err
+	log.Printf("Created Action %#v", action)
+	return nil
 }
 
-func (cmd *ActionServiceImpl) Update(tx pgx.Tx, id uuid.UUID, action *model.ActionInstance) (pgconn.CommandTag, error) {
+func (cmd *ActionServiceImpl) Update(tx pgx.Tx, id uuid.UUID, action *model.ActionInstance) error {
 	log.Printf("Update Action %#v with id %s", action, id)
-	commandTag, err := cmd.actionRepository.Update(tx, id, action)
-	if err != nil {
-		log.Printf("Couldn't update Action with id: %s, error: %s", id, err.Error())
-	} else {
-		log.Printf("Updated Action %#v with id %s, commandTag %s", action, id, commandTag)
+	if err := cmd.actionRepository.Update(tx, id, action); err != nil {
+		return errors.WithMessagef(err, "Couldn't update Action with id: %s", id)
 	}
-	return commandTag, err
+	log.Printf("Updated Action %#v with id %s", action, id)
+	return nil
 }
