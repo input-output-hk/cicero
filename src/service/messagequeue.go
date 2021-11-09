@@ -11,52 +11,58 @@ import (
 	"time"
 )
 
+const StartStreamName = "workflow.*.start"
+const InvokeStreamName = "workflow.*.*.invoke"
+const CertStreamName = "workflow.*.*.cert"
+
+func LiftbridgeConnect(addr string) (liftbridge.Client, error) {
+	client, err := liftbridge.Connect([]string{addr})
+	return client, errors.WithMessage(err, "Couldn't connect to NATS")
+}
+
 //TODO: change to lowercase when service module refactoring is complete.
 func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []string) error {
 	for _, streamName := range streamNames {
 		if err := bridge.CreateStream(
 			context.Background(),
 			streamName, streamName,
-			liftbridge.MaxReplication()); err != nil {
+			liftbridge.MaxReplication(),
+		); err != nil {
 			if err != liftbridge.ErrStreamExists {
-				if err != nil {
-					time.Sleep(1 * time.Second)
-					return errors.WithMessage(err, "Failed to Create NATS Stream")
-				}
+				time.Sleep(1 * time.Second)
+				return errors.WithMessage(err, "Failed to Create NATS Stream")
 			}
 		} else {
 			logger.Printf("Created streams %s\n", streamName)
 		}
 	}
-
 	return nil
 }
 
 //TODO: change to lowercase when service module refactoring is complete.
 func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
-	err := CreateStreams(logger, bridge, []string{stream})
-	if err != nil {
+	if err := CreateStreams(logger, bridge, []string{stream}); err != nil {
 		return errors.WithMessage(err, "Before publishing message")
+	}
+
+	var enc []byte
+	if e, err := json.Marshal(msg); err != nil {
+		return errors.WithMessage(err, "Failed to encode JSON")
+	} else {
+		enc = e
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	enc, err := json.Marshal(msg)
-	if err != nil {
-		return errors.WithMessage(err, "Failed to encode JSON")
-	}
-
-	opts = append(opts, liftbridge.Key([]byte(key)))
-	opts = append(opts, liftbridge.PartitionByKey())
-	opts = append(opts, liftbridge.AckPolicyAll())
-
-	_, err = bridge.Publish(ctx, stream,
+	if _, err := bridge.Publish(ctx, stream,
 		enc,
-		opts...,
-	)
-
-	if err != nil {
+		append(opts,
+			liftbridge.Key([]byte(key)),
+			liftbridge.PartitionByKey(),
+			liftbridge.AckPolicyAll(),
+		)...,
+	); err != nil {
 		return errors.WithMessage(err, "While publishing message")
 	}
 
@@ -71,15 +77,12 @@ type DBExec interface {
 
 //TODO: change to lowercase when service module refactoring is complete.
 func InsertLiftbridgeMessage(logger *log.Logger, db DBExec, msg *liftbridge.Message) error {
-	_, err := db.Exec(
+	if _, err := db.Exec(
 		context.Background(),
 		`INSERT INTO liftbridge_messages ("offset", stream, subject, created_at, value) VALUES ($1, $2, $3, $4, $5)`,
 		msg.Offset(), msg.Stream(), msg.Subject(), msg.Timestamp(), msg.Value(),
-	)
-
-	if err != nil {
-		logger.Printf("Couldn't insert liftbridge message into database: %s\n", err.Error())
+	); err != nil {
+		return errors.WithMessage(err, "Couldn't insert liftbridge message into database")
 	}
-
-	return err
+	return nil
 }

@@ -7,19 +7,18 @@ import (
 	"time"
 
 	"cirello.io/oversight"
-	service "github.com/input-output-hk/cicero/src/service"
-	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/input-output-hk/cicero/src/service"
 	"github.com/pkg/errors"
 )
 
 type AllCmd struct {
-	Addr           string `arg:"--listen" default:":8080"`
+	Listen         string `arg:"--listen" default:":8080"`
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
 func (cmd *AllCmd) Run() error {
-	bridge, err := cmd.liftbridgeConnect()
+	bridge, err := service.LiftbridgeConnect(cmd.LiftbridgeAddr)
 	if err != nil {
 		return err
 	}
@@ -27,35 +26,35 @@ func (cmd *AllCmd) Run() error {
 	supervisor := cmd.newSupervisor()
 
 	evaluator := NewEvaluator(cmd.Evaluator)
-	workflowService := service.NewWorkflowService(DB)
+	workflowService := service.NewWorkflowService(DB, bridge)
 	actionService := service.NewActionService(DB)
 	workflowActionService := NewWorkflowActionService(evaluator, workflowService)
 
-	brain := &BrainCmd{
-		bridge:          	   bridge,
-		workflowService:       workflowService,
-		actionService:         actionService,
-		evaluator:       	   evaluator,
-		workflowActionService: workflowActionService,
+	brain := Brain{
+		workflowService: &workflowService,
+		actionService:   &actionService,
+		bridge:          &bridge,
+		evaluator:       &evaluator,
+		workflowActionService: &workflowActionService,
 	}
-	brain.init()
+	(&BrainCmd{}).init(&brain)
 
-	web := &WebCmd{
-		Addr:            cmd.Addr,
-		bridge:          bridge,
-		workflowService: workflowService,
-		actionService:   actionService,
-		evaluator:       evaluator,
+	web := Web{
+		Listen:          &cmd.Listen,
+		bridge:          &bridge,
+		workflowService: &workflowService,
+		actionService:   &actionService,
+		evaluator:       &evaluator,
 	}
-	web.init()
+	(&WebCmd{}).init(&web)
 
-	invoker := &InvokerCmd{
-		bridge:        bridge,
-		evaluator:     evaluator,
-		actionService: actionService,
-		workflowService: workflowService,
+	invoker := Invoker{
+		bridge:        &bridge,
+		evaluator:     &evaluator,
+		actionService: &actionService,
+		workflowService: &workflowService,
 	}
-	invoker.init()
+	(&InvokerCmd{}).init(&invoker)
 
 	supervisor.Add(invoker.start)
 	brain.addToTree(supervisor)
@@ -73,11 +72,6 @@ func (cmd *AllCmd) Run() error {
 	}
 }
 
-func (cmd *AllCmd) liftbridgeConnect() (liftbridge.Client, error) {
-	client, err := liftbridge.Connect([]string{cmd.LiftbridgeAddr})
-	return client, errors.WithMessage(err, "Couldn't connect to NATS")
-}
-
 func (cmd *AllCmd) newSupervisor() *oversight.Tree {
 	return oversight.New(
 		oversight.WithLogger(
@@ -87,5 +81,6 @@ func (cmd *AllCmd) newSupervisor() *oversight.Tree {
 			10,                    // number of restarts
 			1*time.Minute,         // within this time period
 			oversight.OneForOne(), // restart every task on its own
-		))
+		),
+	)
 }

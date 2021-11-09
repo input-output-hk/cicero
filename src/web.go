@@ -25,41 +25,63 @@ import (
 )
 
 type WebCmd struct {
-	Addr            string `arg:"--listen" default:":8080"`
+	Listen         string `arg:"--listen" default:":8080"`
+	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
+}
+
+func (self WebCmd) init(web *Web) {
+	if web.Listen == nil {
+		web.Listen = &self.Listen
+	}
+	if web.logger == nil {
+		web.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
+	}
+	if web.bridge == nil {
+		bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr)
+		if err != nil {
+			web.logger.Fatalln(err.Error())
+			return
+		}
+		web.bridge = &bridge
+	}
+	if web.workflowService == nil {
+		s := service.NewWorkflowService(DB, *web.bridge)
+		web.workflowService = &s
+	}
+	if web.actionService == nil {
+		s := service.NewActionService(DB)
+		web.actionService = &s
+	}
+	if web.evaluator == nil {
+		e := NewEvaluator(self.Evaluator)
+		web.evaluator = &e
+	}
+}
+
+func (self WebCmd) Run() error {
+	web := Web{}
+	self.init(&web)
+	return web.start(context.Background())
+}
+
+type Web struct {
+	Listen          *string
 	logger          *log.Logger
-	bridge          liftbridge.Client
-	workflowService service.WorkflowService
-	actionService   service.ActionService
-	evaluator       Evaluator
+	bridge          *liftbridge.Client
+	workflowService *service.WorkflowService
+	actionService   *service.ActionService
+	evaluator       *Evaluator
 }
 
-func (cmd *WebCmd) init() {
-	if cmd.logger == nil {
-		cmd.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
-	}
-	if cmd.workflowService == nil {
-		cmd.workflowService = service.NewWorkflowService(DB)
-	}
-	if cmd.actionService == nil {
-		cmd.actionService = service.NewActionService(DB)
-	}
-}
-
-func (cmd *WebCmd) Run() error {
-	cmd.init()
-	return cmd.start(context.Background())
-}
-
-func (cmd *WebCmd) start(ctx context.Context) error {
-	cmd.init()
+func (self *Web) start(ctx context.Context) error {
 	api := Api{
-		bridge:          cmd.bridge,
-		workflowService: cmd.workflowService,
-		evaluator:       cmd.evaluator,
+		workflowService: *self.workflowService,
+		evaluator:       *self.evaluator,
 	}
 	api.init()
 
-	cmd.logger.Println("Starting Web")
+	self.logger.Println("Starting Web")
 
 	router := bunrouter.New(
 		bunrouter.WithMiddleware(errorHandler),
@@ -89,7 +111,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.Param("name")
 
-			instances, err := cmd.workflowService.GetAllByName(name)
+			instances, err := (*self.workflowService).GetAllByName(name)
 			if err != nil {
 				return err
 			}
@@ -111,7 +133,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				version = &v
 			}
 
-			if err := api.WorkflowStart(name, version); err != nil {
+			if err := (*self.workflowService).Start(name, version); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" at version \"%s\"", name, version)
 			}
 
@@ -132,7 +154,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				}
 				instanceId = &iid
 			}
-			def, instance, err := api.WorkflowForInstance(name, instanceId, cmd.logger)
+			def, instance, err := api.WorkflowForInstance(name, instanceId, self.logger)
 			if err != nil {
 				return err
 			}
@@ -152,7 +174,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return RenderWorkflowGraphInputs(def, instance, w)
 			default:
 				// should have already exited when parsing the graph type
-				cmd.logger.Panic("reached code that should be unreachable")
+				self.logger.Panic("reached code that should be unreachable")
 				return nil
 			}
 		})
@@ -183,7 +205,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		})
 		group.WithGroup("/action", func(group *bunrouter.Group) {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				actions, err := cmd.actionService.GetAll()
+				actions, err := (*self.actionService).GetAll()
 				if err != nil {
 					return err
 				}
@@ -200,13 +222,13 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 							return err
 						}
 
-						action, err := cmd.actionService.GetById(id)
+						action, err := (*self.actionService).GetById(id)
 						if err != nil {
 							return err
 						}
 
 						return next(w, req.WithContext(
-							context.WithValue(req.Context(), ctxKeyAction, *action),
+							context.WithValue(req.Context(), ctxKeyAction, action),
 						))
 					}
 				})
@@ -215,7 +237,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				})
 				group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
 					action := req.Context().Value(ctxKeyAction).(model.ActionInstance)
-					wf, err := cmd.workflowService.GetById(action.WorkflowInstanceId)
+					wf, err := (*self.workflowService).GetById(action.WorkflowInstanceId)
 					if err != nil {
 						errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
 						return err
@@ -227,10 +249,10 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 					}
 
 					if err := service.Publish(
-						cmd.logger,
-						cmd.bridge,
+						self.logger,
+						*self.bridge,
 						fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
-						"workflow.*.*.cert",
+						service.CertStreamName,
 						certs,
 					); err != nil {
 						return errors.WithMessage(err, "Could not publish certificate")
@@ -241,11 +263,11 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 		})
 	})
 
-	server := &http.Server{Addr: cmd.Addr, Handler: router}
+	server := &http.Server{Addr: *self.Listen, Handler: router}
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			cmd.logger.Printf("Failed to start web server: %s\n", err.Error())
+			self.logger.Printf("Failed to start web server: %s\n", err.Error())
 		}
 	}()
 
@@ -254,7 +276,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		cmd.logger.Printf("Failed to stop web server: %s\n", err.Error())
+		self.logger.Printf("Failed to stop web server: %s\n", err.Error())
 	}
 
 	return nil

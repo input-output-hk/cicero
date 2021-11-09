@@ -14,11 +14,11 @@ import (
 )
 
 type ActionService interface {
-	GetById(uuid.UUID) (*model.ActionInstance, error)
-	GetByNameAndWorkflowId(string, uint64) (*model.ActionInstance, error)
+	GetById(uuid.UUID) (model.ActionInstance, error)
+	GetByNameAndWorkflowId(string, uint64) (model.ActionInstance, error)
 	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, uuid.UUID, *model.ActionInstance) error
+	Update(pgx.Tx, uuid.UUID, model.ActionInstance) error
 }
 
 type ActionServiceImpl struct {
@@ -33,7 +33,7 @@ func NewActionService(db *pgxpool.Pool) ActionService {
 	}
 }
 
-func (cmd *ActionServiceImpl) GetById(id uuid.UUID) (action *model.ActionInstance, err error) {
+func (cmd *ActionServiceImpl) GetById(id uuid.UUID) (action model.ActionInstance, err error) {
 	log.Printf("Get Action by id %s", id)
 	action, err = cmd.actionRepository.GetById(id)
 	if err != nil {
@@ -42,7 +42,7 @@ func (cmd *ActionServiceImpl) GetById(id uuid.UUID) (action *model.ActionInstanc
 	return
 }
 
-func (cmd *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId uint64) (action *model.ActionInstance, err error) {
+func (cmd *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId uint64) (action model.ActionInstance, err error) {
 	log.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = cmd.actionRepository.GetByNameAndWorkflowId(name, workflowId)
 	if err != nil && !pgxscan.NotFound(err) {
@@ -65,7 +65,7 @@ func (cmd *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) erro
 	return nil
 }
 
-func (cmd *ActionServiceImpl) Update(tx pgx.Tx, id uuid.UUID, action *model.ActionInstance) error {
+func (cmd *ActionServiceImpl) Update(tx pgx.Tx, id uuid.UUID, action model.ActionInstance) error {
 	log.Printf("Update Action %#v with id %s", action, id)
 	if err := cmd.actionRepository.Update(tx, id, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't update Action with id: %s", id)

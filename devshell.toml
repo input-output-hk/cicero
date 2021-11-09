@@ -10,6 +10,10 @@ value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 name = "CICERO_EVALUATOR_NIX_FLAKE"
 value = "."
 
+[[env]]
+name = "LOKI_ADDR"
+value = "http://127.0.0.1:3100"
+
 [[commands]]
 package = "go"
 

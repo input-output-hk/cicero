@@ -11,7 +11,6 @@ import (
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
 	"github.com/go-echarts/go-echarts/v2/opts"
-	"github.com/thoas/go-funk"
 )
 
 type WorkflowGraphType uint
@@ -95,6 +94,16 @@ func RenderWorkflowGraphFlow(wf model.WorkflowDefinition, w io.Writer) error {
 	}, w)
 }
 
+// ContainsString returns true if a string is present in a iteratee.
+func containsString(s []string, v string) bool {
+	for _, vv := range s {
+		if vv == v {
+			return true
+		}
+	}
+	return false
+}
+
 func RenderWorkflowGraphInputs(wf model.WorkflowDefinition, instance *model.WorkflowInstance, w io.Writer) error {
 	nodes := make([]opts.GraphNode, 0)
 	links := make([]opts.GraphLink, 0)
@@ -132,12 +141,12 @@ func RenderWorkflowGraphInputs(wf model.WorkflowDefinition, instance *model.Work
 
 	for _, node := range nodes {
 		for name, action := range wf.Actions {
-			if !funk.ContainsString(action.Inputs, node.Name) {
+			if !containsString(action.Inputs, node.Name) {
 				continue
 			}
 		Inner:
 			for name2, action2 := range wf.Actions {
-				if name == name2 || !funk.ContainsString(action2.Inputs, node.Name) {
+				if name == name2 || !containsString(action2.Inputs, node.Name) {
 					continue
 				}
 
