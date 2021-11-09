@@ -48,8 +48,8 @@ func (cmd *AllCmd) Run() error {
 	web.init()
 
 	invoker := &InvokerCmd{
-		bridge:    bridge,
-		evaluator: evaluator,
+		bridge:        bridge,
+		evaluator:     evaluator,
 		actionService: actionService,
 	}
 	invoker.init()
