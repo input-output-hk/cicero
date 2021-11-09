@@ -2,14 +2,16 @@ package cicero
 
 import (
 	"errors"
-	"github.com/input-output-hk/cicero/src/model"
 	"io"
 	"math"
 	"strings"
 
+	"github.com/input-output-hk/cicero/src/model"
+
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
 	"github.com/go-echarts/go-echarts/v2/opts"
+	"github.com/thoas/go-funk"
 )
 
 type WorkflowGraphType uint
@@ -28,105 +30,154 @@ func (t WorkflowGraphType) String() string {
 }
 
 func WorkflowGraphTypeFromString(s string) (WorkflowGraphType, error) {
-	for i := 0; i < 2; i += 1 {
-		if WorkflowGraphType(i).String() == s {
+	for i, s2 := range WorkflowGraphTypeStrings() {
+		if s2 == s {
 			return WorkflowGraphType(i), nil
 		}
 	}
 	return 0, errors.New("no such WorkflowGraphType: " + s)
 }
 
-func RenderWorkflowGraph(wf *model.WorkflowDefinition, graphType WorkflowGraphType, w io.Writer) error {
-	const SymbolSize = 50
-	const FontSize = 14
+const symbolSize = 50
 
+func RenderWorkflowGraphFlow(wf model.WorkflowDefinition, w io.Writer) error {
 	nodes := make([]opts.GraphNode, 0)
+	links := make([]opts.GraphLink, 0)
+
 	for name, action := range wf.Actions {
-		graphNode := opts.GraphNode{
+		node := opts.GraphNode{
 			Name:       name,
 			Symbol:     "circle",
-			SymbolSize: SymbolSize,
+			SymbolSize: symbolSize,
 		}
 		if action.IsRunnable() {
-			graphNode.Symbol = "diamond"
-			graphNode.Category = 1
-			graphNode.Y = 0
-			graphNode.X = 0
-			graphNode.SymbolSize = SymbolSize * 1.5
+			node.Symbol = "diamond"
+			node.Category = 1
+			node.Y = 0
+			node.X = 0
+			node.SymbolSize = symbolSize * 1.5
 		}
 
-		nodes = append(nodes, graphNode)
+		nodes = append(nodes, node)
 	}
 
-	links := make([]opts.GraphLink, 0)
-	switch graphType {
-	case WorkflowGraphTypeFlow:
-		for name, action := range wf.Actions {
-			for _, input := range action.Inputs {
-				for name2, action2 := range wf.Actions {
-					if name == name2 {
+	for name, action := range wf.Actions {
+		for _, input := range action.Inputs {
+			for name2, action2 := range wf.Actions {
+				if name == name2 {
+					continue
+				}
+				for success := range action2.Success {
+					if input != success {
 						continue
 					}
-					for success := range action2.Success {
-						if input != success {
-							continue
-						}
-						links = append(links, opts.GraphLink{
-							Source: name2,
-							Target: name,
-							Label: &opts.EdgeLabel{
-								Show:      true,
-								Formatter: success, // FIXME escape placeholders
-							},
-						})
-					}
+					links = append(links, opts.GraphLink{
+						Source: name2,
+						Target: name,
+						Label: &opts.EdgeLabel{
+							Show:      true,
+							Formatter: success, // FIXME escape placeholders
+						},
+					})
 				}
 			}
 		}
-	case WorkflowGraphTypeInputs:
-		for name, action := range wf.Actions {
-			for _, input := range action.Inputs {
-				for name2, action2 := range wf.Actions {
-					if name == name2 {
-						continue
+	}
+
+	return renderWorkflowGraph(nodes, links, []charts.SeriesOpts{
+		charts.WithGraphChartOpts(opts.GraphChart{
+			EdgeSymbol: []string{"none", "arrow"},
+			Categories: []*opts.GraphCategory{
+				{Name: "Not Runnable"},
+				{Name: "Runnable"},
+			},
+		}),
+	}, w)
+}
+
+func RenderWorkflowGraphInputs(wf model.WorkflowDefinition, instance *model.WorkflowInstance, w io.Writer) error {
+	nodes := make([]opts.GraphNode, 0)
+	links := make([]opts.GraphLink, 0)
+
+	for _, action := range wf.Actions {
+	Node:
+		for _, input := range action.Inputs {
+			for _, node := range nodes {
+				if node.Name == input {
+					continue Node
+				}
+			}
+
+			node := opts.GraphNode{
+				Name:       input,
+				Symbol:     "circle",
+				SymbolSize: symbolSize,
+			}
+			if instance != nil {
+				for cert := range instance.Certs {
+					if cert == input {
+						node.Symbol = "diamond"
+						node.Category = 1
+						node.Y = 0
+						node.X = 0
+						node.SymbolSize = symbolSize * 1.5
+						break
 					}
-				Inner:
-					for _, input2 := range action2.Inputs {
-						if input != input2 {
-							continue
-						}
-						for _, link := range links {
-							if link.Source == name2 && link.Target == name {
-								for _, label := range strings.Split(link.Label.Formatter, ", ") {
-									if label == input {
-										continue Inner
-									}
-								}
-								link.Label.Formatter += ", " + input
+				}
+			}
+
+			nodes = append(nodes, node)
+		}
+	}
+
+	for _, node := range nodes {
+		for name, action := range wf.Actions {
+			if !funk.ContainsString(action.Inputs, node.Name) {
+				continue
+			}
+		Inner:
+			for name2, action2 := range wf.Actions {
+				if name == name2 || !funk.ContainsString(action2.Inputs, node.Name) {
+					continue
+				}
+
+				for _, link := range links {
+					if link.Source == name2 && link.Target == name {
+						for _, label := range strings.Split(link.Label.Formatter, ", ") {
+							if label == node.Name {
 								continue Inner
 							}
 						}
-						links = append(links, opts.GraphLink{
-							Source: name,
-							Target: name2,
-							Label: &opts.EdgeLabel{
-								Show:      true,
-								Formatter: input, // FIXME escape placeholders
-							},
-						})
+						link.Label.Formatter += ", " + node.Name
+						continue Inner
 					}
 				}
+
+				links = append(links, opts.GraphLink{
+					Source: name,
+					Target: name2,
+					Label: &opts.EdgeLabel{
+						Show:      true,
+						Formatter: name + ", " + name2, // FIXME escape placeholders
+					},
+				})
 			}
 		}
 	}
 
-	var edgeSymbol []string
-	switch graphType {
-	case WorkflowGraphTypeInputs:
-		edgeSymbol = []string{"none"}
-	default:
-		edgeSymbol = []string{"none", "arrow"}
-	}
+	return renderWorkflowGraph(nodes, links, []charts.SeriesOpts{
+		charts.WithGraphChartOpts(opts.GraphChart{
+			EdgeSymbol: []string{"none"},
+			Categories: []*opts.GraphCategory{
+				{Name: "Missing"},
+				{Name: "Present"},
+			},
+		}),
+	}, w)
+}
+
+func renderWorkflowGraph(nodes []opts.GraphNode, links []opts.GraphLink, seriesOpts []charts.SeriesOpts, w io.Writer) error {
+	const fontSize = 14
 
 	graph := charts.NewGraph()
 	graph.SetGlobalOptions(
@@ -134,31 +185,27 @@ func RenderWorkflowGraph(wf *model.WorkflowDefinition, graphType WorkflowGraphTy
 			opts.Legend{Show: true},
 		),
 		func(bc *charts.BaseConfiguration) {
-			bc.TextStyle = &opts.TextStyle{FontSize: int(math.Round(FontSize * 1.3))}
+			bc.TextStyle = &opts.TextStyle{FontSize: int(math.Round(fontSize * 1.3))}
 		},
 	)
 	graph.AddJSFuncs(GraphResponsiveJs)
-	graph.AddSeries("actions", nodes, links,
+
+	graph.AddSeries("workflow", nodes, links, append(seriesOpts,
 		charts.WithLabelOpts(
 			opts.Label{
 				Show:     true,
-				FontSize: FontSize,
+				FontSize: fontSize,
 			},
 		),
-		charts.WithGraphChartOpts(
-			opts.GraphChart{
-				Force:              &opts.GraphForce{Repulsion: 10000},
-				Roam:               true,
-				FocusNodeAdjacency: true,
-				Categories: []*opts.GraphCategory{
-					{Name: "Not Runnable"},
-					{Name: "Runnable"},
-				},
-				EdgeSymbol: edgeSymbol,
-				EdgeLabel:  &opts.EdgeLabel{FontSize: FontSize},
-			},
-		),
-	)
+		// not using charts.WithGraphChartOpts
+		// so previous settings are not overwritten
+		func(s *charts.SingleSeries) {
+			s.Force = &opts.GraphForce{Repulsion: 10000}
+			s.Roam = true
+			s.FocusNodeAdjacency = true
+			s.EdgeLabel = &opts.EdgeLabel{FontSize: fontSize}
+		},
+	)...)
 
 	page := components.NewPage()
 	page.AddCharts(graph)

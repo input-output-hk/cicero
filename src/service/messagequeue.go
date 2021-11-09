@@ -33,7 +33,7 @@ func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []s
 }
 
 //TODO: change to lowercase when service module refactoring is complete.
-func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg model.WorkflowCerts) error {
+func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
 	err := CreateStreams(logger, bridge, []string{stream})
 	if err != nil {
 		return errors.WithMessage(err, "Before publishing message")
@@ -47,11 +47,13 @@ func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, m
 		return errors.WithMessage(err, "Failed to encode JSON")
 	}
 
+	opts = append(opts, liftbridge.Key([]byte(key)))
+	opts = append(opts, liftbridge.PartitionByKey())
+	opts = append(opts, liftbridge.AckPolicyAll())
+
 	_, err = bridge.Publish(ctx, stream,
 		enc,
-		liftbridge.Key([]byte(key)),
-		liftbridge.PartitionByKey(),
-		liftbridge.AckPolicyAll(),
+		opts...,
 	)
 
 	if err != nil {

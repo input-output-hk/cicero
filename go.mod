@@ -35,6 +35,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/viper v1.9.0 // indirect
 	github.com/stretchr/testify v1.7.0
+	github.com/thoas/go-funk v0.9.1 // indirect
 	github.com/uptrace/bun v1.0.15
 	github.com/uptrace/bun/dialect/pgdialect v1.0.15
 	github.com/uptrace/bun/dialect/sqlitedialect v1.0.11

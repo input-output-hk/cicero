@@ -5,12 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
-	"github.com/liftbridge-io/go-liftbridge"
-	"github.com/pkg/errors"
-	"github.com/uptrace/bunrouter"
 	"html/template"
 	"log"
 	"mime"
@@ -21,15 +15,22 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
+	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/pkg/errors"
+	"github.com/uptrace/bunrouter"
 )
 
 type WebCmd struct {
-	Addr      string `arg:"--listen" default:":8080"`
-	logger    *log.Logger
-	bridge    liftbridge.Client
+	Addr            string `arg:"--listen" default:":8080"`
+	logger          *log.Logger
+	bridge          liftbridge.Client
 	workflowService service.WorkflowService
-	actionService service.ActionService
-	evaluator Evaluator
+	actionService   service.ActionService
+	evaluator       Evaluator
 }
 
 func (cmd *WebCmd) init() {
@@ -37,9 +38,7 @@ func (cmd *WebCmd) init() {
 		cmd.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
 	}
 	if cmd.workflowService == nil {
-		wfService := &service.WorkflowServiceCmd{}
-		wfService.Init(DB)
-		cmd.workflowService = wfService
+		cmd.workflowService = service.NewWorkflowService(DB)
 	}
 	if cmd.actionService == nil {
 		aService := &service.ActionServiceCmd{}
@@ -56,9 +55,9 @@ func (cmd *WebCmd) Run() error {
 func (cmd *WebCmd) start(ctx context.Context) error {
 	cmd.init()
 	api := Api{
-		bridge:    cmd.bridge,
+		bridge:          cmd.bridge,
 		workflowService: cmd.workflowService,
-		evaluator: cmd.evaluator,
+		evaluator:       cmd.evaluator,
 	}
 	api.init()
 
@@ -108,9 +107,16 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 
 		group.GET("/:name/start", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.Param("name")
-			if err := api.WorkflowStart(name); err != nil {
-				return err
+
+			var version *string
+			if v := req.URL.Query().Get("version"); v != "" {
+				version = &v
 			}
+
+			if err := api.WorkflowStart(name, version); err != nil {
+				return errors.WithMessagef(err, "Could not start workflow \"%s\" at version \"%s\"", name, version)
+			}
+
 			http.Redirect(w, req.Request, "/workflow/"+name, 302)
 			return nil
 		})
@@ -128,7 +134,7 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				}
 				instanceId = &iid
 			}
-			def, err := api.WorkflowForInstance(name, instanceId, cmd.logger)
+			def, instance, err := api.WorkflowForInstance(name, instanceId, cmd.logger)
 			if err != nil {
 				return err
 			}
@@ -136,13 +142,21 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 			var graphType WorkflowGraphType
 			if len(graphTypeStr) > 0 {
 				var err error
-				graphType, err = WorkflowGraphTypeFromString(graphTypeStr)
-				if err != nil {
+				if graphType, err = WorkflowGraphTypeFromString(graphTypeStr); err != nil {
 					return err
 				}
 			}
 
-			return RenderWorkflowGraph(&def, graphType, w)
+			switch graphType {
+			case WorkflowGraphTypeFlow:
+				return RenderWorkflowGraphFlow(def, w)
+			case WorkflowGraphTypeInputs:
+				return RenderWorkflowGraphInputs(def, instance, w)
+			default:
+				// should have already exited when parsing the graph type
+				cmd.logger.Panic("reached code that should be unreachable")
+				return nil
+			}
 		})
 	})
 
@@ -156,11 +170,17 @@ func (cmd *WebCmd) start(ctx context.Context) error {
 				return bunrouter.JSON(w, wfs)
 			})
 			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-				actions, err := api.Workflow(req.Param("name"))
+				var version *string
+				if v := req.URL.Query().Get("version"); v != "" {
+					version = &v
+				}
+
+				wf, err := api.Workflow(req.Param("name"), version)
 				if err != nil {
 					return err
 				}
-				return bunrouter.JSON(w, actions)
+
+				return bunrouter.JSON(w, wf)
 			})
 		})
 		group.WithGroup("/action", func(group *bunrouter.Group) {

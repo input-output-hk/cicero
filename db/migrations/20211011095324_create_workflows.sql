@@ -3,6 +3,7 @@
 create table workflow_instances (
   id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   name text NOT NULL,
+  version text NOT NULL CHECK (version <> ''),
   certs jsonb NOT NULL,
   created_at timestamp NOT NULL DEFAULT NOW(),
   updated_at timestamp

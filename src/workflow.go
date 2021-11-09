@@ -7,13 +7,14 @@ import (
 	"github.com/pkg/errors"
 	"log"
 )
+
 //TODO: WIP move to service and repository
 
 func GetDefinition(w *model.WorkflowInstance, logger *log.Logger, evaluator Evaluator) (model.WorkflowDefinition, error) {
-	return evaluator.EvaluateWorkflow(w.Name, w.ID, w.Certs)
+	return evaluator.EvaluateWorkflow(w.Name, &w.Version, w.ID, w.Certs)
 }
 
-func GetDefinitionByAction(s *model.ActionInstance, logger *log.Logger, evaluator Evaluator) (*model.WorkflowAction, error){
+func GetDefinitionByAction(s *model.ActionInstance, logger *log.Logger, evaluator Evaluator) (*model.WorkflowAction, error) {
 	wf, err := GetWorkflow(s)
 	if err != nil {
 		return nil, err

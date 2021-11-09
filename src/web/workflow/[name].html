@@ -25,6 +25,7 @@
 		<tr>
 			<th>ID</th>
 			<th>Name</th>
+			<th>Version</th>
 			<th>Created At</th>
 			<th>Updated At</th>
 			<th>Certificates</th>
@@ -37,13 +38,14 @@
 		>
 			<td><a href="?instance={{.ID}}&graph={{$.graph}}">{{.ID}}</a></td>
 			<td>{{.Name}}</td>
+			<td>{{.Version}}</td>
 			<td>{{.CreatedAt}}</td>
 			<td>{{.UpdatedAt}}</td>
 			<td><pre>{{.Certs | toJson}}</pre></td>
 		</tr>
 		{{end}}
 		<tr>
-			<td colspan="5" class="new">
+			<td colspan="6" class="new">
 				<em>
 					<a href="/workflow/{{.Name | pathEscape}}/start">
 						Start New Instance

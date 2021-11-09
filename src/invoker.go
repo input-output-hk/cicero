@@ -142,7 +142,16 @@ func (cmd *InvokerCmd) invokerSubscriber(ctx context.Context) func(*liftbridge.M
 }
 
 func (cmd *InvokerCmd) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts) error {
-	workflow, err := cmd.evaluator.EvaluateWorkflow(workflowName, wfInstanceId, inputs)
+	var version string
+	if err := DB.QueryRow(
+		context.Background(),
+		`SELECT version FROM workflow_instances WHERE id = $1`,
+		wfInstanceId,
+	).Scan(&version); err != nil {
+		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
+	}
+
+	workflow, err := cmd.evaluator.EvaluateWorkflow(workflowName, &version, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}

@@ -3,12 +3,12 @@ package cicero
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/pkg/errors"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/pkg/errors"
 )
 
 type Evaluator struct {
@@ -23,7 +23,7 @@ func NewEvaluator(command string) Evaluator {
 	}
 }
 
-func (e *Evaluator) EvaluateWorkflow(name string, id uint64, inputs model.WorkflowCerts) (model.WorkflowDefinition, error) {
+func (e *Evaluator) EvaluateWorkflow(name string, version *string, id uint64, inputs model.WorkflowCerts) (model.WorkflowDefinition, error) {
 	var def model.WorkflowDefinition
 
 	inputsJson, err := json.Marshal(inputs)
@@ -36,10 +36,12 @@ func (e *Evaluator) EvaluateWorkflow(name string, id uint64, inputs model.Workfl
 		"eval",
 	)
 	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env,
-		"CICERO_WORKFLOW_NAME="+name,
-		"CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id),
-		"CICERO_WORKFLOW_INPUTS="+string(inputsJson))
+	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_NAME="+name)
+	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id))
+	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_INPUTS="+string(inputsJson))
+	if version != nil {
+		cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_VERSION="+*version)
+	}
 
 	e.logger.Printf("running %s\n", strings.Join(cmd.Args, " "))
 	output, err := cmd.Output()
@@ -58,13 +60,16 @@ func (e *Evaluator) EvaluateWorkflow(name string, id uint64, inputs model.Workfl
 	return def, nil
 }
 
-func (e *Evaluator) ListWorkflows() ([]string, error) {
+func (e *Evaluator) ListWorkflows(version *string) ([]string, error) {
 	var names []string
 
 	cmd := exec.Command(
 		e.Command,
 		"list",
 	)
+	if version != nil {
+		cmd.Env = append(os.Environ(), "CICERO_WORKFLOW_VERSION="+*version)
+	}
 
 	e.logger.Printf("running %s\n", strings.Join(cmd.Args, " "))
 	output, err := cmd.Output()

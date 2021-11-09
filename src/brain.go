@@ -25,12 +25,12 @@ const startStreamName = "workflow.*.start"
 const certStreamName = "workflow.*.*.cert"
 
 type BrainCmd struct {
-	logger    *log.Logger
-	tree      *oversight.Tree
-	bridge    liftbridge.Client
+	logger          *log.Logger
+	tree            *oversight.Tree
+	bridge          liftbridge.Client
 	workflowService service.WorkflowService
-	actionService service.ActionService
-	evaluator Evaluator
+	actionService   service.ActionService
+	evaluator       Evaluator
 }
 
 func (cmd *BrainCmd) init() {
@@ -38,9 +38,7 @@ func (cmd *BrainCmd) init() {
 		cmd.logger = log.New(os.Stderr, "brain: ", log.LstdFlags)
 	}
 	if cmd.workflowService == nil {
-		wfService := &service.WorkflowServiceCmd{}
-		wfService.Init(DB)
-		cmd.workflowService = wfService
+		cmd.workflowService = service.NewWorkflowService(DB)
 	}
 	if cmd.actionService == nil {
 		aService := &service.ActionServiceCmd{}
@@ -145,8 +143,24 @@ func (cmd *BrainCmd) onStartMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
+	var version string
+	if versionFromMsg, versionGiven := msg.Headers()["version"]; versionGiven {
+		version = string(versionFromMsg)
+	} else if def, err := cmd.evaluator.EvaluateWorkflow(workflowName, nil, 0, model.WorkflowCerts{}); err != nil {
+		cmd.logger.Printf("Could not evaluate workflow %s to get latest version", workflowName)
+		return
+	} else {
+		version = def.Version
+	}
+
+	workflow := model.WorkflowInstance{
+		Name:    workflowName,
+		Version: version,
+		Certs:   received,
+	}
+
 	//TODO: FIXME this context to be transactional
-	if err = cmd.insertWorkflow(context.Background(), &model.WorkflowInstance{Name: workflowName, Certs: received}); err != nil {
+	if err = cmd.insertWorkflow(context.Background(), &workflow); err != nil {
 		cmd.logger.Printf("Failed to insert new workflow: %s\n", err)
 	}
 }

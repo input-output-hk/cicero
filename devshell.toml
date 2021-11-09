@@ -6,6 +6,10 @@ imports = [
 name = "DATABASE_URL"
 value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 
+[[env]]
+name = "CICERO_EVALUATOR_NIX_FLAKE"
+value = "."
+
 [[commands]]
 package = "go"
 
@@ -47,10 +51,6 @@ help = "Generate API documentation"
 name = "docs-serve"
 command = "docs && swagger serve --no-open -F=swagger swagger.yaml"
 help = "Generate and serve API documentation"
-
-[[commands]]
-package = "wfs"
-help = "Workflow Evaluator (Nix) (wrapper that reads ./workflows)"
 
 [[commands]]
 package = "nomad-dev"

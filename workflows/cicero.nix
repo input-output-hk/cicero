@@ -29,8 +29,6 @@ let
     git checkout ${pr.commit.sha}
   '';
 in {
-  version = 0;
-
   actions = {
     gocritic = { pr ? { }, gocritic ? null }: {
       when = {

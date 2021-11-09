@@ -26,9 +26,6 @@
           liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
           gouml = prev.callPackage ./pkgs/gouml.nix { };
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
-          wfs = prev.writeShellScriptBin "wfs" ''
-            exec ${final.cicero-evaluator-nix}/bin/cicero-evaluator-nix "''${1:-}" ./workflows
-          '';
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
 
@@ -52,7 +49,7 @@
         } // (import ./runners.nix final prev);
 
       packages = { cicero, cicero-evaluator-nix, cicero-entrypoint, liftbridge
-        , liftbridge-cli, gocritic, go, nomad-dev, wfs, run-bash, run-python
+        , liftbridge-cli, gocritic, go, nomad-dev, run-bash, run-python
         , run-perl, run-js }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
@@ -252,6 +249,13 @@
           ];
         };
       };
+
+      extraOutputs.lib = import ./lib.nix self;
+
+      extraOutputs.ciceroWorkflows =
+        self.outputs.lib.callWorkflowsWithDefaults {
+          version = self.rev or null;
+        } ./workflows;
 
       hydraJobs = { cicero }@pkgs: pkgs;
 

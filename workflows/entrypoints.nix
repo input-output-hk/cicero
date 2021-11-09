@@ -1,8 +1,6 @@
 { id, run }:
 
 {
-  version = 0;
-
   actions = {
     github-pull-requests = { }: {
       job = (import ../workflows-nomad.nix) // {
