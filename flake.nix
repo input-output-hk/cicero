@@ -8,9 +8,11 @@
     nixpkgs-os.url = "github:manveru/nixpkgs/use-atomic-bind-mounts";
     utils.url = "github:kreisys/flake-utils";
     driver.url = "github:input-output-hk/nomad-driver-nix";
+    follower.url = "github:input-output-hk/nomad-follower";
   };
 
-  outputs = { self, nixpkgs, nixpkgs-os, utils, devshell, driver, ... }:
+  outputs =
+    { self, nixpkgs, nixpkgs-os, utils, devshell, driver, follower, ... }:
     utils.lib.simpleFlake {
       systems = [ "x86_64-linux" ];
       inherit nixpkgs;
@@ -26,6 +28,7 @@
           liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
           gouml = prev.callPackage ./pkgs/gouml.nix { };
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
+          nomad-follower = follower.defaultPackage.${prev.system};
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
 
@@ -49,8 +52,8 @@
         } // (import ./runners.nix final prev);
 
       packages = { cicero, cicero-evaluator-nix, cicero-entrypoint, liftbridge
-        , liftbridge-cli, gocritic, go, nomad-dev, run-bash, run-python
-        , run-perl, run-js }@pkgs:
+        , liftbridge-cli, gocritic, go, nomad-dev, nomad-follower, run-bash
+        , run-python, run-perl, run-js }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;

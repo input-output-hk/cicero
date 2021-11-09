@@ -3,13 +3,14 @@ package cicero
 import (
 	"context"
 	"encoding/json"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
 
 	"cirello.io/oversight"
 	"github.com/georgysavva/scany/pgxscan"
@@ -18,7 +19,6 @@ import (
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
-	"gopkg.in/yaml.v3"
 )
 
 const invokeStreamName = "workflow.*.*.invoke"
@@ -179,9 +179,6 @@ func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName st
 
 	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if action.IsRunnable() {
-			if err := addLogging(&action.Job); err != nil {
-				return err
-			}
 			if instance == nil {
 				instance = &model.ActionInstance{}
 				instance.WorkflowInstanceId = wfInstanceId
@@ -225,67 +222,6 @@ func (cmd *InvokerCmd) invokeWorkflowAction(ctx context.Context, workflowName st
 		return nil
 	}); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func addLogging(job *nomad.Job) error {
-	pStr := func(v string) *string { return &v }
-	pInt := func(v int) *int { return &v }
-
-	cfg, err := yaml.Marshal(map[string]interface{}{
-		"server": map[string]int{
-			"http_listen_port": 0,
-			"grpc_listen_port": 0,
-		},
-		"positions": map[string]string{"filename": "/local/positions.yaml"},
-		"client":    map[string]string{"url": "http://172.16.0.20:3100/loki/api/v1/path"},
-		"scrape_configs": []map[string]interface{}{{
-			"job_name":        `{{ env "NOMAD_JOB_NAME" }}-{{ env "NOMAD_ALLOC_INDEX" }}`,
-			"pipeline_stages": nil,
-			"static_configs": []map[string]interface{}{{
-				"labels": map[string]string{
-					"nomad_alloc_id":      `{{ env "NOMAD_ALLOC_ID" }}`,
-					"nomad_alloc_index":   `{{ env "NOMAD_ALLOC_INDEX" }}`,
-					"nomad_alloc_name":    `{{ env "NOMAD_ALLOC_NAME" }}`,
-					"nomad_dc":            `{{ env "NOMAD_DC" }}`,
-					"nomad_group_name":    `{{ env "NOMAD_GROUP_NAME" }}`,
-					"nomad_job_id":        `{{ env "NOMAD_JOB_ID" }}`,
-					"nomad_job_name":      `{{ env "NOMAD_JOB_NAME" }}`,
-					"nomad_job_parent_id": `{{ env "NOMAD_JOB_PARENT_ID" }}`,
-					"nomad_namespace":     `{{ env "NOMAD_NAMESPACE" }}`,
-					"nomad_region":        `{{ env "NOMAD_REGION" }}`,
-					"__path__":            "/alloc/logs/*.std*.[0-9]*",
-				},
-			}},
-		}},
-	})
-	if err != nil {
-		return errors.WithMessage(err, "while marshaling promtail config")
-	}
-
-	for _, tg := range job.TaskGroups {
-		tg.Tasks = append(tg.Tasks, &nomad.Task{
-			Name:   "promtail",
-			Driver: "nix",
-			Lifecycle: &nomad.TaskLifecycle{
-				Hook:    "prestart",
-				Sidecar: true,
-			},
-			Resources: &nomad.Resources{
-				CPU:      pInt(100),
-				MemoryMB: pInt(100),
-			},
-			Config: map[string]interface{}{
-				"packages": []string{"github:nixos/nixpkgs/nixos-21.05#grafana-loki"},
-				"command":  []string{"/bin/promtail", "-config.file", "local/config.yaml"},
-			},
-			Templates: []*nomad.Template{{
-				DestPath:     pStr("local/config.yaml"),
-				EmbeddedTmpl: pStr(string(cfg)),
-			}},
-		})
 	}
 
 	return nil

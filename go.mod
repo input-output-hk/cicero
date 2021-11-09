@@ -26,6 +26,7 @@ require (
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/liftbridge-io/go-liftbridge v1.1.0
 	github.com/liftbridge-io/liftbridge v1.6.0
+	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
 	github.com/nats-io/nats-server/v2 v2.5.0 // indirect
@@ -35,11 +36,6 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/viper v1.9.0 // indirect
 	github.com/stretchr/testify v1.7.0
-	github.com/thoas/go-funk v0.9.1 // indirect
-	github.com/uptrace/bun v1.0.15
-	github.com/uptrace/bun/dialect/pgdialect v1.0.15
-	github.com/uptrace/bun/dialect/sqlitedialect v1.0.11
-	github.com/uptrace/bun/driver/sqliteshim v1.0.11
 	github.com/uptrace/bunrouter v1.0.0-rc.2
 	github.com/vivek-ng/concurrency-limiter v0.8.2
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
@@ -47,8 +43,6 @@ require (
 	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
-	golang.org/x/tools v0.1.7 // indirect
 	google.golang.org/genproto v0.0.0-20210917145530-b395a37504d4 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )
