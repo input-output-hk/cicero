@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	model "github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/repository"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
@@ -21,8 +21,8 @@ const CertStreamName = "workflow.*.*.cert"
 type MessageQueueService interface {
 	CreateStreams([]string) error
 	Publish(string, string, model.WorkflowCerts, ...liftbridge.MessageOption) error
-	//GetOffset(string) (int64, error)
-	//Save(pgx.Tx, *liftbridge.Message) error
+	GetOffset(string) (int64, error)
+	Save(pgx.Tx, *liftbridge.Message) error
 }
 
 type MessageQueueServiceImpl struct {
@@ -94,18 +94,20 @@ func (m *MessageQueueServiceImpl) Publish(streamNames string, key string, certs 
 	return nil
 }
 
-type DBExec interface {
-	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+func (m *MessageQueueServiceImpl) Save(tx pgx.Tx, message *liftbridge.Message) error {
+	log.Printf("Saving new Message %#v", message)
+	if err := m.messageQueueRepository.Save(tx, message); err != nil {
+		return errors.WithMessagef(err, "Couldn't insert Message")
+	}
+	log.Printf("Created Message %#v", message)
+	return nil
 }
 
-//TODO: change to lowercase when service module refactoring is complete.
-func InsertLiftbridgeMessage(logger *log.Logger, db DBExec, msg *liftbridge.Message) error {
-	if _, err := db.Exec(
-		context.Background(),
-		`INSERT INTO liftbridge_messages ("offset", stream, subject, created_at, value) VALUES ($1, $2, $3, $4, $5)`,
-		msg.Offset(), msg.Stream(), msg.Subject(), msg.Timestamp(), msg.Value(),
-	); err != nil {
-		return errors.WithMessage(err, "Couldn't insert liftbridge message into database")
+func (m *MessageQueueServiceImpl) GetOffset(streamName string) (offset int64, err error) {
+	log.Printf("Get Offset for the streamName %s", streamName)
+	offset, err = m.messageQueueRepository.GetOffset(streamName)
+	if err != nil {
+		err = errors.WithMessagef(err, "Couldn't get the offset for the streamName: %s", streamName)
 	}
-	return nil
+	return
 }

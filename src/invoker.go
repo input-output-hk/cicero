@@ -113,13 +113,9 @@ func (self *Invoker) listenToInvoke(ctx context.Context) error {
 		return err
 	}
 
-	var offset int64
-	if err := pgxscan.Get(
-		context.Background(), DB, &offset,
-		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
-		service.InvokeStreamName,
-	); err != nil {
-		return errors.WithMessage(err, "Could not select last message offset")
+	offset, err := (*self.messageQueueService).GetOffset(service.InvokeStreamName)
+	if err != nil {
+		return err
 	}
 
 	self.logger.Printf("Subscribing to %s at offset %d\n", service.InvokeStreamName, offset)
@@ -159,7 +155,12 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 			return
 		}
 
-		if err := service.InsertLiftbridgeMessage(self.logger, DB, msg); err != nil {
+		//TODO: must be transactional with the message process
+		if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			err := (*self.messageQueueService).Save(tx, msg)
+			return err
+		}); err != nil {
+			self.logger.Printf( "Could not complete db transaction")
 			return
 		}
 

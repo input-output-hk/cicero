@@ -37,7 +37,7 @@ func (cmd *ActionServiceImpl) GetById(id uuid.UUID) (action model.ActionInstance
 	log.Printf("Get Action by id %s", id)
 	action, err = cmd.actionRepository.GetById(id)
 	if err != nil {
-		err = errors.WithMessagef(err, "Couldn't select existing Action for id %s: %s", id)
+		err = errors.WithMessagef(err, "Couldn't select existing Action for id: %s", id)
 	}
 	return
 }

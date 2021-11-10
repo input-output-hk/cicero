@@ -120,10 +120,10 @@ func (self *Brain) listenToStart(ctx context.Context) error {
 		return err
 	}
 
-	var offset int64
-	pgxscan.Get(context.Background(), DB, &offset,
-		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
-		service.StartStreamName)
+	offset, err := (*self.messageQueueService).GetOffset(service.StartStreamName)
+	if err != nil {
+		return err
+	}
 
 	self.logger.Printf("Subscribing to %s at offset %d\n", service.StartStreamName, offset)
 	err = (*self.bridge).Subscribe(ctx, service.StartStreamName, self.onStartMessage,
@@ -163,7 +163,12 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	if err := service.InsertLiftbridgeMessage(self.logger, DB, msg); err != nil {
+	//TODO: must be transactional with the message process
+	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		err := (*self.messageQueueService).Save(tx, msg)
+		return err
+	}); err != nil {
+		self.logger.Printf( "Could not complete db transaction")
 		return
 	}
 
@@ -226,12 +231,10 @@ func (self *Brain) listenToCerts(ctx context.Context) error {
 		return err
 	}
 
-	var offset int64
-	pgxscan.Get(
-		context.Background(), DB, &offset,
-		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
-		service.CertStreamName,
-	)
+	offset, err := (*self.messageQueueService).GetOffset(service.CertStreamName)
+	if err != nil {
+		return err
+	}
 
 	self.logger.Printf("Subscribing to %s at offset %d\n", service.CertStreamName, offset)
 	if err := (*self.bridge).Subscribe(
@@ -287,7 +290,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 
 	defer tx.Rollback(ctx)
 
-	if err := service.InsertLiftbridgeMessage(self.logger, tx, msg); err != nil {
+	if err := (*self.messageQueueService).Save(tx, msg); err != nil {
 		return
 	}
 
