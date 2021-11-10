@@ -28,6 +28,7 @@
           liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
           gouml = prev.callPackage ./pkgs/gouml.nix { };
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
+          webhook-trigger = prev.callPackage ./pkgs/trigger { };
           nomad-follower = follower.defaultPackage.${prev.system};
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
