@@ -30,9 +30,6 @@ package = "liftbridge-cli"
 package = "liftbridge"
 
 [[commands]]
-package = "foreman"
-
-[[commands]]
 package = "gouml"
 
 [[commands]]
