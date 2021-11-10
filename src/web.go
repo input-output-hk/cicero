@@ -182,83 +182,111 @@ func (self *Web) start(ctx context.Context) error {
 
 	router.WithGroup("/api", func(group *bunrouter.Group) {
 		group.WithGroup("/workflow", func(group *bunrouter.Group) {
-			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				wfs, err := api.Workflows()
-				if err != nil {
-					return err
-				}
-				return bunrouter.JSON(w, wfs)
+			group.WithGroup("/definition", func(group *bunrouter.Group) {
+				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+					if wfs, err := api.Workflows(); err != nil {
+						return err
+					} else {
+						return bunrouter.JSON(w, wfs)
+					}
+				})
+				group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
+					if wf, err := api.Workflow(req.Param("name"), nil); err != nil {
+						return err
+					} else {
+						return bunrouter.JSON(w, wf)
+					}
+				})
+				group.GET("/:name/:version", func(w http.ResponseWriter, req bunrouter.Request) error {
+					version := req.Param("version")
+					if wf, err := api.Workflow(req.Param("name"), &version); err != nil {
+						return err
+					} else {
+						return bunrouter.JSON(w, wf)
+					}
+				})
 			})
-			group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-				var version *string
-				if v := req.URL.Query().Get("version"); v != "" {
-					version = &v
-				}
+			group.WithGroup("/instance", func(group *bunrouter.Group) {
+				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+					if instances, err := (*self.workflowService).GetAll(); err != nil {
+						return err
+					} else {
+						return bunrouter.JSON(w, instances)
+					}
+				})
+				group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+					var params struct {
+						Name    string
+						Version *string
+					}
+					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
+						return errors.WithMessage(err, "Could not unmarshal params from request body")
+					}
+					if err := (*self.workflowService).Start(params.Name, params.Version); err != nil {
+						return err
+					}
+					w.WriteHeader(204)
+					return nil
+				})
+				group.WithGroup("/:id", func(group *bunrouter.Group) {
+					const (
+						ctxKeyWorkflowInstance = iota
+					)
+					group = group.WithMiddleware(func(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
+						return func(w http.ResponseWriter, req bunrouter.Request) error {
+							if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
+								return err
+							} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+								return err
+							} else {
+								return next(w, req.WithContext(
+									context.WithValue(req.Context(), ctxKeyWorkflowInstance, instance),
+								))
+							}
+						}
+					})
+					group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+						return bunrouter.JSON(w, req.Context().Value(ctxKeyWorkflowInstance))
+					})
+					group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
+						instance := req.Context().Value(ctxKeyWorkflowInstance).(model.WorkflowInstance)
 
-				wf, err := api.Workflow(req.Param("name"), version)
-				if err != nil {
-					return err
-				}
+						certs := model.WorkflowCerts{}
+						if err := json.NewDecoder(req.Body).Decode(&certs); err != nil {
+							return errors.WithMessage(err, "Could not unmarshal certs from request body")
+						}
 
-				return bunrouter.JSON(w, wf)
+						if err := service.Publish(
+							self.logger,
+							*self.bridge,
+							fmt.Sprintf("workflow.%s.%d.cert", instance.Name, instance.ID),
+							service.CertStreamName,
+							certs,
+						); err != nil {
+							return errors.WithMessage(err, "Could not publish certificate")
+						}
+						w.WriteHeader(204)
+						return nil
+					})
+				})
 			})
 		})
 		group.WithGroup("/action", func(group *bunrouter.Group) {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				actions, err := (*self.actionService).GetAll()
-				if err != nil {
+				if actions, err := (*self.actionService).GetAll(); err != nil {
 					return err
+				} else {
+					return bunrouter.JSON(w, actions)
 				}
-				return bunrouter.JSON(w, actions)
 			})
-			group.WithGroup("/:id", func(group *bunrouter.Group) {
-				const (
-					ctxKeyAction = iota
-				)
-				group = group.WithMiddleware(func(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
-					return func(w http.ResponseWriter, req bunrouter.Request) error {
-						id, err := uuid.Parse(req.Param("id"))
-						if err != nil {
-							return err
-						}
-
-						action, err := (*self.actionService).GetById(id)
-						if err != nil {
-							return err
-						}
-
-						return next(w, req.WithContext(
-							context.WithValue(req.Context(), ctxKeyAction, action),
-						))
-					}
-				})
-				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-					return bunrouter.JSON(w, req.Context().Value(ctxKeyAction))
-				})
-				group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
-					action := req.Context().Value(ctxKeyAction).(model.ActionInstance)
-					wf, err := (*self.workflowService).GetById(action.WorkflowInstanceId)
-					if err != nil {
-						errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
-						return err
-					}
-
-					certs := model.WorkflowCerts{}
-					if err := json.NewDecoder(req.Body).Decode(&certs); err != nil {
-						return errors.WithMessage(err, "Could not unmarshal certs from request body")
-					}
-
-					if err := service.Publish(
-						self.logger,
-						*self.bridge,
-						fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
-						service.CertStreamName,
-						certs,
-					); err != nil {
-						return errors.WithMessage(err, "Could not publish certificate")
-					}
-					return nil
-				})
+			group.GET("/:id", func(w http.ResponseWriter, req bunrouter.Request) error {
+				if id, err := uuid.Parse(req.Param("id")); err != nil {
+					return err
+				} else if action, err := (*self.actionService).GetById(id); err != nil {
+					return err
+				} else {
+					return bunrouter.JSON(w, action)
+				}
 			})
 		})
 	})
