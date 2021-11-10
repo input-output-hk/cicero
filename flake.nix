@@ -53,8 +53,8 @@
         } // (import ./runners.nix final prev);
 
       packages = { cicero, cicero-evaluator-nix, cicero-entrypoint, liftbridge
-        , liftbridge-cli, gocritic, go, nomad-dev, nomad-follower, run-bash
-        , run-python, run-perl, run-js }@pkgs:
+        , liftbridge-cli, gocritic, go, webhook-trigger, nomad-dev
+        , nomad-follower, run-bash, run-python, run-perl, run-js }@pkgs:
         pkgs // {
           lib = nixpkgs.lib;
           defaultPackage = cicero;
