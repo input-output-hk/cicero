@@ -9,7 +9,7 @@ import (
 	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 )
 

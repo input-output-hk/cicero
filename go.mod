@@ -24,7 +24,7 @@ require (
 	github.com/jackc/pgx/v4 v4.13.0
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
-	github.com/liftbridge-io/go-liftbridge v1.1.0
+	github.com/liftbridge-io/go-liftbridge/v2 v2.1.1-0.20211004155955-3d6d324df820
 	github.com/liftbridge-io/liftbridge v1.6.0
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect

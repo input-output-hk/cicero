@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	model "github.com/input-output-hk/cicero/src/model"
 	"github.com/jackc/pgconn"
-	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 	"log"
 	"time"
