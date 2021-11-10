@@ -154,7 +154,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	if err := service.InsertLiftbridgeMessage(self.logger, DB, msg); err != nil {
+	if err := service.InsertLiftbridgeMessage(self.logger, DB, *msg); err != nil {
 		return
 	}
 
@@ -280,7 +280,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 
 	defer tx.Rollback(ctx)
 
-	if err := service.InsertLiftbridgeMessage(self.logger, tx, msg); err != nil {
+	if err := service.InsertLiftbridgeMessage(self.logger, tx, *msg); err != nil {
 		return
 	}
 

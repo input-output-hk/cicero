@@ -76,11 +76,19 @@ type DBExec interface {
 }
 
 //TODO: change to lowercase when service module refactoring is complete.
-func InsertLiftbridgeMessage(logger *log.Logger, db DBExec, msg *liftbridge.Message) error {
+func InsertLiftbridgeMessage(logger *log.Logger, db DBExec, msg liftbridge.Message) error {
+	headers := msg.Headers()
+	delete(headers, "subject")
+	for k, v := range headers {
+		if v == nil || len(v) == 0 {
+			delete(headers, k)
+		}
+	}
+
 	if _, err := db.Exec(
 		context.Background(),
-		`INSERT INTO liftbridge_messages ("offset", stream, subject, created_at, value) VALUES ($1, $2, $3, $4, $5)`,
-		msg.Offset(), msg.Stream(), msg.Subject(), msg.Timestamp(), msg.Value(),
+		`INSERT INTO liftbridge_messages ("offset", headers, stream, subject, created_at, value) VALUES ($1, $2, $3, $4, $5, $6)`,
+		msg.Offset(), headers, msg.Stream(), msg.Subject(), msg.Timestamp(), msg.Value(),
 	); err != nil {
 		return errors.WithMessage(err, "Couldn't insert liftbridge message into database")
 	}

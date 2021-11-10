@@ -150,7 +150,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 			return
 		}
 
-		if err := service.InsertLiftbridgeMessage(self.logger, DB, msg); err != nil {
+		if err := service.InsertLiftbridgeMessage(self.logger, DB, *msg); err != nil {
 			return
 		}
 
