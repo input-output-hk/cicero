@@ -57,6 +57,14 @@ func (self InvokerCmd) init(invoker *Invoker) {
 		s := service.NewActionService(DB)
 		invoker.actionService = &s
 	}
+	if invoker.messageQueueService == nil {
+		s := service.NewMessageQueueService(DB, *invoker.bridge)
+		invoker.messageQueueService = &s
+	}
+	if invoker.workflowService == nil {
+		s := service.NewWorkflowService(DB, invoker.messageQueueService)
+		invoker.workflowService = &s
+	}
 }
 
 func (self InvokerCmd) Run() error {
@@ -73,13 +81,14 @@ func (self InvokerCmd) Run() error {
 }
 
 type Invoker struct {
-	logger          *log.Logger
-	tree            *oversight.Tree
-	limiter         *priority.PriorityLimiter
-	bridge          *liftbridge.Client
-	evaluator       *Evaluator
-	actionService   *service.ActionService
-	workflowService *service.WorkflowService
+	logger          	  *log.Logger
+	tree            	  *oversight.Tree
+	limiter         	  *priority.PriorityLimiter
+	bridge          	  *liftbridge.Client
+	evaluator       	  *Evaluator
+	actionService   	  *service.ActionService
+	messageQueueService   *service.MessageQueueService
+	workflowService 	  *service.WorkflowService
 }
 
 func (self *Invoker) start(ctx context.Context) error {
@@ -100,7 +109,7 @@ func (self *Invoker) start(ctx context.Context) error {
 func (self *Invoker) listenToInvoke(ctx context.Context) error {
 	self.logger.Println("Starting Invoker.listenToInvoke")
 
-	if err := service.CreateStreams(self.logger, *self.bridge, []string{service.InvokeStreamName}); err != nil {
+	if err := (*self.messageQueueService).CreateStreams([]string{service.InvokeStreamName}); err != nil {
 		return err
 	}
 

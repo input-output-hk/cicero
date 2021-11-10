@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	model "github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"log"
+	"os"
 	"time"
 )
 
@@ -15,15 +18,35 @@ const StartStreamName = "workflow.*.start"
 const InvokeStreamName = "workflow.*.*.invoke"
 const CertStreamName = "workflow.*.*.cert"
 
+type MessageQueueService interface {
+	CreateStreams([]string) error
+	Publish(string, string, model.WorkflowCerts, ...liftbridge.MessageOption) error
+	//GetOffset(string) (int64, error)
+	//Save(pgx.Tx, *liftbridge.Message) error
+}
+
+type MessageQueueServiceImpl struct {
+	logger           	   *log.Logger
+	bridge 				   liftbridge.Client
+	messageQueueRepository repository.MessageQueueRepository
+}
+
+func NewMessageQueueService(db *pgxpool.Pool, bridge liftbridge.Client) MessageQueueService {
+	return &MessageQueueServiceImpl{
+		logger: log.New(os.Stderr, "MessageQueueService: ", log.LstdFlags),
+		bridge: bridge,
+		messageQueueRepository: repository.NewMessageQueueRepository(db),
+	}
+}
+
 func LiftbridgeConnect(addr string) (liftbridge.Client, error) {
 	client, err := liftbridge.Connect([]string{addr})
 	return client, errors.WithMessage(err, "Couldn't connect to NATS")
 }
 
-//TODO: change to lowercase when service module refactoring is complete.
-func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []string) error {
+func (m *MessageQueueServiceImpl) CreateStreams(streamNames []string) error {
 	for _, streamName := range streamNames {
-		if err := bridge.CreateStream(
+		if err := m.bridge.CreateStream(
 			context.Background(),
 			streamName, streamName,
 			liftbridge.MaxReplication(),
@@ -33,20 +56,20 @@ func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []s
 				return errors.WithMessage(err, "Failed to Create NATS Stream")
 			}
 		} else {
-			logger.Printf("Created streams %s\n", streamName)
+			m.logger.Printf("Created streams %s\n", streamName)
 		}
 	}
 	return nil
 }
 
-//TODO: change to lowercase when service module refactoring is complete.
-func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
-	if err := CreateStreams(logger, bridge, []string{stream}); err != nil {
+//TODO streamNames as string or []string?
+func (m *MessageQueueServiceImpl) Publish(streamNames string, key string, certs model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
+	if err := m.CreateStreams([]string{streamNames}); err != nil {
 		return errors.WithMessage(err, "Before publishing message")
 	}
 
 	var enc []byte
-	if e, err := json.Marshal(msg); err != nil {
+	if e, err := json.Marshal(certs); err != nil {
 		return errors.WithMessage(err, "Failed to encode JSON")
 	} else {
 		enc = e
@@ -55,7 +78,7 @@ func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, m
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if _, err := bridge.Publish(ctx, stream,
+	if _, err := m.bridge.Publish(ctx, streamNames,
 		enc,
 		append(opts,
 			liftbridge.Key([]byte(key)),
@@ -66,7 +89,7 @@ func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, m
 		return errors.WithMessage(err, "While publishing message")
 	}
 
-	logger.Printf("Published message to stream %s\n", stream)
+	m.logger.Printf("Published message to stream %s\n", streamNames)
 
 	return nil
 }

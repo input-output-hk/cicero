@@ -45,13 +45,21 @@ func (self BrainCmd) init(brain *Brain) {
 			brain.bridge = &bridge
 		}
 	}
-	if brain.workflowService == nil {
-		s := service.NewWorkflowService(DB, *brain.bridge)
-		brain.workflowService = &s
-	}
 	if brain.actionService == nil {
 		s := service.NewActionService(DB)
 		brain.actionService = &s
+	}
+	if brain.workflowActionService == nil{
+		s := NewWorkflowActionService(*brain.evaluator, *brain.workflowService)
+		brain.workflowActionService = &s
+	}
+	if brain.messageQueueService == nil {
+		s := service.NewMessageQueueService(DB, *brain.bridge)
+		brain.messageQueueService = &s
+	}
+	if brain.workflowService == nil {
+		s := service.NewWorkflowService(DB, brain.messageQueueService)
+		brain.workflowService = &s
 	}
 	if brain.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
@@ -79,6 +87,7 @@ type Brain struct {
 	workflowService       *service.WorkflowService
 	actionService         *service.ActionService
 	workflowActionService *WorkflowActionService
+	messageQueueService   *service.MessageQueueService
 	evaluator             *Evaluator
 }
 
@@ -106,7 +115,7 @@ func (self *Brain) start(ctx context.Context) error {
 func (self *Brain) listenToStart(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToStart")
 
-	err := service.CreateStreams(self.logger, *self.bridge, []string{service.StartStreamName})
+	err := (*self.messageQueueService).CreateStreams([]string{service.StartStreamName})
 	if err != nil {
 		return err
 	}
@@ -197,9 +206,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 
 	self.logger.Printf("Created workflow with ID %d\n", workflow.ID)
 
-	service.Publish(
-		self.logger,
-		*self.bridge,
+	(*self.messageQueueService).Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
 		service.InvokeStreamName,
 		workflow.Certs,
@@ -215,7 +222,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 func (self *Brain) listenToCerts(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToCerts")
 
-	if err := service.CreateStreams(self.logger, *self.bridge, []string{service.CertStreamName}); err != nil {
+	if err := (*self.messageQueueService).CreateStreams([]string{service.CertStreamName}); err != nil {
 		return err
 	}
 
@@ -314,9 +321,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 
 	self.logger.Printf("Updated workflow %#v\n", existing)
 
-	if err := service.Publish(
-		self.logger,
-		*self.bridge,
+	if err := (*self.messageQueueService).Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
 		service.InvokeStreamName,
 		merged,
@@ -438,9 +443,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 			return errors.WithMessage(err, "Could not update action instance")
 		}
 
-		if err := service.Publish(
-			self.logger,
-			*self.bridge,
+		if err := (*self.messageQueueService).Publish(
 			fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
 			service.CertStreamName,
 			*certs,

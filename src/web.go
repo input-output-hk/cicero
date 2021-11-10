@@ -45,13 +45,17 @@ func (self WebCmd) init(web *Web) {
 		}
 		web.bridge = &bridge
 	}
-	if web.workflowService == nil {
-		s := service.NewWorkflowService(DB, *web.bridge)
-		web.workflowService = &s
-	}
 	if web.actionService == nil {
 		s := service.NewActionService(DB)
 		web.actionService = &s
+	}
+	if web.messageQueueService == nil {
+		s := service.NewMessageQueueService(DB, *web.bridge)
+		web.messageQueueService = &s
+	}
+	if web.workflowService == nil {
+		s := service.NewWorkflowService(DB, web.messageQueueService)
+		web.workflowService = &s
 	}
 	if web.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
@@ -66,12 +70,13 @@ func (self WebCmd) Run() error {
 }
 
 type Web struct {
-	Listen          *string
-	logger          *log.Logger
-	bridge          *liftbridge.Client
-	workflowService *service.WorkflowService
-	actionService   *service.ActionService
-	evaluator       *Evaluator
+	Listen          	*string
+	logger          	*log.Logger
+	bridge          	*liftbridge.Client
+	workflowService 	*service.WorkflowService
+	actionService   	*service.ActionService
+	messageQueueService *service.MessageQueueService
+	evaluator       	*Evaluator
 }
 
 func (self *Web) start(ctx context.Context) error {
@@ -248,9 +253,7 @@ func (self *Web) start(ctx context.Context) error {
 						return errors.WithMessage(err, "Could not unmarshal certs from request body")
 					}
 
-					if err := service.Publish(
-						self.logger,
-						*self.bridge,
+					if err := (*self.messageQueueService).Publish(
 						fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
 						service.CertStreamName,
 						certs,
