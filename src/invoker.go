@@ -113,7 +113,7 @@ func (self *Invoker) listenToInvoke(ctx context.Context) error {
 		return errors.WithMessage(err, "Could not select last message offset")
 	}
 
-	self.logger.Printf("Subscribing to %s at offset %d\n", service.InvokeStreamName, offset)
+	self.logger.Printf("Subscribing to %s at offset %d", service.InvokeStreamName, offset)
 	if err := (*self.bridge).Subscribe(
 		ctx,
 		service.InvokeStreamName,
@@ -138,7 +138,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 		inputs := model.WorkflowCerts{}
 		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
 			self.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
-			self.logger.Printf("Invalid JSON received, ignoring: %s\n", err)
+			self.logger.Printf("Invalid JSON received, ignoring: %s", err)
 			return
 		}
 
@@ -146,7 +146,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 		workflowName := parts[1]
 		wfInstanceId, err := strconv.ParseUint(parts[2], 10, 64)
 		if err != nil {
-			self.logger.Printf("Invalid Workflow Instance ID received, ignoring: %s\n", msg.Subject())
+			self.logger.Printf("Invalid Workflow Instance ID received, ignoring: %s", msg.Subject())
 			return
 		}
 
@@ -193,7 +193,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 		instance = &inst
 	}
 
-	self.logger.Printf("Checking runnability of %s: %v\n", actionName, action.IsRunnable())
+	self.logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
 
 	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if action.IsRunnable() {

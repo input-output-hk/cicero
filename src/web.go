@@ -267,7 +267,7 @@ func (self *Web) start(ctx context.Context) error {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			self.logger.Printf("Failed to start web server: %s\n", err.Error())
+			self.logger.Printf("Failed to start web server: %s", err.Error())
 		}
 	}()
 
@@ -276,7 +276,7 @@ func (self *Web) start(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		self.logger.Printf("Failed to stop web server: %s\n", err.Error())
+		self.logger.Printf("Failed to stop web server: %s", err.Error())
 	}
 
 	return nil

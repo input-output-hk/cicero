@@ -44,7 +44,7 @@ func (e *Evaluator) EvaluateWorkflow(name string, version *string, id uint64, in
 		cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_VERSION="+*version)
 	}
 
-	e.logger.Printf("running %s\n", strings.Join(cmd.Args, " "))
+	e.logger.Printf("running %s", strings.Join(cmd.Args, " "))
 	output, err := cmd.Output()
 
 	if err != nil {
@@ -72,7 +72,7 @@ func (e *Evaluator) ListWorkflows(version *string) ([]string, error) {
 		cmd.Env = append(os.Environ(), "CICERO_WORKFLOW_VERSION="+*version)
 	}
 
-	e.logger.Printf("running %s\n", strings.Join(cmd.Args, " "))
+	e.logger.Printf("running %s", strings.Join(cmd.Args, " "))
 	output, err := cmd.Output()
 
 	if err != nil {

@@ -33,7 +33,7 @@ func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []s
 				return errors.WithMessage(err, "Failed to Create NATS Stream")
 			}
 		} else {
-			logger.Printf("Created streams %s\n", streamName)
+			logger.Printf("Created streams %s", streamName)
 		}
 	}
 	return nil
@@ -66,7 +66,7 @@ func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, m
 		return errors.WithMessage(err, "While publishing message")
 	}
 
-	logger.Printf("Published message to stream %s\n", stream)
+	logger.Printf("Published message to stream %s", stream)
 
 	return nil
 }
