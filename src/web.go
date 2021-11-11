@@ -197,6 +197,7 @@ func (self *Web) start(ctx context.Context) error {
 						return bunrouter.JSON(w, wfs)
 					}
 				})
+
 				group.GET("/:source/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
 					var id uint64
 					if idStr := req.URL.Query().Get("id"); len(idStr) > 0 {
@@ -229,6 +230,7 @@ func (self *Web) start(ctx context.Context) error {
 						return bunrouter.JSON(w, instances)
 					}
 				})
+
 				group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 					var params struct {
 						Source string
@@ -243,10 +245,12 @@ func (self *Web) start(ctx context.Context) error {
 					w.WriteHeader(204)
 					return nil
 				})
+
 				group.WithGroup("/:id", func(group *bunrouter.Group) {
 					const (
 						ctxKeyWorkflowInstance = iota
 					)
+
 					group = group.WithMiddleware(func(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
 						return func(w http.ResponseWriter, req bunrouter.Request) error {
 							if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
@@ -260,9 +264,11 @@ func (self *Web) start(ctx context.Context) error {
 							}
 						}
 					})
+
 					group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 						return bunrouter.JSON(w, req.Context().Value(ctxKeyWorkflowInstance))
 					})
+
 					group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
 						instance := req.Context().Value(ctxKeyWorkflowInstance).(model.WorkflowInstance)
 
