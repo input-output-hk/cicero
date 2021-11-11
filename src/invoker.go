@@ -105,16 +105,7 @@ func (self *Invoker) start(ctx context.Context) error {
 func (self *Invoker) listenToInvoke(ctx context.Context) error {
 	self.logger.Println("Starting Invoker.listenToInvoke")
 
-	if err := (*self.messageQueueService).CreateStreams([]string{service.InvokeStreamName}); err != nil {
-		return err
-	}
-
-	offset, err := (*self.messageQueueService).GetOffset(service.InvokeStreamName)
-	if err != nil {
-		return err
-	}
-
-	if err := (*self.messageQueueService).Subscribe(ctx, service.InvokeStreamName, self.invokerSubscriber(ctx), offset, 0); err != nil {
+	if err := (*self.messageQueueService).Subscribe(ctx, service.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.InvokeStreamName)
 	}
 

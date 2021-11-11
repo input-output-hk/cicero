@@ -19,10 +19,8 @@ const InvokeStreamName = "workflow.*.*.invoke"
 const CertStreamName = "workflow.*.*.cert"
 
 type MessageQueueService interface {
-	CreateStreams([]string) error
 	Publish(string, string, model.WorkflowCerts, ...liftbridge.MessageOption) error
-	Subscribe(context.Context, string, liftbridge.Handler, int64, int32) error
-	GetOffset(string) (int64, error)
+	Subscribe(context.Context, string, liftbridge.Handler, int32) error
 	Save(pgx.Tx, *liftbridge.Message) error
 }
 
@@ -40,12 +38,13 @@ func NewMessageQueueService(db *pgxpool.Pool, bridge liftbridge.Client) MessageQ
 	}
 }
 
+//TODO: move to init method
 func LiftbridgeConnect(addr string) (liftbridge.Client, error) {
 	client, err := liftbridge.Connect([]string{addr})
 	return client, errors.WithMessage(err, "Couldn't connect to NATS")
 }
 
-func (m *MessageQueueServiceImpl) CreateStreams(streamNames []string) error {
+func (m *MessageQueueServiceImpl) createStreams(streamNames []string) error {
 	for _, streamName := range streamNames {
 		if err := m.bridge.CreateStream(
 			context.Background(),
@@ -63,9 +62,8 @@ func (m *MessageQueueServiceImpl) CreateStreams(streamNames []string) error {
 	return nil
 }
 
-//TODO streamNames as string or []string?
 func (m *MessageQueueServiceImpl) Publish(streamNames string, key string, certs model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
-	if err := m.CreateStreams([]string{streamNames}); err != nil {
+	if err := m.createStreams([]string{streamNames}); err != nil {
 		return errors.WithMessage(err, "Before publishing message")
 	}
 
@@ -95,12 +93,26 @@ func (m *MessageQueueServiceImpl) Publish(streamNames string, key string, certs 
 	return nil
 }
 
-func (m *MessageQueueServiceImpl) Subscribe(ctx context.Context, streamName string, handler liftbridge.Handler, offset int64, partition int32) error {
+func (m *MessageQueueServiceImpl) subscribe(ctx context.Context, streamName string, handler liftbridge.Handler, offset int64, partition int32) error {
 	m.logger.Printf("Subscribing to %s at offset %d\n", streamName, offset)
 	if err := m.bridge.Subscribe(ctx, streamName, handler, liftbridge.StartAtOffset(offset), liftbridge.Partition(partition)); err != nil {
 		return errors.WithMessagef(err, "Couldn't Subscribing to %s at offset %d\n", streamName, offset)
 	}
 	return nil
+}
+
+func (m *MessageQueueServiceImpl) Subscribe(ctx context.Context, streamName string, handler liftbridge.Handler, partition int32) (err error) {
+	if err := m.createStreams([]string{streamName}); err != nil {
+		return
+	}
+	offset, err := m.getOffset(streamName)
+	if err != nil {
+		return
+	}
+	if err := m.subscribe(ctx, streamName, handler, offset, partition); err != nil {
+		return
+	}
+	return
 }
 
 func (m *MessageQueueServiceImpl) Save(tx pgx.Tx, message *liftbridge.Message) error {
@@ -112,7 +124,7 @@ func (m *MessageQueueServiceImpl) Save(tx pgx.Tx, message *liftbridge.Message) e
 	return nil
 }
 
-func (m *MessageQueueServiceImpl) GetOffset(streamName string) (offset int64, err error) {
+func (m *MessageQueueServiceImpl) getOffset(streamName string) (offset int64, err error) {
 	offset, err = m.messageQueueRepository.GetOffset(streamName)
 	if err != nil {
 		return offset, errors.WithMessagef(err, "Couldn't get the offset for the streamName: %s", streamName)

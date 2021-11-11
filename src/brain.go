@@ -111,17 +111,7 @@ func (self *Brain) start(ctx context.Context) error {
 func (self *Brain) listenToStart(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToStart")
 
-	err := (*self.messageQueueService).CreateStreams([]string{service.StartStreamName})
-	if err != nil {
-		return err
-	}
-
-	offset, err := (*self.messageQueueService).GetOffset(service.StartStreamName)
-	if err != nil {
-		return err
-	}
-
-	if err := (*self.messageQueueService).Subscribe(ctx, service.StartStreamName, self.onStartMessage, offset, 0); err != nil {
+	if err := (*self.messageQueueService).Subscribe(ctx, service.StartStreamName, self.onStartMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.StartStreamName)
 	}
 
@@ -218,16 +208,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 func (self *Brain) listenToCerts(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToCerts")
 
-	if err := (*self.messageQueueService).CreateStreams([]string{service.CertStreamName}); err != nil {
-		return err
-	}
-
-	offset, err := (*self.messageQueueService).GetOffset(service.CertStreamName)
-	if err != nil {
-		return err
-	}
-
-	if err := (*self.messageQueueService).Subscribe(ctx, service.CertStreamName, self.onCertMessage, offset, 0); err != nil {
+	if err := (*self.messageQueueService).Subscribe(ctx, service.CertStreamName, self.onCertMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.CertStreamName)
 	}
 
