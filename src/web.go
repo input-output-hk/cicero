@@ -279,14 +279,32 @@ func (self *Web) start(ctx context.Context) error {
 					return bunrouter.JSON(w, actions)
 				}
 			})
-			group.GET("/:id", func(w http.ResponseWriter, req bunrouter.Request) error {
-				if id, err := uuid.Parse(req.Param("id")); err != nil {
-					return err
-				} else if action, err := (*self.actionService).GetById(id); err != nil {
-					return err
-				} else {
-					return bunrouter.JSON(w, action)
-				}
+
+			group.WithGroup("/:id", func(group *bunrouter.Group) {
+				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+					if id, err := uuid.Parse(req.Param("id")); err != nil {
+						return err
+					} else if action, err := (*self.actionService).GetById(id); err != nil {
+						return err
+					} else {
+						return bunrouter.JSON(w, action)
+					}
+				})
+
+				group.GET("/logs", func(w http.ResponseWriter, req bunrouter.Request) error {
+					if id, err := uuid.Parse(req.Param("id")); err != nil {
+						return err
+					} else {
+						stdout, stderr, err := api.Logs(id)
+						if err != nil {
+							return err
+						}
+						return bunrouter.JSON(w, map[string][]string{
+							"stdout": stdout,
+							"stderr": stderr,
+						})
+					}
+				})
 			})
 		})
 	})
