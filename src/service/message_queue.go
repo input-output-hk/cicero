@@ -103,14 +103,14 @@ func (m *MessageQueueServiceImpl) subscribe(ctx context.Context, streamName stri
 
 func (m *MessageQueueServiceImpl) Subscribe(ctx context.Context, streamName string, handler liftbridge.Handler, partition int32) (err error) {
 	if err := m.createStreams([]string{streamName}); err != nil {
-		return
+		return err
 	}
 	offset, err := m.getOffset(streamName)
 	if err != nil {
-		return
+		return err
 	}
 	if err := m.subscribe(ctx, streamName, handler, offset, partition); err != nil {
-		return
+		return err
 	}
 	return
 }
