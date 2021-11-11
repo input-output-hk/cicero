@@ -3,6 +3,7 @@
 CREATE TABLE liftbridge_messages (
   id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
   "offset" bigint NOT NULL,
+  headers jsonb NOT NULL,
   stream text NOT NULL,
   subject text NOT NULL,
   created_at timestamp NOT NULL,

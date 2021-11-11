@@ -13,6 +13,7 @@ type workflowRepository struct {
 }
 
 type WorkflowRepository interface {
+	GetAll() ([]*model.WorkflowInstance, error)
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
@@ -30,6 +31,14 @@ func (w workflowRepository) GetById(id uint64) (instance model.WorkflowInstance,
 		context.Background(), w.DB, &instance,
 		`SELECT * FROM workflow_instances WHERE id = $1`,
 		id,
+	)
+	return
+}
+
+func (w workflowRepository) GetAll() (instances []*model.WorkflowInstance, err error) {
+	err = pgxscan.Select(
+		context.Background(), w.DB, &instances,
+		`SELECT * FROM workflow_instances ORDER BY id DESC`,
 	)
 	return
 }

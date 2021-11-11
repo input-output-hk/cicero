@@ -17,7 +17,7 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
-	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 )
 
@@ -140,7 +140,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 	received := model.WorkflowCerts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
-		self.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
+		self.logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
 		return
 	}
 
@@ -171,14 +171,14 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 
 	//TODO: FIXME this context to be transactional
 	if err = self.insertWorkflow(context.Background(), &workflow); err != nil {
-		self.logger.Printf("Failed to insert new workflow: %s\n", err)
+		self.logger.Printf("Failed to insert new workflow: %s", err)
 	}
 }
 
 func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowInstance) error {
 	var tx pgx.Tx
 	if t, err := DB.Begin(ctx); err != nil {
-		self.logger.Printf("%s\n", err)
+		self.logger.Printf("%s", err)
 		return err
 	} else {
 		tx = t
@@ -190,7 +190,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 		return errors.WithMessage(err, "Could not insert workflow instance")
 	}
 
-	self.logger.Printf("Created workflow with ID %d\n", workflow.ID)
+	self.logger.Printf("Created workflow with ID %d", workflow.ID)
 
 	(*self.messageQueueService).Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
@@ -199,7 +199,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 	)
 
 	if err := tx.Commit(context.Background()); err != nil {
-		self.logger.Printf("Couldn't complete transaction: %s\n", err)
+		self.logger.Printf("Couldn't complete transaction: %s", err)
 	}
 
 	return nil
@@ -226,7 +226,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 	workflowName := parts[1]
 	id, err := strconv.ParseUint(parts[2], 10, 64)
 	if err != nil {
-		self.logger.Printf("Invalid Workflow ID received, ignoring: %s\n", msg.Subject())
+		self.logger.Printf("Invalid Workflow ID received, ignoring: %s", msg.Subject())
 		return
 	}
 
@@ -242,14 +242,14 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 	received := model.WorkflowCerts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
-		self.logger.Printf("Invalid JSON received, ignoring: %s\n", unmarshalErr)
+		self.logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
 		return
 	}
 
 	ctx := context.Background()
 	tx, err := DB.Begin(ctx)
 	if err != nil {
-		self.logger.Printf("%s\n", err)
+		self.logger.Printf("%s", err)
 		return
 	}
 
@@ -287,19 +287,19 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 
 	// TODO: only invoke when there was a change to the certs?
 
-	self.logger.Printf("Updated workflow %#v\n", existing)
+	self.logger.Printf("Updated workflow %#v", existing)
 
 	if err := (*self.messageQueueService).Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
 		service.InvokeStreamName,
 		merged,
 	); err != nil {
-		self.logger.Printf("Couldn't publish workflow invoke message: %s\n", err)
+		self.logger.Printf("Couldn't publish workflow invoke message: %s", err)
 		return
 	}
 
 	if err = tx.Commit(context.Background()); err != nil {
-		self.logger.Printf("Couldn't complete transaction: %s\n", err)
+		self.logger.Printf("Couldn't complete transaction: %s", err)
 		return
 	}
 }
@@ -373,7 +373,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 	action, err := (*self.actionService).GetById(uuid.MustParse(allocation.JobID))
 	if err != nil {
 		if pgxscan.NotFound(err) {
-			self.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)\n", allocation.JobID)
+			self.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)", allocation.JobID)
 			return nil
 		}
 		return err

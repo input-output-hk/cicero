@@ -7,7 +7,7 @@ import (
 	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 	"log"
 	"os"
@@ -56,7 +56,7 @@ func (m *MessageQueueServiceImpl) createStreams(streamNames []string) error {
 				return errors.WithMessage(err, "Failed to Create NATS Stream")
 			}
 		} else {
-			m.logger.Printf("Created streams %s\n", streamName)
+			m.logger.Printf("Created streams %s", streamName)
 		}
 	}
 	return nil
@@ -88,15 +88,15 @@ func (m *MessageQueueServiceImpl) Publish(streamNames string, key string, certs 
 		return errors.WithMessage(err, "While publishing message")
 	}
 
-	m.logger.Printf("Published message to stream %s\n", streamNames)
+	m.logger.Printf("Published message to stream %s", streamNames)
 
 	return nil
 }
 
 func (m *MessageQueueServiceImpl) subscribe(ctx context.Context, streamName string, handler liftbridge.Handler, offset int64, partition int32) error {
-	m.logger.Printf("Subscribing to %s at offset %d\n", streamName, offset)
+	m.logger.Printf("Subscribing to %s at offset %d", streamName, offset)
 	if err := m.bridge.Subscribe(ctx, streamName, handler, liftbridge.StartAtOffset(offset), liftbridge.Partition(partition)); err != nil {
-		return errors.WithMessagef(err, "Couldn't Subscribing to %s at offset %d\n", streamName, offset)
+		return errors.WithMessagef(err, "Couldn't Subscribing to %s at offset %d", streamName, offset)
 	}
 	return nil
 }
@@ -117,7 +117,14 @@ func (m *MessageQueueServiceImpl) Subscribe(ctx context.Context, streamName stri
 
 func (m *MessageQueueServiceImpl) Save(tx pgx.Tx, message *liftbridge.Message) error {
 	m.logger.Printf("Saving new Message %#v", message)
-	if err := m.messageQueueRepository.Save(tx, message); err != nil {
+	headers := message.Headers()
+	delete(headers, "subject")
+	for k, v := range headers {
+		if v == nil || len(v) == 0 {
+			delete(headers, k)
+		}
+	}
+	if err := m.messageQueueRepository.Save(tx, headers, message); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Message")
 	}
 	m.logger.Printf("Message created %#v", message)

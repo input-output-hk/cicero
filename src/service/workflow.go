@@ -9,11 +9,12 @@ import (
 	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/liftbridge-io/go-liftbridge"
+	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 )
 
 type WorkflowService interface {
+	GetAll() ([]*model.WorkflowInstance, error)
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
@@ -33,6 +34,11 @@ func NewWorkflowService(db *pgxpool.Pool, messageQueueService *MessageQueueServi
 		workflowRepository:  repository.NewWorkflowRepository(db),
 		messageQueueService: messageQueueService,
 	}
+}
+
+func (s *WorkflowServiceImpl) GetAll() ([]*model.WorkflowInstance, error) {
+	log.Printf("Get all Workflows")
+	return s.workflowRepository.GetAll()
 }
 
 func (s *WorkflowServiceImpl) GetAllByName(name string) ([]*model.WorkflowInstance, error) {

@@ -47,7 +47,7 @@ func (a actionRepository) GetByNameAndWorkflowId(name string, workflowId uint64)
 
 func (a actionRepository) GetAll() (instances []*model.ActionInstance, err error) {
 	err = pgxscan.Select(
-		context.Background(), a.DB, instances,
+		context.Background(), a.DB, &instances,
 		`SELECT * FROM action_instances ORDER BY created_at DESC`,
 	)
 	return
