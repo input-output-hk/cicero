@@ -34,7 +34,6 @@ func (cmd *AllCmd) Run() error {
 	brain := Brain{
 		workflowService:       &workflowService,
 		actionService:         &actionService,
-		bridge:                &bridge,
 		evaluator:             &evaluator,
 		workflowActionService: &workflowActionService,
 		messageQueueService:   &messageQueueService,

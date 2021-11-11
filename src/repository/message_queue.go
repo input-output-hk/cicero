@@ -30,10 +30,11 @@ func (m messageQueueRepository) GetOffset(streamName string) (offset int64, err 
 	return
 }
 
-func (m messageQueueRepository) Save(tx pgx.Tx, msg *liftbridge.Message) error {
-	return tx.QueryRow(
+func (m messageQueueRepository) Save(tx pgx.Tx, msg *liftbridge.Message) (err error) {
+	_, err = tx.Exec(
 		context.Background(),
 		`INSERT INTO liftbridge_messages ("offset", stream, subject, created_at, value) VALUES ($1, $2, $3, $4, $5)`,
 		msg.Offset(), msg.Stream(), msg.Subject(), msg.Timestamp(), msg.Value(),
-	).Scan(msg)
+	)
+	return
 }

@@ -21,6 +21,7 @@ const CertStreamName = "workflow.*.*.cert"
 type MessageQueueService interface {
 	CreateStreams([]string) error
 	Publish(string, string, model.WorkflowCerts, ...liftbridge.MessageOption) error
+	Subscribe(context.Context, string, liftbridge.Handler, int64, int32) error
 	GetOffset(string) (int64, error)
 	Save(pgx.Tx, *liftbridge.Message) error
 }
@@ -94,20 +95,28 @@ func (m *MessageQueueServiceImpl) Publish(streamNames string, key string, certs 
 	return nil
 }
 
+func (m *MessageQueueServiceImpl) Subscribe(ctx context.Context, streamName string, handler liftbridge.Handler, offset int64, partition int32) error {
+	m.logger.Printf("Subscribing to %s at offset %d\n", streamName, offset)
+	if err := m.bridge.Subscribe(ctx, streamName, handler, liftbridge.StartAtOffset(offset), liftbridge.Partition(partition)); err != nil {
+		return errors.WithMessagef(err, "Couldn't Subscribing to %s at offset %d\n", streamName, offset)
+	}
+	return nil
+}
+
 func (m *MessageQueueServiceImpl) Save(tx pgx.Tx, message *liftbridge.Message) error {
-	log.Printf("Saving new Message %#v", message)
+	m.logger.Printf("Saving new Message %#v", message)
 	if err := m.messageQueueRepository.Save(tx, message); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Message")
 	}
-	log.Printf("Created Message %#v", message)
+	m.logger.Printf("Message created %#v", message)
 	return nil
 }
 
 func (m *MessageQueueServiceImpl) GetOffset(streamName string) (offset int64, err error) {
-	log.Printf("Get Offset for the streamName %s", streamName)
 	offset, err = m.messageQueueRepository.GetOffset(streamName)
 	if err != nil {
-		err = errors.WithMessagef(err, "Couldn't get the offset for the streamName: %s", streamName)
+		return offset, errors.WithMessagef(err, "Couldn't get the offset for the streamName: %s", streamName)
 	}
+	m.logger.Printf("Get Offset %d for the streamName %s", offset, streamName)
 	return
 }

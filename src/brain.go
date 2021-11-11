@@ -37,14 +37,6 @@ func (self BrainCmd) init(brain *Brain) {
 			oversight.OneForOne(), // restart every task on its own
 		))
 	}
-	if brain.bridge == nil {
-		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
-			brain.logger.Fatalln(err.Error())
-			return
-		} else {
-			brain.bridge = &bridge
-		}
-	}
 	if brain.actionService == nil {
 		s := service.NewActionService(DB)
 		brain.actionService = &s
@@ -54,8 +46,13 @@ func (self BrainCmd) init(brain *Brain) {
 		brain.workflowActionService = &s
 	}
 	if brain.messageQueueService == nil {
-		s := service.NewMessageQueueService(DB, *brain.bridge)
-		brain.messageQueueService = &s
+		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
+			brain.logger.Fatalln(err.Error())
+			return
+		} else {
+			s := service.NewMessageQueueService(DB, bridge)
+			brain.messageQueueService = &s
+		}
 	}
 	if brain.workflowService == nil {
 		s := service.NewWorkflowService(DB, brain.messageQueueService)
@@ -83,7 +80,6 @@ func (self BrainCmd) Run() error {
 type Brain struct {
 	logger                *log.Logger
 	tree                  *oversight.Tree
-	bridge                *liftbridge.Client
 	workflowService       *service.WorkflowService
 	actionService         *service.ActionService
 	workflowActionService *WorkflowActionService
@@ -125,12 +121,7 @@ func (self *Brain) listenToStart(ctx context.Context) error {
 		return err
 	}
 
-	self.logger.Printf("Subscribing to %s at offset %d\n", service.StartStreamName, offset)
-	err = (*self.bridge).Subscribe(ctx, service.StartStreamName, self.onStartMessage,
-		liftbridge.StartAtOffset(offset), liftbridge.Partition(0),
-	)
-
-	if err != nil {
+	if err := (*self.messageQueueService).Subscribe(ctx, service.StartStreamName, self.onStartMessage, offset, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.StartStreamName)
 	}
 
@@ -236,14 +227,7 @@ func (self *Brain) listenToCerts(ctx context.Context) error {
 		return err
 	}
 
-	self.logger.Printf("Subscribing to %s at offset %d\n", service.CertStreamName, offset)
-	if err := (*self.bridge).Subscribe(
-		ctx,
-		service.CertStreamName,
-		self.onCertMessage,
-		liftbridge.StartAtOffset(offset),
-		liftbridge.Partition(0),
-	); err != nil {
+	if err := (*self.messageQueueService).Subscribe(ctx, service.CertStreamName, self.onCertMessage, offset, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.CertStreamName)
 	}
 
