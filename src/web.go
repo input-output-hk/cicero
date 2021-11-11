@@ -16,7 +16,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
 	"github.com/liftbridge-io/go-liftbridge/v2"
@@ -139,10 +141,44 @@ func (self *Web) start(ctx context.Context) error {
 				} else if instance, err := (*self.workflowService).GetById(id); err != nil {
 					return err
 				} else {
+					results := []map[string]interface{}{}
+					err := pgxscan.Select(context.Background(), DB, &results, `
+            SELECT name, payload->>'Allocation' AS alloc
+            FROM (
+              SELECT id, name
+              FROM action_instances
+              WHERE workflow_instance_id = $1
+            ) action
+            LEFT JOIN LATERAL (
+              SELECT payload, index
+              FROM nomad_events
+              WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
+              AND payload#>>'{Allocation,TaskGroup}' = name
+              AND topic = 'Allocation'
+              AND type = 'AllocationUpdated'
+              ORDER BY index DESC LIMIT 1
+            ) payload ON true;
+            `, id)
+					if err != nil {
+						return err
+					}
+
+					allocs := map[string]nomad.Allocation{}
+
+					for _, result := range results {
+						alloc := nomad.Allocation{}
+						err = json.Unmarshal([]byte(result["alloc"].(string)), &alloc)
+						if err != nil {
+							return err
+						}
+						allocs[result["name"].(string)] = alloc
+					}
+
 					return makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
 						"Instance":   instance,
 						"graph":      req.URL.Query().Get("graph"),
 						"graphTypes": WorkflowGraphTypeStrings(),
+						"allocs":     allocs,
 					})
 				}
 			})
