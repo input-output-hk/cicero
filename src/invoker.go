@@ -41,14 +41,6 @@ func (self InvokerCmd) init(invoker *Invoker) {
 		// Increase priority of waiting goroutines every second.
 		invoker.limiter = priority.NewLimiter(1, priority.WithDynamicPriority(1000))
 	}
-	if invoker.bridge == nil {
-		bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr)
-		if err != nil {
-			invoker.logger.Fatalln(err.Error())
-			return
-		}
-		invoker.bridge = &bridge
-	}
 	if invoker.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
 		invoker.evaluator = &e
@@ -58,8 +50,13 @@ func (self InvokerCmd) init(invoker *Invoker) {
 		invoker.actionService = &s
 	}
 	if invoker.messageQueueService == nil {
-		s := service.NewMessageQueueService(DB, *invoker.bridge)
-		invoker.messageQueueService = &s
+		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
+			invoker.logger.Fatalln(err.Error())
+			return
+		} else {
+			s := service.NewMessageQueueService(DB, bridge)
+			invoker.messageQueueService = &s
+		}
 	}
 	if invoker.workflowService == nil {
 		s := service.NewWorkflowService(DB, invoker.messageQueueService)
@@ -84,7 +81,6 @@ type Invoker struct {
 	logger          	  *log.Logger
 	tree            	  *oversight.Tree
 	limiter         	  *priority.PriorityLimiter
-	bridge          	  *liftbridge.Client
 	evaluator       	  *Evaluator
 	actionService   	  *service.ActionService
 	messageQueueService   *service.MessageQueueService
@@ -118,15 +114,8 @@ func (self *Invoker) listenToInvoke(ctx context.Context) error {
 		return err
 	}
 
-	self.logger.Printf("Subscribing to %s at offset %d\n", service.InvokeStreamName, offset)
-	if err := (*self.bridge).Subscribe(
-		ctx,
-		service.InvokeStreamName,
-		self.invokerSubscriber(ctx),
-		liftbridge.StartAtOffset(offset),
-		liftbridge.Partition(0),
-	); err != nil {
-		return errors.WithMessage(err, "failed to subscribe")
+	if err := (*self.messageQueueService).Subscribe(ctx, service.InvokeStreamName, self.invokerSubscriber(ctx), offset, 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.InvokeStreamName)
 	}
 
 	<-ctx.Done()

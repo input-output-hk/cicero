@@ -42,7 +42,6 @@ func (cmd *AllCmd) Run() error {
 
 	web := Web{
 		Listen:          	 &cmd.Listen,
-		bridge:          	 &bridge,
 		workflowService: 	 &workflowService,
 		actionService:   	 &actionService,
 		messageQueueService: &messageQueueService,
@@ -51,7 +50,6 @@ func (cmd *AllCmd) Run() error {
 	(&WebCmd{}).init(&web)
 
 	invoker := Invoker{
-		bridge:          	 &bridge,
 		evaluator:       	 &evaluator,
 		actionService:   	 &actionService,
 		messageQueueService: &messageQueueService,

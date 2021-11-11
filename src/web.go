@@ -19,7 +19,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
-	"github.com/liftbridge-io/go-liftbridge"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
@@ -37,21 +36,18 @@ func (self WebCmd) init(web *Web) {
 	if web.logger == nil {
 		web.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
 	}
-	if web.bridge == nil {
-		bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr)
-		if err != nil {
-			web.logger.Fatalln(err.Error())
-			return
-		}
-		web.bridge = &bridge
-	}
 	if web.actionService == nil {
 		s := service.NewActionService(DB)
 		web.actionService = &s
 	}
 	if web.messageQueueService == nil {
-		s := service.NewMessageQueueService(DB, *web.bridge)
-		web.messageQueueService = &s
+		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
+			web.logger.Fatalln(err.Error())
+			return
+		} else {
+			s := service.NewMessageQueueService(DB, bridge)
+			web.messageQueueService = &s
+		}
 	}
 	if web.workflowService == nil {
 		s := service.NewWorkflowService(DB, web.messageQueueService)
@@ -72,7 +68,6 @@ func (self WebCmd) Run() error {
 type Web struct {
 	Listen          	*string
 	logger          	*log.Logger
-	bridge          	*liftbridge.Client
 	workflowService 	*service.WorkflowService
 	actionService   	*service.ActionService
 	messageQueueService *service.MessageQueueService
