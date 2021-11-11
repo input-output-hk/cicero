@@ -34,7 +34,7 @@ func (w *WorkflowActionServiceImpl) GetWorkflowAction(action model.ActionInstanc
 		return
 	}
 
-	wfDef, err := w.evaluator.EvaluateWorkflow(wf.Name, &wf.Version, wf.ID, wf.Certs)
+	wfDef, err := w.evaluator.EvaluateWorkflow(wf.Source, wf.Name, wf.ID, wf.Certs)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could Evaluate Workflow for Workflow %#v", wf)
 		return

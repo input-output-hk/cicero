@@ -7,7 +7,7 @@ name = "DATABASE_URL"
 value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 
 [[env]]
-name = "CICERO_EVALUATOR_NIX_FLAKE"
+name = "CICERO_WORKFLOW_SRC"
 value = "."
 
 [[env]]

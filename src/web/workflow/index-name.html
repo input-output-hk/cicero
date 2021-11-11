@@ -1,0 +1,24 @@
+{{template "_layout.html" .}}
+
+{{define "main"}}
+	<table class="table">
+		<tr>
+			<th>ID</th>
+			<th>Name</th>
+			<th>Source</th>
+			<th>Created At</th>
+			<th>Updated At</th>
+			<th>Certificates</th>
+		</tr>
+		{{range .}}
+			<tr>
+				<td><a href="{{.ID}}">{{.ID}}</a></td>
+				<td>{{.Name}}</td>
+				<td>{{.Source}}</td>
+				<td>{{.CreatedAt}}</td>
+				<td>{{.UpdatedAt}}</td>
+				<td><pre>{{.Certs | toJson}}</pre></td>
+			</tr>
+		{{end}}
+	</table>
+{{end}}

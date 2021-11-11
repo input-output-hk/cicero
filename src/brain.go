@@ -23,6 +23,7 @@ import (
 
 type BrainCmd struct {
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
@@ -50,7 +51,7 @@ func (self BrainCmd) init(brain *Brain) {
 		brain.workflowService = &s
 	}
 	if brain.actionService == nil {
-		s := service.NewActionService(DB)
+		s := service.NewActionService(DB, self.PrometheusAddr)
 		brain.actionService = &s
 	}
 	if brain.evaluator == nil {
@@ -158,20 +159,18 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	var version string
-	if versionFromMsg, versionGiven := msg.Headers()["version"]; versionGiven {
-		version = string(versionFromMsg)
-	} else if def, err := self.evaluator.EvaluateWorkflow(workflowName, nil, 0, model.WorkflowCerts{}); err != nil {
-		self.logger.Printf("Could not evaluate workflow %s to get latest version", workflowName)
+	var source string
+	if sourceFromMsg, sourceGiven := msg.Headers()["source"]; !sourceGiven {
+		self.logger.Printf("No source given for workflow %s", workflowName)
 		return
 	} else {
-		version = def.Version
+		source = string(sourceFromMsg)
 	}
 
 	workflow := model.WorkflowInstance{
-		Name:    workflowName,
-		Version: version,
-		Certs:   received,
+		Name:   workflowName,
+		Source: source,
+		Certs:  received,
 	}
 
 	//TODO: FIXME this context to be transactional

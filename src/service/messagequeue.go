@@ -3,17 +3,20 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"log"
+	"time"
+
 	model "github.com/input-output-hk/cicero/src/model"
 	"github.com/jackc/pgconn"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
-	"log"
-	"time"
 )
 
-const StartStreamName = "workflow.*.start"
-const InvokeStreamName = "workflow.*.*.invoke"
-const CertStreamName = "workflow.*.*.cert"
+const (
+	StartStreamName  = "workflow.*.start"
+	InvokeStreamName = "workflow.*.*.invoke"
+	CertStreamName   = "workflow.*.*.cert"
+)
 
 func LiftbridgeConnect(addr string) (liftbridge.Client, error) {
 	client, err := liftbridge.Connect([]string{addr})
@@ -40,7 +43,7 @@ func CreateStreams(logger *log.Logger, bridge liftbridge.Client, streamNames []s
 }
 
 //TODO: change to lowercase when service module refactoring is complete.
-func Publish(logger *log.Logger, bridge liftbridge.Client, stream, key string, msg model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
+func Publish(logger *log.Logger, bridge liftbridge.Client, stream string, key string, msg model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
 	if err := CreateStreams(logger, bridge, []string{stream}); err != nil {
 		return errors.WithMessage(err, "Before publishing message")
 	}

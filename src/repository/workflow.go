@@ -62,8 +62,9 @@ func (w workflowRepository) Update(tx pgx.Tx, id uint64, workflow model.Workflow
 }
 
 func (w workflowRepository) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
-	return tx.QueryRow(context.Background(),
-		`INSERT INTO workflow_instances (name, version, certs) VALUES ($1, $2, $3) RETURNING id`,
-		workflow.Name, workflow.Version, workflow.Certs,
+	return tx.QueryRow(
+		context.Background(),
+		`INSERT INTO workflow_instances (source, name, certs) VALUES ($1, $2, $3) RETURNING id`,
+		workflow.Source, workflow.Name, workflow.Certs,
 	).Scan(&workflow.ID)
 }
