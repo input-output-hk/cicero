@@ -67,10 +67,9 @@
     <div class="tab-content" id="myTabContent">
       {{ range $name, $wrapper := $allocs }}
         {{ $alloc := $wrapper.Alloc }}
+        {{ $state := index $alloc.TaskStates $name }}
         <div class="tab-pane fade" id="tab-{{ $name }}">
-          <h2 class="h2">Action {{ $name }}</h2>
-
-          <div class="row">
+          <div class="row pt-2">
             <div class="col-6">
               <h2 class="h2">General Information</h2>
               <dl class="row">
@@ -95,7 +94,28 @@
             </div>
           </div>
 
-          {{ $state := (index $alloc.TaskStates $name) }}
+          {{ $res := (index $alloc.AllocatedResources.Tasks $name) }}
+          <dl class="row pt-2">
+            {{ if $state }}
+              <dt class="col-sm-3">Failed:</dt><dd class="col-sm-9">{{ $state.Failed }}</dd>
+              <dt class="col-sm-3">State:</dt><dd class="col-sm-9">{{ $state.State }}</dd>
+              <dt class="col-sm-3">Started:</dt><dd class="col-sm-9">{{ $state.StartedAt }}</dd>
+              {{ if and $state.FinishedAt $state.StartedAt }}
+                <dt class="col-sm-3">Finished:</dt><dd class="col-sm-9">{{ $state.FinishedAt }}</dd>
+                <dt class="col-sm-3">Duration:</dt><dd class="col-sm-9">TODO: {{ $state.FinishedAt }} - {{ $state.StartedAt }}</dd>
+              {{ end }}
+              {{ if gt $state.Restarts 0 }}
+                <dt class="col-sm-3">Restarts:</dt><dd class="col-sm-9">{{ $state.Restarts }}</dd>
+                <dt class="col-sm-3">Last Restart:</dt><dd class="col-sm-9">{{ $state.LastRestart }}</dd>
+              {{ end }}
+            {{ end }}
+
+            <dt class="col-sm-3">CPU Shares:</dt><dd class="col-sm-9">{{ $res.Cpu.CpuShares }} Mhz</dd>
+            <dt class="col-sm-3">Memory:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMB }} MB</dd>
+            {{ if gt $res.Memory.MemoryMaxMB 0 }}
+              <dt class="col-sm-3">Memory Max:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMaxMB }} MB</dd>
+            {{ end }}
+          </dl>
 
           {{ if $state }}
             <h3 class="h3 pt-2">Event Logs</h3>
@@ -175,30 +195,6 @@
               {{ end }}
             </table>
           {{ end }}
-
-
-          {{ $res := (index $alloc.AllocatedResources.Tasks $name) }}
-          <dl class="row pt-2">
-            {{ if $state }}
-              <dt class="col-sm-3">Failed:</dt><dd class="col-sm-9">{{ $state.Failed }}</dd>
-              <dt class="col-sm-3">State:</dt><dd class="col-sm-9">{{ $state.State }}</dd>
-              <dt class="col-sm-3">Started:</dt><dd class="col-sm-9">{{ $state.StartedAt }}</dd>
-              {{ if and $state.FinishedAt $state.StartedAt }}
-                <dt class="col-sm-3">Finished:</dt><dd class="col-sm-9">{{ $state.FinishedAt }}</dd>
-                <dt class="col-sm-3">Duration:</dt><dd class="col-sm-9">TODO: {{ $state.FinishedAt }} - {{ $state.StartedAt }}</dd>
-              {{ end }}
-              {{ if gt $state.Restarts 0 }}
-                <dt class="col-sm-3">Restarts:</dt><dd class="col-sm-9">{{ $state.Restarts }}</dd>
-                <dt class="col-sm-3">Last Restart:</dt><dd class="col-sm-9">{{ $state.LastRestart }}</dd>
-              {{ end }}
-            {{ end }}
-
-            <dt class="col-sm-3">CPU Shares:</dt><dd class="col-sm-9">{{ $res.Cpu.CpuShares }} Mhz</dd>
-            <dt class="col-sm-3">Memory:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMB }} MB</dd>
-            {{ if gt $res.Memory.MemoryMaxMB 0 }}
-              <dt class="col-sm-3">Memory Max:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMaxMB }} MB</dd>
-            {{ end }}
-          </dl>
 
           <h3 class="h3">Task Logs</h3>
 
