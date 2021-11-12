@@ -18,19 +18,29 @@ in {
               packages = [
                 "github:input-output-hk/cicero#webhook-trigger"
                 "github:input-output-hk/cicero#cicero-evaluator-nix"
+                "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix"
+                "github:nixos/nixpkgs/nixpkgs-unstable#bash"
                 "github:nixos/nixpkgs/nixpkgs-unstable#jq"
                 "github:nixos/nixpkgs/nixpkgs-unstable#curl"
               ];
               command = [ "/bin/trigger" "--config" "/local/trigger.yaml" ];
             };
 
+            Env.NIX_CONFIG = ''
+              experimental-features = nix-command flakes
+            '';
+
             Templates = [{
               DestPath = "local/trigger.yaml";
-              # EmbeddedTempl = "\${meta.triggerConfig}";
               LeftDelim = "";
               RightDelim = "";
               EmbeddedTmpl = builtins.toJSON {
-                settings.host = "0.0.0.0:4567";
+                settings = {
+                  host = "0.0.0.0:4567";
+                  print_commands = true;
+                  capture_output = false;
+                  secret = "TODO get from vault";
+                };
                 events = rec {
                   common = ''
                     set -exuo pipefail
@@ -39,12 +49,17 @@ in {
                     }
                   '';
                   pull_request = ''
-                    case '{action}' in
+                    case $(prop .action) in
                         opened | reopened | synchronize ) ;;
                         * ) exit 0 ;;
                     esac
 
-                    export CICERO_WORKFLOW_SRC=github:$(prop .pull_request.base.repo.full_name)/$(prop .pull_request.base.sha)
+                    if [[ $(prop .pull_request.base.ref) != $(prop .repository.default_branch) ]]; then
+                        >&2 echo 'Ignoring event: PR base is not the default branch. This could allow arbitrary code execution.'
+                        exit
+                    fi
+
+                    export CICERO_WORKFLOW_SRC=github:$(prop .repository.full_name)/$(prop .pull_request.base.sha)
 
                     readarray -t names <<< $(cicero-evaluator-nix list | jq -r .[])
                     for name in "''${names[@]}"; do
