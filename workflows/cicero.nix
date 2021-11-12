@@ -4,7 +4,7 @@ let
   hasCloneUrl = pr: pr.repository.clone_url or false != false;
   hasGitHash = pr: pr.commit.sha or false != false;
 
-  inherit (import ../workflows-nomad.nix) Datacenters;
+  lib = import ../workflows-lib.nix;
 
   defaultPackages = [
     "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
@@ -37,8 +37,7 @@ in {
         "gocritic hasn't run yet" = gocritic == null;
       };
 
-      job = run "bash" {
-        inherit Datacenters;
+      job = lib.addNomadJobDefaults (run "bash" {
         memory = 1024;
         packages = defaultPackages ++ [
           "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#gocritic"
@@ -48,7 +47,7 @@ in {
         ${clone pr}
 
         gocritic check -enableAll ./...
-      '';
+      '');
     };
 
     nixfmt = { pr ? { }, nixfmt ? null }: {
@@ -58,8 +57,7 @@ in {
         "nixfmt hasn't run yet" = nixfmt == null;
       };
 
-      job = run "bash" {
-        inherit Datacenters;
+      job = lib.addNomadJobDefaults (run "bash" {
         memory = 2 * 1024;
         packages = defaultPackages ++ [
           "github:nixos/nixpkgs/nixpkgs-unstable#fd"
@@ -69,7 +67,7 @@ in {
         ${clone pr}
 
         fd -e nix -X nixfmt -c
-      '';
+      '');
     };
 
     build = { pr ? { }, gocritic ? null, nixfmt ? null, build ? null }: {
@@ -79,8 +77,7 @@ in {
         "build hasn't run yet" = build == null;
       };
 
-      job = run "bash" {
-        inherit Datacenters;
+      job = lib.addNomadJobDefaults (run "bash" {
         memory = 4 * 1024;
         cpu = 16000;
         packages = defaultPackages
@@ -94,7 +91,7 @@ in {
         echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
         nix-store --load-db < /registration
         nix build
-      '';
+      '');
     };
 
     deploy = { pr ? { }, environment ? null, gocritic ? null, nixfmt ? null
@@ -104,8 +101,7 @@ in {
           "deploy hasn't run yet" = deploy == null;
         };
 
-        job = run "bash" {
-          inherit Datacenters;
+        job = lib.addNomadJobDefaults (run "bash" {
           memory = 1024;
           packages = defaultPackages ++ [
             "github:nixos/nixpkgs/nixpkgs-unstable#cue"
@@ -124,7 +120,7 @@ in {
             -t 'sha=${pr.commit.sha}' \
             > job.json
           nomad run job.json
-        '';
+        '');
       };
   };
 }

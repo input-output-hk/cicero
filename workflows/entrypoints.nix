@@ -1,9 +1,13 @@
 { id, ... }:
 
-{
+let
+  lib = import ../workflows-lib.nix;
+in {
   actions = {
     github = { }: {
-      job = (import ../workflows-nomad.nix) // {
+      job = lib.addNomadJobDefaults {
+        Type = "service";
+
         TaskGroups = [{
           Name = "webhooks";
 
@@ -17,7 +21,15 @@
                 "github:nixos/nixpkgs/nixpkgs-unstable#jq"
                 "github:nixos/nixpkgs/nixpkgs-unstable#curl"
               ];
-              command = "/bin/trigger " + builtins.toFile "trigger.yaml" (builtins.toJSON {
+              command = [ "/bin/trigger" "--config" "/local/trigger.yaml" ];
+            };
+
+            Templates = [{
+              DestPath = "local/trigger.yaml";
+              # EmbeddedTempl = "\${meta.triggerConfig}";
+              LeftDelim = "";
+              RightDelim = "";
+              EmbeddedTmpl = builtins.toJSON {
                 settings.host = "0.0.0.0:4567";
                 events = rec {
                   common = ''
@@ -43,8 +55,8 @@
                     done
                   '';
                 };
-              });
-            };
+              };
+            }];
           }];
         }];
       };

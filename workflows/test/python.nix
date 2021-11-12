@@ -1,11 +1,13 @@
 { id, run }:
 
-{
+let
+  lib = import ../../workflows-lib.nix;
+in {
   actions = {
     python = { }: {
-      job = (run "python" {} ''
+      job = lib.addNomadJobDefaults (run "python" {} ''
         print("running python ${id}")
-      '') // (import ../../workflows-nomad.nix);
+      '');
     };
   };
 }

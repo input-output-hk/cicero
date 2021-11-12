@@ -92,7 +92,6 @@ in rec {
         };
 
       run = language: options: script: {
-        inherit (options) Datacenters;
         TaskGroups = [{
           Tasks = [{
             Resources = {
