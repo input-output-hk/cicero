@@ -27,33 +27,34 @@ func (cmd *AllCmd) Run() error {
 	supervisor := cmd.newSupervisor()
 
 	evaluator := NewEvaluator(cmd.Evaluator)
-	workflowService := service.NewWorkflowService(DB, bridge)
+	messageQueueService := service.NewMessageQueueService(DB, bridge)
+	workflowService := service.NewWorkflowService(DB, &messageQueueService)
 	actionService := service.NewActionService(DB, cmd.PrometheusAddr)
 	workflowActionService := NewWorkflowActionService(evaluator, workflowService)
 
 	brain := Brain{
 		workflowService:       &workflowService,
 		actionService:         &actionService,
-		bridge:                &bridge,
 		evaluator:             &evaluator,
 		workflowActionService: &workflowActionService,
+		messageQueueService:   &messageQueueService,
 	}
 	(&BrainCmd{}).init(&brain)
 
 	web := Web{
-		Listen:          &cmd.Listen,
-		bridge:          &bridge,
-		workflowService: &workflowService,
-		actionService:   &actionService,
-		evaluator:       &evaluator,
+		Listen:          	 &cmd.Listen,
+		workflowService: 	 &workflowService,
+		actionService:   	 &actionService,
+		messageQueueService: &messageQueueService,
+		evaluator:       	 &evaluator,
 	}
 	(&WebCmd{}).init(&web)
 
 	invoker := Invoker{
-		bridge:          &bridge,
-		evaluator:       &evaluator,
-		actionService:   &actionService,
-		workflowService: &workflowService,
+		evaluator:       	 &evaluator,
+		actionService:   	 &actionService,
+		messageQueueService: &messageQueueService,
+		workflowService: 	 &workflowService,
 	}
 	(&InvokerCmd{}).init(&invoker)
 

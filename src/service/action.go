@@ -58,7 +58,7 @@ func (self *ActionServiceImpl) GetById(id uuid.UUID) (action model.ActionInstanc
 	log.Printf("Get Action by id %s", id)
 	action, err = self.actionRepository.GetById(id)
 	if err != nil {
-		err = errors.WithMessagef(err, "Couldn't select existing Action for id %s: %s", id)
+		err = errors.WithMessagef(err, "Couldn't select existing Action for id: %s", id)
 	}
 	return
 }

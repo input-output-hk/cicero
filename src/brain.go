@@ -38,16 +38,21 @@ func (self BrainCmd) init(brain *Brain) {
 			oversight.OneForOne(), // restart every task on its own
 		))
 	}
-	if brain.bridge == nil {
+	if brain.workflowActionService == nil{
+		s := NewWorkflowActionService(*brain.evaluator, *brain.workflowService)
+		brain.workflowActionService = &s
+	}
+	if brain.messageQueueService == nil {
 		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
 			brain.logger.Fatalln(err.Error())
 			return
 		} else {
-			brain.bridge = &bridge
+			s := service.NewMessageQueueService(DB, bridge)
+			brain.messageQueueService = &s
 		}
 	}
 	if brain.workflowService == nil {
-		s := service.NewWorkflowService(DB, *brain.bridge)
+		s := service.NewWorkflowService(DB, brain.messageQueueService)
 		brain.workflowService = &s
 	}
 	if brain.actionService == nil {
@@ -76,10 +81,10 @@ func (self BrainCmd) Run() error {
 type Brain struct {
 	logger                *log.Logger
 	tree                  *oversight.Tree
-	bridge                *liftbridge.Client
 	workflowService       *service.WorkflowService
 	actionService         *service.ActionService
 	workflowActionService *WorkflowActionService
+	messageQueueService   *service.MessageQueueService
 	evaluator             *Evaluator
 }
 
@@ -107,22 +112,7 @@ func (self *Brain) start(ctx context.Context) error {
 func (self *Brain) listenToStart(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToStart")
 
-	err := service.CreateStreams(self.logger, *self.bridge, []string{service.StartStreamName})
-	if err != nil {
-		return err
-	}
-
-	var offset int64
-	pgxscan.Get(context.Background(), DB, &offset,
-		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
-		service.StartStreamName)
-
-	self.logger.Printf("Subscribing to %s at offset %d", service.StartStreamName, offset)
-	err = (*self.bridge).Subscribe(ctx, service.StartStreamName, self.onStartMessage,
-		liftbridge.StartAtOffset(offset), liftbridge.Partition(0),
-	)
-
-	if err != nil {
+	if err := (*self.messageQueueService).Subscribe(ctx, service.StartStreamName, self.onStartMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.StartStreamName)
 	}
 
@@ -155,7 +145,12 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	if err := service.InsertLiftbridgeMessage(self.logger, DB, *msg); err != nil {
+	//TODO: must be transactional with the message process
+	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		err := (*self.messageQueueService).Save(tx, msg)
+		return err
+	}); err != nil {
+		self.logger.Printf( "Could not complete db transaction")
 		return
 	}
 
@@ -196,9 +191,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 
 	self.logger.Printf("Created workflow with ID %d", workflow.ID)
 
-	service.Publish(
-		self.logger,
-		*self.bridge,
+	(*self.messageQueueService).Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
 		service.InvokeStreamName,
 		workflow.Certs,
@@ -214,25 +207,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 func (self *Brain) listenToCerts(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToCerts")
 
-	if err := service.CreateStreams(self.logger, *self.bridge, []string{service.CertStreamName}); err != nil {
-		return err
-	}
-
-	var offset int64
-	pgxscan.Get(
-		context.Background(), DB, &offset,
-		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
-		service.CertStreamName,
-	)
-
-	self.logger.Printf("Subscribing to %s at offset %d", service.CertStreamName, offset)
-	if err := (*self.bridge).Subscribe(
-		ctx,
-		service.CertStreamName,
-		self.onCertMessage,
-		liftbridge.StartAtOffset(offset),
-		liftbridge.Partition(0),
-	); err != nil {
+	if err := (*self.messageQueueService).Subscribe(ctx, service.CertStreamName, self.onCertMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.CertStreamName)
 	}
 
@@ -279,7 +254,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 
 	defer tx.Rollback(ctx)
 
-	if err := service.InsertLiftbridgeMessage(self.logger, tx, *msg); err != nil {
+	if err := (*self.messageQueueService).Save(tx, msg); err != nil {
 		return
 	}
 
@@ -313,9 +288,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 
 	self.logger.Printf("Updated workflow %#v", existing)
 
-	if err := service.Publish(
-		self.logger,
-		*self.bridge,
+	if err := (*self.messageQueueService).Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
 		service.InvokeStreamName,
 		merged,
@@ -442,9 +415,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 			return errors.WithMessage(err, "Could not update action instance")
 		}
 
-		if err := service.Publish(
-			self.logger,
-			*self.bridge,
+		if err := (*self.messageQueueService).Publish(
 			fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
 			service.CertStreamName,
 			*certs,
