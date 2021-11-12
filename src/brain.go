@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"log"
 	"os"
 	"strconv"
@@ -15,7 +12,10 @@ import (
 
 	"cirello.io/oversight"
 	"github.com/georgysavva/scany/pgxscan"
+	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
@@ -369,7 +369,12 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		return nil
 	}
 
-	action, err := (*self.actionService).GetById(uuid.MustParse(allocation.JobID))
+	id, err := uuid.Parse(allocation.JobID)
+	if err != nil {
+		return nil
+	}
+
+	action, err := (*self.actionService).GetById(id)
 	if err != nil {
 		if pgxscan.NotFound(err) {
 			self.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)", allocation.JobID)

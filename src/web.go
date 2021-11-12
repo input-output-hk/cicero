@@ -16,9 +16,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
+	"github.com/kr/pretty"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
@@ -124,7 +127,7 @@ func (self *Web) start(ctx context.Context) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
 
-			if err := (*self.workflowService).Start(source, name); err != nil {
+			if err := (*self.workflowService).Start(source, name, model.WorkflowCerts{}); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
@@ -139,10 +142,57 @@ func (self *Web) start(ctx context.Context) error {
 				} else if instance, err := (*self.workflowService).GetById(id); err != nil {
 					return err
 				} else {
+					results := []map[string]interface{}{}
+					err := pgxscan.Select(context.Background(), DB, &results, `
+            SELECT name, payload->>'Allocation' AS alloc
+            FROM (
+              SELECT id, name
+              FROM action_instances
+              WHERE workflow_instance_id = $1
+            ) action
+            LEFT JOIN LATERAL (
+              SELECT payload, index
+              FROM nomad_events
+              WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
+              AND payload#>>'{Allocation,TaskGroup}' = action.name
+              AND topic = 'Allocation'
+              AND type = 'AllocationUpdated'
+              ORDER BY index DESC LIMIT 1
+            ) payload ON true;
+            `, id)
+					if err != nil {
+						return err
+					}
+
+					type wrapper struct {
+						Alloc *nomad.Allocation
+						Logs  *service.LokiOutput
+					}
+
+					allocs := map[string]wrapper{}
+
+					for _, result := range results {
+						alloc := &nomad.Allocation{}
+						err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
+						if err != nil {
+							return err
+						}
+
+						logs, err := (*self.actionService).ActionLogs(alloc.ID, alloc.TaskGroup)
+						if err != nil {
+							return err
+						}
+
+						pretty.Println(alloc)
+
+						allocs[result["name"].(string)] = wrapper{Alloc: alloc, Logs: logs}
+					}
+
 					return makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
 						"Instance":   instance,
 						"graph":      req.URL.Query().Get("graph"),
 						"graphTypes": WorkflowGraphTypeStrings(),
+						"allocs":     allocs,
 					})
 				}
 			})
@@ -235,11 +285,12 @@ func (self *Web) start(ctx context.Context) error {
 					var params struct {
 						Source string
 						Name   string
+						Inputs model.WorkflowCerts
 					}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
-					if err := (*self.workflowService).Start(params.Source, params.Name); err != nil {
+					if err := (*self.workflowService).Start(params.Source, params.Name, model.WorkflowCerts{}); err != nil {
 						return err
 					}
 					w.WriteHeader(204)
@@ -314,14 +365,11 @@ func (self *Web) start(ctx context.Context) error {
 					if id, err := uuid.Parse(req.Param("id")); err != nil {
 						return err
 					} else {
-						stdout, stderr, err := (*self.actionService).Logs(id)
+						logs, err := (*self.actionService).JobLogs(id)
 						if err != nil {
 							return err
 						}
-						return bunrouter.JSON(w, map[string][]string{
-							"stdout": stdout,
-							"stderr": stderr,
-						})
+						return bunrouter.JSON(w, map[string]*service.LokiOutput{"logs": logs})
 					}
 				})
 			})

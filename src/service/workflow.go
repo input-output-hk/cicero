@@ -19,7 +19,7 @@ type WorkflowService interface {
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
 	Update(pgx.Tx, uint64, model.WorkflowInstance) error
-	Start(string, string) error
+	Start(string, string, model.WorkflowCerts) error
 }
 
 type WorkflowServiceImpl struct {
@@ -71,12 +71,11 @@ func (s *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow model.Workfl
 	return nil
 }
 
-func (s *WorkflowServiceImpl) Start(source string, name string) error {
-
+func (s *WorkflowServiceImpl) Start(source string, name string, inputs model.WorkflowCerts) error {
 	return (*s.messageQueueService).Publish(
 		fmt.Sprintf("workflow.%s.start", name),
 		StartStreamName,
-		model.WorkflowCerts{},
+		inputs,
 		liftbridge.Header("source", []byte(source)),
 	)
 }
