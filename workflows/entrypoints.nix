@@ -1,4 +1,4 @@
-{ id, run }:
+{ id, ... }:
 
 {
   actions = {
@@ -13,6 +13,7 @@
             Config = {
               packages = [
                 "github:input-output-hk/cicero#webhook-trigger"
+                "github:input-output-hk/cicero#cicero-evaluator-nix"
                 "github:nixos/nixpkgs/nixpkgs-unstable#jq"
                 "github:nixos/nixpkgs/nixpkgs-unstable#curl"
               ];
@@ -22,7 +23,7 @@
                   common = ''
                     set -exuo pipefail
                     function prop {
-                        <<<'{payload}' jq --raw-output "$1"
+                        <<< '{payload}' jq -r "$1"
                     }
                   '';
                   pull_request = ''
@@ -30,8 +31,16 @@
                         opened | reopened | synchronize ) ;;
                         * ) exit 0 ;;
                     esac
-                    body=$(<<<'{payload}' jq '.pull_request | {source: "github:\(.head.repo.full_name)"}')
-                    curl -X POST http://127.0.0.1/api/workflow/ --data "$body"
+
+                    export CICERO_WORKFLOW_SRC=github:$(prop .pull_request.base.repo.full_name)/$(prop .pull_request.base.sha)
+
+                    readarray -t names <<< $(cicero-evaluator-nix list | jq -r .[])
+                    for name in "''${names[@]}"; do
+                        export name
+                        <<< '{payload}' \
+                        jq -r '{Source: env.CICERO_WORKFLOW_SRC, Name: env.name, Inputs: {pr: .}}' \
+                        | curl "$CICERO_API_URL"/workflow/instance/ --data-binary @-
+                    done
                   '';
                 };
               });

@@ -127,7 +127,7 @@ func (self *Web) start(ctx context.Context) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
 
-			if err := (*self.workflowService).Start(source, name); err != nil {
+			if err := (*self.workflowService).Start(source, name, model.WorkflowCerts{}); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
@@ -285,11 +285,12 @@ func (self *Web) start(ctx context.Context) error {
 					var params struct {
 						Source string
 						Name   string
+						Inputs model.WorkflowCerts
 					}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
-					if err := (*self.workflowService).Start(params.Source, params.Name); err != nil {
+					if err := (*self.workflowService).Start(params.Source, params.Name, model.WorkflowCerts{}); err != nil {
 						return err
 					}
 					w.WriteHeader(204)
