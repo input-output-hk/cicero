@@ -6,7 +6,6 @@ import (
 
 // swagger:route GET /api/workflow workflow
 // List all workflows
-
 // responses:
 //   default: GenericError
 //   200: WorkflowDefinitions
