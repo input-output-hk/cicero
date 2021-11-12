@@ -21,6 +21,7 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
+	"github.com/kr/pretty"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
@@ -153,7 +154,7 @@ func (self *Web) start(ctx context.Context) error {
               SELECT payload, index
               FROM nomad_events
               WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
-              AND payload#>>'{Allocation,TaskGroup}' = name
+              AND payload#>>'{Allocation,TaskGroup}' = action.name
               AND topic = 'Allocation'
               AND type = 'AllocationUpdated'
               ORDER BY index DESC LIMIT 1
@@ -163,15 +164,28 @@ func (self *Web) start(ctx context.Context) error {
 						return err
 					}
 
-					allocs := map[string]nomad.Allocation{}
+					type wrapper struct {
+						Alloc *nomad.Allocation
+						Logs  *service.LokiOutput
+					}
+
+					allocs := map[string]wrapper{}
 
 					for _, result := range results {
-						alloc := nomad.Allocation{}
-						err = json.Unmarshal([]byte(result["alloc"].(string)), &alloc)
+						alloc := &nomad.Allocation{}
+						err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
 						if err != nil {
 							return err
 						}
-						allocs[result["name"].(string)] = alloc
+
+						logs, err := (*self.actionService).ActionLogs(alloc.ID, alloc.TaskGroup)
+						if err != nil {
+							return err
+						}
+
+						pretty.Println(alloc)
+
+						allocs[result["name"].(string)] = wrapper{Alloc: alloc, Logs: logs}
 					}
 
 					return makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
@@ -352,14 +366,11 @@ func (self *Web) start(ctx context.Context) error {
 					if id, err := uuid.Parse(req.Param("id")); err != nil {
 						return err
 					} else {
-						stdout, stderr, err := (*self.actionService).Logs(id)
+						logs, err := (*self.actionService).JobLogs(id)
 						if err != nil {
 							return err
 						}
-						return bunrouter.JSON(w, map[string][]string{
-							"stdout": stdout,
-							"stderr": stderr,
-						})
+						return bunrouter.JSON(w, map[string]*service.LokiOutput{"logs": logs})
 					}
 				})
 			})
