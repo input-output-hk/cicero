@@ -19,7 +19,7 @@ type ActionRepository interface {
 	GetByNameAndWorkflowId(string, uint64) (model.ActionInstance, error)
 	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, uuid.UUID, model.ActionInstance) error
+	Update(pgx.Tx, model.ActionInstance) error
 }
 
 func NewActionRepository(db *pgxpool.Pool) ActionRepository {
@@ -61,11 +61,11 @@ func (a actionRepository) Save(tx pgx.Tx, action *model.ActionInstance) error {
 	).Scan(&action.ID)
 }
 
-func (a actionRepository) Update(tx pgx.Tx, id uuid.UUID, action model.ActionInstance) (err error) {
+func (a actionRepository) Update(tx pgx.Tx, action model.ActionInstance) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
 		`UPDATE action_instances SET finished_at = $2, updated_at = $3, certs = $4 WHERE id = $1`,
-		id, action.FinishedAt, action.UpdatedAt, action.Certs,
+		action.ID, action.FinishedAt, action.UpdatedAt, action.Certs,
 	)
 	return
 }

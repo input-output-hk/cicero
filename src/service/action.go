@@ -26,7 +26,7 @@ type ActionService interface {
 	GetByNameAndWorkflowId(string, uint64) (model.ActionInstance, error)
 	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, uuid.UUID, model.ActionInstance) error
+	Update(pgx.Tx, model.ActionInstance) error
 	JobLogs(uuid.UUID) (*LokiOutput, error)
 	ActionLogs(string, string) (*LokiOutput, error)
 }
@@ -86,12 +86,12 @@ func (self *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) err
 	return nil
 }
 
-func (self *ActionServiceImpl) Update(tx pgx.Tx, id uuid.UUID, action model.ActionInstance) error {
-	log.Printf("Update Action %#v with id %s", action, id)
-	if err := self.actionRepository.Update(tx, id, action); err != nil {
-		return errors.WithMessagef(err, "Couldn't update Action with id: %s", id)
+func (self *ActionServiceImpl) Update(tx pgx.Tx, action model.ActionInstance) error {
+	log.Printf("Update Action %#v", action)
+	if err := self.actionRepository.Update(tx, action); err != nil {
+		return errors.WithMessagef(err, "Couldn't update Action with id: %s", action.ID)
 	}
-	log.Printf("Updated Action %#v with id %s", action, id)
+	log.Printf("Updated Action %#v", action)
 	return nil
 }
 

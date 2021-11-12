@@ -209,7 +209,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 				updatedAt := time.Now().UTC()
 				instance.UpdatedAt = &updatedAt
 				instance.Certs = inputs
-				if err := (*self.actionService).Update(tx, instance.ID, *instance); err != nil {
+				if err := (*self.actionService).Update(tx, *instance); err != nil {
 					return errors.WithMessage(err, "Could not update action instance")
 				}
 			}
@@ -231,7 +231,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 			finished := time.Now().UTC()
 			instance.FinishedAt = &finished
 
-			if err := (*self.actionService).Update(tx, instance.ID, *instance); err != nil {
+			if err := (*self.actionService).Update(tx, *instance); err != nil {
 				return errors.WithMessage(err, "Failed to update action instance")
 			}
 		}

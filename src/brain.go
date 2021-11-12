@@ -411,7 +411,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 	}
 
 	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := (*self.actionService).Update(tx, action.ID, action); err != nil {
+		if err := (*self.actionService).Update(tx, action); err != nil {
 			return errors.WithMessage(err, "Could not update action instance")
 		}
 
