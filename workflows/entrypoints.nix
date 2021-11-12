@@ -17,18 +17,12 @@ in {
             Config = {
               packages = [
                 "github:input-output-hk/cicero#webhook-trigger"
-                "github:input-output-hk/cicero#cicero-evaluator-nix"
-                "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix"
                 "github:nixos/nixpkgs/nixpkgs-unstable#bash"
                 "github:nixos/nixpkgs/nixpkgs-unstable#jq"
                 "github:nixos/nixpkgs/nixpkgs-unstable#curl"
               ];
               command = [ "/bin/trigger" "--config" "/local/trigger.yaml" ];
             };
-
-            Env.NIX_CONFIG = ''
-              experimental-features = nix-command flakes
-            '';
 
             Templates = [{
               DestPath = "local/trigger.yaml";
@@ -59,15 +53,10 @@ in {
                         exit
                     fi
 
-                    export CICERO_WORKFLOW_SRC=github:$(prop .repository.full_name)/$(prop .pull_request.base.sha)
-
-                    readarray -t names <<< $(cicero-evaluator-nix list | jq -r .[])
-                    for name in "''${names[@]}"; do
-                        export name
-                        <<< '{payload}' \
-                        jq -r '{Source: env.CICERO_WORKFLOW_SRC, Name: env.name, Inputs: {pr: .}}' \
-                        | curl "$CICERO_API_URL"/workflow/instance/ --data-binary @-
-                    done
+                    CICERO_WORKFLOW_SRC=github:$(prop .repository.full_name)/$(prop .pull_request.base.sha) \
+                    <<< '{payload}' \
+                    jq -r '{Source: env.CICERO_WORKFLOW_SRC, Inputs: {pr: .}}' \
+                    | curl "$CICERO_API_URL"/workflow/instance/ --data-binary @-
                   '';
                 };
               };

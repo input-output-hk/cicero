@@ -281,15 +281,29 @@ func (self *Web) start(ctx context.Context) error {
 				group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 					var params struct {
 						Source string
-						Name   string
+						Name   *string
 						Inputs model.WorkflowCerts
 					}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
-					if err := (*self.workflowService).Start(params.Source, params.Name, params.Inputs); err != nil {
-						return err
+
+					if params.Name != nil {
+						if err := (*self.workflowService).Start(params.Source, *params.Name, params.Inputs); err != nil {
+							return err
+						}
+					} else {
+						if wfNames, err := self.evaluator.ListWorkflows(params.Source); err != nil {
+							return err
+						} else {
+							for _, name := range wfNames {
+								if err := (*self.workflowService).Start(params.Source, name, params.Inputs); err != nil {
+									return err
+								}
+							}
+						}
 					}
+
 					w.WriteHeader(204)
 					return nil
 				})
