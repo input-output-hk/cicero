@@ -284,6 +284,7 @@ func (self *Web) start(ctx context.Context) error {
 						Name   *string
 						Inputs model.WorkflowCerts
 					}
+					params.Inputs = model.WorkflowCerts{}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
