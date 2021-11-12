@@ -2,16 +2,16 @@
 
 buildGoModule rec {
   pname = "liftbridge";
-  version = "1.6.0";
+  version = "1.7.0";
 
   src = fetchFromGitHub {
     owner = "liftbridge-io";
     repo = pname;
     rev = "v${version}";
-    hash = "sha256-XPCqH4AQH2wwj8ImyJkPMT4wk7t4JYt+WeohtdmPW8U=";
+    hash = "sha256-S6vh5L1/yHQ8ApNbxiBpsVonl7Tc3MUzBYoPze88JH4=";
   };
 
-  vendorSha256 = "sha256-aPKk64w6xBF0GEx7ltQEeNPGNEwE1npM4+FJAmFzPNQ=";
+  vendorSha256 = "sha256-c+7B9rqf8GdVBYj/4BOtBwnrbu+h44OLH0bgVjP25L0=";
 
   doCheck = false;
 
