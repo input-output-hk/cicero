@@ -40,6 +40,8 @@ type WorkflowInstance struct {
 
 type WorkflowCerts map[string]interface{}
 
+type ActionInstances map[string]*ActionInstance
+
 type ActionInstance struct {
 	ID                 uuid.UUID
 	WorkflowInstanceId uint64
@@ -49,3 +51,5 @@ type ActionInstance struct {
 	UpdatedAt          *time.Time
 	FinishedAt         *time.Time
 }
+
+type GenericError map[string]interface{}
