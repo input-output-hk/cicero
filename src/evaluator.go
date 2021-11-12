@@ -24,7 +24,7 @@ func NewEvaluator(command string) Evaluator {
 	}
 }
 
-func (e *Evaluator) EvaluateWorkflow(name string, version *string, id uint64, inputs model.WorkflowCerts) (model.WorkflowDefinition, error) {
+func (e *Evaluator) EvaluateWorkflow(src string, name string, id uint64, inputs model.WorkflowCerts) (model.WorkflowDefinition, error) {
 	var def model.WorkflowDefinition
 
 	inputsJson, err := json.Marshal(inputs)
@@ -36,13 +36,13 @@ func (e *Evaluator) EvaluateWorkflow(name string, version *string, id uint64, in
 		e.Command,
 		"eval",
 	)
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_NAME="+name)
-	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id))
-	cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_INPUTS="+string(inputsJson))
-	if version != nil {
-		cmd.Env = append(cmd.Env, "CICERO_WORKFLOW_VERSION="+*version)
-	}
+	cmd.Env = append(
+		os.Environ(),
+		"CICERO_WORKFLOW_SRC="+src,
+		"CICERO_WORKFLOW_NAME="+name,
+		"CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id),
+		"CICERO_WORKFLOW_INPUTS="+string(inputsJson),
+	)
 
 	e.logger.Printf("running %s", strings.Join(cmd.Args, " "))
 	output, err := cmd.Output()
@@ -61,16 +61,14 @@ func (e *Evaluator) EvaluateWorkflow(name string, version *string, id uint64, in
 	return def, nil
 }
 
-func (e *Evaluator) ListWorkflows(version *string) ([]string, error) {
+func (e *Evaluator) ListWorkflows(src string) ([]string, error) {
 	var names []string
 
 	cmd := exec.Command(
 		e.Command,
 		"list",
 	)
-	if version != nil {
-		cmd.Env = append(os.Environ(), "CICERO_WORKFLOW_VERSION="+*version)
-	}
+	cmd.Env = append(os.Environ(), "CICERO_WORKFLOW_SRC="+src)
 
 	e.logger.Printf("running %s", strings.Join(cmd.Args, " "))
 	output, err := cmd.Output()

@@ -1,0 +1,71 @@
+{{template "_layout.html" .}}
+
+{{define "main"}}
+	{{$scope := "d2dc0bac8e4747b39b78a49cf274328a"}}
+
+	{{with .Instance}}
+	<div id="{{$scope}}">
+		<h1>{{.Name}}</h1>
+
+		<ul>
+			<li><a href="#">Stop</a></li>
+			<li><a href="#">Clone</a></li>
+		</ul>
+
+		<ul class="graph-types">
+			<li>Type:</li>
+			{{range $.graphTypes}}
+			<li>
+				{{if or (eq . $.graph) (and (eq $.graph "") (eq . "flow"))}}
+				{{.}}
+				{{else}}
+				<a href="?graph={{.}}">{{.}}</a>
+				{{end}}
+			</li>
+			{{end}}
+		</ul>
+		<iframe src="/workflow/{{.ID}}/graph?type={{$.graph}}"></iframe>
+
+		<table class="table">
+			<tr>
+				<td>Source</td>
+				<td>{{.Source}}</td>
+			</tr>
+			<tr>
+				<td>Created at</td>
+				<td>{{.CreatedAt}}</td>
+			</tr>
+			<tr>
+				<td>Updated at</td>
+				<td>{{.UpdatedAt}}</td>
+			</tr>
+			<tr>
+				<td>State</td>
+				<td><pre>{{.Certs | toJson}}</pre></td>
+			</tr>
+		</table>
+	</div>
+	{{end}}
+
+	<style>
+	#{{$scope}} {
+		height: 100%;
+
+		display: flex;
+		flex-direction: column;
+	}
+
+	#{{$scope}} > iframe {
+		flex-grow: 1;
+		border: 5px groove var(--border);
+		padding: 1%;
+		min-height: 33vh;
+	}
+
+	#{{$scope}} ul.graph-types {
+		display: flex;
+		list-style: none;
+		gap: 1%;
+	}
+	</style>
+{{end}}

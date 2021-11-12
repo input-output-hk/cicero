@@ -23,6 +23,7 @@ import (
 
 type InvokerCmd struct {
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
@@ -46,7 +47,7 @@ func (self InvokerCmd) init(invoker *Invoker) {
 		invoker.evaluator = &e
 	}
 	if invoker.actionService == nil {
-		s := service.NewActionService(DB)
+		s := service.NewActionService(DB, self.PrometheusAddr)
 		invoker.actionService = &s
 	}
 	if invoker.messageQueueService == nil {
@@ -156,13 +157,20 @@ func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wf
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
 	}
 
-	workflow, err := self.evaluator.EvaluateWorkflow(workflowName, &wf.Version, wfInstanceId, inputs)
+	// We don't actually need workflowName because the instance already knows its name.
+	// We would only need it if instance IDs were not globally unique, but only per workflow name.
+	// TODO Decide whether we want instance IDs to be unique per workflow name or globally.
+	if wf.Name != workflowName {
+		return errors.New("Workflow name given does not match name of instance: " + workflowName + " != " + wf.Name)
+	}
+
+	workflow, err := self.evaluator.EvaluateWorkflow(wf.Source, wf.Name, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
 
 	for actionName, action := range workflow.Actions {
-		if err := self.invokeWorkflowAction(ctx, workflowName, wfInstanceId, inputs, actionName, action); err != nil {
+		if err := self.invokeWorkflowAction(ctx, wf.Name, wfInstanceId, inputs, actionName, action); err != nil {
 			return err
 		}
 	}

@@ -14,9 +14,11 @@ import (
 	"time"
 )
 
-const StartStreamName = "workflow.*.start"
-const InvokeStreamName = "workflow.*.*.invoke"
-const CertStreamName = "workflow.*.*.cert"
+const (
+	StartStreamName  = "workflow.*.start"
+	InvokeStreamName = "workflow.*.*.invoke"
+	CertStreamName   = "workflow.*.*.cert"
+)
 
 type MessageQueueService interface {
 	Publish(string, string, model.WorkflowCerts, ...liftbridge.MessageOption) error

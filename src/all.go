@@ -14,6 +14,7 @@ import (
 type AllCmd struct {
 	Listen         string `arg:"--listen" default:":8080"`
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
@@ -28,7 +29,7 @@ func (cmd *AllCmd) Run() error {
 	evaluator := NewEvaluator(cmd.Evaluator)
 	messageQueueService := service.NewMessageQueueService(DB, bridge)
 	workflowService := service.NewWorkflowService(DB, &messageQueueService)
-	actionService := service.NewActionService(DB)
+	actionService := service.NewActionService(DB, cmd.PrometheusAddr)
 	workflowActionService := NewWorkflowActionService(evaluator, workflowService)
 
 	brain := Brain{

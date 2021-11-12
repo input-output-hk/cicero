@@ -26,6 +26,7 @@ import (
 type WebCmd struct {
 	Listen         string `arg:"--listen" default:":8080"`
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
@@ -35,10 +36,6 @@ func (self WebCmd) init(web *Web) {
 	}
 	if web.logger == nil {
 		web.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
-	}
-	if web.actionService == nil {
-		s := service.NewActionService(DB)
-		web.actionService = &s
 	}
 	if web.messageQueueService == nil {
 		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
@@ -52,6 +49,10 @@ func (self WebCmd) init(web *Web) {
 	if web.workflowService == nil {
 		s := service.NewWorkflowService(DB, web.messageQueueService)
 		web.workflowService = &s
+	}
+	if web.actionService == nil {
+		s := service.NewActionService(DB, self.PrometheusAddr)
+		web.actionService = &s
 	}
 	if web.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
@@ -75,12 +76,6 @@ type Web struct {
 }
 
 func (self *Web) start(ctx context.Context) error {
-	api := Api{
-		workflowService: *self.workflowService,
-		evaluator:       *self.evaluator,
-	}
-	api.init()
-
 	self.logger.Println("Starting Web")
 
 	router := bunrouter.New(
@@ -88,7 +83,7 @@ func (self *Web) start(ctx context.Context) error {
 	)
 
 	router.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-		return makeViewTemplate("index.html").Execute(w, struct{}{})
+		return makeViewTemplate("index.html").Execute(w, nil)
 	})
 
 	router.GET("/*route", func(w http.ResponseWriter, req bunrouter.Request) error {
@@ -101,105 +96,126 @@ func (self *Web) start(ctx context.Context) error {
 
 	router.WithGroup("/workflow", func(group *bunrouter.Group) {
 		group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-			wfs, err := api.Workflows()
-			if err != nil {
-				return err
+			name := req.URL.Query().Get("name")
+
+			var templateName string
+			var instances []*model.WorkflowInstance
+
+			if len(name) == 0 {
+				templateName = "workflow"
+				if insts, err := (*self.workflowService).GetAll(); err != nil {
+					return err
+				} else {
+					instances = insts
+				}
+			} else {
+				templateName = "workflow/index-name.html"
+				if insts, err := (*self.workflowService).GetAllByName(name); err != nil {
+					return err
+				} else {
+					instances = insts
+				}
 			}
-			return makeViewTemplate("workflow").Execute(w, wfs)
+
+			return makeViewTemplate(templateName).Execute(w, instances)
 		})
 
-		group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-			name := req.Param("name")
+		group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+			name := req.PostFormValue("name")
+			source := req.PostFormValue("source")
 
-			instances, err := (*self.workflowService).GetAllByName(name)
-			if err != nil {
-				return err
+			if err := (*self.workflowService).Start(source, name); err != nil {
+				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
-			return makeViewTemplate("workflow/[name].html").Execute(w, map[string]interface{}{
-				"Name":       name,
-				"Instances":  instances,
-				"instance":   req.URL.Query().Get("instance"),
-				"graph":      req.URL.Query().Get("graph"),
-				"graphTypes": WorkflowGraphTypeStrings(),
-			})
-		})
-
-		group.GET("/:name/start", func(w http.ResponseWriter, req bunrouter.Request) error {
-			name := req.Param("name")
-
-			var version *string
-			if v := req.URL.Query().Get("version"); v != "" {
-				version = &v
-			}
-
-			if err := (*self.workflowService).Start(name, version); err != nil {
-				return errors.WithMessagef(err, "Could not start workflow \"%s\" at version \"%s\"", name, version)
-			}
-
-			http.Redirect(w, req.Request, "/workflow/"+name, 302)
+			http.Redirect(w, req.Request, "/workflow", 302)
 			return nil
 		})
 
-		group.GET("/:name/graph", func(w http.ResponseWriter, req bunrouter.Request) error {
-			name := req.Param("name")
-			instanceStr := req.URL.Query().Get("instance")
-			graphTypeStr := req.URL.Query().Get("type")
+		group.WithGroup("/:id", func(group *bunrouter.Group) {
+			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+				if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
+					return err
+				} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+					return err
+				} else {
+					return makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
+						"Instance":   instance,
+						"graph":      req.URL.Query().Get("graph"),
+						"graphTypes": WorkflowGraphTypeStrings(),
+					})
+				}
+			})
 
-			var instanceId *uint64
-			if len(instanceStr) > 0 {
-				iid, err := strconv.ParseUint(instanceStr, 10, 64)
+			group.GET("/graph", func(w http.ResponseWriter, req bunrouter.Request) error {
+				id, err := strconv.ParseUint(req.Param("id"), 10, 64)
 				if err != nil {
 					return err
 				}
-				instanceId = &iid
-			}
-			def, instance, err := api.WorkflowForInstance(name, instanceId, self.logger)
-			if err != nil {
-				return err
-			}
 
-			var graphType WorkflowGraphType
-			if len(graphTypeStr) > 0 {
-				var err error
-				if graphType, err = WorkflowGraphTypeFromString(graphTypeStr); err != nil {
+				instance, err := (*self.workflowService).GetById(id)
+				if err != nil {
 					return err
 				}
-			}
 
-			switch graphType {
-			case WorkflowGraphTypeFlow:
-				return RenderWorkflowGraphFlow(def, w)
-			case WorkflowGraphTypeInputs:
-				return RenderWorkflowGraphInputs(def, instance, w)
-			default:
-				// should have already exited when parsing the graph type
-				self.logger.Panic("reached code that should be unreachable")
-				return nil
-			}
+				def, err := self.evaluator.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Certs)
+				if err != nil {
+					return err
+				}
+
+				var graphType WorkflowGraphType
+				graphTypeStr := req.URL.Query().Get("type")
+				if len(graphTypeStr) > 0 {
+					if gt, err := WorkflowGraphTypeFromString(graphTypeStr); err != nil {
+						return err
+					} else {
+						graphType = gt
+					}
+				}
+
+				switch graphType {
+				case WorkflowGraphTypeFlow:
+					return RenderWorkflowGraphFlow(def, w)
+				case WorkflowGraphTypeInputs:
+					return RenderWorkflowGraphInputs(def, &instance, w)
+				default:
+					// should have already exited when parsing the graph type
+					self.logger.Panic("reached code that should be unreachable")
+					return nil
+				}
+			})
 		})
 	})
 
 	router.WithGroup("/api", func(group *bunrouter.Group) {
 		group.WithGroup("/workflow", func(group *bunrouter.Group) {
 			group.WithGroup("/definition", func(group *bunrouter.Group) {
-				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if wfs, err := api.Workflows(); err != nil {
+				group.GET("/:source", func(w http.ResponseWriter, req bunrouter.Request) error {
+					if wfs, err := self.evaluator.ListWorkflows(req.Param("source")); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, wfs)
 					}
 				})
-				group.GET("/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if wf, err := api.Workflow(req.Param("name"), nil); err != nil {
-						return err
-					} else {
-						return bunrouter.JSON(w, wf)
+
+				group.GET("/:source/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
+					var id uint64
+					if idStr := req.URL.Query().Get("id"); len(idStr) > 0 {
+						if iid, err := strconv.ParseUint(idStr, 10, 64); err != nil {
+							return err
+						} else {
+							id = iid
+						}
 					}
-				})
-				group.GET("/:name/:version", func(w http.ResponseWriter, req bunrouter.Request) error {
-					version := req.Param("version")
-					if wf, err := api.Workflow(req.Param("name"), &version); err != nil {
+
+					var inputs model.WorkflowCerts
+					if inputsStr := req.URL.Query().Get("inputs"); len(inputsStr) > 0 {
+						if err := json.Unmarshal([]byte(inputsStr), &inputs); err != nil {
+							return err
+						}
+					}
+
+					if wf, err := self.evaluator.EvaluateWorkflow(req.Param("source"), req.Param("name"), id, inputs); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, wf)
@@ -214,24 +230,27 @@ func (self *Web) start(ctx context.Context) error {
 						return bunrouter.JSON(w, instances)
 					}
 				})
+
 				group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 					var params struct {
-						Name    string
-						Version *string
+						Source string
+						Name   string
 					}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
-					if err := (*self.workflowService).Start(params.Name, params.Version); err != nil {
+					if err := (*self.workflowService).Start(params.Source, params.Name); err != nil {
 						return err
 					}
 					w.WriteHeader(204)
 					return nil
 				})
+
 				group.WithGroup("/:id", func(group *bunrouter.Group) {
 					const (
 						ctxKeyWorkflowInstance = iota
 					)
+
 					group = group.WithMiddleware(func(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
 						return func(w http.ResponseWriter, req bunrouter.Request) error {
 							if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
@@ -245,9 +264,11 @@ func (self *Web) start(ctx context.Context) error {
 							}
 						}
 					})
+
 					group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 						return bunrouter.JSON(w, req.Context().Value(ctxKeyWorkflowInstance))
 					})
+
 					group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
 						instance := req.Context().Value(ctxKeyWorkflowInstance).(model.WorkflowInstance)
 
@@ -277,14 +298,32 @@ func (self *Web) start(ctx context.Context) error {
 					return bunrouter.JSON(w, actions)
 				}
 			})
-			group.GET("/:id", func(w http.ResponseWriter, req bunrouter.Request) error {
-				if id, err := uuid.Parse(req.Param("id")); err != nil {
-					return err
-				} else if action, err := (*self.actionService).GetById(id); err != nil {
-					return err
-				} else {
-					return bunrouter.JSON(w, action)
-				}
+
+			group.WithGroup("/:id", func(group *bunrouter.Group) {
+				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
+					if id, err := uuid.Parse(req.Param("id")); err != nil {
+						return err
+					} else if action, err := (*self.actionService).GetById(id); err != nil {
+						return err
+					} else {
+						return bunrouter.JSON(w, action)
+					}
+				})
+
+				group.GET("/logs", func(w http.ResponseWriter, req bunrouter.Request) error {
+					if id, err := uuid.Parse(req.Param("id")); err != nil {
+						return err
+					} else {
+						stdout, stderr, err := (*self.actionService).Logs(id)
+						if err != nil {
+							return err
+						}
+						return bunrouter.JSON(w, map[string][]string{
+							"stdout": stdout,
+							"stderr": stderr,
+						})
+					}
+				})
 			})
 		})
 	})
