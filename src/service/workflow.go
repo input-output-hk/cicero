@@ -19,20 +19,20 @@ type WorkflowService interface {
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
 	Update(pgx.Tx, uint64, model.WorkflowInstance) error
-	Start(string, *string) error
+	Start(string, string, model.WorkflowCerts) error
 }
 
 type WorkflowServiceImpl struct {
-	logger             *log.Logger
-	workflowRepository repository.WorkflowRepository
-	bridge             liftbridge.Client
+	logger              *log.Logger
+	workflowRepository  repository.WorkflowRepository
+	messageQueueService *MessageQueueService
 }
 
-func NewWorkflowService(db *pgxpool.Pool, bridge liftbridge.Client) WorkflowService {
+func NewWorkflowService(db *pgxpool.Pool, messageQueueService *MessageQueueService) WorkflowService {
 	return &WorkflowServiceImpl{
-		logger:             log.New(os.Stderr, "WorkflowService: ", log.LstdFlags),
-		workflowRepository: repository.NewWorkflowRepository(db),
-		bridge:             bridge,
+		logger:              log.New(os.Stderr, "WorkflowService: ", log.LstdFlags),
+		workflowRepository:  repository.NewWorkflowRepository(db),
+		messageQueueService: messageQueueService,
 	}
 }
 
@@ -71,18 +71,11 @@ func (s *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow model.Workfl
 	return nil
 }
 
-func (s *WorkflowServiceImpl) Start(name string, version *string) error {
-	opts := []liftbridge.MessageOption{}
-	if version != nil {
-		opts = append(opts, liftbridge.Header("version", []byte(*version)))
-	}
-
-	return Publish(
-		s.logger,
-		s.bridge,
+func (s *WorkflowServiceImpl) Start(source string, name string, inputs model.WorkflowCerts) error {
+	return (*s.messageQueueService).Publish(
 		fmt.Sprintf("workflow.%s.start", name),
 		StartStreamName,
-		model.WorkflowCerts{},
-		opts...,
+		inputs,
+		liftbridge.Header("source", []byte(source)),
 	)
 }

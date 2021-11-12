@@ -23,6 +23,7 @@ import (
 
 type InvokerCmd struct {
 	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
@@ -41,21 +42,26 @@ func (self InvokerCmd) init(invoker *Invoker) {
 		// Increase priority of waiting goroutines every second.
 		invoker.limiter = priority.NewLimiter(1, priority.WithDynamicPriority(1000))
 	}
-	if invoker.bridge == nil {
-		bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr)
-		if err != nil {
-			invoker.logger.Fatalln(err.Error())
-			return
-		}
-		invoker.bridge = &bridge
-	}
 	if invoker.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
 		invoker.evaluator = &e
 	}
 	if invoker.actionService == nil {
-		s := service.NewActionService(DB)
+		s := service.NewActionService(DB, self.PrometheusAddr)
 		invoker.actionService = &s
+	}
+	if invoker.messageQueueService == nil {
+		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
+			invoker.logger.Fatalln(err.Error())
+			return
+		} else {
+			s := service.NewMessageQueueService(DB, bridge)
+			invoker.messageQueueService = &s
+		}
+	}
+	if invoker.workflowService == nil {
+		s := service.NewWorkflowService(DB, invoker.messageQueueService)
+		invoker.workflowService = &s
 	}
 }
 
@@ -73,13 +79,13 @@ func (self InvokerCmd) Run() error {
 }
 
 type Invoker struct {
-	logger          *log.Logger
-	tree            *oversight.Tree
-	limiter         *priority.PriorityLimiter
-	bridge          *liftbridge.Client
-	evaluator       *Evaluator
-	actionService   *service.ActionService
-	workflowService *service.WorkflowService
+	logger          	  *log.Logger
+	tree            	  *oversight.Tree
+	limiter         	  *priority.PriorityLimiter
+	evaluator       	  *Evaluator
+	actionService   	  *service.ActionService
+	messageQueueService   *service.MessageQueueService
+	workflowService 	  *service.WorkflowService
 }
 
 func (self *Invoker) start(ctx context.Context) error {
@@ -100,28 +106,8 @@ func (self *Invoker) start(ctx context.Context) error {
 func (self *Invoker) listenToInvoke(ctx context.Context) error {
 	self.logger.Println("Starting Invoker.listenToInvoke")
 
-	if err := service.CreateStreams(self.logger, *self.bridge, []string{service.InvokeStreamName}); err != nil {
-		return err
-	}
-
-	var offset int64
-	if err := pgxscan.Get(
-		context.Background(), DB, &offset,
-		`SELECT COALESCE(MAX("offset") + 1, 0) FROM liftbridge_messages WHERE stream = $1`,
-		service.InvokeStreamName,
-	); err != nil {
-		return errors.WithMessage(err, "Could not select last message offset")
-	}
-
-	self.logger.Printf("Subscribing to %s at offset %d", service.InvokeStreamName, offset)
-	if err := (*self.bridge).Subscribe(
-		ctx,
-		service.InvokeStreamName,
-		self.invokerSubscriber(ctx),
-		liftbridge.StartAtOffset(offset),
-		liftbridge.Partition(0),
-	); err != nil {
-		return errors.WithMessage(err, "failed to subscribe")
+	if err := (*self.messageQueueService).Subscribe(ctx, service.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.InvokeStreamName)
 	}
 
 	<-ctx.Done()
@@ -150,7 +136,12 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 			return
 		}
 
-		if err := service.InsertLiftbridgeMessage(self.logger, DB, *msg); err != nil {
+		//TODO: must be transactional with the message process
+		if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			err := (*self.messageQueueService).Save(tx, msg)
+			return err
+		}); err != nil {
+			self.logger.Printf( "Could not complete db transaction")
 			return
 		}
 
@@ -166,13 +157,20 @@ func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wf
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
 	}
 
-	workflow, err := self.evaluator.EvaluateWorkflow(workflowName, &wf.Version, wfInstanceId, inputs)
+	// We don't actually need workflowName because the instance already knows its name.
+	// We would only need it if instance IDs were not globally unique, but only per workflow name.
+	// TODO Decide whether we want instance IDs to be unique per workflow name or globally.
+	if wf.Name != workflowName {
+		return errors.New("Workflow name given does not match name of instance: " + workflowName + " != " + wf.Name)
+	}
+
+	workflow, err := self.evaluator.EvaluateWorkflow(wf.Source, wf.Name, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
 
 	for actionName, action := range workflow.Actions {
-		if err := self.invokeWorkflowAction(ctx, workflowName, wfInstanceId, inputs, actionName, action); err != nil {
+		if err := self.invokeWorkflowAction(ctx, wf.Name, wfInstanceId, inputs, actionName, action); err != nil {
 			return err
 		}
 	}
