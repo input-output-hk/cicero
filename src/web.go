@@ -287,7 +287,7 @@ func (self *Web) start(ctx context.Context) error {
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
-					if err := (*self.workflowService).Start(params.Source, params.Name, model.WorkflowCerts{}); err != nil {
+					if err := (*self.workflowService).Start(params.Source, params.Name, params.Inputs); err != nil {
 						return err
 					}
 					w.WriteHeader(204)
