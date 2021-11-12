@@ -59,6 +59,10 @@ func (self BrainCmd) init(brain *Brain) {
 		s := service.NewActionService(DB, self.PrometheusAddr)
 		brain.actionService = &s
 	}
+	if brain.nomadEventService == nil {
+		s := service.NewNomadEventService(DB, brain.actionService)
+		brain.nomadEventService = &s
+	}
 	if brain.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
 		brain.evaluator = &e
@@ -85,6 +89,7 @@ type Brain struct {
 	actionService         *service.ActionService
 	workflowActionService *WorkflowActionService
 	messageQueueService   *service.MessageQueueService
+	nomadEventService	  *service.NomadEventService
 	evaluator             *Evaluator
 }
 
@@ -306,11 +311,8 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToNomadEvents")
 
-	var index uint64
-	if err := DB.QueryRow(
-		context.Background(),
-		`SELECT COALESCE(MAX("index") + 1, 0) FROM nomad_events`,
-	).Scan(&index); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	index, err := (*self.nomadEventService).GetLastNomadEvent()
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return errors.WithMessage(err, "Could not get last Nomad event index")
 	}
 
@@ -339,12 +341,13 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 				return errors.WithMessage(err, "Error handling Nomad event")
 			}
 
-			if _, err := DB.Exec(
-				context.Background(),
-				`INSERT INTO nomad_events (topic, "type", "key", filter_keys, "index", payload) VALUES ($1, $2, $3, $4, $5, $6)`,
-				event.Topic, event.Type, event.Key, event.FilterKeys, event.Index, event.Payload,
-			); err != nil {
+			//TODO: must be transactional with the message process
+			if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+				err := (*self.nomadEventService).Save(tx, &event)
 				return errors.WithMessage(err, "Could not insert Nomad event into database")
+			}); err != nil {
+				self.logger.Printf( "Could not complete db transaction")
+				return err
 			}
 
 			index = event.Index

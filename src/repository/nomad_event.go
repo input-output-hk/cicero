@@ -15,6 +15,7 @@ type nomadEventRepository struct {
 type NomadEventRepository interface {
 	Save(pgx.Tx, *nomad.Event) error
 	GetLastNomadEvent() (uint64, error)
+	GetEventAllocByWorkflowId(uint64) ([]map[string]interface{}, error)
 }
 
 func NewNomadEventRepository(db *pgxpool.Pool) NomadEventRepository {
@@ -35,5 +36,26 @@ func (n nomadEventRepository) GetLastNomadEvent() (index uint64, err error) {
 		context.Background(), n.DB, &index,
 		`SELECT COALESCE(MAX("index") + 1, 0) FROM nomad_events`,
 	)
+	return
+}
+
+func (n nomadEventRepository) GetEventAllocByWorkflowId(id uint64) (results []map[string]interface{}, err error) {
+	err = pgxscan.Select(context.Background(), n.DB, &results, `
+            SELECT name, payload->>'Allocation' AS alloc
+            FROM (
+              SELECT id, name
+              FROM action_instances
+              WHERE workflow_instance_id = $1
+            ) action
+            LEFT JOIN LATERAL (
+              SELECT payload, index
+              FROM nomad_events
+              WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
+              AND payload#>>'{Allocation,TaskGroup}' = action.name
+              AND topic = 'Allocation'
+              AND type = 'AllocationUpdated'
+              ORDER BY index DESC LIMIT 1
+            ) payload ON true;
+            `, id)
 	return
 }

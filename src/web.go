@@ -16,12 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
-	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
-	"github.com/kr/pretty"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
@@ -57,6 +54,10 @@ func (self WebCmd) init(web *Web) {
 		s := service.NewActionService(DB, self.PrometheusAddr)
 		web.actionService = &s
 	}
+	if web.nomadEventService == nil {
+		s := service.NewNomadEventService(DB, web.actionService)
+		web.nomadEventService = &s
+	}
 	if web.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
 		web.evaluator = &e
@@ -75,6 +76,7 @@ type Web struct {
 	workflowService 	*service.WorkflowService
 	actionService   	*service.ActionService
 	messageQueueService *service.MessageQueueService
+	nomadEventService	*service.NomadEventService
 	evaluator       	*Evaluator
 }
 
@@ -142,52 +144,10 @@ func (self *Web) start(ctx context.Context) error {
 				} else if instance, err := (*self.workflowService).GetById(id); err != nil {
 					return err
 				} else {
-					results := []map[string]interface{}{}
-					err := pgxscan.Select(context.Background(), DB, &results, `
-            SELECT name, payload->>'Allocation' AS alloc
-            FROM (
-              SELECT id, name
-              FROM action_instances
-              WHERE workflow_instance_id = $1
-            ) action
-            LEFT JOIN LATERAL (
-              SELECT payload, index
-              FROM nomad_events
-              WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
-              AND payload#>>'{Allocation,TaskGroup}' = action.name
-              AND topic = 'Allocation'
-              AND type = 'AllocationUpdated'
-              ORDER BY index DESC LIMIT 1
-            ) payload ON true;
-            `, id)
+					allocs, err := (*self.nomadEventService).GetEventAllocByWorkflowId(id)
 					if err != nil {
 						return err
 					}
-
-					type wrapper struct {
-						Alloc *nomad.Allocation
-						Logs  *service.LokiOutput
-					}
-
-					allocs := map[string]wrapper{}
-
-					for _, result := range results {
-						alloc := &nomad.Allocation{}
-						err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
-						if err != nil {
-							return err
-						}
-
-						logs, err := (*self.actionService).ActionLogs(alloc.ID, alloc.TaskGroup)
-						if err != nil {
-							return err
-						}
-
-						pretty.Println(alloc)
-
-						allocs[result["name"].(string)] = wrapper{Alloc: alloc, Logs: logs}
-					}
-
 					return makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
 						"Instance":   instance,
 						"graph":      req.URL.Query().Get("graph"),

@@ -31,12 +31,14 @@ func (cmd *AllCmd) Run() error {
 	workflowService := service.NewWorkflowService(DB, &messageQueueService)
 	actionService := service.NewActionService(DB, cmd.PrometheusAddr)
 	workflowActionService := NewWorkflowActionService(evaluator, workflowService)
+	nomadEventService := service.NewNomadEventService(DB, &actionService)
 
 	brain := Brain{
 		workflowService:       &workflowService,
 		actionService:         &actionService,
 		evaluator:             &evaluator,
 		workflowActionService: &workflowActionService,
+		nomadEventService:	   &nomadEventService,
 		messageQueueService:   &messageQueueService,
 	}
 	(&BrainCmd{}).init(&brain)
@@ -46,6 +48,7 @@ func (cmd *AllCmd) Run() error {
 		workflowService: 	 &workflowService,
 		actionService:   	 &actionService,
 		messageQueueService: &messageQueueService,
+		nomadEventService:	 &nomadEventService,
 		evaluator:       	 &evaluator,
 	}
 	(&WebCmd{}).init(&web)
