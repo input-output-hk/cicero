@@ -110,10 +110,12 @@
               {{ end }}
             {{ end }}
 
-            <dt class="col-sm-3">CPU Shares:</dt><dd class="col-sm-9">{{ $res.Cpu.CpuShares }} Mhz</dd>
-            <dt class="col-sm-3">Memory:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMB }} MB</dd>
-            {{ if gt $res.Memory.MemoryMaxMB 0 }}
-              <dt class="col-sm-3">Memory Max:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMaxMB }} MB</dd>
+            {{ if $res }}
+              <dt class="col-sm-3">CPU Shares:</dt><dd class="col-sm-9">{{ $res.Cpu.CpuShares }} Mhz</dd>
+              <dt class="col-sm-3">Memory:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMB }} MB</dd>
+              {{ if gt $res.Memory.MemoryMaxMB 0 }}
+                <dt class="col-sm-3">Memory Max:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMaxMB }} MB</dd>
+              {{ end }}
             {{ end }}
           </dl>
 

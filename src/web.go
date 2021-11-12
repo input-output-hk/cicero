@@ -21,7 +21,6 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
-	"github.com/kr/pretty"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
@@ -70,12 +69,12 @@ func (self WebCmd) Run() error {
 }
 
 type Web struct {
-	Listen          	*string
-	logger          	*log.Logger
-	workflowService 	*service.WorkflowService
-	actionService   	*service.ActionService
+	Listen              *string
+	logger              *log.Logger
+	workflowService     *service.WorkflowService
+	actionService       *service.ActionService
 	messageQueueService *service.MessageQueueService
-	evaluator       	*Evaluator
+	evaluator           *Evaluator
 }
 
 func (self *Web) start(ctx context.Context) error {
@@ -182,8 +181,6 @@ func (self *Web) start(ctx context.Context) error {
 						if err != nil {
 							return err
 						}
-
-						pretty.Println(alloc)
 
 						allocs[result["name"].(string)] = wrapper{Alloc: alloc, Logs: logs}
 					}
