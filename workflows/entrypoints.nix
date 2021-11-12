@@ -53,10 +53,10 @@ in {
                         exit
                     fi
 
-                    CICERO_WORKFLOW_SRC=github:$(prop .repository.full_name)/$(prop .pull_request.base.sha) \
-                    <<< '{payload}' \
-                    jq -r '{Source: env.CICERO_WORKFLOW_SRC, Inputs: {pr: .}}' \
-                    | curl "$CICERO_API_URL"/workflow/instance/ --data-binary @-
+                    <<< '{payload}' jq -r '{
+                        Source: "github:\(.repository.full_name)/\(.pull_request.base.sha)",
+                        Inputs: {"github-event": .}
+                    }' | curl "$CICERO_API_URL"/workflow/instance/ --data-binary @-
                   '';
                 };
               };
