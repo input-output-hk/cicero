@@ -10,6 +10,7 @@ require (
 	github.com/georgysavva/scany v0.2.9
 	github.com/go-echarts/go-echarts/v2 v2.2.5-0.20211026072344-dc05f25cd7c2
 	github.com/google/uuid v1.1.2
+	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grafana/loki v1.6.1
 	github.com/hashicorp/cronexpr v1.1.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect

@@ -18,11 +18,11 @@ import (
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
 	"github.com/pkg/errors"
-	"github.com/uptrace/bunrouter"
 )
 
 type WebCmd struct {
@@ -77,72 +77,112 @@ type Web struct {
 	evaluator           *Evaluator
 }
 
+func wildcardRouteHandler(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	route, ok := vars["route"]
+
+	if !ok {
+		// TODO Logging -> Local
+		// TODO Logging -> Grafana Loki
+	}
+
+	if mimeType := mime.TypeByExtension(path.Ext(route)); mimeType != "" {
+		w.Header()["Content-Type"] = []string{mimeType}
+	}
+	err := makeViewTemplate(route).Execute(w, vars)
+	if err != nil {
+		makeViewTemplate("index.html").Execute(w, nil)
+		// TODO Logging -> Local
+		// TODO Logging -> Grafana Loki
+		// TODO Update ViewTemplate
+	}
+}
+
+func defaultHandler(w http.ResponseWriter, req *http.Request) {
+	err := makeViewTemplate("index.html").Execute(w, nil)
+	if err != nil {
+		makeViewTemplate("index.html").Execute(w, nil)
+		// TODO Logging -> Local
+		// TODO Logging -> Grafana Loki
+		// TODO Update ViewTemplate
+	}
+}
+
 func (self *Web) start(ctx context.Context) error {
 	self.logger.Println("Starting Web")
 
-	router := bunrouter.New(
-		bunrouter.WithMiddleware(errorHandler),
-	)
+	router := mux.NewRouter()
+	// TODO Implement Logging to Local
+	// TODO Implement different Log Levels (Info, Warning, Error etc.)
+	// TODO Implement Logging to Loki
+	// TODO Show Errors in viewTemplate
 
-	router.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-		return makeViewTemplate("index.html").Execute(w, nil)
-	})
+	workflowRouter := router.PathPrefix("/workflow").Subrouter()
+	workflowRouter.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		name := req.URL.Query().Get("name")
 
-	router.GET("/*route", func(w http.ResponseWriter, req bunrouter.Request) error {
-		route := req.Param("route")
-		if mimeType := mime.TypeByExtension(path.Ext(route)); mimeType != "" {
-			w.Header()["Content-Type"] = []string{mimeType}
-		}
-		return makeViewTemplate(route).Execute(w, req.Params().Map())
-	})
+		var templateName string
+		var instances []*model.WorkflowInstance
 
-	router.WithGroup("/workflow", func(group *bunrouter.Group) {
-		group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-			name := req.URL.Query().Get("name")
-
-			var templateName string
-			var instances []*model.WorkflowInstance
-
-			if len(name) == 0 {
-				templateName = "workflow"
-				if insts, err := (*self.workflowService).GetAll(); err != nil {
-					return err
-				} else {
-					instances = insts
-				}
+		if len(name) == 0 {
+			templateName = "workflow"
+			if insts, err := (*self.workflowService).GetAll(); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
 			} else {
-				templateName = "workflow/index-name.html"
-				if insts, err := (*self.workflowService).GetAllByName(name); err != nil {
-					return err
-				} else {
-					instances = insts
-				}
+				instances = insts
 			}
-
-			return makeViewTemplate(templateName).Execute(w, instances)
-		})
-
-		group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-			name := req.PostFormValue("name")
-			source := req.PostFormValue("source")
-
-			if err := (*self.workflowService).Start(source, name, model.WorkflowCerts{}); err != nil {
-				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
+		} else {
+			templateName = "workflow/index-name.html"
+			if insts, err := (*self.workflowService).GetAllByName(name); err != nil {
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			} else {
+				instances = insts
 			}
+		}
 
-			http.Redirect(w, req.Request, "/workflow", 302)
-			return nil
-		})
+		err := makeViewTemplate(templateName).Execute(w, instances)
+		if err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+	}).Methods("GET")
 
-		group.WithGroup("/:id", func(group *bunrouter.Group) {
-			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
-					return err
-				} else if instance, err := (*self.workflowService).GetById(id); err != nil {
-					return err
-				} else {
-					results := []map[string]interface{}{}
-					err := pgxscan.Select(context.Background(), DB, &results, `
+	workflowRouter.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		name := req.PostFormValue("name")
+		source := req.PostFormValue("source")
+
+		if err := (*self.workflowService).Start(source, name, model.WorkflowCerts{}); err != nil {
+			errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+
+		http.Redirect(w, req, "/workflow", 302)
+	}).Methods("POST")
+
+	workflowRouter.HandleFunc("{id}/", func(w http.ResponseWriter, req *http.Request) {
+
+		vars := mux.Vars(req)
+		route, ok := vars["id"]
+
+		if !ok {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+
+		if id, err := strconv.ParseUint(route, 10, 64); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
+			results := []map[string]interface{}{}
+			err := pgxscan.Select(context.Background(), DB, &results, `
             SELECT name, payload->>'Allocation' AS alloc
             FROM (
               SELECT id, name
@@ -159,219 +199,301 @@ func (self *Web) start(ctx context.Context) error {
               ORDER BY index DESC LIMIT 1
             ) payload ON true;
             `, id)
-					if err != nil {
-						return err
-					}
+			if err != nil {
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
+			}
 
-					type wrapper struct {
-						Alloc *nomad.Allocation
-						Logs  *service.LokiOutput
-					}
+			type wrapper struct {
+				Alloc *nomad.Allocation
+				Logs  *service.LokiOutput
+			}
 
-					allocs := map[string]wrapper{}
+			allocs := map[string]wrapper{}
 
-					for _, result := range results {
-						alloc := &nomad.Allocation{}
-						err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
-						if err != nil {
-							return err
-						}
-
-						logs, err := (*self.actionService).ActionLogs(alloc.ID, alloc.TaskGroup)
-						if err != nil {
-							return err
-						}
-
-						allocs[result["name"].(string)] = wrapper{Alloc: alloc, Logs: logs}
-					}
-
-					return makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
-						"Instance":   instance,
-						"graph":      req.URL.Query().Get("graph"),
-						"graphTypes": WorkflowGraphTypeStrings(),
-						"allocs":     allocs,
-					})
-				}
-			})
-
-			group.GET("/graph", func(w http.ResponseWriter, req bunrouter.Request) error {
-				id, err := strconv.ParseUint(req.Param("id"), 10, 64)
+			for _, result := range results {
+				alloc := &nomad.Allocation{}
+				err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
 				if err != nil {
-					return err
+					// TODO Logging -> Local
+					// TODO Logging -> Grafana Loki
+					// TODO Update ViewTemplate
 				}
 
-				instance, err := (*self.workflowService).GetById(id)
+				logs, err := (*self.actionService).ActionLogs(alloc.ID, alloc.TaskGroup)
 				if err != nil {
-					return err
+					// TODO Logging -> Local
+					// TODO Logging -> Grafana Loki
+					// TODO Update ViewTemplate
 				}
 
-				def, err := self.evaluator.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Certs)
-				if err != nil {
-					return err
-				}
+				allocs[result["name"].(string)] = wrapper{Alloc: alloc, Logs: logs}
+			}
 
-				var graphType WorkflowGraphType
-				graphTypeStr := req.URL.Query().Get("type")
-				if len(graphTypeStr) > 0 {
-					if gt, err := WorkflowGraphTypeFromString(graphTypeStr); err != nil {
-						return err
-					} else {
-						graphType = gt
-					}
-				}
-
-				switch graphType {
-				case WorkflowGraphTypeFlow:
-					return RenderWorkflowGraphFlow(def, w)
-				case WorkflowGraphTypeInputs:
-					return RenderWorkflowGraphInputs(def, &instance, w)
-				default:
-					// should have already exited when parsing the graph type
-					self.logger.Panic("reached code that should be unreachable")
-					return nil
-				}
+			makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
+				"Instance":   instance,
+				"graph":      req.URL.Query().Get("graph"),
+				"graphTypes": WorkflowGraphTypeStrings(),
+				"allocs":     allocs,
 			})
-		})
-	})
+		}
+	}).Methods("GET")
 
-	router.WithGroup("/api", func(group *bunrouter.Group) {
-		group.WithGroup("/workflow", func(group *bunrouter.Group) {
-			group.WithGroup("/definition", func(group *bunrouter.Group) {
-				group.GET("/:source", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if wfs, err := self.evaluator.ListWorkflows(req.Param("source")); err != nil {
-						return err
-					} else {
-						return bunrouter.JSON(w, wfs)
-					}
-				})
+	workflowRouter.HandleFunc("{id}/graph", func(w http.ResponseWriter, req *http.Request) {
 
-				group.GET("/:source/:name", func(w http.ResponseWriter, req bunrouter.Request) error {
-					var id uint64
-					if idStr := req.URL.Query().Get("id"); len(idStr) > 0 {
-						if iid, err := strconv.ParseUint(idStr, 10, 64); err != nil {
-							return err
-						} else {
-							id = iid
-						}
-					}
+		vars := mux.Vars(req)
+		route, ok := vars["id"]
 
-					var inputs model.WorkflowCerts
-					if inputsStr := req.URL.Query().Get("inputs"); len(inputsStr) > 0 {
-						if err := json.Unmarshal([]byte(inputsStr), &inputs); err != nil {
-							return err
-						}
-					}
+		if !ok {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
 
-					if wf, err := self.evaluator.EvaluateWorkflow(req.Param("source"), req.Param("name"), id, inputs); err != nil {
-						return err
-					} else {
-						return bunrouter.JSON(w, wf)
-					}
-				})
-			})
-			group.WithGroup("/instance", func(group *bunrouter.Group) {
-				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if instances, err := (*self.workflowService).GetAll(); err != nil {
-						return err
-					} else {
-						return bunrouter.JSON(w, instances)
-					}
-				})
+		id, err := strconv.ParseUint(route, 10, 64)
+		if err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
 
-				group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-					var params struct {
-						Source string
-						Name   string
-						Inputs model.WorkflowCerts
-					}
-					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
-						return errors.WithMessage(err, "Could not unmarshal params from request body")
-					}
-					if err := (*self.workflowService).Start(params.Source, params.Name, model.WorkflowCerts{}); err != nil {
-						return err
-					}
-					w.WriteHeader(204)
-					return nil
-				})
+		instance, err := (*self.workflowService).GetById(id)
+		if err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
 
-				group.WithGroup("/:id", func(group *bunrouter.Group) {
-					const (
-						ctxKeyWorkflowInstance = iota
-					)
+		def, err := self.evaluator.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Certs)
+		if err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
 
-					group = group.WithMiddleware(func(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
-						return func(w http.ResponseWriter, req bunrouter.Request) error {
-							if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
-								return err
-							} else if instance, err := (*self.workflowService).GetById(id); err != nil {
-								return err
-							} else {
-								return next(w, req.WithContext(
-									context.WithValue(req.Context(), ctxKeyWorkflowInstance, instance),
-								))
-							}
-						}
-					})
+		var graphType WorkflowGraphType
+		graphTypeStr := req.URL.Query().Get("type")
+		if len(graphTypeStr) > 0 {
+			if gt, err := WorkflowGraphTypeFromString(graphTypeStr); err != nil {
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
+			} else {
+				graphType = gt
+			}
+		}
 
-					group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-						return bunrouter.JSON(w, req.Context().Value(ctxKeyWorkflowInstance))
-					})
+		switch graphType {
+		case 1:
+			RenderWorkflowGraphFlow(def, w)
+		case 2:
+			RenderWorkflowGraphInputs(def, &instance, w)
+		default:
+			// should have already exited when parsing the graph type
+			self.logger.Panic("reached code that should be unreachable")
+		}
+	}).Methods("GET")
 
-					group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
-						instance := req.Context().Value(ctxKeyWorkflowInstance).(model.WorkflowInstance)
+	apiWorkflowRouter := router.PathPrefix("/api/workflow").Subrouter()
+	apiWorkflowRouter.HandleFunc("definition/{source}", func(w http.ResponseWriter, req *http.Request) {
 
-						certs := model.WorkflowCerts{}
-						if err := json.NewDecoder(req.Body).Decode(&certs); err != nil {
-							return errors.WithMessage(err, "Could not unmarshal certs from request body")
-						}
+		source := req.URL.Query().Get("source")
+		if wfs, err := self.evaluator.ListWorkflows(source); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
 
-						if err := (*self.messageQueueService).Publish(
-							fmt.Sprintf("workflow.%s.%d.cert", instance.Name, instance.ID),
-							service.CertStreamName,
-							certs,
-						); err != nil {
-							return errors.WithMessage(err, "Could not publish certificate")
-						}
-						w.WriteHeader(204)
-						return nil
-					})
-				})
-			})
-		})
-		group.WithGroup("/action", func(group *bunrouter.Group) {
-			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				if actions, err := (*self.actionService).GetAll(); err != nil {
-					return err
-				} else {
-					return bunrouter.JSON(w, actions)
-				}
-			})
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+			json.NewEncoder(w).Encode(wfs)
+		}
+	}).Methods("GET")
 
-			group.WithGroup("/:id", func(group *bunrouter.Group) {
-				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if id, err := uuid.Parse(req.Param("id")); err != nil {
-						return err
-					} else if action, err := (*self.actionService).GetById(id); err != nil {
-						return err
-					} else {
-						return bunrouter.JSON(w, action)
-					}
-				})
+	apiWorkflowRouter.HandleFunc("definition/{source}/{name}", func(w http.ResponseWriter, req *http.Request) {
+		var id uint64
+		if idStr := req.URL.Query().Get("id"); len(idStr) > 0 {
+			if iid, err := strconv.ParseUint(idStr, 10, 64); err != nil {
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
+			} else {
+				id = iid
+			}
+		}
 
-				group.GET("/logs", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if id, err := uuid.Parse(req.Param("id")); err != nil {
-						return err
-					} else {
-						logs, err := (*self.actionService).JobLogs(id)
-						if err != nil {
-							return err
-						}
-						return bunrouter.JSON(w, map[string]*service.LokiOutput{"logs": logs})
-					}
-				})
-			})
-		})
-	})
+		var inputs model.WorkflowCerts
+		if inputsStr := req.URL.Query().Get("inputs"); len(inputsStr) > 0 {
+			if err := json.Unmarshal([]byte(inputsStr), &inputs); err != nil {
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
+			}
+		}
+
+		name := req.PostFormValue("name")
+		source := req.PostFormValue("source")
+		if wf, err := self.evaluator.EvaluateWorkflow(source, name, id, inputs); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+			json.NewEncoder(w).Encode(wf)
+		}
+	}).Methods("GET")
+
+	apiWorkflowRouter.HandleFunc("instance/", func(w http.ResponseWriter, req *http.Request) {
+
+		if instances, err := (*self.workflowService).GetAll(); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+			json.NewEncoder(w).Encode(instances)
+		}
+	}).Methods("GET")
+
+	apiWorkflowRouter.HandleFunc("definition/instance/", func(w http.ResponseWriter, req *http.Request) {
+
+		var params struct {
+			Source string
+			Name   string
+			Inputs model.WorkflowCerts
+		}
+		if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
+			errors.WithMessage(err, "Could not unmarshal params from request body")
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+		if err := (*self.workflowService).Start(params.Source, params.Name, model.WorkflowCerts{}); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+		w.WriteHeader(204)
+	}).Methods("POST")
+
+	apiWorkflowInstanceIdRouter := apiWorkflowRouter.PathPrefix("definition/instance/id").Subrouter()
+	apiWorkflowInstanceIdRouter.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		vars := mux.Vars(req)
+		id, ok := vars["id"]
+
+		if !ok {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+
+		if id, err := strconv.ParseUint(id, 10, 64); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
+			json.NewEncoder(w).Encode(instance)
+		}
+
+	}).Methods("GET")
+
+	apiWorkflowRouter.HandleFunc("definition/instance/id/cert", func(w http.ResponseWriter, req *http.Request) {
+
+		vars := mux.Vars(req)
+		id, ok := vars["id"]
+
+		if !ok {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+
+		if id, err := strconv.ParseUint(id, 10, 64); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
+
+			certs := model.WorkflowCerts{}
+			if err := json.NewDecoder(req.Body).Decode(&certs); err != nil {
+				errors.WithMessage(err, "Could not unmarshal certs from request body")
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
+			}
+
+			if err := (*self.messageQueueService).Publish(
+				fmt.Sprintf("workflow.%s.%d.cert", instance.Name, instance.ID),
+				service.CertStreamName,
+				certs,
+			); err != nil {
+				errors.WithMessage(err, "Could not publish certificate")
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
+			}
+			w.WriteHeader(204)
+		}
+	}).Methods("POST")
+
+	apiActionRouter := router.PathPrefix("/api/action").Subrouter()
+	apiActionRouter.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+
+		if actions, err := (*self.actionService).GetAll(); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+			json.NewEncoder(w).Encode(actions)
+		}
+	}).Methods("GET")
+
+	apiActionRouter.HandleFunc("{id}/", func(w http.ResponseWriter, req *http.Request) {
+
+		vars := mux.Vars(req)
+		id, ok := vars["id"]
+		if !ok {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+
+		if id, err := uuid.Parse(id); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else if action, err := (*self.actionService).GetById(id); err != nil {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+			json.NewEncoder(w).Encode(action)
+		}
+	}).Methods("GET")
+
+	apiActionRouter.HandleFunc("{id}/logs", func(w http.ResponseWriter, req *http.Request) {
+
+		vars := mux.Vars(req)
+		id, ok := vars["id"]
+		if !ok {
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+
+		if id, err := uuid.Parse(id); err != nil {
+
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		} else {
+			logs, err := (*self.actionService).JobLogs(id)
+			if err != nil {
+
+				// TODO Logging -> Local
+				// TODO Logging -> Grafana Loki
+			}
+
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+			json.NewEncoder(w).Encode(map[string]*service.LokiOutput{"logs": logs})
+		}
+	}).Methods("GET")
+
+	router.HandleFunc("/*route", wildcardRouteHandler).
+		Methods("GET")
+	router.HandleFunc("/", defaultHandler).
+		Methods("GET")
 
 	server := &http.Server{Addr: *self.Listen, Handler: router}
 
@@ -465,58 +587,4 @@ func makeViewTemplate(route string) *template.Template {
 		return routeTmpl
 	}
 	return t
-}
-
-type stackTracer interface {
-	StackTrace() errors.StackTrace
-}
-
-// copy-pasted error handling from bunrouter's homepage
-
-type HTTPError struct {
-	statusCode int
-
-	Code    string            `json:"code"`
-	Message string            `json:"message"`
-	Trace   errors.StackTrace `json:trace`
-}
-
-func (e HTTPError) Error() string {
-	return e.Message
-}
-
-func NewHTTPError(err error) HTTPError {
-	httpErr := HTTPError{
-		statusCode: http.StatusInternalServerError,
-
-		Code:    "internal",
-		Message: err.Error(),
-	}
-
-	if serr, ok := err.(stackTracer); ok {
-		httpErr.Trace = serr.StackTrace()
-	}
-
-	return httpErr
-}
-
-func errorHandler(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
-	return func(w http.ResponseWriter, req bunrouter.Request) error {
-		// Call the next handler on the chain to get the error.
-		err := next(w, req)
-
-		switch err := err.(type) {
-		case nil:
-			// no error
-		case HTTPError: // already a HTTPError
-			w.WriteHeader(err.statusCode)
-			_ = bunrouter.JSON(w, err)
-		default:
-			httpErr := NewHTTPError(err)
-			w.WriteHeader(httpErr.statusCode)
-			_ = bunrouter.JSON(w, httpErr)
-		}
-
-		return err // return the err in case there other middlewares
-	}
 }
