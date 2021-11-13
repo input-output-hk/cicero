@@ -32,10 +32,11 @@ in {
         "not yet started" = pr == null;
         "GitHub event is a PR event" = github-event ? pull_request;
       };
-      success.pr = github-event.pull_request or null; # TODO make it possible to drop `or null`
-      job = lib.addNomadJobDefaults (run "bash" {} "
+      success.pr =
+        github-event.pull_request or null; # TODO make it possible to drop `or null`
+      job = lib.addNomadJobDefaults (run "bash" { } ''
         echo 'TODO make it possible to omit would-be no-op jobs?'
-      ");
+      '');
     };
 
     gocritic = { pr ? null, gocritic ? null }: {
@@ -78,8 +79,8 @@ in {
 
     build = { pr ? null, gocritic ? null, nixfmt ? null, build ? null }: {
       when = {
-        "gocritic passes" = gocritic == true;
-        "nixfmt passes" = nixfmt == true;
+        "gocritic passes" = gocritic;
+        "nixfmt passes" = nixfmt;
         "build hasn't run yet" = build == null;
       };
 
@@ -99,7 +100,7 @@ in {
     deploy = { pr ? null, environment ? null, gocritic ? null, nixfmt ? null
       , build ? null, deploy ? null }: {
         when = {
-          "build passes" = build == true;
+          "build passes" = build;
           "deploy hasn't run yet" = deploy == null;
         };
 
@@ -113,12 +114,7 @@ in {
           ${clone pr}
 
           cue export -e jobs.cicero \
-            ${
-              if environment == null then
-                ""
-              else
-                "-t environment=${environment}"
-            } \
+            ${if environment == null then "" else "-t env=${environment}"} \
             -t 'sha=${pr.head.sha}' \
             > job.json
           nomad run job.json
