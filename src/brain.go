@@ -38,7 +38,7 @@ func (self BrainCmd) init(brain *Brain) {
 			oversight.OneForOne(), // restart every task on its own
 		))
 	}
-	if brain.workflowActionService == nil{
+	if brain.workflowActionService == nil {
 		s := NewWorkflowActionService(*brain.evaluator, *brain.workflowService)
 		brain.workflowActionService = &s
 	}
@@ -150,7 +150,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 		err := (*self.messageQueueService).Save(tx, msg)
 		return err
 	}); err != nil {
-		self.logger.Printf( "Could not complete db transaction")
+		self.logger.Printf("Could not complete db transaction")
 		return
 	}
 
@@ -319,7 +319,11 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 	stream, err := nomadClient.EventStream().Stream(
 		ctx,
 		map[nomad.Topic][]string{
-			nomad.TopicAll: {string(nomad.TopicAll)},
+			nomad.TopicDeployment: {string(nomad.TopicAll)},
+			nomad.TopicEvaluation: {string(nomad.TopicAll)},
+			nomad.TopicAllocation: {string(nomad.TopicAll)},
+			nomad.TopicJob:        {string(nomad.TopicAll)},
+			nomad.TopicNode:       {string(nomad.TopicAll)},
 		},
 		index,
 		nil,

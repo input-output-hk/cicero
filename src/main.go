@@ -1,10 +1,11 @@
 package cicero
 
 import (
+	"os"
+
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"os"
 )
 
 var DB *pgxpool.Pool
@@ -16,8 +17,8 @@ func Init() error {
 	if err != nil {
 		return err
 	}
-
-	nomadClient, err = nomad.NewClient(nomad.DefaultConfig())
+	config := nomad.DefaultConfig()
+	nomadClient, err = nomad.NewClient(config)
 	if err != nil {
 		return err
 	}
