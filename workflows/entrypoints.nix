@@ -3,10 +3,10 @@
 let lib = import ../workflows-lib.nix;
 in {
   actions = {
-    github = { sha ? null, environment ? null, deploy ? null }: {
+    github = { sha ? null, environment ? null, github ? null }: {
       when = {
         "sha given" = sha != null;
-        "deploy hasn't run yet" = deploy == null;
+        "github hasn't run yet" = github == null;
       };
 
       job = lib.addNomadJobDefaults (run "bash" {
