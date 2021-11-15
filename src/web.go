@@ -121,19 +121,33 @@ func (self *Web) start(ctx context.Context) error {
 		group.GET("/new", func(w http.ResponseWriter, req bunrouter.Request) error {
 			const templateName = "workflow/new.html"
 
-			// step 1
 			source := req.URL.Query().Get("source")
+			name := req.URL.Query().Get("name")
+
+			// step 1
 			if len(source) == 0 {
 				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{})
 			}
 
-			// step 3
-			if name := req.URL.Query().Get("name"); len(name) > 0 {
-				if err := self.workflowService.Start(source, name, model.WorkflowCerts{}); err != nil {
+			// step 4
+			if inputsJson := req.URL.Query().Get("inputs"); len(inputsJson) > 0 {
+				var inputs model.WorkflowCerts
+				if err := json.Unmarshal([]byte(inputsJson), &inputs); err != nil {
+					return err
+				}
+				if err := self.workflowService.Start(source, name, inputs); err != nil {
 					return err
 				}
 				http.Redirect(w, req.Request, "/workflow", 302)
 				return nil
+			}
+
+			// step 3
+			if len(name) > 0 {
+				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{
+					"Source": source,
+					"Name": name,
+				})
 			}
 
 			// step 2

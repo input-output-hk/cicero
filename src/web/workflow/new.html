@@ -3,20 +3,22 @@
 {{define "main"}}
 	<h1>Start Workflow</h1>
 
-	<div class="my-5">
-		<h3>Enter source:</h3>
-		<form>
-			<input
-				class="w-50"
-				name="source"
-				placeholder="github:input-output-hk/cicero"
-				value="{{.Source}}"
-			/>
-			<button>List Workflows →</button>
-		</form>
-	</div>
-
-	{{if .Source}}
+	{{if not .Source}}
+		<!-- step 1 -->
+		<div class="my-5">
+			<h3>Enter source:</h3>
+			<form>
+				<input
+					class="w-50"
+					name="source"
+					placeholder="github:input-output-hk/cicero"
+					value="{{.Source}}"
+				/>
+				<button>List Workflows →</button>
+			</form>
+		</div>
+	{{else if not .Name}}
+		<!-- step 2 -->
 		<h3>
 			Workflows available in
 			<code>{{.Source}}</code>:
@@ -32,5 +34,14 @@
 				</li>
 			{{end}}
 		</ul>
+	{{else}}
+		<!-- step 3 -->
+		<h3>Specify inputs for "{{.Name}}"</h3>
+		<form>
+			<input type="hidden" name="source" value="{{.Source}}"/>
+			<input type="hidden" name="name" value="{{.Name}}"/>
+			<textarea name="inputs" placeholder="{}" style="display: block">{}</textarea>
+			<button>Start!</button>
+		</form>
 	{{end}}
 {{end}}
