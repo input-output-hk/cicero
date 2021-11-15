@@ -32,7 +32,7 @@ in {
         cd src
         git checkout ${sha}
 
-        cue export -e jobs.webhooks \
+        cue export ./jobs -e jobs.webhooks \
           ${if environment == null then "" else "-t env=${environment}"} \
           -t 'sha=${sha}' \
           > job.json

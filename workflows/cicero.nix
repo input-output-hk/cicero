@@ -113,7 +113,7 @@ in {
         } ''
           ${clone pr}
 
-          cue export -e jobs.cicero \
+          cue export ./jobs -e jobs.cicero \
             ${if environment == null then "" else "-t env=${environment}"} \
             -t 'sha=${pr.head.sha}' \
             > job.json
