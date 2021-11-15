@@ -53,12 +53,12 @@ if #env == "prod" {
 				name:         "cicero"
 				address_mode: "auto"
 				port:         "http"
-				task:         "cicero"
 				tags: [
 					"cicero",
 					"ingress",
 					"traefik.enable=true",
 					"traefik.http.routers.cicero.rule=Host(`cicero.infra.aws.iohkdev.io`)",
+					"traefik.http.routers.cicero.middlewares=oauth-auth-redirect",
 					"traefik.http.routers.cicero.entrypoints=https",
 					"traefik.http.routers.cicero.tls=true",
 				]

@@ -3,6 +3,7 @@ package jobs
 #env:            string | *"dev" | "prod"              @tag(env)
 #sha:            string                                @tag(sha)
 #ciceroFlake:    string | *#environment.ciceroFlake    @tag(ciceroFlake)
+#webhookFlake:   string | *#environment.webhookFlake   @tag(webhookFlake)
 #nomadAddr:      string | *#environment.nomadAddr      @tag(nomadAddr)
 #liftbridgeAddr: string | *#environment.liftbridgeAddr @tag(liftbridgeAddr)
 #databaseUrl:    string | *#environment.databaseUrl    @tag(databaseUrl)
@@ -13,6 +14,7 @@ package jobs
 #environments: {
 	dev: {
 		ciceroFlake:    "path:.#cicero-entrypoint"
+		webhookFlake:   "path:.#webhook-trigger"
 		databaseUrl:    "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 		liftbridgeAddr: "127.0.0.1:9292"
 		nomadAddr:      "http://127.0.0.1:4646"
@@ -21,6 +23,7 @@ package jobs
 
 	prod: {
 		ciceroFlake:    "github:input-output-hk/cicero/\(#sha)#cicero-entrypoint"
+		webhookFlake:   "github:input-output-hk/cicero/\(#sha)#webhook-trigger"
 		databaseUrl:    "postgres://cicero:@hydra.node.consul:5432/cicero?sslmode=disable"
 		liftbridgeAddr: "liftbridge.service.consul:9292"
 		nomadAddr:      "https://nomad.infra.aws.iohkdev.io"
