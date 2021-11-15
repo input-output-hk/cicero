@@ -110,7 +110,10 @@ func (self *Web) start(ctx context.Context) error {
 				if instances, err := (*self.workflowService).GetAllByName(name); err != nil {
 					return err
 				} else {
-					return makeViewTemplate("workflow/index-name.html").Execute(w, instances)
+					return makeViewTemplate("workflow/index-name.html").Execute(w, map[string]interface{}{
+						"Name":      name,
+						"Instances": instances,
+					})
 				}
 			}
 		})
