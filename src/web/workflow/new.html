@@ -1,0 +1,36 @@
+{{template "_layout.html" .}}
+
+{{define "main"}}
+	<h1>Start Workflow</h1>
+
+	<div class="my-5">
+		<h3>Enter source:</h3>
+		<form>
+			<input
+				class="w-50"
+				name="source"
+				placeholder="github:input-output-hk/cicero"
+				value="{{.Source}}"
+			/>
+			<button>List Workflows →</button>
+		</form>
+	</div>
+
+	{{if .Source}}
+		<h3>
+			Workflows available in
+			<code>{{.Source}}</code>:
+		</h3>
+		<ul>
+			{{range .Names}}
+				<li>
+					<form>
+						<input type="hidden" name="source" value="{{$.Source}}"/>
+						<input type="hidden" name="name" value="{{.}}"/>
+						<button class="btn btn-link">{{.}}</button>
+					</form>
+				</li>
+			{{end}}
+		</ul>
+	{{end}}
+{{end}}

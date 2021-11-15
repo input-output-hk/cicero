@@ -8,16 +8,16 @@
 			<th># Sources</th>
 		</tr>
 		<tr>
-			<td colspan="3">
-				<form
-					method="POST"
-					action="/workflow/"
-					style="text-align: center"
-				>
-					<input name="source" placeholder="Source"/>
-					<input name="name" placeholder="Name"/>
-					<button>Start New Workflow</button>
-				</form>
+			<td
+				colspan="3"
+				style="
+					text-align: center;
+					font-style: italic;
+				"
+			>
+				<a href="/workflow/new">
+					Start New Workflow
+				</a>
 			</td>
 		</tr>
 		{{range .}}

@@ -118,6 +118,35 @@ func (self *Web) start(ctx context.Context) error {
 			}
 		})
 
+		group.GET("/new", func(w http.ResponseWriter, req bunrouter.Request) error {
+			const templateName = "workflow/new.html"
+
+			// step 1
+			source := req.URL.Query().Get("source")
+			if len(source) == 0 {
+				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{})
+			}
+
+			// step 3
+			if name := req.URL.Query().Get("name"); len(name) > 0 {
+				if err := self.workflowService.Start(source, name, model.WorkflowCerts{}); err != nil {
+					return err
+				}
+				http.Redirect(w, req.Request, "/workflow", 302)
+				return nil
+			}
+
+			// step 2
+			if names, err := self.evaluator.ListWorkflows(source); err != nil {
+				return err
+			} else {
+				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{
+					"Source": source,
+					"Names":  names,
+				})
+			}
+		})
+
 		group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
