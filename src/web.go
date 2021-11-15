@@ -45,16 +45,16 @@ func (self WebCmd) init(web *Web) {
 			return
 		} else {
 			s := service.NewMessageQueueService(DB, bridge)
-			web.messageQueueService = &s
+			web.messageQueueService = s
 		}
 	}
 	if web.workflowService == nil {
 		s := service.NewWorkflowService(DB, web.messageQueueService)
-		web.workflowService = &s
+		web.workflowService = s
 	}
 	if web.actionService == nil {
 		s := service.NewActionService(DB, self.PrometheusAddr)
-		web.actionService = &s
+		web.actionService = s
 	}
 	if web.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
@@ -71,9 +71,9 @@ func (self WebCmd) Run() error {
 type Web struct {
 	Listen              *string
 	logger              *log.Logger
-	workflowService     *service.WorkflowService
-	actionService       *service.ActionService
-	messageQueueService *service.MessageQueueService
+	workflowService     service.WorkflowService
+	actionService       service.ActionService
+	messageQueueService service.MessageQueueService
 	evaluator           *Evaluator
 }
 
@@ -100,14 +100,14 @@ func (self *Web) start(ctx context.Context) error {
 		group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.URL.Query().Get("name")
 
-			if len(name) == 0 {
-				if summary, err := (*self.workflowService).GetSummary(); err != nil {
+			if name == "" {
+				if summary, err := self.workflowService.GetSummary(); err != nil {
 					return err
 				} else {
 					return makeViewTemplate("workflow").Execute(w, summary)
 				}
 			} else {
-				if instances, err := (*self.workflowService).GetAllByName(name); err != nil {
+				if instances, err := self.workflowService.GetAllByName(name); err != nil {
 					return err
 				} else {
 					return makeViewTemplate("workflow/index-name.html").Execute(w, map[string]interface{}{
@@ -122,7 +122,7 @@ func (self *Web) start(ctx context.Context) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
 
-			if err := (*self.workflowService).Start(source, name, model.WorkflowCerts{}); err != nil {
+			if err := self.workflowService.Start(source, name, model.WorkflowCerts{}); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
@@ -134,7 +134,7 @@ func (self *Web) start(ctx context.Context) error {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 				if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
 					return err
-				} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+				} else if instance, err := self.workflowService.GetById(id); err != nil {
 					return err
 				} else {
 					results := []map[string]interface{}{}
@@ -173,7 +173,7 @@ func (self *Web) start(ctx context.Context) error {
 							return err
 						}
 
-						logs, err := (*self.actionService).ActionLogs(alloc.ID, alloc.TaskGroup)
+						logs, err := self.actionService.ActionLogs(alloc.ID, alloc.TaskGroup)
 						if err != nil {
 							return err
 						}
@@ -196,7 +196,7 @@ func (self *Web) start(ctx context.Context) error {
 					return err
 				}
 
-				instance, err := (*self.workflowService).GetById(id)
+				instance, err := self.workflowService.GetById(id)
 				if err != nil {
 					return err
 				}
@@ -267,7 +267,7 @@ func (self *Web) start(ctx context.Context) error {
 			})
 			group.WithGroup("/instance", func(group *bunrouter.Group) {
 				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if instances, err := (*self.workflowService).GetAll(); err != nil {
+					if instances, err := self.workflowService.GetAll(); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, instances)
@@ -286,7 +286,7 @@ func (self *Web) start(ctx context.Context) error {
 					}
 
 					if params.Name != nil {
-						if err := (*self.workflowService).Start(params.Source, *params.Name, params.Inputs); err != nil {
+						if err := self.workflowService.Start(params.Source, *params.Name, params.Inputs); err != nil {
 							return err
 						}
 					} else {
@@ -294,7 +294,7 @@ func (self *Web) start(ctx context.Context) error {
 							return err
 						} else {
 							for _, name := range wfNames {
-								if err := (*self.workflowService).Start(params.Source, name, params.Inputs); err != nil {
+								if err := self.workflowService.Start(params.Source, name, params.Inputs); err != nil {
 									return err
 								}
 							}
@@ -314,7 +314,7 @@ func (self *Web) start(ctx context.Context) error {
 						return func(w http.ResponseWriter, req bunrouter.Request) error {
 							if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
 								return err
-							} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+							} else if instance, err := self.workflowService.GetById(id); err != nil {
 								return err
 							} else {
 								return next(w, req.WithContext(
@@ -336,7 +336,7 @@ func (self *Web) start(ctx context.Context) error {
 							return errors.WithMessage(err, "Could not unmarshal certs from request body")
 						}
 
-						if err := (*self.messageQueueService).Publish(
+						if err := self.messageQueueService.Publish(
 							fmt.Sprintf("workflow.%s.%d.cert", instance.Name, instance.ID),
 							service.CertStreamName,
 							certs,
@@ -351,7 +351,7 @@ func (self *Web) start(ctx context.Context) error {
 		})
 		group.WithGroup("/action", func(group *bunrouter.Group) {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				if actions, err := (*self.actionService).GetAll(); err != nil {
+				if actions, err := self.actionService.GetAll(); err != nil {
 					return err
 				} else {
 					return bunrouter.JSON(w, actions)
@@ -362,7 +362,7 @@ func (self *Web) start(ctx context.Context) error {
 				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 					if id, err := uuid.Parse(req.Param("id")); err != nil {
 						return err
-					} else if action, err := (*self.actionService).GetById(id); err != nil {
+					} else if action, err := self.actionService.GetById(id); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, action)
@@ -373,7 +373,7 @@ func (self *Web) start(ctx context.Context) error {
 					if id, err := uuid.Parse(req.Param("id")); err != nil {
 						return err
 					} else {
-						logs, err := (*self.actionService).JobLogs(id)
+						logs, err := self.actionService.JobLogs(id)
 						if err != nil {
 							return err
 						}

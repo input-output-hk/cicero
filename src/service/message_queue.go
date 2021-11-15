@@ -3,15 +3,16 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"log"
+	"os"
+	"time"
+
 	model "github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
-	"log"
-	"os"
-	"time"
 )
 
 const (
@@ -27,15 +28,15 @@ type MessageQueueService interface {
 }
 
 type MessageQueueServiceImpl struct {
-	logger           	   *log.Logger
-	bridge 				   liftbridge.Client
+	logger                 *log.Logger
+	bridge                 liftbridge.Client
 	messageQueueRepository repository.MessageQueueRepository
 }
 
 func NewMessageQueueService(db *pgxpool.Pool, bridge liftbridge.Client) MessageQueueService {
 	return &MessageQueueServiceImpl{
-		logger: log.New(os.Stderr, "MessageQueueService: ", log.LstdFlags),
-		bridge: bridge,
+		logger:                 log.New(os.Stderr, "MessageQueueService: ", log.LstdFlags),
+		bridge:                 bridge,
 		messageQueueRepository: repository.NewMessageQueueRepository(db),
 	}
 }
@@ -64,7 +65,7 @@ func (m *MessageQueueServiceImpl) createStreams(streamNames []string) error {
 	return nil
 }
 
-func (m *MessageQueueServiceImpl) Publish(streamNames string, key string, certs model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
+func (m *MessageQueueServiceImpl) Publish(streamNames, key string, certs model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
 	if err := m.createStreams([]string{streamNames}); err != nil {
 		return errors.WithMessage(err, "Before publishing message")
 	}

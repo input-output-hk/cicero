@@ -24,7 +24,7 @@ func NewEvaluator(command string) Evaluator {
 	}
 }
 
-func (e *Evaluator) EvaluateWorkflow(src string, name string, id uint64, inputs model.WorkflowCerts) (model.WorkflowDefinition, error) {
+func (e *Evaluator) EvaluateWorkflow(src, name string, id uint64, inputs model.WorkflowCerts) (model.WorkflowDefinition, error) {
 	var def model.WorkflowDefinition
 
 	inputsJson, err := json.Marshal(inputs)

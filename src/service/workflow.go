@@ -26,10 +26,10 @@ type WorkflowService interface {
 type WorkflowServiceImpl struct {
 	logger              *log.Logger
 	workflowRepository  repository.WorkflowRepository
-	messageQueueService *MessageQueueService
+	messageQueueService MessageQueueService
 }
 
-func NewWorkflowService(db *pgxpool.Pool, messageQueueService *MessageQueueService) WorkflowService {
+func NewWorkflowService(db *pgxpool.Pool, messageQueueService MessageQueueService) WorkflowService {
 	return &WorkflowServiceImpl{
 		logger:              log.New(os.Stderr, "WorkflowService: ", log.LstdFlags),
 		workflowRepository:  repository.NewWorkflowRepository(db),
@@ -77,8 +77,8 @@ func (s *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow model.Workfl
 	return nil
 }
 
-func (s *WorkflowServiceImpl) Start(source string, name string, inputs model.WorkflowCerts) error {
-	return (*s.messageQueueService).Publish(
+func (s *WorkflowServiceImpl) Start(source, name string, inputs model.WorkflowCerts) error {
+	return s.messageQueueService.Publish(
 		fmt.Sprintf("workflow.%s.start", name),
 		StartStreamName,
 		inputs,
