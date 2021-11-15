@@ -1,4 +1,4 @@
-{ id, ... }:
+{ id, run }:
 
 let lib = import ../workflows-lib.nix;
 in {
@@ -11,7 +11,7 @@ in {
 
       job = lib.addNomadJobDefaults (run "bash" {
         memory = 1024;
-        packages = defaultPackages ++ [
+        packages = [
           "github:nixos/nixpkgs/nixpkgs-unstable#cacert"
           "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
           "github:nixos/nixpkgs/nixpkgs-unstable#cue"
@@ -34,7 +34,7 @@ in {
 
         cue export -e jobs.webhooks \
           ${if environment == null then "" else "-t env=${environment}"} \
-          -t 'sha=${pr.head.sha}' \
+          -t 'sha=${sha}' \
           > job.json
 
         nomad run job.json
