@@ -343,10 +343,9 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 
 			//TODO: must be transactional with the message process
 			if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-				err := (*self.nomadEventService).Save(tx, &event)
-				return errors.WithMessage(err, "Could not insert Nomad event into database")
+				return (*self.nomadEventService).Save(tx, &event)
 			}); err != nil {
-				self.logger.Printf( "Could not complete db transaction")
+				self.logger.Printf( "Could not complete db transaction", err)
 				return err
 			}
 
