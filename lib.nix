@@ -65,7 +65,7 @@ in rec {
             inherit workflowName actionName;
             job = {
               TaskGroups = [ ];
-            } // lib.optionalAttrs (all lib.id (attrValues when)) job;
+            } // lib.optionalAttrs (all (x: x == true) (attrValues when)) job;
           };
         };
 
