@@ -21,6 +21,7 @@ import (
 	"github.com/input-output-hk/cicero/src/service"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type WebCmd struct {
@@ -30,7 +31,7 @@ type WebCmd struct {
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
-func (self WebCmd) init(web *Web) {
+func (self WebCmd) init(web *Web, db *pgxpool.Pool) {
 	if web.Listen == nil {
 		web.Listen = &self.Listen
 	}
@@ -42,20 +43,20 @@ func (self WebCmd) init(web *Web) {
 			web.logger.Fatalln(err.Error())
 			return
 		} else {
-			s := service.NewMessageQueueService(DB, bridge)
+			s := service.NewMessageQueueService(db, bridge)
 			web.messageQueueService = &s
 		}
 	}
 	if web.workflowService == nil {
-		s := service.NewWorkflowService(DB, web.messageQueueService)
+		s := service.NewWorkflowService(db, web.messageQueueService)
 		web.workflowService = &s
 	}
 	if web.actionService == nil {
-		s := service.NewActionService(DB, self.PrometheusAddr)
+		s := service.NewActionService(db, self.PrometheusAddr)
 		web.actionService = &s
 	}
 	if web.nomadEventService == nil {
-		s := service.NewNomadEventService(DB, web.actionService)
+		s := service.NewNomadEventService(db, web.actionService)
 		web.nomadEventService = &s
 	}
 	if web.evaluator == nil {
@@ -64,9 +65,9 @@ func (self WebCmd) init(web *Web) {
 	}
 }
 
-func (self WebCmd) Run() error {
+func (self WebCmd) Run(db *pgxpool.Pool) error {
 	web := Web{}
-	self.init(&web)
+	self.init(&web, db)
 	return web.start(context.Background())
 }
 

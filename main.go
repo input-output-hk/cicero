@@ -68,21 +68,22 @@ func parseArgs(args *CLI) (*arg.Parser, error) {
 }
 
 func Run(parser *arg.Parser, args *CLI) error {
-	if err := cicero.Init(); err != nil {
+	db, nomadClient, err := cicero.Init()
+	if err != nil {
 		return err
 	}
 
-	defer cicero.DB.Close()
+	defer db.Close()
 
 	switch {
 	case args.Brain != nil:
-		return args.Brain.Run()
+		return args.Brain.Run(db, nomadClient)
 	case args.Invoker != nil:
-		return args.Invoker.Run()
+		return args.Invoker.Run(db, nomadClient)
 	case args.Web != nil:
-		return args.Web.Run()
+		return args.Web.Run(db)
 	case args.All != nil:
-		return args.All.Run()
+		return args.All.Run(db, nomadClient)
 	default:
 		parser.WriteHelp(os.Stderr)
 	}

@@ -7,20 +7,16 @@ import (
 	"os"
 )
 
-var DB *pgxpool.Pool
-var nomadClient *nomad.Client
-
-func Init() error {
-	var err error
-	DB, err = model.DBConnection(os.Getenv("DATABASE_URL"))
+func Init() (db *pgxpool.Pool, nomadClient *nomad.Client, err error) {
+	db, err = model.DBConnection(os.Getenv("DATABASE_URL"))
 	if err != nil {
-		return err
+		return
 	}
 
 	nomadClient, err = nomad.NewClient(nomad.DefaultConfig())
 	if err != nil {
-		return err
+		return
 	}
 
-	return nil
+	return
 }

@@ -2,12 +2,14 @@ package cicero
 
 import (
 	"context"
+	nomad "github.com/hashicorp/nomad/api"
 	"log"
 	"os"
 	"time"
 
 	"cirello.io/oversight"
 	"github.com/input-output-hk/cicero/src/service"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 )
 
@@ -18,7 +20,7 @@ type AllCmd struct {
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
-func (cmd *AllCmd) Run() error {
+func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 	bridge, err := service.LiftbridgeConnect(cmd.LiftbridgeAddr)
 	if err != nil {
 		return err
@@ -27,11 +29,11 @@ func (cmd *AllCmd) Run() error {
 	supervisor := cmd.newSupervisor()
 
 	evaluator := NewEvaluator(cmd.Evaluator)
-	messageQueueService := service.NewMessageQueueService(DB, bridge)
-	workflowService := service.NewWorkflowService(DB, &messageQueueService)
-	actionService := service.NewActionService(DB, cmd.PrometheusAddr)
+	messageQueueService := service.NewMessageQueueService(db, bridge)
+	workflowService := service.NewWorkflowService(db, &messageQueueService)
+	actionService := service.NewActionService(db, cmd.PrometheusAddr)
 	workflowActionService := NewWorkflowActionService(evaluator, workflowService)
-	nomadEventService := service.NewNomadEventService(DB, &actionService)
+	nomadEventService := service.NewNomadEventService(db, &actionService)
 
 	brain := Brain{
 		workflowService:       &workflowService,
@@ -40,8 +42,10 @@ func (cmd *AllCmd) Run() error {
 		workflowActionService: &workflowActionService,
 		nomadEventService:	   &nomadEventService,
 		messageQueueService:   &messageQueueService,
+		db: 				   db,
+		nomadClient: 		   nomadClient,
 	}
-	(&BrainCmd{}).init(&brain)
+	(&BrainCmd{}).init(&brain, db, nomadClient)
 
 	web := Web{
 		Listen:          	 &cmd.Listen,
@@ -50,16 +54,19 @@ func (cmd *AllCmd) Run() error {
 		messageQueueService: &messageQueueService,
 		nomadEventService:	 &nomadEventService,
 		evaluator:       	 &evaluator,
+
 	}
-	(&WebCmd{}).init(&web)
+	(&WebCmd{}).init(&web, db)
 
 	invoker := Invoker{
 		evaluator:       	 &evaluator,
 		actionService:   	 &actionService,
 		messageQueueService: &messageQueueService,
 		workflowService: 	 &workflowService,
+		db: 				 db,
+		nomadClient: 		 nomadClient,
 	}
-	(&InvokerCmd{}).init(&invoker)
+	(&InvokerCmd{}).init(&invoker, db, nomadClient)
 
 	supervisor.Add(invoker.start)
 	brain.addToTree(supervisor)

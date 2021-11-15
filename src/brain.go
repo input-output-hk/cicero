@@ -17,6 +17,7 @@ import (
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 )
@@ -27,7 +28,13 @@ type BrainCmd struct {
 	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
 }
 
-func (self BrainCmd) init(brain *Brain) {
+func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Client) {
+	if brain.db == nil {
+		brain.db = db
+	}
+	if brain.nomadClient == nil{
+		brain.nomadClient = nomadClient
+	}
 	if brain.logger == nil {
 		brain.logger = log.New(os.Stderr, "brain: ", log.LstdFlags)
 	}
@@ -47,20 +54,20 @@ func (self BrainCmd) init(brain *Brain) {
 			brain.logger.Fatalln(err.Error())
 			return
 		} else {
-			s := service.NewMessageQueueService(DB, bridge)
+			s := service.NewMessageQueueService(db, bridge)
 			brain.messageQueueService = &s
 		}
 	}
 	if brain.workflowService == nil {
-		s := service.NewWorkflowService(DB, brain.messageQueueService)
+		s := service.NewWorkflowService(db, brain.messageQueueService)
 		brain.workflowService = &s
 	}
 	if brain.actionService == nil {
-		s := service.NewActionService(DB, self.PrometheusAddr)
+		s := service.NewActionService(db, self.PrometheusAddr)
 		brain.actionService = &s
 	}
 	if brain.nomadEventService == nil {
-		s := service.NewNomadEventService(DB, brain.actionService)
+		s := service.NewNomadEventService(db, brain.actionService)
 		brain.nomadEventService = &s
 	}
 	if brain.evaluator == nil {
@@ -69,9 +76,9 @@ func (self BrainCmd) init(brain *Brain) {
 	}
 }
 
-func (self BrainCmd) Run() error {
+func (self BrainCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 	brain := Brain{}
-	self.init(&brain)
+	self.init(&brain, db, nomadClient)
 
 	if err := brain.start(context.Background()); err != nil {
 		return errors.WithMessage(err, "While running brain")
@@ -91,6 +98,8 @@ type Brain struct {
 	messageQueueService   *service.MessageQueueService
 	nomadEventService	  *service.NomadEventService
 	evaluator             *Evaluator
+	db 					  *pgxpool.Pool
+	nomadClient 		  *nomad.Client
 }
 
 func (self *Brain) addToTree(tree *oversight.Tree) {
@@ -151,7 +160,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 	}
 
 	//TODO: must be transactional with the message process
-	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		err := (*self.messageQueueService).Save(tx, msg)
 		return err
 	}); err != nil {
@@ -181,7 +190,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 
 func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowInstance) error {
 	var tx pgx.Tx
-	if t, err := DB.Begin(ctx); err != nil {
+	if t, err := (*self.db).Begin(ctx); err != nil {
 		self.logger.Printf("%s", err)
 		return err
 	} else {
@@ -251,7 +260,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 	}
 
 	ctx := context.Background()
-	tx, err := DB.Begin(ctx)
+	tx, err := (*self.db).Begin(ctx)
 	if err != nil {
 		self.logger.Printf("%s", err)
 		return
@@ -318,7 +327,7 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 
 	self.logger.Println("Listening to Nomad events starting at index", index)
 
-	stream, err := nomadClient.EventStream().Stream(
+	stream, err := (*self.nomadClient).EventStream().Stream(
 		ctx,
 		map[nomad.Topic][]string{
 			nomad.TopicAll: {string(nomad.TopicAll)},
@@ -342,7 +351,7 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 			}
 
 			//TODO: must be transactional with the message process
-			if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
 				return (*self.nomadEventService).Save(tx, &event)
 			}); err != nil {
 				self.logger.Printf( "Could not complete db transaction", err)
@@ -412,7 +421,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		return errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
 	}
 
-	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if err := (*self.actionService).Update(tx, action.ID, action); err != nil {
 			return errors.WithMessage(err, "Could not update action instance")
 		}
