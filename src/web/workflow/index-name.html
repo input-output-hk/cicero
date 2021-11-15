@@ -17,7 +17,7 @@
 				<td>{{.Source}}</td>
 				<td>{{.CreatedAt}}</td>
 				<td>{{.UpdatedAt}}</td>
-				<td><pre>{{.Certs | toJson}}</pre></td>
+				<td><code>{{toJson .Certs true}}</code></td>
 			</tr>
 		{{end}}
 	</table>

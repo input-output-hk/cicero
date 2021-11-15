@@ -472,8 +472,13 @@ func makeViewTemplate(route string) *template.Template {
 			return BuildInfo
 		},
 		"route": func() string { return route },
-		"toJson": func(o interface{}) string {
-			enc, _ := json.Marshal(o)
+		"toJson": func(o interface{}, pretty bool) string {
+			var enc []byte
+			if pretty {
+				enc, _ = json.MarshalIndent(o, "", "\t")
+			} else {
+				enc, _ = json.Marshal(o)
+			}
 			return string(enc)
 		},
 		"pathEscape": url.PathEscape,
