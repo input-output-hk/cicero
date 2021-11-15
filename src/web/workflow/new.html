@@ -5,14 +5,14 @@
 
 	{{if not .Source}}
 		<!-- step 1 -->
-		<div class="my-5">
+		<div style="margin: 1em 0">
 			<h3>Enter source:</h3>
 			<form>
 				<input
-					class="w-50"
 					name="source"
 					placeholder="github:input-output-hk/cicero"
 					value="{{.Source}}"
+					style="width: 50%"
 				/>
 				<button>List Workflows →</button>
 			</form>
@@ -29,7 +29,7 @@
 					<form>
 						<input type="hidden" name="source" value="{{$.Source}}"/>
 						<input type="hidden" name="name" value="{{.}}"/>
-						<button class="btn btn-link">{{.}}</button>
+						<button class="link">{{.}}</button>
 					</form>
 				</li>
 			{{end}}
