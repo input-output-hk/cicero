@@ -68,22 +68,5 @@
 				{{end}}
 			</div>
 		</footer>
-
-		<script>
-			var triggerTabList = [].slice.call(document.querySelectorAll('#myTab button'))
-			var first = true
-			triggerTabList.forEach(function (triggerEl) {
-				var tabTrigger = new bootstrap.Tab(triggerEl)
-				triggerEl.addEventListener('click', function (event) {
-					event.preventDefault()
-					document.location.hash = triggerEl.dataset.bsTarget
-					tabTrigger.show()
-				})
-				if (first || (document.location.hash === triggerEl.dataset.bsTarget)) {
-					tabTrigger.show()
-				}
-				first = false
-			})
-		</script>
 	</body>
 </html>
