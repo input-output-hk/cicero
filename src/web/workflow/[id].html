@@ -52,7 +52,7 @@
 		<h2>Actions</h2>
 		<div class="tabs" style="--num-tabs: {{print (len .allocs)}}">
 			{{range $name, $wrapper := .allocs}}
-				<input id="tab-{{$name}}" type="radio" name="tab"/>
+				<input id="tab-{{$name}}" type="radio" name="tab" checked/>
 				<label for="tab-{{$name}}"><h3>{{$name}}</h3></label>
 				<div style="padding: 1em">
 					<div data-tab="{{$name}}">
