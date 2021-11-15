@@ -14,6 +14,7 @@ import (
 )
 
 type WorkflowService interface {
+	GetSummary() (repository.WorkflowSummary, error)
 	GetAll() ([]*model.WorkflowInstance, error)
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
@@ -36,8 +37,13 @@ func NewWorkflowService(db *pgxpool.Pool, messageQueueService *MessageQueueServi
 	}
 }
 
+func (s *WorkflowServiceImpl) GetSummary() (repository.WorkflowSummary, error) {
+	log.Println("Get Summary")
+	return s.workflowRepository.GetSummary()
+}
+
 func (s *WorkflowServiceImpl) GetAll() ([]*model.WorkflowInstance, error) {
-	log.Printf("Get all Workflows")
+	log.Println("Get all Workflows")
 	return s.workflowRepository.GetAll()
 }
 

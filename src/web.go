@@ -100,26 +100,19 @@ func (self *Web) start(ctx context.Context) error {
 		group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.URL.Query().Get("name")
 
-			var templateName string
-			var instances []*model.WorkflowInstance
-
 			if len(name) == 0 {
-				templateName = "workflow"
-				if insts, err := (*self.workflowService).GetAll(); err != nil {
+				if summary, err := (*self.workflowService).GetSummary(); err != nil {
 					return err
 				} else {
-					instances = insts
+					return makeViewTemplate("workflow").Execute(w, summary)
 				}
 			} else {
-				templateName = "workflow/index-name.html"
-				if insts, err := (*self.workflowService).GetAllByName(name); err != nil {
+				if instances, err := (*self.workflowService).GetAllByName(name); err != nil {
 					return err
 				} else {
-					instances = insts
+					return makeViewTemplate("workflow/index-name.html").Execute(w, instances)
 				}
 			}
-
-			return makeViewTemplate(templateName).Execute(w, instances)
 		})
 
 		group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {

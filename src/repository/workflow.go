@@ -13,11 +13,18 @@ type workflowRepository struct {
 }
 
 type WorkflowRepository interface {
+	GetSummary() (WorkflowSummary, error)
 	GetAll() ([]*model.WorkflowInstance, error)
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
 	Update(pgx.Tx, uint64, model.WorkflowInstance) error
+}
+
+type WorkflowSummary []struct {
+	Name string
+	NumSources uint64
+	NumInstances uint64
 }
 
 func NewWorkflowRepository(db *pgxpool.Pool) WorkflowRepository {
@@ -31,6 +38,14 @@ func (w workflowRepository) GetById(id uint64) (instance model.WorkflowInstance,
 		context.Background(), w.DB, &instance,
 		`SELECT * FROM workflow_instances WHERE id = $1`,
 		id,
+	)
+	return
+}
+
+func (w workflowRepository) GetSummary() (summary WorkflowSummary, err error) {
+	err = pgxscan.Select(
+		context.Background(), w.DB, &summary,
+		`SELECT name, (SELECT COUNT(*) FROM workflow_instances WHERE name = wf_i.name) AS num_instances, COUNT(DISTINCT source) AS num_sources FROM workflow_instances wf_i GROUP BY name`,
 	)
 	return
 }
