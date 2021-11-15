@@ -1,7 +1,6 @@
 { id, ... }:
 
-let
-  lib = import ../workflows-lib.nix;
+let lib = import ../workflows-lib.nix;
 in {
   actions = {
     github = { }: {

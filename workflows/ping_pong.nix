@@ -3,8 +3,7 @@
 let
   lib = import ../workflows-lib.nix;
 
-  bash = script:
-    lib.addNomadJobDefaults (run "bash" {} script);
+  bash = script: lib.addNomadJobDefaults (run "bash" { } script);
 in {
   actions = {
     ping = { ping ? null }: {
