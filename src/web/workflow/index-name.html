@@ -14,7 +14,7 @@
 		{{range .Instances}}
 			<tr>
 				<td><a href="{{.ID}}">{{.ID}}</a></td>
-				<td>{{.Source}}</td>
+				<td><code>{{.Source}}</code></td>
 				<td>{{.CreatedAt}}</td>
 				<td>{{.UpdatedAt}}</td>
 				<td><code>{{toJson .Certs true}}</code></td>

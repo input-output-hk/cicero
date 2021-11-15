@@ -26,10 +26,13 @@
 			</ul>
 			<iframe src="/workflow/{{.ID}}/graph?type={{$.graph}}"></iframe>
 
-			<table class="table">
+			<table
+				class="table"
+				style="margin: 1em 0"
+			>
 				<tr>
 					<td>Source</td>
-					<td>{{.Source}}</td>
+					<td><code>{{.Source}}</code></td>
 				</tr>
 				<tr>
 					<td>Created at</td>
