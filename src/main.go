@@ -8,6 +8,11 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
+var BuildInfo struct {
+	Version string
+	Commit  string
+}
+
 var DB *pgxpool.Pool
 var nomadClient *nomad.Client
 

@@ -146,7 +146,7 @@ func (self *Web) start(ctx context.Context) error {
 			if len(name) > 0 {
 				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{
 					"Source": source,
-					"Name": name,
+					"Name":   name,
 				})
 			}
 
@@ -468,6 +468,9 @@ func makeViewTemplate(route string) *template.Template {
 
 	t := template.New("")
 	t.Funcs(template.FuncMap{
+		"buildInfo": func() interface{} {
+			return BuildInfo
+		},
 		"route": func() string { return route },
 		"toJson": func(o interface{}) string {
 			enc, _ := json.Marshal(o)
