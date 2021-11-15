@@ -43,22 +43,22 @@
 		<main>
 			{{block "main" .}}{{end}}
 		</main>
-	</body>
 
-	<script>
-		var triggerTabList = [].slice.call(document.querySelectorAll('#myTab button'))
-		var first = true
-		triggerTabList.forEach(function (triggerEl) {
-			var tabTrigger = new bootstrap.Tab(triggerEl)
-			triggerEl.addEventListener('click', function (event) {
-				event.preventDefault()
-				document.location.hash = triggerEl.dataset.bsTarget
-				tabTrigger.show()
+		<script>
+			var triggerTabList = [].slice.call(document.querySelectorAll('#myTab button'))
+			var first = true
+			triggerTabList.forEach(function (triggerEl) {
+				var tabTrigger = new bootstrap.Tab(triggerEl)
+				triggerEl.addEventListener('click', function (event) {
+					event.preventDefault()
+					document.location.hash = triggerEl.dataset.bsTarget
+					tabTrigger.show()
+				})
+				if (first || (document.location.hash === triggerEl.dataset.bsTarget)) {
+					tabTrigger.show()
+				}
+				first = false
 			})
-			if (first || (document.location.hash === triggerEl.dataset.bsTarget)) {
-				tabTrigger.show()
-			}
-			first = false
-		})
-	</script>
+		</script>
+	</body>
 </html>
