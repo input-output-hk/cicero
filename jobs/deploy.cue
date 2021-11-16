@@ -10,6 +10,7 @@ package jobs
 #vaultAddr:      string | *#environment.vaultAddr      @tag(vaultAddr)
 #ciceroApiUrl:   string | *#environment.ciceroApiUrl   @tag(ciceroApiUrl)
 #nameserver:     string | *#environment.nameserver     @tag(nameserver)
+#lokiAddr:       string | *#environment.lokiAddr       @tag(lokiAddr)
 
 #environment: #environments[#env]
 
@@ -23,6 +24,7 @@ package jobs
 		vaultAddr:      "http://127.0.0.1:8300"
 		ciceroApiUrl:   "http://127.0.0.1:8080/api"
 		nameserver:     "1.1.1.1"
+		lokiAddr:       "http://127.0.0.1:3100"
 	}
 
 	prod: {
@@ -34,6 +36,7 @@ package jobs
 		vaultAddr:      "https://vault.infra.aws.iohkdev.io"
 		ciceroApiUrl:   "http://cicero.service.consul:8888/api"
 		nameserver:     "172.17.0.1"
+		lokiAddr:       "http://monitoring.node.consul:3100"
 	}
 }
 
