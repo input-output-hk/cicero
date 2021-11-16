@@ -485,6 +485,12 @@ func makeViewTemplate(route string) *template.Template {
 		"timeSub": func(a time.Time, b time.Time) time.Duration {
 			return a.Sub(b)
 		},
+		"timeUnixNano": func(ns int64) time.Time {
+			return time.Unix(
+				ns/int64(time.Second),
+				ns%int64(time.Second),
+			)
+		},
 	})
 
 	isDirectory := func(p string) (bool, error) {
