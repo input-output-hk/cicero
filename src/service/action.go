@@ -155,6 +155,10 @@ func (self *ActionServiceImpl) LokiQueryRange(query string) (*LokiOutput, error)
 		fmt.Println(req)
 
 		done, body, err := self.prometheus.Do(ctx, req)
+		if err != nil {
+			return output, errors.WithMessage(err, "Failed to talk with loki")
+		}
+
 		if done.StatusCode/100 != 2 {
 			return output, fmt.Errorf("Error response %d from Loki: %s (%v)", done.StatusCode, string(body), err)
 		}
