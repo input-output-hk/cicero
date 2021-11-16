@@ -41,13 +41,6 @@ writeShellScriptBin "entrypoint" ''
     done
   fi
 
-  if [ -d cicero ]; then
-    git -C cicero pull
-  else
-    git clone --quiet --depth 1 https://github.com/input-output-hk/cicero
-  fi
-
-  cd cicero
   dbmate up
 
   if [ -n "''${VAULT_TOKEN:-}" ]; then
