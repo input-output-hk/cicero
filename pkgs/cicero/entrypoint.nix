@@ -6,7 +6,7 @@ writeShellScriptBin "entrypoint" ''
 
   export PATH="${
     lib.makeBinPath [
-      git
+      gitMinimal
       cicero
       cicero-evaluator-nix
       nixUnstable
