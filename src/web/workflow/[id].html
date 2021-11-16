@@ -261,23 +261,27 @@
 
 						<h4>Task Logs</h4>
 
-						<table class="panel log">
-							{{range .Logs.Stdout}}
-								<tr>
-									<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
-									<td class="line">{{.Text}}</td>
-								</tr>
-							{{end}}
-						</table>
+						{{if .Logs.Stdout}}
+							<table class="panel log">
+								{{range .Logs.Stdout}}
+									<tr>
+										<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
+										<td class="line">{{.Text}}</td>
+									</tr>
+								{{end}}
+							</table>
+						{{end}}
 
-						<table class="panel log">
-							{{range .Logs.Stderr}}
-								<tr class="stderr">
-									<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
-									<td class="line">{{.Text}}</td>
-								</tr>
-							{{end}}
-						</table>
+						{{if .Logs.Stderr}}
+							<table class="panel log">
+								{{range .Logs.Stderr}}
+									<tr class="stderr">
+										<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
+										<td class="line">{{.Text}}</td>
+									</tr>
+								{{end}}
+							</table>
+						{{end}}
 					{{end}}
 				</div>
 			{{end}}
