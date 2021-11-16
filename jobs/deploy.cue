@@ -8,6 +8,8 @@ package jobs
 #liftbridgeAddr: string | *#environment.liftbridgeAddr @tag(liftbridgeAddr)
 #databaseUrl:    string | *#environment.databaseUrl    @tag(databaseUrl)
 #vaultAddr:      string | *#environment.vaultAddr      @tag(vaultAddr)
+#ciceroApiUrl:   string | *#environment.ciceroApiUrl   @tag(ciceroApiUrl)
+#nameserver:     string | *#environment.nameserver     @tag(nameserver)
 
 #environment: #environments[#env]
 
@@ -19,6 +21,8 @@ package jobs
 		liftbridgeAddr: "127.0.0.1:9292"
 		nomadAddr:      "http://127.0.0.1:4646"
 		vaultAddr:      "http://127.0.0.1:8300"
+		ciceroApiUrl:   "http://127.0.0.1:8080/api"
+		nameserver:     "1.1.1.1"
 	}
 
 	prod: {
@@ -28,6 +32,8 @@ package jobs
 		liftbridgeAddr: "liftbridge.service.consul:9292"
 		nomadAddr:      "https://nomad.infra.aws.iohkdev.io"
 		vaultAddr:      "https://vault.infra.aws.iohkdev.io"
+		ciceroApiUrl:   "http://cicero.service.consul:8888/api"
+		nameserver:     "172.17.0.1"
 	}
 }
 

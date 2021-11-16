@@ -94,10 +94,12 @@ job: webhooks: group: webhooks: {
 						    exit
 						fi
 
+						echo "nameserver \(#nameserver)" > /etc/resolv.conf
+
 						<<< '{payload}' jq -r '{
 						    Source: "github:\\(.repository.full_name)/\\(.pull_request.base.sha)",
 						    Inputs: {"github-event": .}
-						}' | curl "$CICERO_API_URL"/workflow/instance/ --data-binary @-
+						}' | curl "\(#ciceroApiUrl)/workflow/instance/" --data-binary @-
 						"""
 				}
 			})
