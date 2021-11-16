@@ -1,6 +1,6 @@
 { lib, cicero, cicero-evaluator-nix, writeShellScriptBin, nixUnstable
-, bashInteractive, coreutils, shadow, git, cacert, dbmate, vault-bin, netcat
-, ... }:
+, bashInteractive, coreutils, shadow, gitMinimal, cacert, dbmate, vault-bin
+, netcat, ... }:
 writeShellScriptBin "entrypoint" ''
   set -exuo pipefail
 
