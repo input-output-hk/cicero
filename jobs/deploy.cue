@@ -11,11 +11,13 @@ package jobs
 #ciceroApiUrl:   string | *#environment.ciceroApiUrl   @tag(ciceroApiUrl)
 #nameserver:     string | *#environment.nameserver     @tag(nameserver)
 #lokiAddr:       string | *#environment.lokiAddr       @tag(lokiAddr)
+#namespace:      string | *#environment.namespace      @tag(namespace)
 
 #environment: #environments[#env]
 
 #environments: {
 	dev: {
+		namespace:      "default"
 		ciceroFlake:    "path:.#cicero-entrypoint"
 		webhookFlake:   "path:.#webhook-trigger"
 		databaseUrl:    "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
@@ -28,6 +30,7 @@ package jobs
 	}
 
 	prod: {
+		namespace:      "cicero"
 		ciceroFlake:    "github:input-output-hk/cicero/\(#sha)#cicero-entrypoint"
 		webhookFlake:   "github:input-output-hk/cicero/\(#sha)#webhook-trigger"
 		databaseUrl:    "postgres://cicero:@hydra.node.consul:5432/cicero?sslmode=disable"
@@ -45,7 +48,7 @@ job: [string]: {
 	type: "service"
 	datacenters: ["dc1", "eu-central-1", "us-east-2"]
 
-	namespace: "cicero" | *"default"
+	namespace: #namespace
 
 	group: [string]: {
 		task: [string]: {
