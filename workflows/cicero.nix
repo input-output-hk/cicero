@@ -1,10 +1,7 @@
 { id, run }:
 
 let
-  hasCloneUrl = pr: pr.repository.clone_url or false != false;
-  hasGitHash = pr: pr.commit.sha or false != false;
-
-  inherit (import ../workflows-nomad.nix) Datacenters;
+  lib = import ../workflows-lib.nix;
 
   defaultPackages = [
     "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
@@ -24,21 +21,31 @@ let
     mkdir "$HOME"
 
     git config --global advice.detachedHead false
-    git clone --quiet ${pr.repository.clone_url} src
+    git clone --quiet ${pr.head.repo.clone_url} src
     cd src
-    git checkout ${pr.commit.sha}
+    git checkout ${pr.head.sha}
   '';
 in {
   actions = {
-    gocritic = { pr ? { }, gocritic ? null }: {
+    pr = { pr ? null, github-event ? { } }: {
       when = {
-        "pr.repository.clone_url exists" = hasCloneUrl pr;
-        "pr.commit.sha exists" = hasGitHash pr;
+        "not yet started" = pr == null;
+        "GitHub event is a PR event" = github-event ? pull_request;
+      };
+      success.pr =
+        github-event.pull_request or null; # TODO make it possible to drop `or null`
+      job = lib.addNomadJobDefaults (run "bash" { } ''
+        echo 'TODO make it possible to omit would-be no-op jobs?'
+      '');
+    };
+
+    gocritic = { pr ? null, gocritic ? null }: {
+      when = {
+        "PR received" = pr != null;
         "gocritic hasn't run yet" = gocritic == null;
       };
 
-      job = run "bash" {
-        inherit Datacenters;
+      job = lib.addNomadJobDefaults (run "bash" {
         memory = 1024;
         packages = defaultPackages ++ [
           "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#gocritic"
@@ -48,18 +55,16 @@ in {
         ${clone pr}
 
         gocritic check -enableAll ./...
-      '';
+      '');
     };
 
-    nixfmt = { pr ? { }, nixfmt ? null }: {
+    nixfmt = { pr ? null, nixfmt ? null }: {
       when = {
-        "pr.repository.clone_url exists" = hasCloneUrl pr;
-        "pr.commit.sha exists" = hasGitHash pr;
+        "PR received" = pr != null;
         "nixfmt hasn't run yet" = nixfmt == null;
       };
 
-      job = run "bash" {
-        inherit Datacenters;
+      job = lib.addNomadJobDefaults (run "bash" {
         memory = 2 * 1024;
         packages = defaultPackages ++ [
           "github:nixos/nixpkgs/nixpkgs-unstable#fd"
@@ -69,43 +74,37 @@ in {
         ${clone pr}
 
         fd -e nix -X nixfmt -c
-      '';
+      '');
     };
 
-    build = { pr ? { }, gocritic ? null, nixfmt ? null, build ? null }: {
+    build = { pr ? null, gocritic ? null, nixfmt ? null, build ? null }: {
       when = {
-        "gocritic passes" = gocritic == true;
-        "nixfmt passes" = nixfmt == true;
+        "gocritic passes" = gocritic;
+        "nixfmt passes" = nixfmt;
         "build hasn't run yet" = build == null;
       };
 
-      job = run "bash" {
-        inherit Datacenters;
+      job = lib.addNomadJobDefaults (run "bash" {
         memory = 4 * 1024;
         cpu = 16000;
         packages = defaultPackages
-          ++ [ "github:nixos/nixpkgs/nixpkgs-unstable#nixUnstable" ];
+          ++ [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
       } ''
         ${clone pr}
 
-        mkdir -p /etc
-        echo 'nixbld:x:30000:nixbld1' > /etc/group
-        echo 'nixbld1:x:30001:30000:Nix build user 1:/var/empty:/bin/nologin' > /etc/passwd
         echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
-        nix-store --load-db < /registration
         nix build
-      '';
+      '');
     };
 
-    deploy = { pr ? { }, environment ? null, gocritic ? null, nixfmt ? null
+    deploy = { pr ? null, environment ? null, gocritic ? null, nixfmt ? null
       , build ? null, deploy ? null }: {
         when = {
-          "build passes" = build == true;
+          "build passes" = build;
           "deploy hasn't run yet" = deploy == null;
         };
 
-        job = run "bash" {
-          inherit Datacenters;
+        job = lib.addNomadJobDefaults (run "bash" {
           memory = 1024;
           packages = defaultPackages ++ [
             "github:nixos/nixpkgs/nixpkgs-unstable#cue"
@@ -114,17 +113,12 @@ in {
         } ''
           ${clone pr}
 
-          cue export -e jobs.cicero \
-            ${
-              if environment == null then
-                ""
-              else
-                "-t environment=${environment}"
-            } \
-            -t 'sha=${pr.commit.sha}' \
+          cue export ./jobs -e jobs.cicero \
+            ${if environment == null then "" else "-t env=${environment}"} \
+            -t 'sha=${pr.head.sha}' \
             > job.json
           nomad run job.json
-        '';
+        '');
       };
   };
 }

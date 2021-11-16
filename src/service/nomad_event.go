@@ -21,10 +21,10 @@ type NomadEventService interface {
 type NomadEventServiceImpl struct {
 	logger          *log.Logger
 	nomadEventRepository repository.NomadEventRepository
-	actionService *ActionService
+	actionService ActionService
 }
 
-func NewNomadEventService(db *pgxpool.Pool, actionService *ActionService) NomadEventService {
+func NewNomadEventService(db *pgxpool.Pool, actionService ActionService) NomadEventService {
 	return &NomadEventServiceImpl{
 		logger:               log.New(os.Stderr, "NomadEventService: ", log.LstdFlags),
 		nomadEventRepository: repository.NewNomadEventRepository(db),
@@ -68,7 +68,7 @@ func (n *NomadEventServiceImpl) GetEventAllocByWorkflowId(workflowId uint64) (ma
 			return nil, err
 		}
 
-		logs, err := (*n.actionService).ActionLogs(alloc.ID, alloc.TaskGroup)
+		logs, err := n.actionService.ActionLogs(alloc.ID, alloc.TaskGroup)
 		if err != nil {
 			return nil, err
 		}

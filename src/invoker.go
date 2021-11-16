@@ -55,7 +55,7 @@ func (self InvokerCmd) init(invoker *Invoker, db *pgxpool.Pool, nomadClient *nom
 	}
 	if invoker.actionService == nil {
 		s := service.NewActionService(db, self.PrometheusAddr)
-		invoker.actionService = &s
+		invoker.actionService = s
 	}
 	if invoker.messageQueueService == nil {
 		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
@@ -63,12 +63,12 @@ func (self InvokerCmd) init(invoker *Invoker, db *pgxpool.Pool, nomadClient *nom
 			return
 		} else {
 			s := service.NewMessageQueueService(db, bridge)
-			invoker.messageQueueService = &s
+			invoker.messageQueueService = s
 		}
 	}
 	if invoker.workflowService == nil {
 		s := service.NewWorkflowService(db, invoker.messageQueueService)
-		invoker.workflowService = &s
+		invoker.workflowService = s
 	}
 }
 
@@ -90,9 +90,9 @@ type Invoker struct {
 	tree            	  *oversight.Tree
 	limiter         	  *priority.PriorityLimiter
 	evaluator       	  *Evaluator
-	actionService   	  *service.ActionService
-	messageQueueService   *service.MessageQueueService
-	workflowService 	  *service.WorkflowService
+	actionService   	  service.ActionService
+	messageQueueService   service.MessageQueueService
+	workflowService 	  service.WorkflowService
 	db 					  *pgxpool.Pool
 	nomadClient 		  *nomad.Client
 }
@@ -115,7 +115,7 @@ func (self *Invoker) start(ctx context.Context) error {
 func (self *Invoker) listenToInvoke(ctx context.Context) error {
 	self.logger.Println("Starting Invoker.listenToInvoke")
 
-	if err := (*self.messageQueueService).Subscribe(ctx, service.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
+	if err := self.messageQueueService.Subscribe(ctx, service.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.InvokeStreamName)
 	}
 
@@ -147,10 +147,10 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 
 		//TODO: must be transactional with the message process
 		if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
-			err := (*self.messageQueueService).Save(tx, msg)
+			err := self.messageQueueService.Save(tx, msg)
 			return err
 		}); err != nil {
-			self.logger.Printf( "Could not complete db transaction")
+			self.logger.Printf("Could not complete db transaction")
 			return
 		}
 
@@ -161,7 +161,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 }
 
 func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts) error {
-	wf, err := (*self.workflowService).GetById(wfInstanceId)
+	wf, err := self.workflowService.GetById(wfInstanceId)
 	if err != nil {
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
 	}
@@ -192,7 +192,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 	defer self.limiter.Finish()
 
 	var instance *model.ActionInstance
-	if inst, err := (*self.actionService).GetByNameAndWorkflowId(actionName, wfInstanceId); err != nil {
+	if inst, err := self.actionService.GetByNameAndWorkflowId(actionName, wfInstanceId); err != nil {
 		if !pgxscan.NotFound(err) {
 			return errors.WithMessage(err, "While getting last action instance")
 		}
@@ -210,7 +210,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 				instance.Name = actionName
 				instance.Certs = inputs
 
-				err := (*self.actionService).Save(tx, instance)
+				err := self.actionService.Save(tx, instance)
 				if err != nil {
 					return errors.WithMessage(err, "Could not insert action instance")
 				}
@@ -218,7 +218,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 				updatedAt := time.Now().UTC()
 				instance.UpdatedAt = &updatedAt
 				instance.Certs = inputs
-				if err := (*self.actionService).Update(tx, instance.ID, *instance); err != nil {
+				if err := self.actionService.Update(tx, *instance); err != nil {
 					return errors.WithMessage(err, "Could not update action instance")
 				}
 			}
@@ -226,21 +226,21 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 			actionInstanceId := instance.ID.String()
 			action.Job.ID = &actionInstanceId
 
-			if response, _, err := (*self.nomadClient).Jobs().Register(&action.Job, &nomad.WriteOptions{}); err != nil {
+			if response, _, err := self.nomadClient.Jobs().Register(&action.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run action")
 			} else if len(response.Warnings) > 0 {
 				self.logger.Println(response.Warnings)
 			}
 
 		} else if instance != nil {
-			if _, _, err := (*self.nomadClient).Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
+			if _, _, err := self.nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to stop action")
 			}
 
 			finished := time.Now().UTC()
 			instance.FinishedAt = &finished
 
-			if err := (*self.actionService).Update(tx, instance.ID, *instance); err != nil {
+			if err := self.actionService.Update(tx, *instance); err != nil {
 				return errors.WithMessage(err, "Failed to update action instance")
 			}
 		}

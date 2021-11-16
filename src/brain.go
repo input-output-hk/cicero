@@ -32,7 +32,7 @@ func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Cli
 	if brain.db == nil {
 		brain.db = db
 	}
-	if brain.nomadClient == nil{
+	if brain.nomadClient == nil {
 		brain.nomadClient = nomadClient
 	}
 	if brain.logger == nil {
@@ -45,9 +45,9 @@ func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Cli
 			oversight.OneForOne(), // restart every task on its own
 		))
 	}
-	if brain.workflowActionService == nil{
-		s := NewWorkflowActionService(*brain.evaluator, *brain.workflowService)
-		brain.workflowActionService = &s
+	if brain.workflowActionService == nil {
+		s := NewWorkflowActionService(*brain.evaluator, brain.workflowService)
+		brain.workflowActionService = s
 	}
 	if brain.messageQueueService == nil {
 		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
@@ -55,20 +55,20 @@ func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Cli
 			return
 		} else {
 			s := service.NewMessageQueueService(db, bridge)
-			brain.messageQueueService = &s
+			brain.messageQueueService = s
 		}
 	}
 	if brain.workflowService == nil {
 		s := service.NewWorkflowService(db, brain.messageQueueService)
-		brain.workflowService = &s
+		brain.workflowService = s
 	}
 	if brain.actionService == nil {
 		s := service.NewActionService(db, self.PrometheusAddr)
-		brain.actionService = &s
+		brain.actionService = s
 	}
 	if brain.nomadEventService == nil {
 		s := service.NewNomadEventService(db, brain.actionService)
-		brain.nomadEventService = &s
+		brain.nomadEventService = s
 	}
 	if brain.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
@@ -92,11 +92,11 @@ func (self BrainCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 type Brain struct {
 	logger                *log.Logger
 	tree                  *oversight.Tree
-	workflowService       *service.WorkflowService
-	actionService         *service.ActionService
-	workflowActionService *WorkflowActionService
-	messageQueueService   *service.MessageQueueService
-	nomadEventService	  *service.NomadEventService
+	workflowService       service.WorkflowService
+	actionService         service.ActionService
+	workflowActionService WorkflowActionService
+	messageQueueService   service.MessageQueueService
+	nomadEventService	  service.NomadEventService
 	evaluator             *Evaluator
 	db 					  *pgxpool.Pool
 	nomadClient 		  *nomad.Client
@@ -126,7 +126,7 @@ func (self *Brain) start(ctx context.Context) error {
 func (self *Brain) listenToStart(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToStart")
 
-	if err := (*self.messageQueueService).Subscribe(ctx, service.StartStreamName, self.onStartMessage, 0); err != nil {
+	if err := self.messageQueueService.Subscribe(ctx, service.StartStreamName, self.onStartMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.StartStreamName)
 	}
 
@@ -161,10 +161,10 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 
 	//TODO: must be transactional with the message process
 	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		err := (*self.messageQueueService).Save(tx, msg)
+		err := self.messageQueueService.Save(tx, msg)
 		return err
 	}); err != nil {
-		self.logger.Printf( "Could not complete db transaction")
+		self.logger.Printf("Could not complete db transaction")
 		return
 	}
 
@@ -199,13 +199,13 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 
 	defer tx.Rollback(ctx)
 
-	if err := (*self.workflowService).Save(tx, workflow); err != nil {
+	if err := self.workflowService.Save(tx, workflow); err != nil {
 		return errors.WithMessage(err, "Could not insert workflow instance")
 	}
 
 	self.logger.Printf("Created workflow with ID %d", workflow.ID)
 
-	(*self.messageQueueService).Publish(
+	self.messageQueueService.Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
 		service.InvokeStreamName,
 		workflow.Certs,
@@ -221,7 +221,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 func (self *Brain) listenToCerts(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToCerts")
 
-	if err := (*self.messageQueueService).Subscribe(ctx, service.CertStreamName, self.onCertMessage, 0); err != nil {
+	if err := self.messageQueueService.Subscribe(ctx, service.CertStreamName, self.onCertMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.CertStreamName)
 	}
 
@@ -268,11 +268,11 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 
 	defer tx.Rollback(ctx)
 
-	if err := (*self.messageQueueService).Save(tx, msg); err != nil {
+	if err := self.messageQueueService.Save(tx, msg); err != nil {
 		return
 	}
 
-	wf, err := (*self.workflowService).GetById(id)
+	wf, err := self.workflowService.GetById(id)
 	var existing = &wf
 
 	if err != nil {
@@ -293,7 +293,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 	existing.Certs = merged
 	existing.UpdatedAt = &now
 
-	if err := (*self.workflowService).Update(tx, id, *existing); err != nil {
+	if err := self.workflowService.Update(tx, id, *existing); err != nil {
 		self.logger.Printf("Error while updating workflow: %s", err)
 		return
 	}
@@ -302,7 +302,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 
 	self.logger.Printf("Updated workflow %#v", existing)
 
-	if err := (*self.messageQueueService).Publish(
+	if err := self.messageQueueService.Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
 		service.InvokeStreamName,
 		merged,
@@ -320,17 +320,21 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToNomadEvents")
 
-	index, err := (*self.nomadEventService).GetLastNomadEvent()
+	index, err := self.nomadEventService.GetLastNomadEvent()
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return errors.WithMessage(err, "Could not get last Nomad event index")
 	}
 
 	self.logger.Println("Listening to Nomad events starting at index", index)
 
-	stream, err := (*self.nomadClient).EventStream().Stream(
+	stream, err := self.nomadClient.EventStream().Stream(
 		ctx,
 		map[nomad.Topic][]string{
-			nomad.TopicAll: {string(nomad.TopicAll)},
+			nomad.TopicDeployment: {string(nomad.TopicAll)},
+			nomad.TopicEvaluation: {string(nomad.TopicAll)},
+			nomad.TopicAllocation: {string(nomad.TopicAll)},
+			nomad.TopicJob:        {string(nomad.TopicAll)},
+			nomad.TopicNode:       {string(nomad.TopicAll)},
 		},
 		index,
 		nil,
@@ -352,7 +356,7 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 
 			//TODO: must be transactional with the message process
 			if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
-				return (*self.nomadEventService).Save(tx, &event)
+				return self.nomadEventService.Save(tx, &event)
 			}); err != nil {
 				self.logger.Printf( "Could not complete db transaction", err)
 				return err
@@ -385,7 +389,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		return nil
 	}
 
-	action, err := (*self.actionService).GetById(id)
+	action, err := self.actionService.GetById(id)
 	if err != nil {
 		if pgxscan.NotFound(err) {
 			self.logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)", allocation.JobID)
@@ -394,7 +398,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		return err
 	}
 
-	def, err := (*self.workflowActionService).GetWorkflowAction(action)
+	def, err := self.workflowActionService.GetWorkflowAction(action)
 	if err != nil {
 		return errors.WithMessagef(err, "Could not get definition for action instance %s", action.ID)
 	}
@@ -416,17 +420,17 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 	).UTC()
 	action.FinishedAt = &modifyTime
 
-	wf, err := (*self.workflowService).GetById(action.WorkflowInstanceId)
+	wf, err := self.workflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
 		return errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
 	}
 
 	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := (*self.actionService).Update(tx, action.ID, action); err != nil {
+		if err := self.actionService.Update(tx, action); err != nil {
 			return errors.WithMessage(err, "Could not update action instance")
 		}
 
-		if err := (*self.messageQueueService).Publish(
+		if err := self.messageQueueService.Publish(
 			fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
 			service.CertStreamName,
 			*certs,

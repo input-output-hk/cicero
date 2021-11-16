@@ -30,18 +30,18 @@ func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 
 	evaluator := NewEvaluator(cmd.Evaluator)
 	messageQueueService := service.NewMessageQueueService(db, bridge)
-	workflowService := service.NewWorkflowService(db, &messageQueueService)
+	workflowService := service.NewWorkflowService(db, messageQueueService)
 	actionService := service.NewActionService(db, cmd.PrometheusAddr)
 	workflowActionService := NewWorkflowActionService(evaluator, workflowService)
-	nomadEventService := service.NewNomadEventService(db, &actionService)
+	nomadEventService := service.NewNomadEventService(db, actionService)
 
 	brain := Brain{
-		workflowService:       &workflowService,
-		actionService:         &actionService,
+		workflowService:       workflowService,
+		actionService:         actionService,
 		evaluator:             &evaluator,
-		workflowActionService: &workflowActionService,
-		nomadEventService:	   &nomadEventService,
-		messageQueueService:   &messageQueueService,
+		workflowActionService: workflowActionService,
+		nomadEventService:     nomadEventService,
+		messageQueueService:   messageQueueService,
 		db: 				   db,
 		nomadClient: 		   nomadClient,
 	}
@@ -49,20 +49,19 @@ func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 
 	web := Web{
 		Listen:          	 &cmd.Listen,
-		workflowService: 	 &workflowService,
-		actionService:   	 &actionService,
-		messageQueueService: &messageQueueService,
-		nomadEventService:	 &nomadEventService,
+		workflowService: 	 workflowService,
+		actionService:   	 actionService,
+		messageQueueService: messageQueueService,
+		nomadEventService:	 nomadEventService,
 		evaluator:       	 &evaluator,
-
 	}
 	(&WebCmd{}).init(&web, db)
 
 	invoker := Invoker{
 		evaluator:       	 &evaluator,
-		actionService:   	 &actionService,
-		messageQueueService: &messageQueueService,
-		workflowService: 	 &workflowService,
+		actionService:   	 actionService,
+		messageQueueService: messageQueueService,
+		workflowService: 	 workflowService,
 		db: 				 db,
 		nomadClient: 		 nomadClient,
 	}

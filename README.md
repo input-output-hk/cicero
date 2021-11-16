@@ -26,7 +26,11 @@ Start a development instance of Nomad:
 
 Run the required services in Nomad:
 
-    cue export -e jobs.dev | nomad run -
+    dev-run
+
+Start the Nomad follower to capture logs:
+
+    sudo nomad-follower
 
 Migrate the database:
 

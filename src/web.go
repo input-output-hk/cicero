@@ -44,20 +44,20 @@ func (self WebCmd) init(web *Web, db *pgxpool.Pool) {
 			return
 		} else {
 			s := service.NewMessageQueueService(db, bridge)
-			web.messageQueueService = &s
+			web.messageQueueService = s
 		}
 	}
 	if web.workflowService == nil {
 		s := service.NewWorkflowService(db, web.messageQueueService)
-		web.workflowService = &s
+		web.workflowService = s
 	}
 	if web.actionService == nil {
 		s := service.NewActionService(db, self.PrometheusAddr)
-		web.actionService = &s
+		web.actionService = s
 	}
 	if web.nomadEventService == nil {
 		s := service.NewNomadEventService(db, web.actionService)
-		web.nomadEventService = &s
+		web.nomadEventService = s
 	}
 	if web.evaluator == nil {
 		e := NewEvaluator(self.Evaluator)
@@ -74,10 +74,10 @@ func (self WebCmd) Run(db *pgxpool.Pool) error {
 type Web struct {
 	Listen          	*string
 	logger          	*log.Logger
-	workflowService 	*service.WorkflowService
-	actionService   	*service.ActionService
-	messageQueueService *service.MessageQueueService
-	nomadEventService	*service.NomadEventService
+	workflowService 	service.WorkflowService
+	actionService   	service.ActionService
+	messageQueueService service.MessageQueueService
+	nomadEventService	service.NomadEventService
 	evaluator       	*Evaluator
 }
 
@@ -104,33 +104,72 @@ func (self *Web) start(ctx context.Context) error {
 		group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.URL.Query().Get("name")
 
-			var templateName string
-			var instances []*model.WorkflowInstance
-
-			if len(name) == 0 {
-				templateName = "workflow"
-				if insts, err := (*self.workflowService).GetAll(); err != nil {
+			if name == "" {
+				if summary, err := self.workflowService.GetSummary(); err != nil {
 					return err
 				} else {
-					instances = insts
+					return makeViewTemplate("workflow").Execute(w, summary)
 				}
 			} else {
-				templateName = "workflow/index-name.html"
-				if insts, err := (*self.workflowService).GetAllByName(name); err != nil {
+				if instances, err := self.workflowService.GetAllByName(name); err != nil {
 					return err
 				} else {
-					instances = insts
+					return makeViewTemplate("workflow/index-name.html").Execute(w, map[string]interface{}{
+						"Name":      name,
+						"Instances": instances,
+					})
 				}
 			}
+		})
 
-			return makeViewTemplate(templateName).Execute(w, instances)
+		group.GET("/new", func(w http.ResponseWriter, req bunrouter.Request) error {
+			const templateName = "workflow/new.html"
+
+			source := req.URL.Query().Get("source")
+			name := req.URL.Query().Get("name")
+
+			// step 1
+			if len(source) == 0 {
+				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{})
+			}
+
+			// step 4
+			if inputsJson := req.URL.Query().Get("inputs"); len(inputsJson) > 0 {
+				var inputs model.WorkflowCerts
+				if err := json.Unmarshal([]byte(inputsJson), &inputs); err != nil {
+					return err
+				}
+				if err := self.workflowService.Start(source, name, inputs); err != nil {
+					return err
+				}
+				http.Redirect(w, req.Request, "/workflow", 302)
+				return nil
+			}
+
+			// step 3
+			if len(name) > 0 {
+				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{
+					"Source": source,
+					"Name":   name,
+				})
+			}
+
+			// step 2
+			if names, err := self.evaluator.ListWorkflows(source); err != nil {
+				return err
+			} else {
+				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{
+					"Source": source,
+					"Names":  names,
+				})
+			}
 		})
 
 		group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
 
-			if err := (*self.workflowService).Start(source, name, model.WorkflowCerts{}); err != nil {
+			if err := self.workflowService.Start(source, name, model.WorkflowCerts{}); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
@@ -142,10 +181,10 @@ func (self *Web) start(ctx context.Context) error {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 				if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
 					return err
-				} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+				} else if instance, err := self.workflowService.GetById(id); err != nil {
 					return err
 				} else {
-					allocs, err := (*self.nomadEventService).GetEventAllocByWorkflowId(id)
+					allocs, err := self.nomadEventService.GetEventAllocByWorkflowId(id)
 					if err != nil {
 						return err
 					}
@@ -164,7 +203,7 @@ func (self *Web) start(ctx context.Context) error {
 					return err
 				}
 
-				instance, err := (*self.workflowService).GetById(id)
+				instance, err := self.workflowService.GetById(id)
 				if err != nil {
 					return err
 				}
@@ -235,7 +274,7 @@ func (self *Web) start(ctx context.Context) error {
 			})
 			group.WithGroup("/instance", func(group *bunrouter.Group) {
 				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if instances, err := (*self.workflowService).GetAll(); err != nil {
+					if instances, err := self.workflowService.GetAll(); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, instances)
@@ -245,14 +284,28 @@ func (self *Web) start(ctx context.Context) error {
 				group.POST("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 					var params struct {
 						Source string
-						Name   string
+						Name   *string
 						Inputs model.WorkflowCerts
 					}
+					params.Inputs = model.WorkflowCerts{}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
-					if err := (*self.workflowService).Start(params.Source, params.Name, model.WorkflowCerts{}); err != nil {
-						return err
+
+					if params.Name != nil {
+						if err := self.workflowService.Start(params.Source, *params.Name, params.Inputs); err != nil {
+							return err
+						}
+					} else {
+						if wfNames, err := self.evaluator.ListWorkflows(params.Source); err != nil {
+							return err
+						} else {
+							for _, name := range wfNames {
+								if err := self.workflowService.Start(params.Source, name, params.Inputs); err != nil {
+									return err
+								}
+							}
+						}
 					}
 					w.WriteHeader(204)
 					return nil
@@ -267,7 +320,7 @@ func (self *Web) start(ctx context.Context) error {
 						return func(w http.ResponseWriter, req bunrouter.Request) error {
 							if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
 								return err
-							} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+							} else if instance, err := self.workflowService.GetById(id); err != nil {
 								return err
 							} else {
 								return next(w, req.WithContext(
@@ -289,7 +342,7 @@ func (self *Web) start(ctx context.Context) error {
 							return errors.WithMessage(err, "Could not unmarshal certs from request body")
 						}
 
-						if err := (*self.messageQueueService).Publish(
+						if err := self.messageQueueService.Publish(
 							fmt.Sprintf("workflow.%s.%d.cert", instance.Name, instance.ID),
 							service.CertStreamName,
 							certs,
@@ -304,7 +357,7 @@ func (self *Web) start(ctx context.Context) error {
 		})
 		group.WithGroup("/action", func(group *bunrouter.Group) {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				if actions, err := (*self.actionService).GetAll(); err != nil {
+				if actions, err := self.actionService.GetAll(); err != nil {
 					return err
 				} else {
 					return bunrouter.JSON(w, actions)
@@ -315,7 +368,7 @@ func (self *Web) start(ctx context.Context) error {
 				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 					if id, err := uuid.Parse(req.Param("id")); err != nil {
 						return err
-					} else if action, err := (*self.actionService).GetById(id); err != nil {
+					} else if action, err := self.actionService.GetById(id); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, action)
@@ -326,7 +379,7 @@ func (self *Web) start(ctx context.Context) error {
 					if id, err := uuid.Parse(req.Param("id")); err != nil {
 						return err
 					} else {
-						logs, err := (*self.actionService).JobLogs(id)
+						logs, err := self.actionService.JobLogs(id)
 						if err != nil {
 							return err
 						}
@@ -378,12 +431,29 @@ func makeViewTemplate(route string) *template.Template {
 
 	t := template.New("")
 	t.Funcs(template.FuncMap{
+		"buildInfo": func() interface{} {
+			return BuildInfo
+		},
 		"route": func() string { return route },
-		"toJson": func(o interface{}) string {
-			enc, _ := json.Marshal(o)
+		"toJson": func(o interface{}, pretty bool) string {
+			var enc []byte
+			if pretty {
+				enc, _ = json.MarshalIndent(o, "", "\t")
+			} else {
+				enc, _ = json.Marshal(o)
+			}
 			return string(enc)
 		},
 		"pathEscape": url.PathEscape,
+		"timeSub": func(a time.Time, b time.Time) time.Duration {
+			return a.Sub(b)
+		},
+		"timeUnixNano": func(ns int64) time.Time {
+			return time.Unix(
+				ns/int64(time.Second),
+				ns%int64(time.Second),
+			)
+		},
 	})
 
 	isDirectory := func(p string) (bool, error) {

@@ -124,14 +124,15 @@ func RenderWorkflowGraphInputs(wf model.WorkflowDefinition, instance *model.Work
 			}
 			if instance != nil {
 				for cert := range instance.Certs {
-					if cert == input {
-						node.Symbol = "diamond"
-						node.Category = 1
-						node.Y = 0
-						node.X = 0
-						node.SymbolSize = symbolSize * 1.5
-						break
+					if cert != input {
+						continue
 					}
+					node.Symbol = "diamond"
+					node.Category = 1
+					node.Y = 0
+					node.X = 0
+					node.SymbolSize = symbolSize * 1.5
+					break
 				}
 			}
 

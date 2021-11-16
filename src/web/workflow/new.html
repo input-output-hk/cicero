@@ -1,0 +1,47 @@
+{{template "_layout.html" .}}
+
+{{define "main"}}
+	<h1>Start Workflow</h1>
+
+	{{if not .Source}}
+		<!-- step 1 -->
+		<div style="margin: 1em 0">
+			<h3>Enter source:</h3>
+			<form>
+				<input
+					name="source"
+					placeholder="github:input-output-hk/cicero"
+					value="{{.Source}}"
+					style="width: 50%"
+				/>
+				<button>List Workflows →</button>
+			</form>
+		</div>
+	{{else if not .Name}}
+		<!-- step 2 -->
+		<h3>
+			Workflows available in
+			<code>{{.Source}}</code>:
+		</h3>
+		<ul>
+			{{range .Names}}
+				<li>
+					<form>
+						<input type="hidden" name="source" value="{{$.Source}}"/>
+						<input type="hidden" name="name" value="{{.}}"/>
+						<button class="link">{{.}}</button>
+					</form>
+				</li>
+			{{end}}
+		</ul>
+	{{else}}
+		<!-- step 3 -->
+		<h3>Specify inputs for "{{.Name}}"</h3>
+		<form>
+			<input type="hidden" name="source" value="{{.Source}}"/>
+			<input type="hidden" name="name" value="{{.Name}}"/>
+			<textarea name="inputs" placeholder="{}" style="display: block">{}</textarea>
+			<button>Start!</button>
+		</form>
+	{{end}}
+{{end}}

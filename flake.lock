@@ -74,11 +74,11 @@
         "utils": "utils_2"
       },
       "locked": {
-        "lastModified": 1636643075,
-        "narHash": "sha256-Fb32pKO1LrJHDw7i/wtXOANV1kpG8onEf9Cf4/hmNd4=",
+        "lastModified": 1636719630,
+        "narHash": "sha256-Hi1YxoY2BrkYSc1cOXCzEL9CJP2E4y7icO9/eNLNj6E=",
         "owner": "input-output-hk",
         "repo": "nomad-follower",
-        "rev": "c8455c2dfd744e97e83cd368b13fa4a53a7ed093",
+        "rev": "51feb240fc8c311819be4dc997054267b5c75019",
         "type": "github"
       },
       "original": {

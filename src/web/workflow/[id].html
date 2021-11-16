@@ -2,224 +2,279 @@
 
 {{define "main"}}
 	{{$scope := "d2dc0bac8e4747b39b78a49cf274328a"}}
-  {{$allocs := .allocs}}
 
-	{{with .Instance}}
 	<div id="{{$scope}}">
-		<h1>{{.Name}}</h1>
+		{{with .Instance}}
+			<h1>{{.Name}}</h1>
 
-		<ul>
-			<li><a href="#">Stop</a></li>
-			<li><a href="#">Clone</a></li>
-		</ul>
+			<ul>
+				<li><a href="#">Stop</a></li>
+				<li><a href="#">Clone</a></li>
+			</ul>
 
-		<ul class="graph-types">
-			<li>Type:</li>
-			{{range $.graphTypes}}
-			<li>
-				{{if or (eq . $.graph) (and (eq $.graph "") (eq . "flow"))}}
-				{{.}}
-				{{else}}
-				<a href="?graph={{.}}">{{.}}</a>
+			<ul class="graph-types">
+				<li>Type:</li>
+				{{range $.graphTypes}}
+					<li>
+						{{if or (eq . $.graph) (and (eq $.graph "") (eq . "flow"))}}
+							{{.}}
+						{{else}}
+							<a href="?graph={{.}}">{{.}}</a>
+						{{end}}
+					</li>
 				{{end}}
-			</li>
+			</ul>
+			<iframe src="/workflow/{{.ID}}/graph?type={{$.graph}}"></iframe>
+
+			<table
+				class="table"
+				style="margin: 1em 0"
+			>
+				<tr>
+					<td>Source</td>
+					<td><code>{{.Source}}</code></td>
+				</tr>
+				<tr>
+					<td>Created at</td>
+					<td>{{.CreatedAt}}</td>
+				</tr>
+				<tr>
+					<td>Updated at</td>
+					<td>{{.UpdatedAt}}</td>
+				</tr>
+				<tr>
+					<td>State</td>
+					<td><code><pre>{{toJson .Certs true}}</pre></code></td>
+				</tr>
+			</table>
+		{{end}}
+
+		<h2>Actions</h2>
+		<div class="tabs" style="--num-tabs: {{print (len .allocs)}}">
+			{{range $name, $wrapper := .allocs}}
+				<input id="tab-{{$name}}" type="radio" name="tab" checked/>
+				<label for="tab-{{$name}}"><h3>{{$name}}</h3></label>
+				<div style="padding: 1em">
+					<div data-tab="{{$name}}">
+						{{with $wrapper}}
+							{{with .Alloc}}
+								<div style="display: flex">
+									<div style="flex-grow: 1">
+										<h4>General Information</h4>
+										<table class="table">
+											<tr>
+												<th>Status:</th>
+												<td>{{.ClientStatus}}</td>
+											</tr>
+											<tr>
+												<th>Task Group:</th>
+												<td>{{.TaskGroup}}</td>
+											</tr>
+											<tr>
+												<th>Created:</th>
+												<td>{{timeUnixNano .CreateTime}}</td>
+											</tr>
+											<tr>
+												<th>Job:</th>
+												<td>{{.JobID}}</td>
+											</tr>
+											<tr>
+												<th>Node:</th>
+												<td>{{.NodeName}}</td>
+											</tr>
+										</table>
+									</div>
+									<div style="flex-grow: 1">
+										<h4>Allocated Resources</h4>
+										<table class="table">
+											<tr>
+												<th>Cores:</th>
+												<td>{{.Resources.Cores}}</td>
+											</tr>
+											<tr>
+												<th>CPU:</th>
+												<td>{{.Resources.CPU}} Mhz</td>
+											</tr>
+											<tr>
+												<th>Disk:</th>
+												<td>{{.Resources.DiskMB}} MB</td>
+											</tr>
+											<tr>
+												<th>IOPS:</th>
+												<td>{{.Resources.IOPS}}</td>
+											</tr>
+											<tr>
+												<th>Memory Max:</th>
+												<td>{{.Resources.MemoryMaxMB}} MB</td>
+											</tr>
+											<tr>
+												<th>Memory:</th>
+												<td>{{.Resources.MemoryMB}} MB</td>
+											</tr>
+										</table>
+									</div>
+								</div>
+
+								{{with index .TaskStates $name}}
+									<table
+										class="table"
+										style="margin: 1em 0"
+									>
+										<tr>
+											<th>Failed:</th>
+											<td>{{.Failed}}</td>
+										</tr>
+										<tr>
+											<th>State:</th>
+											<td>{{.State}}</td>
+										</tr>
+										<tr>
+											<th>Started:</th>
+											<td>{{.StartedAt}}</td>
+										</tr>
+										{{if and .FinishedAt .StartedAt}}
+											<tr>
+												<th>Finished:</th>
+												<td>{{.FinishedAt}}</td>
+											</tr>
+											<tr>
+												<th>Duration:</th>
+												<td>{{timeSub .FinishedAt .StartedAt}}</td>
+											</tr>
+										{{end}}
+										{{if gt .Restarts 0}}
+											<tr>
+												<th>Restarts:</th>
+												<td>{{.Restarts}}</td>
+											</tr>
+											<tr>
+												<th>Last Restart:</th>
+												<td>{{.LastRestart}}</td>
+											</tr>
+										{{end}}
+										{{with index $wrapper.Alloc.AllocatedResources.Tasks $name}}
+											<tr>
+												<th>CPU Shares:</th>
+												<td>{{.Cpu.CpuShares}} Mhz</td>
+											</tr>
+											<tr>
+												<th>Memory:</th>
+												<td>{{.Memory.MemoryMB}} MB</td>
+											</tr>
+											{{if gt .Memory.MemoryMaxMB 0}}
+												<tr>
+													<th>Memory Max:</th>
+													<td>{{.Memory.MemoryMaxMB}} MB</td>
+												</tr>
+											{{end}}
+										{{end}}
+									</table>
+
+									<h4>Event Logs</h4>
+									<table>
+										{{range .Events}}
+											<tr>
+												<td class="time">{{.Time}}</td>
+												{{if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting"}}
+													<td class="line">{{.DisplayMessage}}</td>
+												{{else if eq .Type "Not Restarting"}}
+													<td class="line">{{.Type}}: {{.DisplayMessage}}</td>
+												{{else if eq .Type "Terminated"}}
+													<td class="line">
+														{{.Type}}:
+														{{range $key, $value := .Details -}}
+															{{$key}}: {{$value}},
+														{{end}}
+													</td>
+												{{else}}
+													<table class="table">
+														<tr>
+															<td>type</td>
+															<td>details</td>
+															<td>disk_limit</td>
+															<td>display_message</td>
+															<td>download_error</td>
+															<td>driver_error</td>
+															<td>driver_message</td>
+															<td>exit_code</td>
+															<td>failed_sibling</td>
+															<td>fails_task</td>
+															<td>generic_source</td>
+															<td>kill_error</td>
+															<td>kill_reason</td>
+															<td>kill_timeout</td>
+															<td>message</td>
+															<td>restart_reason</td>
+															<td>setup_error</td>
+															<td>signal</td>
+															<td>start_delay</td>
+															<td>task_signal</td>
+															<td>task_signal_reason</td>
+															<td>validation_error</td>
+															<td>vault_error</td>
+														</tr>
+														<tr>
+															<td>{{.Type}}</td>
+															<td>
+																{{range $key, $value := .Details}}
+																	{{$key}}: {{$value}}<br/>
+																{{end}}
+															</td>
+															<td>{{.DiskLimit}}</td>
+															<td>{{.DisplayMessage}}</td>
+															<td>{{.DownloadError}}</td>
+															<td>{{.DriverError}}</td>
+															<td>{{.DriverMessage}}</td>
+															<td>{{.ExitCode}}</td>
+															<td>{{.FailedSibling}}</td>
+															<td>{{.FailsTask}}</td>
+															<td>{{.GenericSource}}</td>
+															<td>{{.KillError}}</td>
+															<td>{{.KillReason}}</td>
+															<td>{{.KillTimeout}}</td>
+															<td>{{.Message}}</td>
+															<td>{{.RestartReason}}</td>
+															<td>{{.SetupError}}</td>
+															<td>{{.Signal}}</td>
+															<td>{{.StartDelay}}</td>
+															<td>{{.TaskSignal}}</td>
+															<td>{{.TaskSignalReason}}</td>
+															<td>{{.ValidationError}}</td>
+															<td>{{.VaultError}}</td>
+														</tr>
+													</table>
+												{{end}}
+											</tr>
+										{{end}}
+									</table>
+								{{end}}
+							{{end}}
+
+							<h4>Task Logs</h4>
+
+							<table>
+								{{range .Logs.Stdout}}
+									<tr>
+										<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
+										<td class="line">{{.Text}}</td>
+									</tr>
+								{{end}}
+							</table>
+
+							<table>
+								{{range .Logs.Stderr}}
+									<tr class="stderr">
+										<td class="time">{{.Time.Format "Jan 02, 2006"}}</td>
+										<td class="line">{{.Text}}</td>
+									</tr>
+								{{end}}
+							</table>
+						{{end}}
+					</div>
+				</div>
 			{{end}}
-		</ul>
-		<iframe src="/workflow/{{.ID}}/graph?type={{$.graph}}"></iframe>
-
-		<table class="table">
-			<tr>
-				<td>Source</td>
-				<td>{{.Source}}</td>
-			</tr>
-			<tr>
-				<td>Created at</td>
-				<td>{{.CreatedAt}}</td>
-			</tr>
-			<tr>
-				<td>Updated at</td>
-				<td>{{.UpdatedAt}}</td>
-			</tr>
-			<tr>
-				<td>State</td>
-				<td><pre>{{.Certs | toJson}}</pre></td>
-			</tr>
-		</table>
-
-    <h2 class="h2 pt-2">Actions</h2>
-    <ul class="nav nav-tabs" id="myTab" role="tablist">
-      {{ range $name, $x := $allocs }}
-        <li class="nav-item" role="presentation">
-          <button
-            class="nav-link"
-            id="{{ $name }}-tab"
-            data-bs-toggle="tab"
-            data-bs-target="#tab-{{ $name }}"
-            type="button"
-            role="tab"
-            aria-controls="tab-{{ $name }}"
-            aria-selected="true"
-            >{{ $name }}</button>
-        </li>
-      {{ end }}
-    </ul>
-
-    <div class="tab-content" id="myTabContent">
-      {{ range $name, $wrapper := $allocs }}
-        {{ $alloc := $wrapper.Alloc }}
-        {{ $state := index $alloc.TaskStates $name }}
-        <div class="tab-pane fade" id="tab-{{ $name }}">
-          <div class="row pt-2">
-            <div class="col-6">
-              <h2 class="h2">General Information</h2>
-              <dl class="row">
-                <dt class="col-sm-2">Status:</dt><dd class="col-sm-10">{{ $alloc.ClientStatus }}</dd>
-                <dt class="col-sm-2">Task Group:</dt><dd class="col-sm-10">{{ $alloc.TaskGroup }}</dd>
-                <dt class="col-sm-2">Created:</dt><dd class="col-sm-10">{{ $alloc.CreateTime }}</dd>
-                <dt class="col-sm-2">Job:</dt><dd class="col-sm-10">{{ $alloc.JobID }}</dd>
-                <dt class="col-sm-2">Node:</dt><dd class="col-sm-10">{{ $alloc.NodeName }}</dd>
-              </dl>
-            </div>
-
-            <div class="col-6">
-              <h2 class="h2">Allocated Resources</h2>
-              <dl class="row">
-                <dt class="col-sm-2">Cores:</dt><dd class="col-sm-10">{{ $alloc.Resources.Cores }}</dd>
-                <dt class="col-sm-2">CPU:</dt><dd class="col-sm-10">{{ $alloc.Resources.CPU }} Mhz</dd>
-                <dt class="col-sm-2">Disk:</dt><dd class="col-sm-10">{{ $alloc.Resources.DiskMB }} MB</dd>
-                <dt class="col-sm-2">IOPS:</dt><dd class="col-sm-10">{{ $alloc.Resources.IOPS }}</dd>
-                <dt class="col-sm-2">Memory Max:</dt><dd class="col-sm-10">{{ $alloc.Resources.MemoryMaxMB }} MB</dd>
-                <dt class="col-sm-2">Memory:</dt><dd class="col-sm-10">{{ $alloc.Resources.MemoryMB }} MB</dd>
-              </dl>
-            </div>
-          </div>
-
-          {{ $res := (index $alloc.AllocatedResources.Tasks $name) }}
-          <dl class="row pt-2">
-            {{ if $state }}
-              <dt class="col-sm-3">Failed:</dt><dd class="col-sm-9">{{ $state.Failed }}</dd>
-              <dt class="col-sm-3">State:</dt><dd class="col-sm-9">{{ $state.State }}</dd>
-              <dt class="col-sm-3">Started:</dt><dd class="col-sm-9">{{ $state.StartedAt }}</dd>
-              {{ if and $state.FinishedAt $state.StartedAt }}
-                <dt class="col-sm-3">Finished:</dt><dd class="col-sm-9">{{ $state.FinishedAt }}</dd>
-                <dt class="col-sm-3">Duration:</dt><dd class="col-sm-9">TODO: {{ $state.FinishedAt }} - {{ $state.StartedAt }}</dd>
-              {{ end }}
-              {{ if gt $state.Restarts 0 }}
-                <dt class="col-sm-3">Restarts:</dt><dd class="col-sm-9">{{ $state.Restarts }}</dd>
-                <dt class="col-sm-3">Last Restart:</dt><dd class="col-sm-9">{{ $state.LastRestart }}</dd>
-              {{ end }}
-            {{ end }}
-
-            <dt class="col-sm-3">CPU Shares:</dt><dd class="col-sm-9">{{ $res.Cpu.CpuShares }} Mhz</dd>
-            <dt class="col-sm-3">Memory:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMB }} MB</dd>
-            {{ if gt $res.Memory.MemoryMaxMB 0 }}
-              <dt class="col-sm-3">Memory Max:</dt><dd class="col-sm-9">{{ $res.Memory.MemoryMaxMB }} MB</dd>
-            {{ end }}
-          </dl>
-
-          {{ if $state }}
-            <h3 class="h3 pt-2">Event Logs</h3>
-
-            <table class="table table-borderless table-sm">
-              {{ range $state.Events }}
-                {{ $time := .Time }}
-                <tr>
-                  <td class="time">{{ $time }}</td>
-                  {{ if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting" }}
-                    <td class="line">{{ .DisplayMessage -}}</td>
-                  {{ else if eq .Type "Not Restarting" }}
-                    <td class="line">{{ .Type }}: {{ .DisplayMessage -}}</td>
-                  {{ else if eq .Type "Terminated" }}
-                    <td class="line">{{ .Type }}: {{ range $key, $value := .Details -}}
-                      {{ $key }}: {{ $value }}, {{ end -}}
-                    </td>
-                  {{ else }}
-                    <table class="table">
-                      <tr>
-                        <td>type</td>
-                        <td>details</td>
-                        <td>disk_limit</td>
-                        <td>display_message</td>
-                        <td>download_error</td>
-                        <td>driver_error</td>
-                        <td>driver_message</td>
-                        <td>exit_code</td>
-                        <td>failed_sibling</td>
-                        <td>fails_task</td>
-                        <td>generic_source</td>
-                        <td>kill_error</td>
-                        <td>kill_reason</td>
-                        <td>kill_timeout</td>
-                        <td>message</td>
-                        <td>restart_reason</td>
-                        <td>setup_error</td>
-                        <td>signal</td>
-                        <td>start_delay</td>
-                        <td>task_signal</td>
-                        <td>task_signal_reason</td>
-                        <td>validation_error</td>
-                        <td>vault_error</td>
-                      </tr>
-                      <tr>
-                        <td>{{ .Type }}</td>
-                        <td>
-                          {{ range $key, $value := .Details }}
-                            {{ $key }}: {{ $value }}<br/>
-                          {{ end }}
-                        </td>
-                        <td>{{ .DiskLimit }}</td>
-                        <td>{{ .DisplayMessage }}</td>
-                        <td>{{ .DownloadError }}</td>
-                        <td>{{ .DriverError }}</td>
-                        <td>{{ .DriverMessage }}</td>
-                        <td>{{ .ExitCode }}</td>
-                        <td>{{ .FailedSibling }}</td>
-                        <td>{{ .FailsTask }}</td>
-                        <td>{{ .GenericSource }}</td>
-                        <td>{{ .KillError }}</td>
-                        <td>{{ .KillReason }}</td>
-                        <td>{{ .KillTimeout }}</td>
-                        <td>{{ .Message }}</td>
-                        <td>{{ .RestartReason }}</td>
-                        <td>{{ .SetupError }}</td>
-                        <td>{{ .Signal }}</td>
-                        <td>{{ .StartDelay }}</td>
-                        <td>{{ .TaskSignal }}</td>
-                        <td>{{ .TaskSignalReason }}</td>
-                        <td>{{ .ValidationError }}</td>
-                        <td>{{ .VaultError }}</td>
-                      </tr>
-                    </table>
-                  {{ end }}
-                </tr>
-              {{ end }}
-            </table>
-          {{ end }}
-
-          <h3 class="h3">Task Logs</h3>
-
-          <table class="table table-borderless table-sm">
-            {{ range $wrapper.Logs.Stdout }}
-              <tr class="text-body">
-                <td class="time">{{ .Time.Format "2006-01-02 15:04:05" }}</td>
-                <td class="line">{{ .Text }}</td>
-              </tr>
-            {{ end }}
-          </table>
-
-          <table class="table table-borderless table-sm">
-            {{ range $wrapper.Logs.Stderr }}
-              <tr class="text-danger">
-                <td class="time">{{ .Time.Format "Jan 02, 2006" }}</td>
-                <td class="line">{{ .Text }}</td>
-              </tr>
-            {{ end }}
-          </table>
-        </div>
-      {{ end }}
-    </div>
+		</div>
 	</div>
-	{{end}}
 
 	<style>
 	#{{$scope}} {
@@ -242,22 +297,26 @@
 		gap: 1%;
 	}
 
-  #{{$scope}} td.time, td.line {
-    font-size: 0.7em;
-  }
+	#{{$scope}} td.time, td.line {
+		font-size: 0.7em;
+	}
 
-  #{{$scope}} td.time {
-    white-space: nowrap;
-    user-select: none;
-    width: 7em;
-  }
+	#{{$scope}} td.time {
+		white-space: nowrap;
+		user-select: none;
+		width: 7em;
+	}
 
-  #{{$scope}} td.line {
-    font-family: "SFMono-Regular", Monaco, Menlo, Consolas, "Liberation Mono", Courier, monospace;
-    white-space: pre-wrap;
-    vertical-align: middle;
-    word-break: break-word;
-    overflow-wrap: break-word;
-  }
+	#{{$scope}} td.line {
+		font-family: "SFMono-Regular", Monaco, Menlo, Consolas, "Liberation Mono", Courier, monospace;
+		white-space: pre-wrap;
+		vertical-align: middle;
+		word-break: break-word;
+		overflow-wrap: break-word;
+	}
+
+	#{{$scope}} .stderr {
+		color: red;
+	}
 	</style>
 {{end}}

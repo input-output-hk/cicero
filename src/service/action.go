@@ -26,7 +26,7 @@ type ActionService interface {
 	GetByNameAndWorkflowId(string, uint64) (model.ActionInstance, error)
 	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, uuid.UUID, model.ActionInstance) error
+	Update(pgx.Tx, model.ActionInstance) error
 	JobLogs(uuid.UUID) (*LokiOutput, error)
 	ActionLogs(string, string) (*LokiOutput, error)
 }
@@ -43,12 +43,12 @@ func NewActionService(db *pgxpool.Pool, prometheusAddr string) ActionService {
 		actionRepository: repository.NewActionRepository(db),
 	}
 
-	if prometheus, err := prometheus.NewClient(prometheus.Config{
+	if prom, err := prometheus.NewClient(prometheus.Config{
 		Address: prometheusAddr,
 	}); err != nil {
 		impl.logger.Fatal(err.Error())
 	} else {
-		impl.prometheus = prometheus
+		impl.prometheus = prom
 	}
 
 	return &impl
@@ -86,12 +86,12 @@ func (self *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) err
 	return nil
 }
 
-func (self *ActionServiceImpl) Update(tx pgx.Tx, id uuid.UUID, action model.ActionInstance) error {
-	log.Printf("Update Action %#v with id %s", action, id)
-	if err := self.actionRepository.Update(tx, id, action); err != nil {
-		return errors.WithMessagef(err, "Couldn't update Action with id: %s", id)
+func (self *ActionServiceImpl) Update(tx pgx.Tx, action model.ActionInstance) error {
+	log.Printf("Update Action %#v", action)
+	if err := self.actionRepository.Update(tx, action); err != nil {
+		return errors.WithMessagef(err, "Couldn't update Action with id: %s", action.ID)
 	}
-	log.Printf("Updated Action %#v with id %s", action, id)
+	log.Printf("Updated Action %#v", action)
 	return nil
 }
 
@@ -107,14 +107,14 @@ type LokiOutput struct {
 
 func (self *ActionServiceImpl) JobLogs(nomadJobID uuid.UUID) (*LokiOutput, error) {
 	return self.LokiQueryRange(fmt.Sprintf(
-		`{nomad_job_id="%s"}`,
+		`{nomad_job_id=%q}`,
 		nomadJobID.String(),
 	))
 }
 
-func (self *ActionServiceImpl) ActionLogs(allocID string, taskGroup string) (*LokiOutput, error) {
+func (self *ActionServiceImpl) ActionLogs(allocID, taskGroup string) (*LokiOutput, error) {
 	return self.LokiQueryRange(fmt.Sprintf(
-		`{nomad_alloc_id="%s",nomad_task_group="%s"}`,
+		`{nomad_alloc_id=%q,nomad_task_group=%q}`,
 		allocID,
 		taskGroup,
 	))
@@ -137,7 +137,7 @@ func (self *ActionServiceImpl) LokiQueryRange(query string) (*LokiOutput, error)
 		req, err := http.NewRequest(
 			"GET",
 			self.prometheus.URL("/loki/api/v1/query_range", nil).String(),
-			nil,
+			http.NoBody,
 		)
 		if err != nil {
 			return output, err
@@ -180,7 +180,7 @@ func (self *ActionServiceImpl) LokiQueryRange(query string) (*LokiOutput, error)
 
 			for _, entry := range stream.Entries {
 				if ok && source == "stderr" {
-					output.Stdout = append(output.Stdout, LokiLine{entry.Timestamp, entry.Line})
+					output.Stderr = append(output.Stderr, LokiLine{entry.Timestamp, entry.Line})
 				} else {
 					output.Stdout = append(output.Stdout, LokiLine{entry.Timestamp, entry.Line})
 				}

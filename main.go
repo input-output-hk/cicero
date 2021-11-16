@@ -22,6 +22,9 @@ func main() {
 		logger.SetOutput(os.Stderr)
 	}
 
+	cicero.BuildInfo.Version = buildVersion
+	cicero.BuildInfo.Commit = buildCommit
+
 	abort(parser, Run(parser, args))
 }
 
