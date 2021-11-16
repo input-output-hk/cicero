@@ -482,6 +482,9 @@ func makeViewTemplate(route string) *template.Template {
 			return string(enc)
 		},
 		"pathEscape": url.PathEscape,
+		"timeSub": func(a time.Time, b time.Time) time.Duration {
+			return a.Sub(b)
+		},
 	})
 
 	isDirectory := func(p string) (bool, error) {

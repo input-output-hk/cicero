@@ -139,7 +139,7 @@
 											</tr>
 											<tr>
 												<th>Duration:</th>
-												<td>TODO: {{.FinishedAt}} - {{.StartedAt}}</td>
+												<td>{{timeSub .FinishedAt .StartedAt}}</td>
 											</tr>
 										{{end}}
 										{{if gt .Restarts 0}}
