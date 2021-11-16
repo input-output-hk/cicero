@@ -33,7 +33,7 @@ type WebCmd struct {
 	Env            []string `arg:"--env"`
 }
 
-func (self WebCmd) init(web *Web) {
+func (self *WebCmd) init(web *Web) {
 	if web.Listen == nil {
 		web.Listen = &self.Listen
 	}
@@ -63,7 +63,7 @@ func (self WebCmd) init(web *Web) {
 	}
 }
 
-func (self WebCmd) Run() error {
+func (self *WebCmd) Run() error {
 	web := Web{}
 	self.init(&web)
 	return web.start(context.Background())
@@ -126,7 +126,7 @@ func (self *Web) start(ctx context.Context) error {
 			name := req.URL.Query().Get("name")
 
 			// step 1
-			if len(source) == 0 {
+			if source == "" {
 				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{})
 			}
 
