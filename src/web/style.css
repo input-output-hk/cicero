@@ -31,6 +31,10 @@ button.link {
 	cursor: pointer;
 }
 
+.panel {
+	border: 5px groove var(--border);
+}
+
 .tabs {
 	display: grid;
 	grid-template-rows: auto 1fr;
