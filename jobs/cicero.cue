@@ -40,6 +40,7 @@ job: cicero: group: cicero: {
 				"/bin/entrypoint",
 				"--liftbridge-addr", #liftbridgeAddr,
 				"--prometheus-addr", #lokiAddr,
+				"--env", "NOMAD_ADDR",
 				"--listen", ":8888",
 			]
 		}]
