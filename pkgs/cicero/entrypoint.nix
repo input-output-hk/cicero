@@ -41,10 +41,11 @@ writeShellScriptBin "entrypoint" ''
     done
   fi
 
-  dbmate up \
+  dbmate \
     --migrations-dir ${../../db/migrations} \
     --no-dump-schema \
-    --wait
+    --wait \
+    up
 
   if [ -n "''${VAULT_TOKEN:-}" ]; then
     NOMAD_TOKEN="$(vault read -field secret_id nomad/creds/cicero)"
