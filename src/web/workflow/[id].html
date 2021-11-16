@@ -197,62 +197,64 @@
 												{{end}}
 											</td>
 										{{else}}
-											<table class="table">
-												<tr>
-													<td>type</td>
-													<td>details</td>
-													<td>disk_limit</td>
-													<td>display_message</td>
-													<td>download_error</td>
-													<td>driver_error</td>
-													<td>driver_message</td>
-													<td>exit_code</td>
-													<td>failed_sibling</td>
-													<td>fails_task</td>
-													<td>generic_source</td>
-													<td>kill_error</td>
-													<td>kill_reason</td>
-													<td>kill_timeout</td>
-													<td>message</td>
-													<td>restart_reason</td>
-													<td>setup_error</td>
-													<td>signal</td>
-													<td>start_delay</td>
-													<td>task_signal</td>
-													<td>task_signal_reason</td>
-													<td>validation_error</td>
-													<td>vault_error</td>
-												</tr>
-												<tr>
-													<td>{{.Type}}</td>
-													<td>
-														{{range $key, $value := .Details}}
-															{{$key}}: {{$value}}<br/>
-														{{end}}
-													</td>
-													<td>{{.DiskLimit}}</td>
-													<td>{{.DisplayMessage}}</td>
-													<td>{{.DownloadError}}</td>
-													<td>{{.DriverError}}</td>
-													<td>{{.DriverMessage}}</td>
-													<td>{{.ExitCode}}</td>
-													<td>{{.FailedSibling}}</td>
-													<td>{{.FailsTask}}</td>
-													<td>{{.GenericSource}}</td>
-													<td>{{.KillError}}</td>
-													<td>{{.KillReason}}</td>
-													<td>{{.KillTimeout}}</td>
-													<td>{{.Message}}</td>
-													<td>{{.RestartReason}}</td>
-													<td>{{.SetupError}}</td>
-													<td>{{.Signal}}</td>
-													<td>{{.StartDelay}}</td>
-													<td>{{.TaskSignal}}</td>
-													<td>{{.TaskSignalReason}}</td>
-													<td>{{.ValidationError}}</td>
-													<td>{{.VaultError}}</td>
-												</tr>
-											</table>
+											<td>
+												<table class="table">
+													<tr>
+														<td>type</td>
+														<td>details</td>
+														<td>disk_limit</td>
+														<td>display_message</td>
+														<td>download_error</td>
+														<td>driver_error</td>
+														<td>driver_message</td>
+														<td>exit_code</td>
+														<td>failed_sibling</td>
+														<td>fails_task</td>
+														<td>generic_source</td>
+														<td>kill_error</td>
+														<td>kill_reason</td>
+														<td>kill_timeout</td>
+														<td>message</td>
+														<td>restart_reason</td>
+														<td>setup_error</td>
+														<td>signal</td>
+														<td>start_delay</td>
+														<td>task_signal</td>
+														<td>task_signal_reason</td>
+														<td>validation_error</td>
+														<td>vault_error</td>
+													</tr>
+													<tr>
+														<td>{{.Type}}</td>
+														<td>
+															{{range $key, $value := .Details}}
+																{{$key}}: {{$value}}<br/>
+															{{end}}
+														</td>
+														<td>{{.DiskLimit}}</td>
+														<td>{{.DisplayMessage}}</td>
+														<td>{{.DownloadError}}</td>
+														<td>{{.DriverError}}</td>
+														<td>{{.DriverMessage}}</td>
+														<td>{{.ExitCode}}</td>
+														<td>{{.FailedSibling}}</td>
+														<td>{{.FailsTask}}</td>
+														<td>{{.GenericSource}}</td>
+														<td>{{.KillError}}</td>
+														<td>{{.KillReason}}</td>
+														<td>{{.KillTimeout}}</td>
+														<td>{{.Message}}</td>
+														<td>{{.RestartReason}}</td>
+														<td>{{.SetupError}}</td>
+														<td>{{.Signal}}</td>
+														<td>{{.StartDelay}}</td>
+														<td>{{.TaskSignal}}</td>
+														<td>{{.TaskSignalReason}}</td>
+														<td>{{.ValidationError}}</td>
+														<td>{{.VaultError}}</td>
+													</tr>
+												</table>
+											</td>
 										{{end}}
 									</tr>
 								{{end}}
