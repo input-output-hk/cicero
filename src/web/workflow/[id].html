@@ -147,7 +147,7 @@
 											</tr>
 											<tr>
 												<th>Duration:</th>
-												<td>{{timeSub .FinishedAt .StartedAt}}</td>
+												<td>{{.FinishedAt.Sub .StartedAt}}</td>
 											</tr>
 										{{end}}
 										{{if gt .Restarts 0}}
