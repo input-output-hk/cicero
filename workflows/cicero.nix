@@ -92,7 +92,7 @@ in {
       } ''
         ${clone pr}
 
-        echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
+        echo "nameserver 1.1.1.1 > /etc/resolv.conf
         nix build
       '');
     };
