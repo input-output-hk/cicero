@@ -26,10 +26,11 @@ import (
 )
 
 type WebCmd struct {
-	Listen         string `arg:"--listen" default:":8080"`
-	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	Listen         string   `arg:"--listen" default:":8080"`
+	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
+	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	Env            []string `arg:"--env"`
 }
 
 func (self WebCmd) init(web *Web) {
@@ -57,7 +58,7 @@ func (self WebCmd) init(web *Web) {
 		web.actionService = s
 	}
 	if web.evaluator == nil {
-		e := NewEvaluator(self.Evaluator)
+		e := NewEvaluator(self.Evaluator, self.Env)
 		web.evaluator = &e
 	}
 }

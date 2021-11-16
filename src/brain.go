@@ -22,9 +22,10 @@ import (
 )
 
 type BrainCmd struct {
-	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
+	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	Env            []string `arg:"--env"`
 }
 
 func (self BrainCmd) init(brain *Brain) {
@@ -60,7 +61,7 @@ func (self BrainCmd) init(brain *Brain) {
 		brain.actionService = s
 	}
 	if brain.evaluator == nil {
-		e := NewEvaluator(self.Evaluator)
+		e := NewEvaluator(self.Evaluator, self.Env)
 		brain.evaluator = &e
 	}
 }

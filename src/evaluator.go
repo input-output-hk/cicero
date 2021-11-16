@@ -14,12 +14,14 @@ import (
 
 type Evaluator struct {
 	Command string
+	Env     []string // NAME=VALUE or just NAME to inherit from process environment
 	logger  *log.Logger
 }
 
-func NewEvaluator(command string) Evaluator {
+func NewEvaluator(command string, env []string) Evaluator {
 	return Evaluator{
 		Command: command,
+		Env:     env,
 		logger:  log.New(os.Stderr, "evaluator: ", log.LstdFlags),
 	}
 }
@@ -37,10 +39,10 @@ func (e *Evaluator) EvaluateWorkflow(src, name string, id uint64, inputs model.W
 		"eval",
 	)
 	extraEnv := []string{
-		"CICERO_WORKFLOW_SRC="+src,
-		"CICERO_WORKFLOW_NAME="+name,
-		"CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id),
-		"CICERO_WORKFLOW_INPUTS="+string(inputsJson),
+		"CICERO_WORKFLOW_SRC=" + src,
+		"CICERO_WORKFLOW_NAME=" + name,
+		"CICERO_WORKFLOW_INSTANCE_ID=" + fmt.Sprintf("%d", id),
+		"CICERO_WORKFLOW_INPUTS=" + string(inputsJson),
 	}
 	cmd.Env = append(os.Environ(), extraEnv...)
 
@@ -58,7 +60,27 @@ func (e *Evaluator) EvaluateWorkflow(src, name string, id uint64, inputs model.W
 		return def, errors.WithMessage(err, "While unmarshaling WorkflowDefinition")
 	}
 
+	e.addEnv(&def)
+
 	return def, nil
+}
+
+func (e *Evaluator) addEnv(def *model.WorkflowDefinition) {
+	for _, action := range def.Actions {
+		for _, group := range action.Job.TaskGroups {
+			for _, task := range group.Tasks {
+				for _, envSpec := range e.Env {
+					splits := strings.SplitN(envSpec, "=", 2)
+					name := splits[0]
+					if len(splits) == 2 {
+						task.Env[name] = splits[1]
+					} else if procEnvVar, exists := os.LookupEnv(name); exists {
+						task.Env[name] = procEnvVar
+					}
+				}
+			}
+		}
+	}
 }
 
 func (e *Evaluator) ListWorkflows(src string) ([]string, error) {
@@ -68,7 +90,7 @@ func (e *Evaluator) ListWorkflows(src string) ([]string, error) {
 		e.Command,
 		"list",
 	)
-	extraEnv := []string{"CICERO_WORKFLOW_SRC="+src}
+	extraEnv := []string{"CICERO_WORKFLOW_SRC=" + src}
 	cmd.Env = append(os.Environ(), extraEnv...)
 
 	e.logger.Printf("running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
