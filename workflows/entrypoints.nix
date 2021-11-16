@@ -15,7 +15,7 @@ in {
           "github:nixos/nixpkgs/nixpkgs-unstable#cacert"
           "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
           "github:nixos/nixpkgs/nixpkgs-unstable#cue"
-          "github:nixos/nixpkgs/nixpkgs-unstable#git"
+          "github:nixos/nixpkgs/nixpkgs-unstable#gitMinimal"
           "github:nixos/nixpkgs/nixpkgs-unstable#gnutar"
           "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
         ];
