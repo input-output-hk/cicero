@@ -109,9 +109,15 @@ in rec {
                 "/bin/${
                   self.outputs.legacyPackages.x86_64-linux.${runner}.name
                 }"
-                script
+                "/local/script"
               ];
             };
+            Templates = [{
+              DestPath = "local/script";
+              LeftDelim = "";
+              RightDelim = "";
+              EmbeddedTmpl = script;
+            }];
           }];
         }];
       };
