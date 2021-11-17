@@ -47,7 +47,12 @@
 				</tr>
 				<tr>
 					<td>State</td>
-					<td><textarea readonly>{{toJson .Certs true}}</textarea></td>
+					<td style="display: flex">
+						<textarea
+							readonly
+							style="flex-grow: 1"
+						>{{toJson .Certs true}}</textarea>
+					</td>
 				</tr>
 			</table>
 		{{end}}
