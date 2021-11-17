@@ -259,10 +259,8 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	wf, err := self.workflowService.GetById(id)
-	var existing = &wf
-
-	if err != nil {
+	var existing model.WorkflowInstance
+	if existing, err = self.workflowService.GetById(id); err != nil {
 		return
 	}
 
@@ -280,7 +278,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 	existing.Certs = merged
 	existing.UpdatedAt = &now
 
-	if err := self.workflowService.Update(tx, id, *existing); err != nil {
+	if err := self.workflowService.Update(tx, existing); err != nil {
 		self.logger.Printf("Error while updating workflow: %s", err)
 		return
 	}

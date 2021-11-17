@@ -23,12 +23,12 @@ import (
 
 type ActionService interface {
 	GetById(uuid.UUID) (model.ActionInstance, error)
-	GetByNameAndWorkflowId(string, uint64) (model.ActionInstance, error)
+	GetByNameAndWorkflowId(name string, workflowId uint64) (model.ActionInstance, error)
 	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
 	Update(pgx.Tx, model.ActionInstance) error
 	JobLogs(uuid.UUID) (*LokiOutput, error)
-	ActionLogs(string, string) (*LokiOutput, error)
+	ActionLogs(allocId string, taskGroup string) (*LokiOutput, error)
 }
 
 type ActionServiceImpl struct {
@@ -112,7 +112,7 @@ func (self *ActionServiceImpl) JobLogs(nomadJobID uuid.UUID) (*LokiOutput, error
 	))
 }
 
-func (self *ActionServiceImpl) ActionLogs(allocID, taskGroup string) (*LokiOutput, error) {
+func (self *ActionServiceImpl) ActionLogs(allocID string, taskGroup string) (*LokiOutput, error) {
 	return self.LokiQueryRange(fmt.Sprintf(
 		`{nomad_alloc_id=%q,nomad_task_group=%q}`,
 		allocID,
