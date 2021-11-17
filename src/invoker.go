@@ -122,7 +122,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 			self.logger.Fatalf("error in liftbridge message: %s", err.Error())
 		}
 
-		inputs := model.WorkflowCerts{}
+		inputs := model.Facts{}
 		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
 			self.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
 			self.logger.Printf("Invalid JSON received, ignoring: %s", err)
@@ -152,7 +152,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 	}
 }
 
-func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts) error {
+func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts) error {
 	wf, err := self.workflowService.GetById(wfInstanceId)
 	if err != nil {
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
@@ -179,7 +179,7 @@ func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wf
 	return nil
 }
 
-func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.WorkflowCerts, actionName string, action *model.WorkflowAction) error {
+func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts, actionName string, action *model.WorkflowAction) error {
 	self.limiter.Wait(context.Background(), priority.High)
 	defer self.limiter.Finish()
 
@@ -200,7 +200,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 				instance = &model.ActionInstance{}
 				instance.WorkflowInstanceId = wfInstanceId
 				instance.Name = actionName
-				instance.Certs = inputs
+				instance.Facts = inputs
 
 				err := self.actionService.Save(tx, instance)
 				if err != nil {
@@ -209,7 +209,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 			} else {
 				updatedAt := time.Now().UTC()
 				instance.UpdatedAt = &updatedAt
-				instance.Certs = inputs
+				instance.Facts = inputs
 				if err := self.actionService.Update(tx, *instance); err != nil {
 					return errors.WithMessage(err, "Could not update action instance")
 				}

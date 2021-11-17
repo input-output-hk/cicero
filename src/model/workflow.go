@@ -18,9 +18,9 @@ type WorkflowDefinition struct {
 }
 
 type WorkflowAction struct {
-	Failure WorkflowCerts   `json:"failure"`
-	Success WorkflowCerts   `json:"success"`
-	Inputs  []string        `json:"inputs"`
+	Failure Facts    `json:"failure"`
+	Success Facts    `json:"success"`
+	Inputs  []string `json:"inputs"`
 	When    map[string]bool `json:"when"`
 	Job     nomad.Job       `json:"job"`
 }
@@ -33,19 +33,19 @@ type WorkflowInstance struct {
 	ID        uint64
 	Name      string
 	Source    string
-	Certs     WorkflowCerts
+	Facts     Facts
 	CreatedAt *time.Time
 	UpdatedAt *time.Time
 }
 
-type WorkflowCerts map[string]interface{}
+type Facts map[string]interface{}
 
 type ActionInstance struct {
 	ID                 uuid.UUID
 	WorkflowInstanceId uint64
-	Name               string
-	Certs              WorkflowCerts
-	CreatedAt          *time.Time
+	Name      string
+	Facts     Facts
+	CreatedAt *time.Time
 	UpdatedAt          *time.Time
 	FinishedAt         *time.Time
 }

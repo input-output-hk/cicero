@@ -18,11 +18,11 @@ import (
 const (
 	StartStreamName  = "workflow.*.start"
 	InvokeStreamName = "workflow.*.*.invoke"
-	CertStreamName   = "workflow.*.*.cert"
+	FactStreamName   = "workflow.*.*.fact"
 )
 
 type MessageQueueService interface {
-	Publish(string, string, model.WorkflowCerts, ...liftbridge.MessageOption) error
+	Publish(string, string, model.Facts, ...liftbridge.MessageOption) error
 	Subscribe(context.Context, string, liftbridge.Handler, int32) error
 	Save(pgx.Tx, *liftbridge.Message) error
 }
@@ -65,13 +65,13 @@ func (m *MessageQueueServiceImpl) createStreams(streamNames []string) error {
 	return nil
 }
 
-func (m *MessageQueueServiceImpl) Publish(streamNames, key string, certs model.WorkflowCerts, opts ...liftbridge.MessageOption) error {
+func (m *MessageQueueServiceImpl) Publish(streamNames, key string, facts model.Facts, opts ...liftbridge.MessageOption) error {
 	if err := m.createStreams([]string{streamNames}); err != nil {
 		return errors.WithMessage(err, "Before publishing message")
 	}
 
 	var enc []byte
-	if e, err := json.Marshal(certs); err != nil {
+	if e, err := json.Marshal(facts); err != nil {
 		return errors.WithMessage(err, "Failed to encode JSON")
 	} else {
 		enc = e

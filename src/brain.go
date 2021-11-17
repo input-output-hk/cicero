@@ -90,7 +90,7 @@ type Brain struct {
 }
 
 func (self *Brain) addToTree(tree *oversight.Tree) {
-	tree.Add(self.listenToCerts)
+	tree.Add(self.listenToFacts)
 	tree.Add(self.listenToStart)
 	tree.Add(self.listenToNomadEvents)
 }
@@ -139,7 +139,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 		"time:", msg.Timestamp(),
 	)
 
-	received := model.WorkflowCerts{}
+	received := model.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
 		self.logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
@@ -166,7 +166,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 	workflow := model.WorkflowInstance{
 		Name:   workflowName,
 		Source: source,
-		Certs:  received,
+		Facts:  received,
 	}
 
 	//TODO: FIXME this context to be transactional
@@ -195,7 +195,7 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 	self.messageQueueService.Publish(
 		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
 		service.InvokeStreamName,
-		workflow.Certs,
+		workflow.Facts,
 	)
 
 	if err := tx.Commit(context.Background()); err != nil {
@@ -205,11 +205,11 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 	return nil
 }
 
-func (self *Brain) listenToCerts(ctx context.Context) error {
-	self.logger.Println("Starting Brain.listenToCerts")
+func (self *Brain) listenToFacts(ctx context.Context) error {
+	self.logger.Println("Starting Brain.listenToFacts")
 
-	if err := self.messageQueueService.Subscribe(ctx, service.CertStreamName, self.onCertMessage, 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.CertStreamName)
+	if err := self.messageQueueService.Subscribe(ctx, service.FactStreamName, self.onFactMessage, 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.FactStreamName)
 	}
 
 	<-ctx.Done()
@@ -217,7 +217,7 @@ func (self *Brain) listenToCerts(ctx context.Context) error {
 	return nil
 }
 
-func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
+func (self *Brain) onFactMessage(msg *liftbridge.Message, err error) {
 	if err != nil {
 		self.logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
 	}
@@ -239,7 +239,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 		"time:", msg.Timestamp(),
 	)
 
-	received := model.WorkflowCerts{}
+	received := model.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
 		self.logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
@@ -266,9 +266,9 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	merged := model.WorkflowCerts{}
+	merged := model.Facts{}
 
-	for k, v := range existing.Certs {
+	for k, v := range existing.Facts {
 		merged[k] = v
 	}
 
@@ -277,7 +277,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 	}
 
 	now := time.Now().UTC()
-	existing.Certs = merged
+	existing.Facts = merged
 	existing.UpdatedAt = &now
 
 	if err := self.workflowService.Update(tx, id, *existing); err != nil {
@@ -285,7 +285,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	// TODO: only invoke when there was a change to the certs?
+	// TODO: only invoke when there was a change to the facts?
 
 	self.logger.Printf("Updated workflow %#v", existing)
 
@@ -393,14 +393,14 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		return errors.WithMessagef(err, "Could not get definition for action instance %s", action.ID)
 	}
 
-	var certs *model.WorkflowCerts
+	var facts *model.Facts
 	switch allocation.ClientStatus {
 	case "complete":
-		certs = &def.Success
+		facts = &def.Success
 	case "failed":
-		certs = &def.Failure
+		facts = &def.Failure
 	}
-	if certs == nil {
+	if facts == nil {
 		return nil
 	}
 
@@ -421,11 +421,11 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		}
 
 		if err := self.messageQueueService.Publish(
-			fmt.Sprintf("workflow.%s.%d.cert", wf.Name, wf.ID),
-			service.CertStreamName,
-			*certs,
+			fmt.Sprintf("workflow.%s.%d.fact", wf.Name, wf.ID),
+			service.FactStreamName,
+			*facts,
 		); err != nil {
-			return errors.WithMessage(err, "Could not publish certificate")
+			return errors.WithMessage(err, "Could not publish fact")
 		}
 
 		return nil
