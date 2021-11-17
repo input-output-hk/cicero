@@ -23,9 +23,10 @@ import (
 )
 
 type BrainCmd struct {
-	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
+	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	Env            []string `arg:"--env"`
 }
 
 func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Client) {
@@ -71,7 +72,7 @@ func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Cli
 		brain.nomadEventService = s
 	}
 	if brain.evaluator == nil {
-		e := NewEvaluator(self.Evaluator)
+		e := NewEvaluator(self.Evaluator, self.Env)
 		brain.evaluator = &e
 	}
 }
@@ -272,10 +273,8 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	wf, err := self.workflowService.GetById(id)
-	var existing = &wf
-
-	if err != nil {
+	var existing model.WorkflowInstance
+	if existing, err = self.workflowService.GetById(id); err != nil {
 		return
 	}
 
@@ -293,7 +292,7 @@ func (self *Brain) onCertMessage(msg *liftbridge.Message, err error) {
 	existing.Certs = merged
 	existing.UpdatedAt = &now
 
-	if err := self.workflowService.Update(tx, id, *existing); err != nil {
+	if err := self.workflowService.Update(tx, existing); err != nil {
 		self.logger.Printf("Error while updating workflow: %s", err)
 		return
 	}

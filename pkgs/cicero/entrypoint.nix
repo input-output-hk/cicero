@@ -1,12 +1,12 @@
 { lib, cicero, cicero-evaluator-nix, writeShellScriptBin, nixUnstable
-, bashInteractive, coreutils, shadow, git, cacert, dbmate, vault-bin, netcat
-, ... }:
+, bashInteractive, coreutils, shadow, gitMinimal, cacert, dbmate, vault-bin
+, netcat, ... }:
 writeShellScriptBin "entrypoint" ''
   set -exuo pipefail
 
   export PATH="${
     lib.makeBinPath [
-      git
+      gitMinimal
       cicero
       cicero-evaluator-nix
       nixUnstable
@@ -41,14 +41,11 @@ writeShellScriptBin "entrypoint" ''
     done
   fi
 
-  if [ -d cicero ]; then
-    git -C cicero pull
-  else
-    git clone --quiet --depth 1 https://github.com/input-output-hk/cicero
-  fi
-
-  cd cicero
-  dbmate up
+  dbmate \
+    --migrations-dir ${../../db/migrations} \
+    --no-dump-schema \
+    --wait \
+    up
 
   if [ -n "''${VAULT_TOKEN:-}" ]; then
     NOMAD_TOKEN="$(vault read -field secret_id nomad/creds/cicero)"

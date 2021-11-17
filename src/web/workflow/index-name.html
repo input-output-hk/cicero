@@ -17,7 +17,12 @@
 				<td><code>{{.Source}}</code></td>
 				<td>{{.CreatedAt}}</td>
 				<td>{{.UpdatedAt}}</td>
-				<td><code>{{toJson .Certs true}}</code></td>
+				<td style="display: flex">
+					<textarea
+						readonly
+						style="flex-grow: 1"
+					>{{toJson .Certs true}}</textarea>
+				</td>
 			</tr>
 		{{end}}
 	</table>

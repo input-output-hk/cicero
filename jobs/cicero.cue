@@ -39,6 +39,8 @@ job: cicero: group: cicero: {
 			command: [
 				"/bin/entrypoint",
 				"--liftbridge-addr", #liftbridgeAddr,
+				"--prometheus-addr", #lokiAddr,
+				"--env", "NOMAD_ADDR", "NOMAD_TOKEN",
 				"--listen", ":8888",
 			]
 		}]

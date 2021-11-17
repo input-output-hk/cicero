@@ -23,9 +23,10 @@ import (
 )
 
 type InvokerCmd struct {
-	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
+	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	Env            []string `arg:"--env"`
 }
 
 func (self InvokerCmd) init(invoker *Invoker, db *pgxpool.Pool, nomadClient *nomad.Client) {
@@ -50,7 +51,7 @@ func (self InvokerCmd) init(invoker *Invoker, db *pgxpool.Pool, nomadClient *nom
 		invoker.limiter = priority.NewLimiter(1, priority.WithDynamicPriority(1000))
 	}
 	if invoker.evaluator == nil {
-		e := NewEvaluator(self.Evaluator)
+		e := NewEvaluator(self.Evaluator, self.Env)
 		invoker.evaluator = &e
 	}
 	if invoker.actionService == nil {

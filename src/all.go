@@ -14,10 +14,11 @@ import (
 )
 
 type AllCmd struct {
-	Listen         string `arg:"--listen" default:":8080"`
-	LiftbridgeAddr string `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	PrometheusAddr string `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	Listen         string   `arg:"--listen" default:":8080"`
+	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
+	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
+	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
+	Env            []string `arg:"--env"`
 }
 
 func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
@@ -28,7 +29,7 @@ func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 
 	supervisor := cmd.newSupervisor()
 
-	evaluator := NewEvaluator(cmd.Evaluator)
+	evaluator := NewEvaluator(cmd.Evaluator, cmd.Env)
 	messageQueueService := service.NewMessageQueueService(db, bridge)
 	workflowService := service.NewWorkflowService(db, messageQueueService)
 	actionService := service.NewActionService(db, cmd.PrometheusAddr)

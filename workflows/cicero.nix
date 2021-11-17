@@ -8,7 +8,7 @@ let
     "github:nixos/nixpkgs/nixpkgs-unstable#gnutar"
     "github:nixos/nixpkgs/nixpkgs-unstable#xz"
     "github:nixos/nixpkgs/nixpkgs-unstable#cacert"
-    "github:nixos/nixpkgs/nixpkgs-unstable#git"
+    "github:nixos/nixpkgs/nixpkgs-unstable#gitMinimal"
   ];
 
   clone = pr: ''
