@@ -15,15 +15,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
-	StartStreamName  = "workflow.*.start"
-	InvokeStreamName = "workflow.*.*.invoke"
-	FactStreamName   = "workflow.*.*.fact"
-)
-
 type MessageQueueService interface {
-	Publish(string, string, model.Facts, ...liftbridge.MessageOption) error
-	Subscribe(context.Context, string, liftbridge.Handler, int32) error
+	Publish(string, model.StreamName, model.Facts, ...liftbridge.MessageOption) error
+	Subscribe(context.Context, model.StreamName, liftbridge.Handler, int32) error
 	Save(pgx.Tx, *liftbridge.Message) error
 }
 
@@ -47,8 +41,8 @@ func LiftbridgeConnect(addr string) (liftbridge.Client, error) {
 	return client, errors.WithMessage(err, "Couldn't connect to NATS")
 }
 
-func (m *MessageQueueServiceImpl) createStreams(streamNames []string) error {
-	for _, streamName := range streamNames {
+func (m *MessageQueueServiceImpl) createStreams(stream []string) error {
+	for _, streamName := range stream {
 		if err := m.bridge.CreateStream(
 			context.Background(),
 			streamName, streamName,
@@ -65,8 +59,8 @@ func (m *MessageQueueServiceImpl) createStreams(streamNames []string) error {
 	return nil
 }
 
-func (m *MessageQueueServiceImpl) Publish(streamNames, key string, facts model.Facts, opts ...liftbridge.MessageOption) error {
-	if err := m.createStreams([]string{streamNames}); err != nil {
+func (m *MessageQueueServiceImpl) Publish(stream string, streamName model.StreamName, facts model.Facts, opts ...liftbridge.MessageOption) error {
+	if err := m.createStreams([]string{stream}); err != nil {
 		return errors.WithMessage(err, "Before publishing message")
 	}
 
@@ -80,10 +74,10 @@ func (m *MessageQueueServiceImpl) Publish(streamNames, key string, facts model.F
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if _, err := m.bridge.Publish(ctx, streamNames,
+	if _, err := m.bridge.Publish(ctx, stream,
 		enc,
 		append(opts,
-			liftbridge.Key([]byte(key)),
+			liftbridge.Key([]byte(streamName)),
 			liftbridge.PartitionByKey(),
 			liftbridge.AckPolicyAll(),
 		)...,
@@ -91,7 +85,7 @@ func (m *MessageQueueServiceImpl) Publish(streamNames, key string, facts model.F
 		return errors.WithMessage(err, "While publishing message")
 	}
 
-	m.logger.Printf("Published message to stream %s", streamNames)
+	m.logger.Printf("Published message to stream %s", stream)
 
 	return nil
 }
@@ -104,15 +98,16 @@ func (m *MessageQueueServiceImpl) subscribe(ctx context.Context, streamName stri
 	return nil
 }
 
-func (m *MessageQueueServiceImpl) Subscribe(ctx context.Context, streamName string, handler liftbridge.Handler, partition int32) (err error) {
-	if err := m.createStreams([]string{streamName}); err != nil {
+func (m *MessageQueueServiceImpl) Subscribe(ctx context.Context, streamName model.StreamName, handler liftbridge.Handler, partition int32) (err error) {
+	sName := streamName.String()
+	if err := m.createStreams([]string{sName}); err != nil {
 		return err
 	}
-	offset, err := m.getOffset(streamName)
+	offset, err := m.getOffset(sName)
 	if err != nil {
 		return err
 	}
-	if err := m.subscribe(ctx, streamName, handler, offset, partition); err != nil {
+	if err := m.subscribe(ctx, sName, handler, offset, partition); err != nil {
 		return err
 	}
 	return

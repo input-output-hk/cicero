@@ -3,7 +3,6 @@ package cicero
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -113,8 +112,8 @@ func (self *Brain) start(ctx context.Context) error {
 func (self *Brain) listenToStart(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToStart")
 
-	if err := self.messageQueueService.Subscribe(ctx, service.StartStreamName, self.onStartMessage, 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.StartStreamName)
+	if err := self.messageQueueService.Subscribe(ctx, model.StartStreamName, self.onStartMessage, 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.StartStreamName)
 	}
 
 	<-ctx.Done()
@@ -193,8 +192,8 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 	self.logger.Printf("Created workflow with ID %d", workflow.ID)
 
 	self.messageQueueService.Publish(
-		fmt.Sprintf("workflow.%s.%d.invoke", workflow.Name, workflow.ID),
-		service.InvokeStreamName,
+		model.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
+		model.InvokeStreamName,
 		workflow.Facts,
 	)
 
@@ -208,8 +207,8 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 func (self *Brain) listenToFacts(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToFacts")
 
-	if err := self.messageQueueService.Subscribe(ctx, service.FactStreamName, self.onFactMessage, 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.FactStreamName)
+	if err := self.messageQueueService.Subscribe(ctx, model.FactStreamName, self.onFactMessage, 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.FactStreamName)
 	}
 
 	<-ctx.Done()
@@ -290,8 +289,8 @@ func (self *Brain) onFactMessage(msg *liftbridge.Message, err error) {
 	self.logger.Printf("Updated workflow %#v", existing)
 
 	if err := self.messageQueueService.Publish(
-		fmt.Sprintf("workflow.%s.%d.invoke", workflowName, id),
-		service.InvokeStreamName,
+		model.InvokeStreamName.Fmt(workflowName, id),
+		model.InvokeStreamName,
 		merged,
 	); err != nil {
 		self.logger.Printf("Couldn't publish workflow invoke message: %s", err)
@@ -421,8 +420,8 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		}
 
 		if err := self.messageQueueService.Publish(
-			fmt.Sprintf("workflow.%s.%d.fact", wf.Name, wf.ID),
-			service.FactStreamName,
+			model.FactStreamName.Fmt(wf.Name, wf.ID),
+			model.FactStreamName,
 			*facts,
 		); err != nil {
 			return errors.WithMessage(err, "Could not publish fact")

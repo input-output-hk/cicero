@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -79,8 +78,8 @@ func (s *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow model.Workfl
 
 func (s *WorkflowServiceImpl) Start(source, name string, inputs model.Facts) error {
 	return s.messageQueueService.Publish(
-		fmt.Sprintf("workflow.%s.start", name),
-		StartStreamName,
+		model.StartStreamName.Fmt(name),
+		model.StartStreamName,
 		inputs,
 		liftbridge.Header("source", []byte(source)),
 	)

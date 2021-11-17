@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"log"
 	"mime"
@@ -381,8 +380,8 @@ func (self *Web) start(ctx context.Context) error {
 						}
 
 						if err := self.messageQueueService.Publish(
-							fmt.Sprintf("workflow.%s.%d.fact", instance.Name, instance.ID),
-							service.FactStreamName,
+							model.FactStreamName.Fmt(instance.Name, instance.ID),
+							model.FactStreamName,
 							facts,
 						); err != nil {
 							return errors.WithMessage(err, "Could not publish fact")

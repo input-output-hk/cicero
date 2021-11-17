@@ -107,8 +107,8 @@ func (self *Invoker) start(ctx context.Context) error {
 func (self *Invoker) listenToInvoke(ctx context.Context) error {
 	self.logger.Println("Starting Invoker.listenToInvoke")
 
-	if err := self.messageQueueService.Subscribe(ctx, service.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", service.InvokeStreamName)
+	if err := self.messageQueueService.Subscribe(ctx, model.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.InvokeStreamName)
 	}
 
 	<-ctx.Done()
