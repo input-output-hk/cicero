@@ -357,7 +357,7 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 			if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
 				return self.nomadEventService.Save(tx, &event)
 			}); err != nil {
-				self.logger.Printf("Could not complete db transaction", err)
+				self.logger.Println("Could not complete db transaction")
 				return err
 			}
 
