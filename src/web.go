@@ -510,7 +510,7 @@ type HTTPError struct {
 
 	Code    string            `json:"code"`
 	Message string            `json:"message"`
-	Trace   errors.StackTrace `json:trace`
+	Trace   errors.StackTrace `json:"trace"`
 }
 
 func (e HTTPError) Error() string {
