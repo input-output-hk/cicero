@@ -112,7 +112,7 @@ func (self *ActionServiceImpl) JobLogs(nomadJobID uuid.UUID) (*LokiOutput, error
 	))
 }
 
-func (self *ActionServiceImpl) ActionLogs(allocID string, taskGroup string) (*LokiOutput, error) {
+func (self *ActionServiceImpl) ActionLogs(allocID, taskGroup string) (*LokiOutput, error) {
 	return self.LokiQueryRange(fmt.Sprintf(
 		`{nomad_alloc_id=%q,nomad_task_group=%q}`,
 		allocID,
