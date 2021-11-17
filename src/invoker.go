@@ -87,15 +87,15 @@ func (self InvokerCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 }
 
 type Invoker struct {
-	logger          	  *log.Logger
-	tree            	  *oversight.Tree
-	limiter         	  *priority.PriorityLimiter
-	evaluator       	  *Evaluator
-	actionService   	  service.ActionService
-	messageQueueService   service.MessageQueueService
-	workflowService 	  service.WorkflowService
-	db 					  *pgxpool.Pool
-	nomadClient 		  *nomad.Client
+	logger              *log.Logger
+	tree                *oversight.Tree
+	limiter             *priority.PriorityLimiter
+	evaluator           *Evaluator
+	actionService       service.ActionService
+	messageQueueService service.MessageQueueService
+	workflowService     service.WorkflowService
+	db                  *pgxpool.Pool
+	nomadClient         *nomad.Client
 }
 
 func (self *Invoker) start(ctx context.Context) error {

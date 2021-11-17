@@ -97,10 +97,10 @@ type Brain struct {
 	actionService         service.ActionService
 	workflowActionService WorkflowActionService
 	messageQueueService   service.MessageQueueService
-	nomadEventService	  service.NomadEventService
+	nomadEventService     service.NomadEventService
 	evaluator             *Evaluator
-	db 					  *pgxpool.Pool
-	nomadClient 		  *nomad.Client
+	db                    *pgxpool.Pool
+	nomadClient           *nomad.Client
 }
 
 func (self *Brain) addToTree(tree *oversight.Tree) {
@@ -357,7 +357,7 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 			if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
 				return self.nomadEventService.Save(tx, &event)
 			}); err != nil {
-				self.logger.Printf( "Could not complete db transaction", err)
+				self.logger.Printf("Could not complete db transaction", err)
 				return err
 			}
 

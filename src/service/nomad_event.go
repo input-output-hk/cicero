@@ -19,16 +19,16 @@ type NomadEventService interface {
 }
 
 type NomadEventServiceImpl struct {
-	logger          *log.Logger
+	logger               *log.Logger
 	nomadEventRepository repository.NomadEventRepository
-	actionService ActionService
+	actionService        ActionService
 }
 
 func NewNomadEventService(db *pgxpool.Pool, actionService ActionService) NomadEventService {
 	return &NomadEventServiceImpl{
 		logger:               log.New(os.Stderr, "NomadEventService: ", log.LstdFlags),
 		nomadEventRepository: repository.NewNomadEventRepository(db),
-		actionService: 		  actionService,
+		actionService:        actionService,
 	}
 }
 
@@ -51,12 +51,11 @@ type AllocWrapper struct {
 	Logs  *LokiOutput
 }
 
-
 func (n *NomadEventServiceImpl) GetEventAllocByWorkflowId(workflowId uint64) (map[string]AllocWrapper, error) {
 	allocs := map[string]AllocWrapper{}
 	results := []map[string]interface{}{}
 	n.logger.Printf("Get EventAlloc by WorkflowId: %d", workflowId)
-	results, err :=  n.nomadEventRepository.GetEventAllocByWorkflowId(workflowId)
+	results, err := n.nomadEventRepository.GetEventAllocByWorkflowId(workflowId)
 	if err != nil {
 		return nil, err
 	}

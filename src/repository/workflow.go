@@ -22,8 +22,8 @@ type WorkflowRepository interface {
 }
 
 type WorkflowSummary []struct {
-	Name string
-	NumSources uint64
+	Name         string
+	NumSources   uint64
 	NumInstances uint64
 }
 

@@ -43,28 +43,28 @@ func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 		workflowActionService: workflowActionService,
 		nomadEventService:     nomadEventService,
 		messageQueueService:   messageQueueService,
-		db: 				   db,
-		nomadClient: 		   nomadClient,
+		db:                    db,
+		nomadClient:           nomadClient,
 	}
 	(&BrainCmd{}).init(&brain, db, nomadClient)
 
 	web := Web{
-		Listen:          	 &cmd.Listen,
-		workflowService: 	 workflowService,
-		actionService:   	 actionService,
+		Listen:              &cmd.Listen,
+		workflowService:     workflowService,
+		actionService:       actionService,
 		messageQueueService: messageQueueService,
-		nomadEventService:	 nomadEventService,
-		evaluator:       	 &evaluator,
+		nomadEventService:   nomadEventService,
+		evaluator:           &evaluator,
 	}
 	(&WebCmd{}).init(&web, db)
 
 	invoker := Invoker{
-		evaluator:       	 &evaluator,
-		actionService:   	 actionService,
+		evaluator:           &evaluator,
+		actionService:       actionService,
 		messageQueueService: messageQueueService,
-		workflowService: 	 workflowService,
-		db: 				 db,
-		nomadClient: 		 nomadClient,
+		workflowService:     workflowService,
+		db:                  db,
+		nomadClient:         nomadClient,
 	}
 	(&InvokerCmd{}).init(&invoker, db, nomadClient)
 

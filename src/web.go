@@ -19,9 +19,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
-	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type WebCmd struct {
@@ -73,13 +73,13 @@ func (self *WebCmd) Run(db *pgxpool.Pool) error {
 }
 
 type Web struct {
-	Listen          	*string
-	logger          	*log.Logger
-	workflowService 	service.WorkflowService
-	actionService   	service.ActionService
+	Listen              *string
+	logger              *log.Logger
+	workflowService     service.WorkflowService
+	actionService       service.ActionService
 	messageQueueService service.MessageQueueService
-	nomadEventService	service.NomadEventService
-	evaluator       	*Evaluator
+	nomadEventService   service.NomadEventService
+	evaluator           *Evaluator
 }
 
 func (self *Web) start(ctx context.Context) error {
