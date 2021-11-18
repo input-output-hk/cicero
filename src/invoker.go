@@ -33,8 +33,8 @@ type Invoker struct {
 	nomadClient         *nomad.Client
 }
 
-func (self *Invoker) listenToInvoke(ctx context.Context) error {
-	self.logger.Println("Starting Invoker.listenToInvoke")
+func (self *Invoker) ListenToInvoke(ctx context.Context) error {
+	self.logger.Println("Starting Invoker.ListenToInvoke")
 
 	if err := self.messageQueueService.Subscribe(ctx, model.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.InvokeStreamName)

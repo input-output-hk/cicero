@@ -33,8 +33,8 @@ type Brain struct {
 	nomadClient           *nomad.Client
 }
 
-func (self *Brain) listenToStart(ctx context.Context) error {
-	self.logger.Println("Starting Brain.listenToStart")
+func (self *Brain) ListenToStart(ctx context.Context) error {
+	self.logger.Println("Starting Brain.ListenToStart")
 
 	if err := self.messageQueueService.Subscribe(ctx, model.StartStreamName, self.onStartMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.StartStreamName)
@@ -128,8 +128,8 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 	return nil
 }
 
-func (self *Brain) listenToFacts(ctx context.Context) error {
-	self.logger.Println("Starting Brain.listenToFacts")
+func (self *Brain) ListenToFacts(ctx context.Context) error {
+	self.logger.Println("Starting Brain.ListenToFacts")
 
 	if err := self.messageQueueService.Subscribe(ctx, model.FactStreamName, self.onFactMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.FactStreamName)
@@ -225,8 +225,8 @@ func (self *Brain) onFactMessage(msg *liftbridge.Message, err error) {
 	}
 }
 
-func (self *Brain) listenToNomadEvents(ctx context.Context) error {
-	self.logger.Println("Starting Brain.listenToNomadEvents")
+func (self *Brain) ListenToNomadEvents(ctx context.Context) error {
+	self.logger.Println("Starting Brain.ListenToNomadEvents")
 
 	index, err := self.nomadEventService.GetLastNomadEvent()
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {

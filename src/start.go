@@ -96,9 +96,9 @@ func (cmd *StartCmd) Run() error {
 			nomadClient:           nomadClient().(*nomad.Client),
 			logger:                log.New(os.Stderr, "brain: ", log.LstdFlags),
 		}
-		supervisor.Add(brain.listenToFacts)
-		supervisor.Add(brain.listenToStart)
-		supervisor.Add(brain.listenToNomadEvents)
+		supervisor.Add(brain.ListenToFacts)
+		supervisor.Add(brain.ListenToStart)
+		supervisor.Add(brain.ListenToNomadEvents)
 	}
 
 	if cmd.Web {
@@ -126,7 +126,7 @@ func (cmd *StartCmd) Run() error {
 			limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
 			logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
 		}
-		supervisor.Add(invoker.listenToInvoke)
+		supervisor.Add(invoker.ListenToInvoke)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
