@@ -18,19 +18,17 @@ type WorkflowRepository interface {
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
-	Update(pgx.Tx, uint64, model.WorkflowInstance) error
+	Update(pgx.Tx, model.WorkflowInstance) error
 }
 
 type WorkflowSummary []struct {
-	Name string
-	NumSources uint64
+	Name         string
+	NumSources   uint64
 	NumInstances uint64
 }
 
 func NewWorkflowRepository(db *pgxpool.Pool) WorkflowRepository {
-	return workflowRepository{
-		DB: db,
-	}
+	return workflowRepository{DB: db}
 }
 
 func (w workflowRepository) GetById(id uint64) (instance model.WorkflowInstance, err error) {
@@ -67,11 +65,11 @@ func (w workflowRepository) GetAllByName(name string) (instances []*model.Workfl
 	return
 }
 
-func (w workflowRepository) Update(tx pgx.Tx, id uint64, workflow model.WorkflowInstance) (err error) {
+func (w workflowRepository) Update(tx pgx.Tx, workflow model.WorkflowInstance) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
 		`UPDATE workflow_instances SET facts = $2, updated_at = $3 WHERE id = $1`,
-		id, workflow.Facts, workflow.UpdatedAt,
+		workflow.ID, workflow.Facts, workflow.UpdatedAt,
 	)
 	return
 }

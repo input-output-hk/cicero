@@ -18,7 +18,7 @@ type WorkflowService interface {
 	GetAllByName(string) ([]*model.WorkflowInstance, error)
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
-	Update(pgx.Tx, uint64, model.WorkflowInstance) error
+	Update(pgx.Tx, model.WorkflowInstance) error
 	Start(string, string, model.Facts) error
 }
 
@@ -67,12 +67,12 @@ func (s *WorkflowServiceImpl) Save(tx pgx.Tx, workflow *model.WorkflowInstance) 
 	return nil
 }
 
-func (s *WorkflowServiceImpl) Update(tx pgx.Tx, id uint64, workflow model.WorkflowInstance) error {
-	log.Printf("Update workflow %#v with id %d", workflow, id)
-	if err := s.workflowRepository.Update(tx, id, workflow); err != nil {
-		return errors.WithMessagef(err, "Couldn't update workflow with id: %d, error: %s", id)
+func (s *WorkflowServiceImpl) Update(tx pgx.Tx, workflow model.WorkflowInstance) error {
+	log.Printf("Update workflow %#v", workflow)
+	if err := s.workflowRepository.Update(tx, workflow); err != nil {
+		return errors.WithMessage(err, "Couldn't update workflow")
 	}
-	log.Printf("Updated workflow %#v with id %d", workflow, id)
+	log.Printf("Updated workflow %#v", workflow)
 	return nil
 }
 

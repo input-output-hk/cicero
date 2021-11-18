@@ -23,12 +23,12 @@ import (
 
 type ActionService interface {
 	GetById(uuid.UUID) (model.ActionInstance, error)
-	GetByNameAndWorkflowId(string, uint64) (model.ActionInstance, error)
+	GetByNameAndWorkflowId(name string, workflowId uint64) (model.ActionInstance, error)
 	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
 	Update(pgx.Tx, model.ActionInstance) error
 	JobLogs(uuid.UUID) (*LokiOutput, error)
-	ActionLogs(string, string) (*LokiOutput, error)
+	ActionLogs(allocId string, taskGroup string) (*LokiOutput, error)
 }
 
 type ActionServiceImpl struct {

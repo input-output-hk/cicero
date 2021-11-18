@@ -15,11 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
-	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
@@ -32,7 +31,7 @@ type WebCmd struct {
 	Env            []string `arg:"--env"`
 }
 
-func (self *WebCmd) init(web *Web) {
+func (self *WebCmd) init(web *Web, db *pgxpool.Pool) {
 	if web.Listen == nil {
 		web.Listen = &self.Listen
 	}
@@ -44,17 +43,21 @@ func (self *WebCmd) init(web *Web) {
 			web.logger.Fatalln(err.Error())
 			return
 		} else {
-			s := service.NewMessageQueueService(DB, bridge)
+			s := service.NewMessageQueueService(db, bridge)
 			web.messageQueueService = s
 		}
 	}
 	if web.workflowService == nil {
-		s := service.NewWorkflowService(DB, web.messageQueueService)
+		s := service.NewWorkflowService(db, web.messageQueueService)
 		web.workflowService = s
 	}
 	if web.actionService == nil {
-		s := service.NewActionService(DB, self.PrometheusAddr)
+		s := service.NewActionService(db, self.PrometheusAddr)
 		web.actionService = s
+	}
+	if web.nomadEventService == nil {
+		s := service.NewNomadEventService(db, web.actionService)
+		web.nomadEventService = s
 	}
 	if web.evaluator == nil {
 		e := NewEvaluator(self.Evaluator, self.Env)
@@ -62,9 +65,9 @@ func (self *WebCmd) init(web *Web) {
 	}
 }
 
-func (self *WebCmd) Run() error {
+func (self *WebCmd) Run(db *pgxpool.Pool) error {
 	web := Web{}
-	self.init(&web)
+	self.init(&web, db)
 	return web.start(context.Background())
 }
 
@@ -74,6 +77,7 @@ type Web struct {
 	workflowService     service.WorkflowService
 	actionService       service.ActionService
 	messageQueueService service.MessageQueueService
+	nomadEventService   service.NomadEventService
 	evaluator           *Evaluator
 }
 
@@ -180,50 +184,10 @@ func (self *Web) start(ctx context.Context) error {
 				} else if instance, err := self.workflowService.GetById(id); err != nil {
 					return err
 				} else {
-					results := []map[string]interface{}{}
-					err := pgxscan.Select(context.Background(), DB, &results, `
-            SELECT name, payload->>'Allocation' AS alloc
-            FROM (
-              SELECT id, name
-              FROM action_instances
-              WHERE workflow_instance_id = $1
-            ) action
-            LEFT JOIN LATERAL (
-              SELECT payload, index
-              FROM nomad_events
-              WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
-              AND payload#>>'{Allocation,TaskGroup}' = action.name
-              AND topic = 'Allocation'
-              AND type = 'AllocationUpdated'
-              ORDER BY index DESC LIMIT 1
-            ) payload ON true;
-            `, id)
+					allocs, err := self.nomadEventService.GetEventAllocByWorkflowId(id)
 					if err != nil {
 						return err
 					}
-
-					type wrapper struct {
-						Alloc *nomad.Allocation
-						Logs  *service.LokiOutput
-					}
-
-					allocs := map[string]wrapper{}
-
-					for _, result := range results {
-						alloc := &nomad.Allocation{}
-						err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
-						if err != nil {
-							return err
-						}
-
-						logs, err := self.actionService.ActionLogs(alloc.ID, alloc.TaskGroup)
-						if err != nil {
-							return err
-						}
-
-						allocs[result["name"].(string)] = wrapper{Alloc: alloc, Logs: logs}
-					}
-
 					return makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
 						"Instance":   instance,
 						"graph":      req.URL.Query().Get("graph"),
@@ -343,7 +307,6 @@ func (self *Web) start(ctx context.Context) error {
 							}
 						}
 					}
-
 					w.WriteHeader(204)
 					return nil
 				})
@@ -546,7 +509,7 @@ type HTTPError struct {
 
 	Code    string            `json:"code"`
 	Message string            `json:"message"`
-	Trace   errors.StackTrace `json:trace`
+	Trace   errors.StackTrace `json:"trace"`
 }
 
 func (e HTTPError) Error() string {

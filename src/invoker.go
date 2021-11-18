@@ -16,6 +16,7 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
@@ -28,7 +29,13 @@ type InvokerCmd struct {
 	Env            []string `arg:"--env"`
 }
 
-func (self InvokerCmd) init(invoker *Invoker) {
+func (self InvokerCmd) init(invoker *Invoker, db *pgxpool.Pool, nomadClient *nomad.Client) {
+	if invoker.db == nil {
+		invoker.db = db
+	}
+	if invoker.nomadClient == nil {
+		invoker.nomadClient = nomadClient
+	}
 	if invoker.logger == nil {
 		invoker.logger = log.New(os.Stderr, "invoker: ", log.LstdFlags)
 	}
@@ -48,7 +55,7 @@ func (self InvokerCmd) init(invoker *Invoker) {
 		invoker.evaluator = &e
 	}
 	if invoker.actionService == nil {
-		s := service.NewActionService(DB, self.PrometheusAddr)
+		s := service.NewActionService(db, self.PrometheusAddr)
 		invoker.actionService = s
 	}
 	if invoker.messageQueueService == nil {
@@ -56,19 +63,19 @@ func (self InvokerCmd) init(invoker *Invoker) {
 			invoker.logger.Fatalln(err.Error())
 			return
 		} else {
-			s := service.NewMessageQueueService(DB, bridge)
+			s := service.NewMessageQueueService(db, bridge)
 			invoker.messageQueueService = s
 		}
 	}
 	if invoker.workflowService == nil {
-		s := service.NewWorkflowService(DB, invoker.messageQueueService)
+		s := service.NewWorkflowService(db, invoker.messageQueueService)
 		invoker.workflowService = s
 	}
 }
 
-func (self InvokerCmd) Run() error {
+func (self InvokerCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 	invoker := Invoker{}
-	self.init(&invoker)
+	self.init(&invoker, db, nomadClient)
 
 	if err := invoker.start(context.Background()); err != nil {
 		return errors.WithMessage(err, "While running invoker")
@@ -87,6 +94,8 @@ type Invoker struct {
 	actionService       service.ActionService
 	messageQueueService service.MessageQueueService
 	workflowService     service.WorkflowService
+	db                  *pgxpool.Pool
+	nomadClient         *nomad.Client
 }
 
 func (self *Invoker) start(ctx context.Context) error {
@@ -138,7 +147,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 		}
 
 		//TODO: must be transactional with the message process
-		if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
 			err := self.messageQueueService.Save(tx, msg)
 			return err
 		}); err != nil {
@@ -194,7 +203,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 
 	self.logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
 
-	if err := DB.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if action.IsRunnable() {
 			if instance == nil {
 				instance = &model.ActionInstance{}
@@ -218,14 +227,14 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 			actionInstanceId := instance.ID.String()
 			action.Job.ID = &actionInstanceId
 
-			if response, _, err := nomadClient.Jobs().Register(&action.Job, &nomad.WriteOptions{}); err != nil {
+			if response, _, err := self.nomadClient.Jobs().Register(&action.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run action")
 			} else if len(response.Warnings) > 0 {
 				self.logger.Println(response.Warnings)
 			}
 
 		} else if instance != nil {
-			if _, _, err := nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
+			if _, _, err := self.nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to stop action")
 			}
 
