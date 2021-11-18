@@ -9,7 +9,6 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -18,61 +17,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
 
-type WebCmd struct {
-	Listen         string   `arg:"--listen" default:":8080"`
-	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
-	Env            []string `arg:"--env"`
-}
-
-func (self *WebCmd) init(web *Web, db *pgxpool.Pool) {
-	if web.Listen == nil {
-		web.Listen = &self.Listen
-	}
-	if web.logger == nil {
-		web.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
-	}
-	if web.messageQueueService == nil {
-		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
-			web.logger.Fatalln(err.Error())
-			return
-		} else {
-			s := service.NewMessageQueueService(db, bridge)
-			web.messageQueueService = s
-		}
-	}
-	if web.workflowService == nil {
-		s := service.NewWorkflowService(db, web.messageQueueService)
-		web.workflowService = s
-	}
-	if web.actionService == nil {
-		s := service.NewActionService(db, self.PrometheusAddr)
-		web.actionService = s
-	}
-	if web.nomadEventService == nil {
-		s := service.NewNomadEventService(db, web.actionService)
-		web.nomadEventService = s
-	}
-	if web.evaluator == nil {
-		e := NewEvaluator(self.Evaluator, self.Env)
-		web.evaluator = &e
-	}
-}
-
-func (self *WebCmd) Run(db *pgxpool.Pool) error {
-	web := Web{}
-	self.init(&web, db)
-	return web.start(context.Background())
-}
-
 type Web struct {
-	Listen              *string
+	Listen              string
 	logger              *log.Logger
 	workflowService     service.WorkflowService
 	actionService       service.ActionService
@@ -390,7 +340,7 @@ func (self *Web) start(ctx context.Context) error {
 		})
 	})
 
-	server := &http.Server{Addr: *self.Listen, Handler: router}
+	server := &http.Server{Addr: self.Listen, Handler: router}
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {

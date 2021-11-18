@@ -18,8 +18,8 @@ type Evaluator struct {
 	logger  *log.Logger
 }
 
-func NewEvaluator(command string, env []string) Evaluator {
-	return Evaluator{
+func NewEvaluator(command string, env []string) *Evaluator {
+	return &Evaluator{
 		Command: command,
 		Env:     env,
 		logger:  log.New(os.Stderr, "evaluator: ", log.LstdFlags),

@@ -13,16 +13,12 @@ var BuildInfo struct {
 	Commit  string
 }
 
-func Init() (db *pgxpool.Pool, nomadClient *nomad.Client, err error) {
+func NewDb() (db *pgxpool.Pool, err error) {
 	db, err = model.DBConnection(os.Getenv("DATABASE_URL"))
-	if err != nil {
-		return
-	}
-	config := nomad.DefaultConfig()
-	nomadClient, err = nomad.NewClient(config)
-	if err != nil {
-		return
-	}
+	return
+}
 
+func NewNomadClient() (client *nomad.Client, err error) {
+	client, err = nomad.NewClient(nomad.DefaultConfig())
 	return
 }
