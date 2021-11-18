@@ -13,21 +13,21 @@ type WorkflowActionService interface {
 	GetWorkflowAction(model.ActionInstance) (model.WorkflowAction, error)
 }
 
-type WorkflowActionServiceImpl struct {
+type workflowActionService struct {
 	logger          *log.Logger
 	evaluator       *Evaluator
 	workflowService service.WorkflowService
 }
 
 func NewWorkflowActionService(evaluator *Evaluator, workflowService service.WorkflowService) WorkflowActionService {
-	return &WorkflowActionServiceImpl{
+	return &workflowActionService{
 		logger:          log.New(os.Stderr, "WorkflowActionService: ", log.LstdFlags),
 		evaluator:       evaluator,
 		workflowService: workflowService,
 	}
 }
 
-func (w *WorkflowActionServiceImpl) GetWorkflowAction(action model.ActionInstance) (def model.WorkflowAction, err error) {
+func (w *workflowActionService) GetWorkflowAction(action model.ActionInstance) (def model.WorkflowAction, err error) {
 	wf, err := w.workflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not get workflow instance for workflow instance with ID %d", action.WorkflowInstanceId)
