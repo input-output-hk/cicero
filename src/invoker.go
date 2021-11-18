@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -22,70 +21,6 @@ import (
 	"github.com/vivek-ng/concurrency-limiter/priority"
 )
 
-type InvokerCmd struct {
-	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
-	Env            []string `arg:"--env"`
-}
-
-func (self InvokerCmd) init(invoker *Invoker, db *pgxpool.Pool, nomadClient *nomad.Client) {
-	if invoker.db == nil {
-		invoker.db = db
-	}
-	if invoker.nomadClient == nil {
-		invoker.nomadClient = nomadClient
-	}
-	if invoker.logger == nil {
-		invoker.logger = log.New(os.Stderr, "invoker: ", log.LstdFlags)
-	}
-	if invoker.tree == nil {
-		invoker.tree = oversight.New(oversight.WithSpecification(
-			10,                    // number of restarts
-			10*time.Minute,        // within this time period
-			oversight.OneForOne(), // restart every task on its own
-		))
-	}
-	if invoker.limiter == nil {
-		// Increase priority of waiting goroutines every second.
-		invoker.limiter = priority.NewLimiter(1, priority.WithDynamicPriority(1000))
-	}
-	if invoker.evaluator == nil {
-		e := NewEvaluator(self.Evaluator, self.Env)
-		invoker.evaluator = &e
-	}
-	if invoker.actionService == nil {
-		s := service.NewActionService(db, self.PrometheusAddr)
-		invoker.actionService = s
-	}
-	if invoker.messageQueueService == nil {
-		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
-			invoker.logger.Fatalln(err.Error())
-			return
-		} else {
-			s := service.NewMessageQueueService(db, bridge)
-			invoker.messageQueueService = s
-		}
-	}
-	if invoker.workflowService == nil {
-		s := service.NewWorkflowService(db, invoker.messageQueueService)
-		invoker.workflowService = s
-	}
-}
-
-func (self InvokerCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
-	invoker := Invoker{}
-	self.init(&invoker, db, nomadClient)
-
-	if err := invoker.start(context.Background()); err != nil {
-		return errors.WithMessage(err, "While running invoker")
-	}
-
-	for {
-		time.Sleep(time.Hour)
-	}
-}
-
 type Invoker struct {
 	logger              *log.Logger
 	tree                *oversight.Tree
@@ -96,21 +31,6 @@ type Invoker struct {
 	workflowService     service.WorkflowService
 	db                  *pgxpool.Pool
 	nomadClient         *nomad.Client
-}
-
-func (self *Invoker) start(ctx context.Context) error {
-	self.tree.Add(self.listenToInvoke)
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	if err := self.tree.Start(ctx); err != nil {
-		return errors.WithMessage(err, "While starting invoker supervisor")
-	}
-
-	<-ctx.Done()
-	self.logger.Println("context was cancelled")
-	return nil
 }
 
 func (self *Invoker) listenToInvoke(ctx context.Context) error {

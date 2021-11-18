@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,74 +20,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type BrainCmd struct {
-	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
-	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
-	Env            []string `arg:"--env"`
-}
-
-func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Client) {
-	if brain.db == nil {
-		brain.db = db
-	}
-	if brain.nomadClient == nil {
-		brain.nomadClient = nomadClient
-	}
-	if brain.logger == nil {
-		brain.logger = log.New(os.Stderr, "brain: ", log.LstdFlags)
-	}
-	if brain.tree == nil {
-		brain.tree = oversight.New(oversight.WithSpecification(
-			10,                    // number of restarts
-			10*time.Minute,        // within this time period
-			oversight.OneForOne(), // restart every task on its own
-		))
-	}
-	if brain.workflowActionService == nil {
-		s := NewWorkflowActionService(*brain.evaluator, brain.workflowService)
-		brain.workflowActionService = s
-	}
-	if brain.messageQueueService == nil {
-		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
-			brain.logger.Fatalln(err.Error())
-			return
-		} else {
-			s := service.NewMessageQueueService(db, bridge)
-			brain.messageQueueService = s
-		}
-	}
-	if brain.workflowService == nil {
-		s := service.NewWorkflowService(db, brain.messageQueueService)
-		brain.workflowService = s
-	}
-	if brain.actionService == nil {
-		s := service.NewActionService(db, self.PrometheusAddr)
-		brain.actionService = s
-	}
-	if brain.nomadEventService == nil {
-		s := service.NewNomadEventService(db, brain.actionService)
-		brain.nomadEventService = s
-	}
-	if brain.evaluator == nil {
-		e := NewEvaluator(self.Evaluator, self.Env)
-		brain.evaluator = &e
-	}
-}
-
-func (self BrainCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
-	brain := Brain{}
-	self.init(&brain, db, nomadClient)
-
-	if err := brain.start(context.Background()); err != nil {
-		return errors.WithMessage(err, "While running brain")
-	}
-
-	for {
-		time.Sleep(time.Hour)
-	}
-}
-
 type Brain struct {
 	logger                *log.Logger
 	tree                  *oversight.Tree
@@ -100,27 +31,6 @@ type Brain struct {
 	evaluator             *Evaluator
 	db                    *pgxpool.Pool
 	nomadClient           *nomad.Client
-}
-
-func (self *Brain) addToTree(tree *oversight.Tree) {
-	tree.Add(self.listenToFacts)
-	tree.Add(self.listenToStart)
-	tree.Add(self.listenToNomadEvents)
-}
-
-func (self *Brain) start(ctx context.Context) error {
-	self.addToTree(self.tree)
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	if err := self.tree.Start(ctx); err != nil {
-		return errors.WithMessage(err, "While starting brain supervisor")
-	}
-
-	<-ctx.Done()
-	self.logger.Println("context was cancelled")
-	return nil
 }
 
 func (self *Brain) listenToStart(ctx context.Context) error {

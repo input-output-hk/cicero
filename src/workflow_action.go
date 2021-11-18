@@ -15,11 +15,11 @@ type WorkflowActionService interface {
 
 type WorkflowActionServiceImpl struct {
 	logger          *log.Logger
-	evaluator       Evaluator
+	evaluator       *Evaluator
 	workflowService service.WorkflowService
 }
 
-func NewWorkflowActionService(evaluator Evaluator, workflowService service.WorkflowService) WorkflowActionService {
+func NewWorkflowActionService(evaluator *Evaluator, workflowService service.WorkflowService) WorkflowActionService {
 	return &WorkflowActionServiceImpl{
 		logger:          log.New(os.Stderr, "WorkflowActionService: ", log.LstdFlags),
 		evaluator:       evaluator,
