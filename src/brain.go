@@ -70,7 +70,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 	}
 
 	//TODO: must be transactional with the message process
-	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		err := self.messageQueueService.Save(tx, msg)
 		return err
 	}); err != nil {
@@ -100,7 +100,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 
 func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowInstance) error {
 	var tx pgx.Tx
-	if t, err := (*self.db).Begin(ctx); err != nil {
+	if t, err := self.db.Begin(ctx); err != nil {
 		self.logger.Printf("%s", err)
 		return err
 	} else {
@@ -170,7 +170,7 @@ func (self *Brain) onFactMessage(msg *liftbridge.Message, err error) {
 	}
 
 	ctx := context.Background()
-	tx, err := (*self.db).Begin(ctx)
+	tx, err := self.db.Begin(ctx)
 	if err != nil {
 		self.logger.Printf("%s", err)
 		return
@@ -271,7 +271,7 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 			}
 
 			//TODO: must be transactional with the message process
-			if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 				return self.nomadEventService.Save(tx, &event)
 			}); err != nil {
 				self.logger.Println("Could not complete db transaction")
@@ -345,7 +345,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		return errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
 	}
 
-	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if err := self.actionService.Update(tx, action); err != nil {
 			return errors.WithMessage(err, "Could not update action instance")
 		}

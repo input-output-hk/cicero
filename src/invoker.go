@@ -67,7 +67,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 		}
 
 		//TODO: must be transactional with the message process
-		if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 			err := self.messageQueueService.Save(tx, msg)
 			return err
 		}); err != nil {
@@ -123,7 +123,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 
 	self.logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
 
-	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if action.IsRunnable() {
 			if instance == nil {
 				instance = &model.ActionInstance{}
