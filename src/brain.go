@@ -322,6 +322,7 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return errors.WithMessage(err, "Could not get last Nomad event index")
 	}
+	index += 1
 
 	self.logger.Println("Listening to Nomad events starting at index", index)
 
@@ -347,6 +348,13 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 			return errors.WithMessage(err, "Error getting next events from Nomad event stream")
 		}
 
+		if events.Index < index {
+			// We always get the last event even if we start at
+			// an index greater than the last so we have to ignore it.
+			// https://github.com/hashicorp/nomad/issues/11296
+			continue
+		}
+
 		for _, event := range events.Events {
 			if err := self.handleNomadEvent(&event); err != nil {
 				return errors.WithMessage(err, "Error handling Nomad event")
@@ -359,9 +367,9 @@ func (self *Brain) listenToNomadEvents(ctx context.Context) error {
 				self.logger.Println("Could not complete db transaction")
 				return err
 			}
-
-			index = event.Index
 		}
+
+		index = events.Index
 	}
 }
 
