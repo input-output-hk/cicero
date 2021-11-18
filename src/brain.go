@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"cirello.io/oversight"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
@@ -22,7 +21,6 @@ import (
 
 type Brain struct {
 	logger                *log.Logger
-	tree                  *oversight.Tree
 	workflowService       service.WorkflowService
 	actionService         service.ActionService
 	workflowActionService WorkflowActionService
