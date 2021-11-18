@@ -8,7 +8,8 @@ import (
 
 	"cirello.io/oversight"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/consumers"
+	"github.com/input-output-hk/cicero/src/component"
+	"github.com/input-output-hk/cicero/src/component/web"
 	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -16,18 +17,14 @@ import (
 )
 
 type StartCmd struct {
-	ConsumeWorkflowStart  bool `arg:"--consume-workflow-start"`
-	ConsumeWorkflowInvoke bool `arg:"--consume-workflow-invoke"`
-	ConsumeWorkflowFact   bool `arg:"--consume-workflow-fact"`
-	ConsumeNomadEvent     bool `arg:"--consume-nomad-event"`
-
-	Web       bool   `arg:"--web"`
-	WebListen string `arg:"--web-listen" default:":8080"`
+	Components []string `arg:"positional" help:"any of: start, invoke, fact, nomad, web"`
 
 	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
 	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
 	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
 	Env            []string `arg:"--env"`
+
+	WebListen string `arg:"--web-listen" default:":8080"`
 }
 
 func (cmd *StartCmd) Run() error {
@@ -35,16 +32,39 @@ func (cmd *StartCmd) Run() error {
 
 	// If none are given then start all,
 	// otherwise start only those that are given.
-	if !(cmd.ConsumeWorkflowStart ||
-		cmd.ConsumeWorkflowInvoke ||
-		cmd.ConsumeWorkflowFact ||
-		cmd.ConsumeNomadEvent ||
-		cmd.Web) {
-		cmd.ConsumeWorkflowStart = true
-		cmd.ConsumeWorkflowInvoke = true
-		cmd.ConsumeWorkflowFact = true
-		cmd.ConsumeNomadEvent = true
-		cmd.Web = true
+	var start struct {
+		workflowStart  bool
+		workflowInvoke bool
+		workflowFact   bool
+		nomadEvent     bool
+		web            bool
+	}
+	for _, component := range cmd.Components {
+		switch component {
+		case "start":
+			start.workflowStart = true
+		case "invoke":
+			start.workflowInvoke = true
+		case "fact":
+			start.workflowFact = true
+		case "nomad":
+			start.nomadEvent = true
+		case "web":
+			start.web = true
+		default:
+			logger.Fatalf("Unknown component: %s", component)
+		}
+	}
+	if !(start.workflowStart ||
+		start.workflowInvoke ||
+		start.workflowFact ||
+		start.nomadEvent ||
+		start.web) {
+		start.workflowStart = true
+		start.workflowInvoke = true
+		start.workflowFact = true
+		start.nomadEvent = true
+		start.web = true
 	}
 
 	db := once(func() interface{} {
@@ -91,18 +111,18 @@ func (cmd *StartCmd) Run() error {
 
 	supervisor := cmd.newSupervisor(logger)
 
-	if cmd.ConsumeWorkflowStart {
-		consumer := consumers.WorkflowStartConsumer{
+	if start.workflowStart {
+		component := component.WorkflowStartConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
 			WorkflowService:     workflowService().(service.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 		}
-		supervisor.Add(consumer.Listen)
+		supervisor.Add(component.Start)
 	}
 
-	if cmd.ConsumeWorkflowInvoke {
-		consumer := consumers.WorkflowInvokeConsumer{
+	if start.workflowInvoke {
+		component := component.WorkflowInvokeConsumer{
 			EvaluationService:   evaluationService().(service.EvaluationService),
 			ActionService:       actionService().(service.ActionService),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
@@ -113,21 +133,21 @@ func (cmd *StartCmd) Run() error {
 			Limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
 			Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
 		}
-		supervisor.Add(consumer.Listen)
+		supervisor.Add(component.Start)
 	}
 
-	if cmd.ConsumeWorkflowFact {
-		consumer := consumers.WorkflowFactConsumer{
+	if start.workflowFact {
+		component := component.WorkflowFactConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
 			WorkflowService:     workflowService().(service.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 		}
-		supervisor.Add(consumer.Listen)
+		supervisor.Add(component.Start)
 	}
 
-	if cmd.ConsumeNomadEvent {
-		consumer := consumers.NomadEventConsumer{
+	if start.nomadEvent {
+		component := component.NomadEventConsumer{
 			Logger:                log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
 			MessageQueueService:   messageQueueService().(service.MessageQueueService),
 			WorkflowService:       workflowService().(service.WorkflowService),
@@ -137,11 +157,11 @@ func (cmd *StartCmd) Run() error {
 			NomadClient:           nomadClient().(*nomad.Client),
 			Db:                    db().(*pgxpool.Pool),
 		}
-		supervisor.Add(consumer.Listen)
+		supervisor.Add(component.Start)
 	}
 
-	if cmd.Web {
-		web := Web{
+	if start.web {
+		component := web.Web{
 			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			Listen:              cmd.WebListen,
 			WorkflowService:     workflowService().(service.WorkflowService),
@@ -150,7 +170,7 @@ func (cmd *StartCmd) Run() error {
 			NomadEventService:   nomadEventService().(service.NomadEventService),
 			EvaluationService:   evaluationService().(service.EvaluationService),
 		}
-		supervisor.Add(web.Start)
+		supervisor.Add(component.Start)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

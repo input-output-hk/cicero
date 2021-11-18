@@ -1,4 +1,4 @@
-package cicero
+package web
 
 import (
 	"errors"

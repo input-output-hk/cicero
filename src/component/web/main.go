@@ -1,4 +1,4 @@
-package cicero
+package web
 
 import (
 	"context"
@@ -359,7 +359,7 @@ func (self *Web) Start(ctx context.Context) error {
 	return nil
 }
 
-//go:embed web/* web/**/*
+//go:embed templates/* templates/**/*
 var viewsFs embed.FS
 
 // Learn by example.
@@ -377,12 +377,12 @@ var viewsFs embed.FS
 // https://github.com/dannyvankooten/extemplate
 // Does not work with embed.FS though.
 func makeViewTemplate(route string) *template.Template {
-	root := "web"
+	root := "templates"
 
 	t := template.New("")
 	t.Funcs(template.FuncMap{
 		"buildInfo": func() interface{} {
-			return BuildInfo
+			return model.BuildInfo
 		},
 		"route": func() string { return route },
 		"toJson": func(o interface{}, pretty bool) string {

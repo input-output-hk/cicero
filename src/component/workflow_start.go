@@ -1,4 +1,4 @@
-package consumers
+package component
 
 import (
 	"context"
@@ -21,8 +21,8 @@ type WorkflowStartConsumer struct {
 	Db                  *pgxpool.Pool
 }
 
-func (self *WorkflowStartConsumer) Listen(ctx context.Context) error {
-	self.Logger.Println("Starting WorkflowStartConsumer.Listen")
+func (self *WorkflowStartConsumer) Start(ctx context.Context) error {
+	self.Logger.Println("Starting WorkflowStartConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, model.StartStreamName, self.onStartMessage, 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.StartStreamName)

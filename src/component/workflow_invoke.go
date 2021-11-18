@@ -1,4 +1,4 @@
-package consumers
+package component
 
 import (
 	"context"
@@ -31,8 +31,8 @@ type WorkflowInvokeConsumer struct {
 	NomadClient         *nomad.Client
 }
 
-func (self *WorkflowInvokeConsumer) Listen(ctx context.Context) error {
-	self.Logger.Println("Starting WorkflowInvokeConsumer.Listen")
+func (self *WorkflowInvokeConsumer) Start(ctx context.Context) error {
+	self.Logger.Println("Starting WorkflowInvokeConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, model.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.InvokeStreamName)

@@ -1,4 +1,4 @@
-package consumers
+package component
 
 import (
 	"context"
@@ -26,8 +26,8 @@ type NomadEventConsumer struct {
 	NomadClient           *nomad.Client
 }
 
-func (self *NomadEventConsumer) Listen(ctx context.Context) error {
-	self.Logger.Println("Starting NomadEventConsumer.Listen")
+func (self *NomadEventConsumer) Start(ctx context.Context) error {
+	self.Logger.Println("Starting NomadEventConsumer")
 
 	index, err := self.NomadEventService.GetLastNomadEvent()
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
