@@ -30,13 +30,13 @@ func NewWorkflowActionService(evaluator Evaluator, workflowService service.Workf
 func (w *WorkflowActionServiceImpl) GetWorkflowAction(action model.ActionInstance) (def model.WorkflowAction, err error) {
 	wf, err := w.workflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
-		err = errors.WithMessagef(err, "Could not get workflow instance for WorkflowInstanceId %d", action.WorkflowInstanceId)
+		err = errors.WithMessagef(err, "Could not get workflow instance for workflow instance with ID %d", action.WorkflowInstanceId)
 		return
 	}
 
 	wfDef, err := w.evaluator.EvaluateWorkflow(wf.Source, wf.Name, wf.ID, wf.Facts)
 	if err != nil {
-		err = errors.WithMessagef(err, "Could Evaluate Workflow for Workflow %#v", wf)
+		err = errors.WithMessagef(err, "Could not evaluate definition for workflow instance %#v", wf)
 		return
 	}
 
