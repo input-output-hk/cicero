@@ -99,6 +99,7 @@ func (self *Web) start(ctx context.Context) error {
 				err = errors.WithMessagef(err, "Could not get all workflows")
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 				// TODO Logging -> Grafana Loki
+				return
 			} else {
 				instances = insts
 			}
@@ -108,6 +109,7 @@ func (self *Web) start(ctx context.Context) error {
 				err = errors.WithMessagef(err, "Could not get index-name.html")
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 				// TODO Logging -> Grafana Loki
+				return
 			} else {
 				instances = insts
 			}
@@ -118,6 +120,7 @@ func (self *Web) start(ctx context.Context) error {
 			err = errors.WithMessagef(err, "Could not create workflow view")
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 			// TODO Logging -> Grafana Loki
+			return
 		}
 	}).Methods("GET")
 
@@ -129,6 +132,7 @@ func (self *Web) start(ctx context.Context) error {
 			err = errors.WithMessagef(err, "Could not start workflow by name \"%s\" and source \"%s\"", source, name)
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 			// TODO Logging -> Grafana Loki
+			return
 		}
 
 		http.Redirect(w, req, "/workflow", 302)
@@ -143,16 +147,21 @@ func (self *Web) start(ctx context.Context) error {
 			err := errors.New("Could not read empty id")
 			writeLogs(err, self.logger)
 			// TODO Logging -> Grafana Loki
+			return
 		}
 
 		if id, err := strconv.ParseUint(id, 10, 64); err != nil {
 			err = errors.WithMessagef(err, "Could not read id \"%s\"", id)
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 			// TODO Logging -> Grafana Loki
+			return
+
 		} else if instance, err := (*self.workflowService).GetById(id); err != nil {
 			err = errors.WithMessagef(err, "Could not get workflow by id \"%s", id)
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 			// TODO Logging -> Grafana Loki
+			return
+
 		} else {
 			results := []map[string]interface{}{}
 			err := pgxscan.Select(context.Background(), DB, &results, `
@@ -176,6 +185,7 @@ func (self *Web) start(ctx context.Context) error {
 				err = errors.WithMessagef(err, "Could not select action_instance from db", id)
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 				// TODO Logging -> Grafana Loki
+				return
 			}
 
 			type wrapper struct {
