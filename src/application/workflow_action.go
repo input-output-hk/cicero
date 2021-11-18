@@ -1,7 +1,6 @@
-package cicero
+package application
 
 import (
-	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
@@ -16,10 +15,10 @@ type WorkflowActionService interface {
 type WorkflowActionServiceImpl struct {
 	logger          *log.Logger
 	evaluator       Evaluator
-	workflowService application.WorkflowService
+	workflowService WorkflowService
 }
 
-func NewWorkflowActionService(evaluator Evaluator, workflowService application.WorkflowService) WorkflowActionService {
+func NewWorkflowActionService(evaluator Evaluator, workflowService WorkflowService) WorkflowActionService {
 	return &WorkflowActionServiceImpl{
 		logger:          log.New(os.Stderr, "WorkflowActionService: ", log.LstdFlags),
 		evaluator:       evaluator,

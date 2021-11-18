@@ -1,4 +1,4 @@
-package cicero
+package application
 
 import (
 	"encoding/json"

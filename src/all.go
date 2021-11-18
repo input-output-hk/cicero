@@ -29,11 +29,11 @@ func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 
 	supervisor := cmd.newSupervisor()
 
-	evaluator := NewEvaluator(cmd.Evaluator, cmd.Env)
+	evaluator := application.NewEvaluator(cmd.Evaluator, cmd.Env)
 	messageQueueService := application.NewMessageQueueService(db, bridge)
 	workflowService := application.NewWorkflowService(db, messageQueueService)
 	actionService := application.NewActionService(db, cmd.PrometheusAddr)
-	workflowActionService := NewWorkflowActionService(evaluator, workflowService)
+	workflowActionService := application.NewWorkflowActionService(evaluator, workflowService)
 	nomadEventService := application.NewNomadEventService(db, actionService)
 
 	brain := Brain{

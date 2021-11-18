@@ -7,6 +7,7 @@ import (
 
 	"github.com/alexflint/go-arg"
 	cicero "github.com/input-output-hk/cicero/src"
+	cicero_domain "github.com/input-output-hk/cicero/src/domain"
 )
 
 var buildVersion = "dev"
@@ -22,8 +23,8 @@ func main() {
 		logger.SetOutput(os.Stderr)
 	}
 
-	cicero.BuildInfo.Version = buildVersion
-	cicero.BuildInfo.Commit = buildCommit
+	cicero_domain.BuildInfo.Version = buildVersion
+	cicero_domain.BuildInfo.Commit = buildCommit
 
 	abort(parser, Run(parser, args))
 }

@@ -46,7 +46,7 @@ func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Cli
 		))
 	}
 	if brain.workflowActionService == nil {
-		s := NewWorkflowActionService(*brain.evaluator, brain.workflowService)
+		s := application.NewWorkflowActionService(*brain.evaluator, brain.workflowService)
 		brain.workflowActionService = s
 	}
 	if brain.messageQueueService == nil {
@@ -71,7 +71,7 @@ func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Cli
 		brain.nomadEventService = s
 	}
 	if brain.evaluator == nil {
-		e := NewEvaluator(self.Evaluator, self.Env)
+		e := application.NewEvaluator(self.Evaluator, self.Env)
 		brain.evaluator = &e
 	}
 }
@@ -94,10 +94,10 @@ type Brain struct {
 	tree                  *oversight.Tree
 	workflowService       application.WorkflowService
 	actionService         application.ActionService
-	workflowActionService WorkflowActionService
+	workflowActionService application.WorkflowActionService
 	messageQueueService   application.MessageQueueService
 	nomadEventService     application.NomadEventService
-	evaluator             *Evaluator
+	evaluator             *application.Evaluator
 	db                    *pgxpool.Pool
 	nomadClient           *nomad.Client
 }

@@ -50,7 +50,7 @@ func (self InvokerCmd) init(invoker *Invoker, db *pgxpool.Pool, nomadClient *nom
 		invoker.limiter = priority.NewLimiter(1, priority.WithDynamicPriority(1000))
 	}
 	if invoker.evaluator == nil {
-		e := NewEvaluator(self.Evaluator, self.Env)
+		e := application.NewEvaluator(self.Evaluator, self.Env)
 		invoker.evaluator = &e
 	}
 	if invoker.actionService == nil {
@@ -89,7 +89,7 @@ type Invoker struct {
 	logger              *log.Logger
 	tree                *oversight.Tree
 	limiter             *priority.PriorityLimiter
-	evaluator           *Evaluator
+	evaluator           *application.Evaluator
 	actionService       application.ActionService
 	messageQueueService application.MessageQueueService
 	workflowService     application.WorkflowService

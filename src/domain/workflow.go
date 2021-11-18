@@ -4,8 +4,6 @@ import (
 	"time"
 
 	nomad "github.com/hashicorp/nomad/api"
-
-	"github.com/google/uuid"
 )
 
 type WorkflowDefinitions map[string]*WorkflowDefinition
@@ -44,14 +42,4 @@ type WorkflowInstance struct {
 	UpdatedAt *time.Time
 }
 
-type Facts map[string]interface{}
 
-type ActionInstance struct {
-	ID                 uuid.UUID
-	WorkflowInstanceId uint64
-	Name      string
-	Facts     Facts
-	CreatedAt *time.Time
-	UpdatedAt          *time.Time
-	FinishedAt         *time.Time
-}

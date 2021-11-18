@@ -60,7 +60,7 @@ func (self *WebCmd) init(web *Web, db *pgxpool.Pool) {
 		web.nomadEventService = s
 	}
 	if web.evaluator == nil {
-		e := NewEvaluator(self.Evaluator, self.Env)
+		e := application.NewEvaluator(self.Evaluator, self.Env)
 		web.evaluator = &e
 	}
 }
@@ -78,7 +78,7 @@ type Web struct {
 	actionService       application.ActionService
 	messageQueueService application.MessageQueueService
 	nomadEventService   application.NomadEventService
-	evaluator           *Evaluator
+	evaluator           *application.Evaluator
 }
 
 func (self *Web) start(ctx context.Context) error {
@@ -432,7 +432,7 @@ func makeViewTemplate(route string) *template.Template {
 	t := template.New("")
 	t.Funcs(template.FuncMap{
 		"buildInfo": func() interface{} {
-			return BuildInfo
+			return domain.BuildInfo
 		},
 		"route": func() string { return route },
 		"toJson": func(o interface{}, pretty bool) string {
