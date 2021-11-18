@@ -406,7 +406,11 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 
 	def, err := self.workflowActionService.GetWorkflowAction(action)
 	if err != nil {
-		return errors.WithMessagef(err, "Could not get definition for action instance %s", action.ID)
+		// TODO We don't want to crash here (for example if a workflow source disappeared)
+		// but we don't want to silently ignore it either - should this pop up in the web UI somewhere?
+		// Unfortunately evaluators can currently not indicate the reason why evaluation failed - add that to contract?
+		self.logger.Printf("Could not get definition for action instance %s: %s", action.ID, err.Error())
+		return nil
 	}
 
 	var facts *model.Facts
