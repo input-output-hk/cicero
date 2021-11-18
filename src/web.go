@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"log"
 	"mime"
@@ -136,7 +135,7 @@ func (self *Web) start(ctx context.Context) error {
 
 			// step 4
 			if inputsJson := req.URL.Query().Get("inputs"); len(inputsJson) > 0 {
-				var inputs model.WorkflowCerts
+				var inputs model.Facts
 				if err := json.Unmarshal([]byte(inputsJson), &inputs); err != nil {
 					return err
 				}
@@ -170,7 +169,7 @@ func (self *Web) start(ctx context.Context) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
 
-			if err := self.workflowService.Start(source, name, model.WorkflowCerts{}); err != nil {
+			if err := self.workflowService.Start(source, name, model.Facts{}); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
@@ -209,7 +208,7 @@ func (self *Web) start(ctx context.Context) error {
 					return err
 				}
 
-				def, err := self.evaluator.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Certs)
+				def, err := self.evaluator.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Facts)
 				if err != nil {
 					return err
 				}
@@ -259,7 +258,7 @@ func (self *Web) start(ctx context.Context) error {
 						}
 					}
 
-					var inputs model.WorkflowCerts
+					var inputs model.Facts
 					if inputsStr := req.URL.Query().Get("inputs"); len(inputsStr) > 0 {
 						if err := json.Unmarshal([]byte(inputsStr), &inputs); err != nil {
 							return err
@@ -286,9 +285,9 @@ func (self *Web) start(ctx context.Context) error {
 					var params struct {
 						Source string
 						Name   *string
-						Inputs model.WorkflowCerts
+						Inputs model.Facts
 					}
-					params.Inputs = model.WorkflowCerts{}
+					params.Inputs = model.Facts{}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
@@ -335,20 +334,20 @@ func (self *Web) start(ctx context.Context) error {
 						return bunrouter.JSON(w, req.Context().Value(ctxKeyWorkflowInstance))
 					})
 
-					group.POST("/cert", func(w http.ResponseWriter, req bunrouter.Request) error {
+					group.POST("/fact", func(w http.ResponseWriter, req bunrouter.Request) error {
 						instance := req.Context().Value(ctxKeyWorkflowInstance).(model.WorkflowInstance)
 
-						certs := model.WorkflowCerts{}
-						if err := json.NewDecoder(req.Body).Decode(&certs); err != nil {
-							return errors.WithMessage(err, "Could not unmarshal certs from request body")
+						facts := model.Facts{}
+						if err := json.NewDecoder(req.Body).Decode(&facts); err != nil {
+							return errors.WithMessage(err, "Could not unmarshal facts from request body")
 						}
 
 						if err := self.messageQueueService.Publish(
-							fmt.Sprintf("workflow.%s.%d.cert", instance.Name, instance.ID),
-							service.CertStreamName,
-							certs,
+							model.FactStreamName.Fmt(instance.Name, instance.ID),
+							model.FactStreamName,
+							facts,
 						); err != nil {
-							return errors.WithMessage(err, "Could not publish certificate")
+							return errors.WithMessage(err, "Could not publish fact")
 						}
 						w.WriteHeader(204)
 						return nil

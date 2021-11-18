@@ -9,7 +9,7 @@
 			<th>Source</th>
 			<th>Created At</th>
 			<th>Updated At</th>
-			<th>Certificates</th>
+			<th>Facts</th>
 		</tr>
 		{{range .Instances}}
 			<tr>
@@ -21,7 +21,7 @@
 					<textarea
 						readonly
 						style="flex-grow: 1"
-					>{{toJson .Certs true}}</textarea>
+					>{{toJson .Facts true}}</textarea>
 				</td>
 			</tr>
 		{{end}}

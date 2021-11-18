@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -20,7 +19,7 @@ type WorkflowService interface {
 	GetById(uint64) (model.WorkflowInstance, error)
 	Save(pgx.Tx, *model.WorkflowInstance) error
 	Update(pgx.Tx, model.WorkflowInstance) error
-	Start(string, string, model.WorkflowCerts) error
+	Start(string, string, model.Facts) error
 }
 
 type WorkflowServiceImpl struct {
@@ -77,10 +76,10 @@ func (s *WorkflowServiceImpl) Update(tx pgx.Tx, workflow model.WorkflowInstance)
 	return nil
 }
 
-func (s *WorkflowServiceImpl) Start(source, name string, inputs model.WorkflowCerts) error {
+func (s *WorkflowServiceImpl) Start(source, name string, inputs model.Facts) error {
 	return s.messageQueueService.Publish(
-		fmt.Sprintf("workflow.%s.start", name),
-		StartStreamName,
+		model.StartStreamName.Fmt(name),
+		model.StartStreamName,
 		inputs,
 		liftbridge.Header("source", []byte(source)),
 	)

@@ -6,7 +6,7 @@ create table action_instances (
   id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
   workflow_instance_id integer NOT NULL,
   name text NOT NULL,
-  certs jsonb NOT NULL,
+  facts jsonb NOT NULL,
   created_at timestamp NOT NULL DEFAULT NOW(),
   updated_at timestamp,
   finished_at timestamp

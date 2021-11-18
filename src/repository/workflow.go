@@ -68,8 +68,8 @@ func (w workflowRepository) GetAllByName(name string) (instances []*model.Workfl
 func (w workflowRepository) Update(tx pgx.Tx, workflow model.WorkflowInstance) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
-		`UPDATE workflow_instances SET certs = $2, updated_at = $3 WHERE id = $1`,
-		workflow.ID, workflow.Certs, workflow.UpdatedAt,
+		`UPDATE workflow_instances SET facts = $2, updated_at = $3 WHERE id = $1`,
+		workflow.ID, workflow.Facts, workflow.UpdatedAt,
 	)
 	return
 }
@@ -77,7 +77,7 @@ func (w workflowRepository) Update(tx pgx.Tx, workflow model.WorkflowInstance) (
 func (w workflowRepository) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
 	return tx.QueryRow(
 		context.Background(),
-		`INSERT INTO workflow_instances (source, name, certs) VALUES ($1, $2, $3) RETURNING id`,
-		workflow.Source, workflow.Name, workflow.Certs,
+		`INSERT INTO workflow_instances (source, name, facts) VALUES ($1, $2, $3) RETURNING id`,
+		workflow.Source, workflow.Name, workflow.Facts,
 	).Scan(&workflow.ID)
 }
