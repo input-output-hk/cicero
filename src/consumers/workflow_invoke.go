@@ -1,4 +1,4 @@
-package cicero
+package consumers
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/input-output-hk/cicero/src/service"
 
-	"cirello.io/oversight"
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
@@ -21,40 +20,39 @@ import (
 	"github.com/vivek-ng/concurrency-limiter/priority"
 )
 
-type Invoker struct {
-	logger              *log.Logger
-	tree                *oversight.Tree
-	limiter             *priority.PriorityLimiter
-	evaluator           *Evaluator
-	actionService       service.ActionService
-	messageQueueService service.MessageQueueService
-	workflowService     service.WorkflowService
-	db                  *pgxpool.Pool
-	nomadClient         *nomad.Client
+type WorkflowInvokeConsumer struct {
+	Logger              *log.Logger
+	Limiter             *priority.PriorityLimiter
+	EvaluationService   service.EvaluationService
+	ActionService       service.ActionService
+	MessageQueueService service.MessageQueueService
+	WorkflowService     service.WorkflowService
+	Db                  *pgxpool.Pool
+	NomadClient         *nomad.Client
 }
 
-func (self *Invoker) ListenToInvoke(ctx context.Context) error {
-	self.logger.Println("Starting Invoker.ListenToInvoke")
+func (self *WorkflowInvokeConsumer) Listen(ctx context.Context) error {
+	self.Logger.Println("Starting WorkflowInvokeConsumer.Listen")
 
-	if err := self.messageQueueService.Subscribe(ctx, model.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
+	if err := self.MessageQueueService.Subscribe(ctx, model.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.InvokeStreamName)
 	}
 
 	<-ctx.Done()
-	self.logger.Println("context was cancelled")
+	self.Logger.Println("context was cancelled")
 	return nil
 }
 
-func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
+func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
-			self.logger.Fatalf("error in liftbridge message: %s", err.Error())
+			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
 		}
 
 		inputs := model.Facts{}
 		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
-			self.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
-			self.logger.Printf("Invalid JSON received, ignoring: %s", err)
+			self.Logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
+			self.Logger.Printf("Invalid JSON received, ignoring: %s", err)
 			return
 		}
 
@@ -62,27 +60,27 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 		workflowName := parts[1]
 		wfInstanceId, err := strconv.ParseUint(parts[2], 10, 64)
 		if err != nil {
-			self.logger.Printf("Invalid Workflow Instance ID received, ignoring: %s", msg.Subject())
+			self.Logger.Printf("Invalid Workflow Instance ID received, ignoring: %s", msg.Subject())
 			return
 		}
 
 		//TODO: must be transactional with the message process
-		if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-			err := self.messageQueueService.Save(tx, msg)
+		if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			err := self.MessageQueueService.Save(tx, msg)
 			return err
 		}); err != nil {
-			self.logger.Printf("Could not complete db transaction")
+			self.Logger.Printf("Could not complete Db transaction")
 			return
 		}
 
 		if err := self.invokeWorkflow(ctx, workflowName, wfInstanceId, inputs); err != nil {
-			self.logger.Println("Failed to invoke workflow", err)
+			self.Logger.Println("Failed to invoke workflow", err)
 		}
 	}
 }
 
-func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts) error {
-	wf, err := self.workflowService.GetById(wfInstanceId)
+func (self *WorkflowInvokeConsumer) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts) error {
+	wf, err := self.WorkflowService.GetById(wfInstanceId)
 	if err != nil {
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
 	}
@@ -94,7 +92,7 @@ func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wf
 		return errors.New("Workflow name given does not match name of instance: " + workflowName + " != " + wf.Name)
 	}
 
-	workflow, err := self.evaluator.EvaluateWorkflow(wf.Source, wf.Name, wfInstanceId, inputs)
+	workflow, err := self.EvaluationService.EvaluateWorkflow(wf.Source, wf.Name, wfInstanceId, inputs)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
@@ -108,12 +106,12 @@ func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wf
 	return nil
 }
 
-func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts, actionName string, action *model.WorkflowAction) error {
-	self.limiter.Wait(context.Background(), priority.High)
-	defer self.limiter.Finish()
+func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts, actionName string, action *model.WorkflowAction) error {
+	self.Limiter.Wait(context.Background(), priority.High)
+	defer self.Limiter.Finish()
 
 	var instance *model.ActionInstance
-	if inst, err := self.actionService.GetByNameAndWorkflowId(actionName, wfInstanceId); err != nil {
+	if inst, err := self.ActionService.GetByNameAndWorkflowId(actionName, wfInstanceId); err != nil {
 		if !pgxscan.NotFound(err) {
 			return errors.WithMessage(err, "While getting last action instance")
 		}
@@ -121,9 +119,9 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 		instance = &inst
 	}
 
-	self.logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
+	self.Logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
 
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if action.IsRunnable() {
 			if instance == nil {
 				instance = &model.ActionInstance{}
@@ -131,7 +129,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 				instance.Name = actionName
 				instance.Facts = inputs
 
-				err := self.actionService.Save(tx, instance)
+				err := self.ActionService.Save(tx, instance)
 				if err != nil {
 					return errors.WithMessage(err, "Could not insert action instance")
 				}
@@ -139,7 +137,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 				updatedAt := time.Now().UTC()
 				instance.UpdatedAt = &updatedAt
 				instance.Facts = inputs
-				if err := self.actionService.Update(tx, *instance); err != nil {
+				if err := self.ActionService.Update(tx, *instance); err != nil {
 					return errors.WithMessage(err, "Could not update action instance")
 				}
 			}
@@ -147,21 +145,21 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 			actionInstanceId := instance.ID.String()
 			action.Job.ID = &actionInstanceId
 
-			if response, _, err := self.nomadClient.Jobs().Register(&action.Job, &nomad.WriteOptions{}); err != nil {
+			if response, _, err := self.NomadClient.Jobs().Register(&action.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run action")
 			} else if len(response.Warnings) > 0 {
-				self.logger.Println(response.Warnings)
+				self.Logger.Println(response.Warnings)
 			}
 
 		} else if instance != nil {
-			if _, _, err := self.nomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
+			if _, _, err := self.NomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to stop action")
 			}
 
 			finished := time.Now().UTC()
 			instance.FinishedAt = &finished
 
-			if err := self.actionService.Update(tx, *instance); err != nil {
+			if err := self.ActionService.Update(tx, *instance); err != nil {
 				return errors.WithMessage(err, "Failed to update action instance")
 			}
 		}

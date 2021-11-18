@@ -8,6 +8,7 @@ import (
 
 	"cirello.io/oversight"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/input-output-hk/cicero/src/consumers"
 	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -15,9 +16,10 @@ import (
 )
 
 type StartCmd struct {
-	Brain bool `arg:"--brain"`
-
-	Invoker bool `arg:"--invoker"`
+	ConsumeWorkflowStart  bool `arg:"--consume-workflow-start"`
+	ConsumeWorkflowInvoke bool `arg:"--consume-workflow-invoke"`
+	ConsumeWorkflowFact   bool `arg:"--consume-workflow-fact"`
+	ConsumeNomadEvent     bool `arg:"--consume-nomad-event"`
 
 	Web       bool   `arg:"--web"`
 	WebListen string `arg:"--web-listen" default:":8080"`
@@ -33,9 +35,15 @@ func (cmd *StartCmd) Run() error {
 
 	// If none are given then start all,
 	// otherwise start only those that are given.
-	if !(cmd.Brain || cmd.Invoker || cmd.Web) {
-		cmd.Brain = true
-		cmd.Invoker = true
+	if !(cmd.ConsumeWorkflowStart ||
+		cmd.ConsumeWorkflowInvoke ||
+		cmd.ConsumeWorkflowFact ||
+		cmd.ConsumeNomadEvent ||
+		cmd.Web) {
+		cmd.ConsumeWorkflowStart = true
+		cmd.ConsumeWorkflowInvoke = true
+		cmd.ConsumeWorkflowFact = true
+		cmd.ConsumeNomadEvent = true
 		cmd.Web = true
 	}
 
@@ -57,10 +65,9 @@ func (cmd *StartCmd) Run() error {
 		}
 	})
 
-	evaluator := once(func() interface{} {
-		return NewEvaluator(cmd.Evaluator, cmd.Env)
+	evaluationService := once(func() interface{} {
+		return service.NewEvaluationService(cmd.Evaluator, cmd.Env)
 	})
-
 	messageQueueService := once(func() interface{} {
 		if bridge, err := service.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
 			logger.Fatalln(err.Error())
@@ -76,7 +83,7 @@ func (cmd *StartCmd) Run() error {
 		return service.NewActionService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
 	})
 	workflowActionService := once(func() interface{} {
-		return NewWorkflowActionService(evaluator().(*Evaluator), workflowService().(service.WorkflowService))
+		return service.NewWorkflowActionService(evaluationService().(service.EvaluationService), workflowService().(service.WorkflowService))
 	})
 	nomadEventService := once(func() interface{} {
 		return service.NewNomadEventService(db().(*pgxpool.Pool), actionService().(service.ActionService))
@@ -84,49 +91,66 @@ func (cmd *StartCmd) Run() error {
 
 	supervisor := cmd.newSupervisor(logger)
 
-	if cmd.Brain {
-		brain := Brain{
-			workflowService:       workflowService().(service.WorkflowService),
-			actionService:         actionService().(service.ActionService),
-			evaluator:             evaluator().(*Evaluator),
-			workflowActionService: workflowActionService().(WorkflowActionService),
-			nomadEventService:     nomadEventService().(service.NomadEventService),
-			messageQueueService:   messageQueueService().(service.MessageQueueService),
-			db:                    db().(*pgxpool.Pool),
-			nomadClient:           nomadClient().(*nomad.Client),
-			logger:                log.New(os.Stderr, "brain: ", log.LstdFlags),
+	if cmd.ConsumeWorkflowStart {
+		consumer := consumers.WorkflowStartConsumer{
+			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			WorkflowService:     workflowService().(service.WorkflowService),
+			Db:                  db().(*pgxpool.Pool),
 		}
-		supervisor.Add(brain.ListenToFacts)
-		supervisor.Add(brain.ListenToStart)
-		supervisor.Add(brain.ListenToNomadEvents)
+		supervisor.Add(consumer.Listen)
+	}
+
+	if cmd.ConsumeWorkflowInvoke {
+		consumer := consumers.WorkflowInvokeConsumer{
+			EvaluationService:   evaluationService().(service.EvaluationService),
+			ActionService:       actionService().(service.ActionService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			WorkflowService:     workflowService().(service.WorkflowService),
+			Db:                  db().(*pgxpool.Pool),
+			NomadClient:         nomadClient().(*nomad.Client),
+			// Increase priority of waiting goroutines every second.
+			Limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
+			Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
+		}
+		supervisor.Add(consumer.Listen)
+	}
+
+	if cmd.ConsumeWorkflowFact {
+		consumer := consumers.WorkflowFactConsumer{
+			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			WorkflowService:     workflowService().(service.WorkflowService),
+			Db:                  db().(*pgxpool.Pool),
+		}
+		supervisor.Add(consumer.Listen)
+	}
+
+	if cmd.ConsumeNomadEvent {
+		consumer := consumers.NomadEventConsumer{
+			Logger:                log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
+			MessageQueueService:   messageQueueService().(service.MessageQueueService),
+			WorkflowService:       workflowService().(service.WorkflowService),
+			ActionService:         actionService().(service.ActionService),
+			WorkflowActionService: workflowActionService().(service.WorkflowActionService),
+			NomadEventService:     nomadEventService().(service.NomadEventService),
+			NomadClient:           nomadClient().(*nomad.Client),
+			Db:                    db().(*pgxpool.Pool),
+		}
+		supervisor.Add(consumer.Listen)
 	}
 
 	if cmd.Web {
 		web := Web{
+			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			Listen:              cmd.WebListen,
-			workflowService:     workflowService().(service.WorkflowService),
-			actionService:       actionService().(service.ActionService),
-			messageQueueService: messageQueueService().(service.MessageQueueService),
-			nomadEventService:   nomadEventService().(service.NomadEventService),
-			evaluator:           evaluator().(*Evaluator),
-			logger:              log.New(os.Stderr, "web: ", log.LstdFlags),
+			WorkflowService:     workflowService().(service.WorkflowService),
+			ActionService:       actionService().(service.ActionService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			NomadEventService:   nomadEventService().(service.NomadEventService),
+			EvaluationService:   evaluationService().(service.EvaluationService),
 		}
-		supervisor.Add(web.start)
-	}
-
-	if cmd.Invoker {
-		invoker := Invoker{
-			evaluator:           evaluator().(*Evaluator),
-			actionService:       actionService().(service.ActionService),
-			messageQueueService: messageQueueService().(service.MessageQueueService),
-			workflowService:     workflowService().(service.WorkflowService),
-			db:                  db().(*pgxpool.Pool),
-			nomadClient:         nomadClient().(*nomad.Client),
-			// Increase priority of waiting goroutines every second.
-			limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
-			logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
-		}
-		supervisor.Add(invoker.ListenToInvoke)
+		supervisor.Add(web.Start)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -1,4 +1,4 @@
-package cicero
+package service
 
 import (
 	"encoding/json"
@@ -12,21 +12,26 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Evaluator struct {
+type EvaluationService interface {
+	EvaluateWorkflow(src string, name string, id uint64, inputs model.Facts) (model.WorkflowDefinition, error)
+	ListWorkflows(src string) ([]string, error)
+}
+
+type evaluationService struct {
 	Command string
 	Env     []string // NAME=VALUE or just NAME to inherit from process environment
 	logger  *log.Logger
 }
 
-func NewEvaluator(command string, env []string) *Evaluator {
-	return &Evaluator{
+func NewEvaluationService(command string, env []string) EvaluationService {
+	return &evaluationService{
 		Command: command,
 		Env:     env,
-		logger:  log.New(os.Stderr, "evaluator: ", log.LstdFlags),
+		logger:  log.New(os.Stderr, "evaluationService: ", log.LstdFlags),
 	}
 }
 
-func (e *Evaluator) EvaluateWorkflow(src, name string, id uint64, inputs model.Facts) (model.WorkflowDefinition, error) {
+func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs model.Facts) (model.WorkflowDefinition, error) {
 	var def model.WorkflowDefinition
 
 	inputsJson, err := json.Marshal(inputs)
@@ -65,7 +70,7 @@ func (e *Evaluator) EvaluateWorkflow(src, name string, id uint64, inputs model.F
 	return def, nil
 }
 
-func (e *Evaluator) addEnv(def *model.WorkflowDefinition) {
+func (e *evaluationService) addEnv(def *model.WorkflowDefinition) {
 	for _, action := range def.Actions {
 		for _, group := range action.Job.TaskGroups {
 			for _, task := range group.Tasks {
@@ -83,7 +88,7 @@ func (e *Evaluator) addEnv(def *model.WorkflowDefinition) {
 	}
 }
 
-func (e *Evaluator) ListWorkflows(src string) ([]string, error) {
+func (e *evaluationService) ListWorkflows(src string) ([]string, error) {
 	var names []string
 
 	cmd := exec.Command(

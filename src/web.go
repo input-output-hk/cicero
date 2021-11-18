@@ -23,16 +23,16 @@ import (
 
 type Web struct {
 	Listen              string
-	logger              *log.Logger
-	workflowService     service.WorkflowService
-	actionService       service.ActionService
-	messageQueueService service.MessageQueueService
-	nomadEventService   service.NomadEventService
-	evaluator           *Evaluator
+	Logger              *log.Logger
+	WorkflowService     service.WorkflowService
+	ActionService       service.ActionService
+	MessageQueueService service.MessageQueueService
+	NomadEventService   service.NomadEventService
+	EvaluationService   service.EvaluationService
 }
 
-func (self *Web) start(ctx context.Context) error {
-	self.logger.Println("Starting Web")
+func (self *Web) Start(ctx context.Context) error {
+	self.Logger.Println("Starting Web")
 
 	router := bunrouter.New(
 		bunrouter.WithMiddleware(errorHandler),
@@ -55,13 +55,13 @@ func (self *Web) start(ctx context.Context) error {
 			name := req.URL.Query().Get("name")
 
 			if name == "" {
-				if summary, err := self.workflowService.GetSummary(); err != nil {
+				if summary, err := self.WorkflowService.GetSummary(); err != nil {
 					return err
 				} else {
 					return makeViewTemplate("workflow").Execute(w, summary)
 				}
 			} else {
-				if instances, err := self.workflowService.GetAllByName(name); err != nil {
+				if instances, err := self.WorkflowService.GetAllByName(name); err != nil {
 					return err
 				} else {
 					return makeViewTemplate("workflow/index-name.html").Execute(w, map[string]interface{}{
@@ -89,7 +89,7 @@ func (self *Web) start(ctx context.Context) error {
 				if err := json.Unmarshal([]byte(inputsJson), &inputs); err != nil {
 					return err
 				}
-				if err := self.workflowService.Start(source, name, inputs); err != nil {
+				if err := self.WorkflowService.Start(source, name, inputs); err != nil {
 					return err
 				}
 				http.Redirect(w, req.Request, "/workflow", 302)
@@ -105,7 +105,7 @@ func (self *Web) start(ctx context.Context) error {
 			}
 
 			// step 2
-			if names, err := self.evaluator.ListWorkflows(source); err != nil {
+			if names, err := self.EvaluationService.ListWorkflows(source); err != nil {
 				return err
 			} else {
 				return makeViewTemplate(templateName).Execute(w, map[string]interface{}{
@@ -119,7 +119,7 @@ func (self *Web) start(ctx context.Context) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
 
-			if err := self.workflowService.Start(source, name, model.Facts{}); err != nil {
+			if err := self.WorkflowService.Start(source, name, model.Facts{}); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
@@ -131,10 +131,10 @@ func (self *Web) start(ctx context.Context) error {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 				if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
 					return err
-				} else if instance, err := self.workflowService.GetById(id); err != nil {
+				} else if instance, err := self.WorkflowService.GetById(id); err != nil {
 					return err
 				} else {
-					allocs, err := self.nomadEventService.GetEventAllocByWorkflowId(id)
+					allocs, err := self.NomadEventService.GetEventAllocByWorkflowId(id)
 					if err != nil {
 						return err
 					}
@@ -153,12 +153,12 @@ func (self *Web) start(ctx context.Context) error {
 					return err
 				}
 
-				instance, err := self.workflowService.GetById(id)
+				instance, err := self.WorkflowService.GetById(id)
 				if err != nil {
 					return err
 				}
 
-				def, err := self.evaluator.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Facts)
+				def, err := self.EvaluationService.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Facts)
 				if err != nil {
 					return err
 				}
@@ -180,7 +180,7 @@ func (self *Web) start(ctx context.Context) error {
 					return RenderWorkflowGraphInputs(def, &instance, w)
 				default:
 					// should have already exited when parsing the graph type
-					self.logger.Panic("reached code that should be unreachable")
+					self.Logger.Panic("reached code that should be unreachable")
 					return nil
 				}
 			})
@@ -191,7 +191,7 @@ func (self *Web) start(ctx context.Context) error {
 		group.WithGroup("/workflow", func(group *bunrouter.Group) {
 			group.WithGroup("/definition", func(group *bunrouter.Group) {
 				group.GET("/:source", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if wfs, err := self.evaluator.ListWorkflows(req.Param("source")); err != nil {
+					if wfs, err := self.EvaluationService.ListWorkflows(req.Param("source")); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, wfs)
@@ -215,7 +215,7 @@ func (self *Web) start(ctx context.Context) error {
 						}
 					}
 
-					if wf, err := self.evaluator.EvaluateWorkflow(req.Param("source"), req.Param("name"), id, inputs); err != nil {
+					if wf, err := self.EvaluationService.EvaluateWorkflow(req.Param("source"), req.Param("name"), id, inputs); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, wf)
@@ -224,7 +224,7 @@ func (self *Web) start(ctx context.Context) error {
 			})
 			group.WithGroup("/instance", func(group *bunrouter.Group) {
 				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-					if instances, err := self.workflowService.GetAll(); err != nil {
+					if instances, err := self.WorkflowService.GetAll(); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, instances)
@@ -243,15 +243,15 @@ func (self *Web) start(ctx context.Context) error {
 					}
 
 					if params.Name != nil {
-						if err := self.workflowService.Start(params.Source, *params.Name, params.Inputs); err != nil {
+						if err := self.WorkflowService.Start(params.Source, *params.Name, params.Inputs); err != nil {
 							return err
 						}
 					} else {
-						if wfNames, err := self.evaluator.ListWorkflows(params.Source); err != nil {
+						if wfNames, err := self.EvaluationService.ListWorkflows(params.Source); err != nil {
 							return err
 						} else {
 							for _, name := range wfNames {
-								if err := self.workflowService.Start(params.Source, name, params.Inputs); err != nil {
+								if err := self.WorkflowService.Start(params.Source, name, params.Inputs); err != nil {
 									return err
 								}
 							}
@@ -270,7 +270,7 @@ func (self *Web) start(ctx context.Context) error {
 						return func(w http.ResponseWriter, req bunrouter.Request) error {
 							if id, err := strconv.ParseUint(req.Param("id"), 10, 64); err != nil {
 								return err
-							} else if instance, err := self.workflowService.GetById(id); err != nil {
+							} else if instance, err := self.WorkflowService.GetById(id); err != nil {
 								return err
 							} else {
 								return next(w, req.WithContext(
@@ -292,7 +292,7 @@ func (self *Web) start(ctx context.Context) error {
 							return errors.WithMessage(err, "Could not unmarshal facts from request body")
 						}
 
-						if err := self.messageQueueService.Publish(
+						if err := self.MessageQueueService.Publish(
 							model.FactStreamName.Fmt(instance.Name, instance.ID),
 							model.FactStreamName,
 							facts,
@@ -307,7 +307,7 @@ func (self *Web) start(ctx context.Context) error {
 		})
 		group.WithGroup("/action", func(group *bunrouter.Group) {
 			group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-				if actions, err := self.actionService.GetAll(); err != nil {
+				if actions, err := self.ActionService.GetAll(); err != nil {
 					return err
 				} else {
 					return bunrouter.JSON(w, actions)
@@ -318,7 +318,7 @@ func (self *Web) start(ctx context.Context) error {
 				group.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
 					if id, err := uuid.Parse(req.Param("id")); err != nil {
 						return err
-					} else if action, err := self.actionService.GetById(id); err != nil {
+					} else if action, err := self.ActionService.GetById(id); err != nil {
 						return err
 					} else {
 						return bunrouter.JSON(w, action)
@@ -329,7 +329,7 @@ func (self *Web) start(ctx context.Context) error {
 					if id, err := uuid.Parse(req.Param("id")); err != nil {
 						return err
 					} else {
-						logs, err := self.actionService.JobLogs(id)
+						logs, err := self.ActionService.JobLogs(id)
 						if err != nil {
 							return err
 						}
@@ -344,7 +344,7 @@ func (self *Web) start(ctx context.Context) error {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			self.logger.Printf("Failed to start web server: %s", err.Error())
+			self.Logger.Printf("Failed to start web server: %s", err.Error())
 		}
 	}()
 
@@ -353,7 +353,7 @@ func (self *Web) start(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		self.logger.Printf("Failed to stop web server: %s", err.Error())
+		self.Logger.Printf("Failed to stop web server: %s", err.Error())
 	}
 
 	return nil

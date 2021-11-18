@@ -1,11 +1,10 @@
-package cicero
+package service
 
 import (
 	"log"
 	"os"
 
 	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/pkg/errors"
 )
 
@@ -14,16 +13,16 @@ type WorkflowActionService interface {
 }
 
 type workflowActionService struct {
-	logger          *log.Logger
-	evaluator       *Evaluator
-	workflowService service.WorkflowService
+	logger            *log.Logger
+	evaluationService EvaluationService
+	workflowService   WorkflowService
 }
 
-func NewWorkflowActionService(evaluator *Evaluator, workflowService service.WorkflowService) WorkflowActionService {
+func NewWorkflowActionService(evaluationService EvaluationService, workflowService WorkflowService) WorkflowActionService {
 	return &workflowActionService{
-		logger:          log.New(os.Stderr, "WorkflowActionService: ", log.LstdFlags),
-		evaluator:       evaluator,
-		workflowService: workflowService,
+		logger:            log.New(os.Stderr, "WorkflowActionService: ", log.LstdFlags),
+		evaluationService: evaluationService,
+		workflowService:   workflowService,
 	}
 }
 
@@ -34,7 +33,7 @@ func (w *workflowActionService) GetWorkflowAction(action model.ActionInstance) (
 		return
 	}
 
-	wfDef, err := w.evaluator.EvaluateWorkflow(wf.Source, wf.Name, wf.ID, wf.Facts)
+	wfDef, err := w.evaluationService.EvaluateWorkflow(wf.Source, wf.Name, wf.ID, wf.Facts)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not evaluate definition for workflow instance %#v", wf)
 		return
