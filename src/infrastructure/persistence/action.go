@@ -15,7 +15,6 @@ type actionRepository struct {
 	DB *pgxpool.Pool
 }
 
-
 func NewActionRepository(db *pgxpool.Pool) repository.ActionRepository {
 	return actionRepository{DB: db}
 }

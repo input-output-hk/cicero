@@ -16,9 +16,9 @@ type WorkflowDefinition struct {
 }
 
 type WorkflowAction struct {
-	Failure Facts    `json:"failure"`
-	Success Facts    `json:"success"`
-	Inputs  []string `json:"inputs"`
+	Failure Facts           `json:"failure"`
+	Success Facts           `json:"success"`
+	Inputs  []string        `json:"inputs"`
 	When    map[string]bool `json:"when"`
 	Job     nomad.Job       `json:"job"`
 }
@@ -41,5 +41,3 @@ type WorkflowInstance struct {
 	CreatedAt *time.Time
 	UpdatedAt *time.Time
 }
-
-

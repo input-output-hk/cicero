@@ -13,8 +13,6 @@ type nomadEventRepository struct {
 	DB *pgxpool.Pool
 }
 
-
-
 func NewNomadEventRepository(db *pgxpool.Pool) repository.NomadEventRepository {
 	return nomadEventRepository{DB: db}
 }
