@@ -5,9 +5,9 @@ import "fmt"
 type StreamName string
 
 const (
-	StartStreamName StreamName  = "workflow.*.start"
+	StartStreamName  StreamName = "workflow.*.start"
 	InvokeStreamName StreamName = "workflow.*.*.invoke"
-	FactStreamName StreamName = "workflow.*.*.fact"
+	FactStreamName   StreamName = "workflow.*.*.fact"
 )
 
 func (s StreamName) String() string {
