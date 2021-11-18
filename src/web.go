@@ -585,3 +585,12 @@ func makeViewTemplate(route string) *template.Template {
 	}
 	return t
 }
+
+func writeHttpErrorAndLogs(err error, httpStatusCode int, logger *log.Logger, w http.ResponseWriter) {
+	http.Error(w, err.Error(), httpStatusCode)
+	writeLogs(err, logger)
+}
+
+func writeLogs(err error, logger *log.Logger) {
+	logger.Println(err.Error())
+}
