@@ -3,6 +3,8 @@ package cicero
 import (
 	"context"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
 	"strconv"
@@ -13,8 +15,6 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
@@ -50,24 +50,24 @@ func (self BrainCmd) init(brain *Brain, db *pgxpool.Pool, nomadClient *nomad.Cli
 		brain.workflowActionService = s
 	}
 	if brain.messageQueueService == nil {
-		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
+		if bridge, err := application.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
 			brain.logger.Fatalln(err.Error())
 			return
 		} else {
-			s := service.NewMessageQueueService(db, bridge)
+			s := application.NewMessageQueueService(db, bridge)
 			brain.messageQueueService = s
 		}
 	}
 	if brain.workflowService == nil {
-		s := service.NewWorkflowService(db, brain.messageQueueService)
+		s := application.NewWorkflowService(db, brain.messageQueueService)
 		brain.workflowService = s
 	}
 	if brain.actionService == nil {
-		s := service.NewActionService(db, self.PrometheusAddr)
+		s := application.NewActionService(db, self.PrometheusAddr)
 		brain.actionService = s
 	}
 	if brain.nomadEventService == nil {
-		s := service.NewNomadEventService(db, brain.actionService)
+		s := application.NewNomadEventService(db, brain.actionService)
 		brain.nomadEventService = s
 	}
 	if brain.evaluator == nil {
@@ -92,11 +92,11 @@ func (self BrainCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 type Brain struct {
 	logger                *log.Logger
 	tree                  *oversight.Tree
-	workflowService       service.WorkflowService
-	actionService         service.ActionService
+	workflowService       application.WorkflowService
+	actionService         application.ActionService
 	workflowActionService WorkflowActionService
-	messageQueueService   service.MessageQueueService
-	nomadEventService     service.NomadEventService
+	messageQueueService   application.MessageQueueService
+	nomadEventService     application.NomadEventService
 	evaluator             *Evaluator
 	db                    *pgxpool.Pool
 	nomadClient           *nomad.Client
@@ -126,8 +126,8 @@ func (self *Brain) start(ctx context.Context) error {
 func (self *Brain) listenToStart(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToStart")
 
-	if err := self.messageQueueService.Subscribe(ctx, model.StartStreamName, self.onStartMessage, 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.StartStreamName)
+	if err := self.messageQueueService.Subscribe(ctx, domain.StartStreamName, self.onStartMessage, 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.StartStreamName)
 	}
 
 	<-ctx.Done()
@@ -152,7 +152,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 		"time:", msg.Timestamp(),
 	)
 
-	received := model.Facts{}
+	received := domain.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
 		self.logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
@@ -176,7 +176,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 		source = string(sourceFromMsg)
 	}
 
-	workflow := model.WorkflowInstance{
+	workflow := domain.WorkflowInstance{
 		Name:   workflowName,
 		Source: source,
 		Facts:  received,
@@ -188,7 +188,7 @@ func (self *Brain) onStartMessage(msg *liftbridge.Message, err error) {
 	}
 }
 
-func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowInstance) error {
+func (self *Brain) insertWorkflow(ctx context.Context, workflow *domain.WorkflowInstance) error {
 	var tx pgx.Tx
 	if t, err := (*self.db).Begin(ctx); err != nil {
 		self.logger.Printf("%s", err)
@@ -206,8 +206,8 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 	self.logger.Printf("Created workflow with ID %d", workflow.ID)
 
 	self.messageQueueService.Publish(
-		model.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
-		model.InvokeStreamName,
+		domain.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
+		domain.InvokeStreamName,
 		workflow.Facts,
 	)
 
@@ -221,8 +221,8 @@ func (self *Brain) insertWorkflow(ctx context.Context, workflow *model.WorkflowI
 func (self *Brain) listenToFacts(ctx context.Context) error {
 	self.logger.Println("Starting Brain.listenToFacts")
 
-	if err := self.messageQueueService.Subscribe(ctx, model.FactStreamName, self.onFactMessage, 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.FactStreamName)
+	if err := self.messageQueueService.Subscribe(ctx, domain.FactStreamName, self.onFactMessage, 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.FactStreamName)
 	}
 
 	<-ctx.Done()
@@ -252,7 +252,7 @@ func (self *Brain) onFactMessage(msg *liftbridge.Message, err error) {
 		"time:", msg.Timestamp(),
 	)
 
-	received := model.Facts{}
+	received := domain.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
 		self.logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
@@ -272,12 +272,12 @@ func (self *Brain) onFactMessage(msg *liftbridge.Message, err error) {
 		return
 	}
 
-	var existing model.WorkflowInstance
+	var existing domain.WorkflowInstance
 	if existing, err = self.workflowService.GetById(id); err != nil {
 		return
 	}
 
-	merged := model.Facts{}
+	merged := domain.Facts{}
 
 	for k, v := range existing.Facts {
 		merged[k] = v
@@ -301,8 +301,8 @@ func (self *Brain) onFactMessage(msg *liftbridge.Message, err error) {
 	self.logger.Printf("Updated workflow %#v", existing)
 
 	if err := self.messageQueueService.Publish(
-		model.InvokeStreamName.Fmt(workflowName, id),
-		model.InvokeStreamName,
+		domain.InvokeStreamName.Fmt(workflowName, id),
+		domain.InvokeStreamName,
 		merged,
 	); err != nil {
 		self.logger.Printf("Couldn't publish workflow invoke message: %s", err)
@@ -413,7 +413,7 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		return nil
 	}
 
-	var facts *model.Facts
+	var facts *domain.Facts
 	switch allocation.ClientStatus {
 	case "complete":
 		facts = &def.Success
@@ -441,8 +441,8 @@ func (self *Brain) handleNomadAllocationEvent(allocation *nomad.Allocation) erro
 		}
 
 		if err := self.messageQueueService.Publish(
-			model.FactStreamName.Fmt(wf.Name, wf.ID),
-			model.FactStreamName,
+			domain.FactStreamName.Fmt(wf.Name, wf.ID),
+			domain.FactStreamName,
 			*facts,
 		); err != nil {
 			return errors.WithMessage(err, "Could not publish fact")

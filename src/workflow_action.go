@@ -1,25 +1,25 @@
 package cicero
 
 import (
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
 
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/pkg/errors"
 )
 
 type WorkflowActionService interface {
-	GetWorkflowAction(model.ActionInstance) (model.WorkflowAction, error)
+	GetWorkflowAction(domain.ActionInstance) (domain.WorkflowAction, error)
 }
 
 type WorkflowActionServiceImpl struct {
 	logger          *log.Logger
 	evaluator       Evaluator
-	workflowService service.WorkflowService
+	workflowService application.WorkflowService
 }
 
-func NewWorkflowActionService(evaluator Evaluator, workflowService service.WorkflowService) WorkflowActionService {
+func NewWorkflowActionService(evaluator Evaluator, workflowService application.WorkflowService) WorkflowActionService {
 	return &WorkflowActionServiceImpl{
 		logger:          log.New(os.Stderr, "WorkflowActionService: ", log.LstdFlags),
 		evaluator:       evaluator,
@@ -27,7 +27,7 @@ func NewWorkflowActionService(evaluator Evaluator, workflowService service.Workf
 	}
 }
 
-func (w *WorkflowActionServiceImpl) GetWorkflowAction(action model.ActionInstance) (def model.WorkflowAction, err error) {
+func (w *WorkflowActionServiceImpl) GetWorkflowAction(action domain.ActionInstance) (def domain.WorkflowAction, err error) {
 	wf, err := w.workflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not get workflow instance for workflow instance with ID %d", action.WorkflowInstanceId)

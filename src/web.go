@@ -4,6 +4,8 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"html/template"
 	"log"
 	"mime"
@@ -16,8 +18,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
@@ -39,24 +39,24 @@ func (self *WebCmd) init(web *Web, db *pgxpool.Pool) {
 		web.logger = log.New(os.Stderr, "web: ", log.LstdFlags)
 	}
 	if web.messageQueueService == nil {
-		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
+		if bridge, err := application.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
 			web.logger.Fatalln(err.Error())
 			return
 		} else {
-			s := service.NewMessageQueueService(db, bridge)
+			s := application.NewMessageQueueService(db, bridge)
 			web.messageQueueService = s
 		}
 	}
 	if web.workflowService == nil {
-		s := service.NewWorkflowService(db, web.messageQueueService)
+		s := application.NewWorkflowService(db, web.messageQueueService)
 		web.workflowService = s
 	}
 	if web.actionService == nil {
-		s := service.NewActionService(db, self.PrometheusAddr)
+		s := application.NewActionService(db, self.PrometheusAddr)
 		web.actionService = s
 	}
 	if web.nomadEventService == nil {
-		s := service.NewNomadEventService(db, web.actionService)
+		s := application.NewNomadEventService(db, web.actionService)
 		web.nomadEventService = s
 	}
 	if web.evaluator == nil {
@@ -74,10 +74,10 @@ func (self *WebCmd) Run(db *pgxpool.Pool) error {
 type Web struct {
 	Listen              *string
 	logger              *log.Logger
-	workflowService     service.WorkflowService
-	actionService       service.ActionService
-	messageQueueService service.MessageQueueService
-	nomadEventService   service.NomadEventService
+	workflowService     application.WorkflowService
+	actionService       application.ActionService
+	messageQueueService application.MessageQueueService
+	nomadEventService   application.NomadEventService
 	evaluator           *Evaluator
 }
 
@@ -135,7 +135,7 @@ func (self *Web) start(ctx context.Context) error {
 
 			// step 4
 			if inputsJson := req.URL.Query().Get("inputs"); len(inputsJson) > 0 {
-				var inputs model.Facts
+				var inputs domain.Facts
 				if err := json.Unmarshal([]byte(inputsJson), &inputs); err != nil {
 					return err
 				}
@@ -169,7 +169,7 @@ func (self *Web) start(ctx context.Context) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
 
-			if err := self.workflowService.Start(source, name, model.Facts{}); err != nil {
+			if err := self.workflowService.Start(source, name, domain.Facts{}); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
@@ -258,7 +258,7 @@ func (self *Web) start(ctx context.Context) error {
 						}
 					}
 
-					var inputs model.Facts
+					var inputs domain.Facts
 					if inputsStr := req.URL.Query().Get("inputs"); len(inputsStr) > 0 {
 						if err := json.Unmarshal([]byte(inputsStr), &inputs); err != nil {
 							return err
@@ -285,9 +285,9 @@ func (self *Web) start(ctx context.Context) error {
 					var params struct {
 						Source string
 						Name   *string
-						Inputs model.Facts
+						Inputs domain.Facts
 					}
-					params.Inputs = model.Facts{}
+					params.Inputs = domain.Facts{}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
@@ -335,16 +335,16 @@ func (self *Web) start(ctx context.Context) error {
 					})
 
 					group.POST("/fact", func(w http.ResponseWriter, req bunrouter.Request) error {
-						instance := req.Context().Value(ctxKeyWorkflowInstance).(model.WorkflowInstance)
+						instance := req.Context().Value(ctxKeyWorkflowInstance).(domain.WorkflowInstance)
 
-						facts := model.Facts{}
+						facts := domain.Facts{}
 						if err := json.NewDecoder(req.Body).Decode(&facts); err != nil {
 							return errors.WithMessage(err, "Could not unmarshal facts from request body")
 						}
 
 						if err := self.messageQueueService.Publish(
-							model.FactStreamName.Fmt(instance.Name, instance.ID),
-							model.FactStreamName,
+							domain.FactStreamName.Fmt(instance.Name, instance.ID),
+							domain.FactStreamName,
 							facts,
 						); err != nil {
 							return errors.WithMessage(err, "Could not publish fact")
@@ -383,7 +383,7 @@ func (self *Web) start(ctx context.Context) error {
 						if err != nil {
 							return err
 						}
-						return bunrouter.JSON(w, map[string]*service.LokiOutput{"logs": logs})
+						return bunrouter.JSON(w, map[string]*application.LokiOutput{"logs": logs})
 					}
 				})
 			})

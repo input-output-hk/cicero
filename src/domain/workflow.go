@@ -1,4 +1,4 @@
-package model
+package domain
 
 import (
 	"time"
@@ -18,15 +18,21 @@ type WorkflowDefinition struct {
 }
 
 type WorkflowAction struct {
-	Failure Facts           `json:"failure"`
-	Success Facts           `json:"success"`
-	Inputs  []string        `json:"inputs"`
+	Failure Facts    `json:"failure"`
+	Success Facts    `json:"success"`
+	Inputs  []string `json:"inputs"`
 	When    map[string]bool `json:"when"`
 	Job     nomad.Job       `json:"job"`
 }
 
 func (s *WorkflowAction) IsRunnable() bool {
 	return len(s.Job.TaskGroups) > 0
+}
+
+type WorkflowSummary []struct {
+	Name         string
+	NumSources   uint64
+	NumInstances uint64
 }
 
 type WorkflowInstance struct {
@@ -43,9 +49,9 @@ type Facts map[string]interface{}
 type ActionInstance struct {
 	ID                 uuid.UUID
 	WorkflowInstanceId uint64
-	Name               string
-	Facts              Facts
-	CreatedAt          *time.Time
+	Name      string
+	Facts     Facts
+	CreatedAt *time.Time
 	UpdatedAt          *time.Time
 	FinishedAt         *time.Time
 }

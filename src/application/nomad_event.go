@@ -1,9 +1,10 @@
-package service
+package application
 
 import (
 	"encoding/json"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/repository"
+	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -27,7 +28,7 @@ type NomadEventServiceImpl struct {
 func NewNomadEventService(db *pgxpool.Pool, actionService ActionService) NomadEventService {
 	return &NomadEventServiceImpl{
 		logger:               log.New(os.Stderr, "NomadEventService: ", log.LstdFlags),
-		nomadEventRepository: repository.NewNomadEventRepository(db),
+		nomadEventRepository: persistence.NewNomadEventRepository(db),
 		actionService:        actionService,
 	}
 }

@@ -1,9 +1,11 @@
-package service
+package application
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"log"
 	"net/http"
 	"os"
@@ -13,8 +15,7 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/grafana/loki/pkg/loghttp"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/repository"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -22,11 +23,11 @@ import (
 )
 
 type ActionService interface {
-	GetById(uuid.UUID) (model.ActionInstance, error)
-	GetByNameAndWorkflowId(name string, workflowId uint64) (model.ActionInstance, error)
-	GetAll() ([]*model.ActionInstance, error)
-	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, model.ActionInstance) error
+	GetById(uuid.UUID) (domain.ActionInstance, error)
+	GetByNameAndWorkflowId(name string, workflowId uint64) (domain.ActionInstance, error)
+	GetAll() ([]*domain.ActionInstance, error)
+	Save(pgx.Tx, *domain.ActionInstance) error
+	Update(pgx.Tx, domain.ActionInstance) error
 	JobLogs(uuid.UUID) (*LokiOutput, error)
 	ActionLogs(allocId string, taskGroup string) (*LokiOutput, error)
 }
@@ -40,7 +41,7 @@ type ActionServiceImpl struct {
 func NewActionService(db *pgxpool.Pool, prometheusAddr string) ActionService {
 	impl := ActionServiceImpl{
 		logger:           log.New(os.Stderr, "ActionService: ", log.LstdFlags),
-		actionRepository: repository.NewActionRepository(db),
+		actionRepository: persistence.NewActionRepository(db),
 	}
 
 	if prom, err := prometheus.NewClient(prometheus.Config{
@@ -54,7 +55,7 @@ func NewActionService(db *pgxpool.Pool, prometheusAddr string) ActionService {
 	return &impl
 }
 
-func (self *ActionServiceImpl) GetById(id uuid.UUID) (action model.ActionInstance, err error) {
+func (self *ActionServiceImpl) GetById(id uuid.UUID) (action domain.ActionInstance, err error) {
 	log.Printf("Get Action by id %s", id)
 	action, err = self.actionRepository.GetById(id)
 	if err != nil {
@@ -63,7 +64,7 @@ func (self *ActionServiceImpl) GetById(id uuid.UUID) (action model.ActionInstanc
 	return
 }
 
-func (self *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId uint64) (action model.ActionInstance, err error) {
+func (self *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId uint64) (action domain.ActionInstance, err error) {
 	log.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = self.actionRepository.GetByNameAndWorkflowId(name, workflowId)
 	if err != nil && !pgxscan.NotFound(err) {
@@ -72,12 +73,12 @@ func (self *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId ui
 	return
 }
 
-func (self *ActionServiceImpl) GetAll() ([]*model.ActionInstance, error) {
+func (self *ActionServiceImpl) GetAll() ([]*domain.ActionInstance, error) {
 	log.Printf("Get all Actions")
 	return self.actionRepository.GetAll()
 }
 
-func (self *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) error {
+func (self *ActionServiceImpl) Save(tx pgx.Tx, action *domain.ActionInstance) error {
 	log.Printf("Saving new Action %#v", action)
 	if err := self.actionRepository.Save(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Action")
@@ -86,7 +87,7 @@ func (self *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) err
 	return nil
 }
 
-func (self *ActionServiceImpl) Update(tx pgx.Tx, action model.ActionInstance) error {
+func (self *ActionServiceImpl) Update(tx pgx.Tx, action domain.ActionInstance) error {
 	log.Printf("Update Action %#v", action)
 	if err := self.actionRepository.Update(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't update Action with id: %s", action.ID)

@@ -3,12 +3,12 @@ package cicero
 import (
 	"context"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/input-output-hk/cicero/src/application"
 	"log"
 	"os"
 	"time"
 
 	"cirello.io/oversight"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 )
@@ -22,7 +22,7 @@ type AllCmd struct {
 }
 
 func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
-	bridge, err := service.LiftbridgeConnect(cmd.LiftbridgeAddr)
+	bridge, err := application.LiftbridgeConnect(cmd.LiftbridgeAddr)
 	if err != nil {
 		return err
 	}
@@ -30,11 +30,11 @@ func (cmd *AllCmd) Run(db *pgxpool.Pool, nomadClient *nomad.Client) error {
 	supervisor := cmd.newSupervisor()
 
 	evaluator := NewEvaluator(cmd.Evaluator, cmd.Env)
-	messageQueueService := service.NewMessageQueueService(db, bridge)
-	workflowService := service.NewWorkflowService(db, messageQueueService)
-	actionService := service.NewActionService(db, cmd.PrometheusAddr)
+	messageQueueService := application.NewMessageQueueService(db, bridge)
+	workflowService := application.NewWorkflowService(db, messageQueueService)
+	actionService := application.NewActionService(db, cmd.PrometheusAddr)
 	workflowActionService := NewWorkflowActionService(evaluator, workflowService)
-	nomadEventService := service.NewNomadEventService(db, actionService)
+	nomadEventService := application.NewNomadEventService(db, actionService)
 
 	brain := Brain{
 		workflowService:       workflowService,

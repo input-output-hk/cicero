@@ -2,11 +2,10 @@ package cicero
 
 import (
 	"errors"
+	"github.com/input-output-hk/cicero/src/domain"
 	"io"
 	"math"
 	"strings"
-
-	"github.com/input-output-hk/cicero/src/model"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
@@ -39,7 +38,7 @@ func WorkflowGraphTypeFromString(s string) (WorkflowGraphType, error) {
 
 const symbolSize = 50
 
-func RenderWorkflowGraphFlow(wf model.WorkflowDefinition, w io.Writer) error {
+func RenderWorkflowGraphFlow(wf domain.WorkflowDefinition, w io.Writer) error {
 	nodes := make([]opts.GraphNode, 0)
 	links := make([]opts.GraphLink, 0)
 
@@ -104,7 +103,7 @@ func containsString(s []string, v string) bool {
 	return false
 }
 
-func RenderWorkflowGraphInputs(wf model.WorkflowDefinition, instance *model.WorkflowInstance, w io.Writer) error {
+func RenderWorkflowGraphInputs(wf domain.WorkflowDefinition, instance *domain.WorkflowInstance, w io.Writer) error {
 	nodes := make([]opts.GraphNode, 0)
 	links := make([]opts.GraphLink, 0)
 

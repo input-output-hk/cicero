@@ -3,12 +3,12 @@ package cicero
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/input-output-hk/cicero/src/model"
 	"github.com/pkg/errors"
 )
 
@@ -26,8 +26,8 @@ func NewEvaluator(command string, env []string) Evaluator {
 	}
 }
 
-func (e *Evaluator) EvaluateWorkflow(src, name string, id uint64, inputs model.Facts) (model.WorkflowDefinition, error) {
-	var def model.WorkflowDefinition
+func (e *Evaluator) EvaluateWorkflow(src, name string, id uint64, inputs domain.Facts) (domain.WorkflowDefinition, error) {
+	var def domain.WorkflowDefinition
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
@@ -65,7 +65,7 @@ func (e *Evaluator) EvaluateWorkflow(src, name string, id uint64, inputs model.F
 	return def, nil
 }
 
-func (e *Evaluator) addEnv(def *model.WorkflowDefinition) {
+func (e *Evaluator) addEnv(def *domain.WorkflowDefinition) {
 	for _, action := range def.Actions {
 		for _, group := range action.Job.TaskGroups {
 			for _, task := range group.Tasks {

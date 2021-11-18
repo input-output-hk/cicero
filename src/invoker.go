@@ -3,14 +3,13 @@ package cicero
 import (
 	"context"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 
 	"cirello.io/oversight"
 	"github.com/georgysavva/scany/pgxscan"
@@ -55,20 +54,20 @@ func (self InvokerCmd) init(invoker *Invoker, db *pgxpool.Pool, nomadClient *nom
 		invoker.evaluator = &e
 	}
 	if invoker.actionService == nil {
-		s := service.NewActionService(db, self.PrometheusAddr)
+		s := application.NewActionService(db, self.PrometheusAddr)
 		invoker.actionService = s
 	}
 	if invoker.messageQueueService == nil {
-		if bridge, err := service.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
+		if bridge, err := application.LiftbridgeConnect(self.LiftbridgeAddr); err != nil {
 			invoker.logger.Fatalln(err.Error())
 			return
 		} else {
-			s := service.NewMessageQueueService(db, bridge)
+			s := application.NewMessageQueueService(db, bridge)
 			invoker.messageQueueService = s
 		}
 	}
 	if invoker.workflowService == nil {
-		s := service.NewWorkflowService(db, invoker.messageQueueService)
+		s := application.NewWorkflowService(db, invoker.messageQueueService)
 		invoker.workflowService = s
 	}
 }
@@ -91,9 +90,9 @@ type Invoker struct {
 	tree                *oversight.Tree
 	limiter             *priority.PriorityLimiter
 	evaluator           *Evaluator
-	actionService       service.ActionService
-	messageQueueService service.MessageQueueService
-	workflowService     service.WorkflowService
+	actionService       application.ActionService
+	messageQueueService application.MessageQueueService
+	workflowService     application.WorkflowService
 	db                  *pgxpool.Pool
 	nomadClient         *nomad.Client
 }
@@ -116,8 +115,8 @@ func (self *Invoker) start(ctx context.Context) error {
 func (self *Invoker) listenToInvoke(ctx context.Context) error {
 	self.logger.Println("Starting Invoker.listenToInvoke")
 
-	if err := self.messageQueueService.Subscribe(ctx, model.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.InvokeStreamName)
+	if err := self.messageQueueService.Subscribe(ctx, domain.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.InvokeStreamName)
 	}
 
 	<-ctx.Done()
@@ -131,7 +130,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 			self.logger.Fatalf("error in liftbridge message: %s", err.Error())
 		}
 
-		inputs := model.Facts{}
+		inputs := domain.Facts{}
 		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
 			self.logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
 			self.logger.Printf("Invalid JSON received, ignoring: %s", err)
@@ -161,7 +160,7 @@ func (self *Invoker) invokerSubscriber(ctx context.Context) func(*liftbridge.Mes
 	}
 }
 
-func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts) error {
+func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs domain.Facts) error {
 	wf, err := self.workflowService.GetById(wfInstanceId)
 	if err != nil {
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
@@ -188,11 +187,11 @@ func (self *Invoker) invokeWorkflow(ctx context.Context, workflowName string, wf
 	return nil
 }
 
-func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts, actionName string, action *model.WorkflowAction) error {
+func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs domain.Facts, actionName string, action *domain.WorkflowAction) error {
 	self.limiter.Wait(context.Background(), priority.High)
 	defer self.limiter.Finish()
 
-	var instance *model.ActionInstance
+	var instance *domain.ActionInstance
 	if inst, err := self.actionService.GetByNameAndWorkflowId(actionName, wfInstanceId); err != nil {
 		if !pgxscan.NotFound(err) {
 			return errors.WithMessage(err, "While getting last action instance")
@@ -206,7 +205,7 @@ func (self *Invoker) invokeWorkflowAction(ctx context.Context, workflowName stri
 	if err := (*self.db).BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if action.IsRunnable() {
 			if instance == nil {
-				instance = &model.ActionInstance{}
+				instance = &domain.ActionInstance{}
 				instance.WorkflowInstanceId = wfInstanceId
 				instance.Name = actionName
 				instance.Facts = inputs
