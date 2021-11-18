@@ -77,37 +77,6 @@ type Web struct {
 	evaluator           *Evaluator
 }
 
-func wildcardRouteHandler(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	route, ok := vars["route"]
-
-	if !ok {
-		// TODO Logging -> Local
-		// TODO Logging -> Grafana Loki
-	}
-
-	if mimeType := mime.TypeByExtension(path.Ext(route)); mimeType != "" {
-		w.Header()["Content-Type"] = []string{mimeType}
-	}
-	err := makeViewTemplate(route).Execute(w, vars)
-	if err != nil {
-		makeViewTemplate("index.html").Execute(w, nil)
-		// TODO Logging -> Local
-		// TODO Logging -> Grafana Loki
-		// TODO Update ViewTemplate
-	}
-}
-
-func defaultHandler(w http.ResponseWriter, req *http.Request) {
-	err := makeViewTemplate("index.html").Execute(w, nil)
-	if err != nil {
-		makeViewTemplate("index.html").Execute(w, nil)
-		// TODO Logging -> Local
-		// TODO Logging -> Grafana Loki
-		// TODO Update ViewTemplate
-	}
-}
-
 func (self *Web) start(ctx context.Context) error {
 	self.logger.Println("Starting Web")
 
@@ -490,10 +459,38 @@ func (self *Web) start(ctx context.Context) error {
 		}
 	}).Methods("GET")
 
-	router.HandleFunc("/*route", wildcardRouteHandler).
-		Methods("GET")
-	router.HandleFunc("/", defaultHandler).
-		Methods("GET")
+	router.HandleFunc("/*route", func(w http.ResponseWriter, req *http.Request) {
+		vars := mux.Vars(req)
+		route, ok := vars["route"]
+
+		if !ok {
+			logger.Default().logger.Println("Request: ", req, " was not ok")
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+		}
+
+		if mimeType := mime.TypeByExtension(path.Ext(route)); mimeType != "" {
+			w.Header()["Content-Type"] = []string{mimeType}
+		}
+		err := makeViewTemplate(route).Execute(w, vars)
+		if err != nil {
+			makeViewTemplate("index.html").Execute(w, nil)
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+			// TODO Update ViewTemplate
+		}
+
+	}).Methods("GET")
+
+	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		err := makeViewTemplate("index.html").Execute(w, nil)
+		if err != nil {
+			makeViewTemplate("index.html").Execute(w, nil)
+			// TODO Logging -> Local
+			// TODO Logging -> Grafana Loki
+			// TODO Update ViewTemplate
+		}
+	}).Methods("GET")
 
 	server := &http.Server{Addr: *self.Listen, Handler: router}
 
