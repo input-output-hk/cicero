@@ -78,10 +78,10 @@ type Web struct {
 }
 
 func (self *Web) start(ctx context.Context) error {
+
 	self.logger.Println("Starting Web")
 
 	router := mux.NewRouter()
-	// TODO Implement Logging to Local
 	// TODO Implement different Log Levels (Info, Warning, Error etc.)
 	// TODO Implement Logging to Loki
 	// TODO Show Errors in viewTemplate
@@ -96,8 +96,8 @@ func (self *Web) start(ctx context.Context) error {
 		if len(name) == 0 {
 			templateName = "workflow"
 			if insts, err := (*self.workflowService).GetAll(); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				// TODO Logging -> Local
+				err = errors.WithMessagef(err, "Could not get all workflows")
+				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 				// TODO Logging -> Grafana Loki
 			} else {
 				instances = insts
@@ -105,9 +105,9 @@ func (self *Web) start(ctx context.Context) error {
 		} else {
 			templateName = "workflow/index-name.html"
 			if insts, err := (*self.workflowService).GetAllByName(name); err != nil {
-				// TODO Logging -> Local
+				err = errors.WithMessagef(err, "Could not get index-name.html")
+				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 				// TODO Logging -> Grafana Loki
-				http.Error(w, err.Error(), http.StatusInternalServerError)
 			} else {
 				instances = insts
 			}
@@ -115,7 +115,8 @@ func (self *Web) start(ctx context.Context) error {
 
 		err := makeViewTemplate(templateName).Execute(w, instances)
 		if err != nil {
-			// TODO Logging -> Local
+			err = errors.WithMessagef(err, "Could not create workflow view")
+			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 			// TODO Logging -> Grafana Loki
 		}
 	}).Methods("GET")
@@ -125,8 +126,8 @@ func (self *Web) start(ctx context.Context) error {
 		source := req.PostFormValue("source")
 
 		if err := (*self.workflowService).Start(source, name, model.WorkflowCerts{}); err != nil {
-			errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
-			// TODO Logging -> Local
+			err = errors.WithMessagef(err, "Could not start workflow by name \"%s\" and source \"%s\"", source, name)
+			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 			// TODO Logging -> Grafana Loki
 		}
 
@@ -136,18 +137,21 @@ func (self *Web) start(ctx context.Context) error {
 	workflowRouter.HandleFunc("{id}/", func(w http.ResponseWriter, req *http.Request) {
 
 		vars := mux.Vars(req)
-		route, ok := vars["id"]
+		id, ok := vars["id"]
 
 		if !ok {
-			// TODO Logging -> Local
+			err := errors.New("Could not read empty id")
+			writeLogs(err, self.logger)
 			// TODO Logging -> Grafana Loki
 		}
 
-		if id, err := strconv.ParseUint(route, 10, 64); err != nil {
-			// TODO Logging -> Local
+		if id, err := strconv.ParseUint(id, 10, 64); err != nil {
+			err = errors.WithMessagef(err, "Could not read id \"%s\"", id)
+			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 			// TODO Logging -> Grafana Loki
 		} else if instance, err := (*self.workflowService).GetById(id); err != nil {
-			// TODO Logging -> Local
+			err = errors.WithMessagef(err, "Could not get workflow by id \"%s", id)
+			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 			// TODO Logging -> Grafana Loki
 		} else {
 			results := []map[string]interface{}{}
@@ -169,7 +173,8 @@ func (self *Web) start(ctx context.Context) error {
             ) payload ON true;
             `, id)
 			if err != nil {
-				// TODO Logging -> Local
+				err = errors.WithMessagef(err, "Could not select action_instance from db", id)
+				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 				// TODO Logging -> Grafana Loki
 			}
 
@@ -184,14 +189,16 @@ func (self *Web) start(ctx context.Context) error {
 				alloc := &nomad.Allocation{}
 				err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
 				if err != nil {
-					// TODO Logging -> Local
+				        err = errors.WithMessagef(err, "Could not unmarshal json for alloc \"%s\"", alloc)
+				        writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 					// TODO Logging -> Grafana Loki
 					// TODO Update ViewTemplate
 				}
 
 				logs, err := (*self.actionService).ActionLogs(alloc.ID, alloc.TaskGroup)
 				if err != nil {
-					// TODO Logging -> Local
+				        err = errors.WithMessagef(err, "Could not get logs for alloc \"%s\"", alloc)
+				        writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.logger)
 					// TODO Logging -> Grafana Loki
 					// TODO Update ViewTemplate
 				}
@@ -586,7 +593,7 @@ func makeViewTemplate(route string) *template.Template {
 	return t
 }
 
-func writeHttpErrorAndLogs(err error, httpStatusCode int, logger *log.Logger, w http.ResponseWriter) {
+func writeHttpErrorAndLogs(w http.ResponseWriter, err error, httpStatusCode int, logger *log.Logger) {
 	http.Error(w, err.Error(), httpStatusCode)
 	writeLogs(err, logger)
 }
