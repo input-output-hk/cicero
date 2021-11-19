@@ -2,14 +2,14 @@ package service
 
 import (
 	"encoding/json"
+	"log"
+	"os"
+
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/repository"
-
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
-	"log"
-	"os"
 )
 
 type NomadEventService interface {
@@ -33,11 +33,11 @@ func NewNomadEventService(db *pgxpool.Pool, actionService ActionService) NomadEv
 }
 
 func (n *nomadEventService) Save(tx pgx.Tx, event *nomad.Event) error {
-	n.logger.Printf("Saving new NomadEvent %#v", event)
+	n.logger.Printf("Saving new NomadEvent %d", event.Index)
 	if err := n.nomadEventRepository.Save(tx, event); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert NomadEvent")
 	}
-	n.logger.Printf("Created NomadEvent %#v", event)
+	n.logger.Printf("Created NomadEvent %d", event.Index)
 	return nil
 }
 
