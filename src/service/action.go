@@ -87,11 +87,11 @@ func (self *actionService) Save(tx pgx.Tx, action *model.ActionInstance) error {
 }
 
 func (self *actionService) Update(tx pgx.Tx, action model.ActionInstance) error {
-	log.Printf("Update Action %#v", action)
+	log.Printf("Update Action %s", action.ID.String())
 	if err := self.actionRepository.Update(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't update Action with id: %s", action.ID)
 	}
-	log.Printf("Updated Action %#v", action)
+	log.Printf("Updated Action %s", action.ID.String())
 	return nil
 }
 
