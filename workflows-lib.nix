@@ -1,16 +1,21 @@
 {
   addNomadJobDefaults = job:
     job // {
-      Datacenters = job.Datacenters or [ ]
+      datacenters = job.datacenters or [ ]
         ++ [ "dc1" "eu-central-1" "us-east-2" ];
-      TaskGroups = map (group:
-        group // {
-          Tasks = map (task:
+    } // (if !(job ? group) then
+      { }
+    else {
+      group = builtins.mapAttrs (k: group:
+        group // (if !(group ? task) then
+          { }
+        else {
+          task = builtins.mapAttrs (k: task:
             task // {
-              Env = {
+              env = {
                 CICERO_API_URL = "http://127.0.0.1:8080/api";
-              } // task.Env or { };
-            }) group.Tasks or [ ];
-        }) job.TaskGroups or [ ];
-    };
+              } // task.env or { };
+            }) group.task;
+        })) job.group;
+    });
 }
