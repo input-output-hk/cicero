@@ -102,7 +102,7 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 
 	// TODO: only invoke when there was a change to the facts?
 
-	self.Logger.Printf("Updated workflow %#v", existing)
+	self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
 
 	if err := self.MessageQueueService.Publish(
 		model.InvokeStreamName.Fmt(workflowName, id),
