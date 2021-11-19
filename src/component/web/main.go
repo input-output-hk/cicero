@@ -4,6 +4,8 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"html/template"
 	"log"
 	"mime"
@@ -15,8 +17,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bunrouter"
 )
@@ -24,11 +24,11 @@ import (
 type Web struct {
 	Listen              string
 	Logger              *log.Logger
-	WorkflowService     service.WorkflowService
-	ActionService       service.ActionService
-	MessageQueueService service.MessageQueueService
-	NomadEventService   service.NomadEventService
-	EvaluationService   service.EvaluationService
+	WorkflowService     application.WorkflowService
+	ActionService       application.ActionService
+	MessageQueueService application.MessageQueueService
+	NomadEventService   application.NomadEventService
+	EvaluationService   application.EvaluationService
 }
 
 func (self *Web) Start(ctx context.Context) error {
@@ -85,7 +85,7 @@ func (self *Web) Start(ctx context.Context) error {
 
 			// step 4
 			if inputsJson := req.URL.Query().Get("inputs"); len(inputsJson) > 0 {
-				var inputs model.Facts
+				var inputs domain.Facts
 				if err := json.Unmarshal([]byte(inputsJson), &inputs); err != nil {
 					return err
 				}
@@ -119,7 +119,7 @@ func (self *Web) Start(ctx context.Context) error {
 			name := req.PostFormValue("name")
 			source := req.PostFormValue("source")
 
-			if err := self.WorkflowService.Start(source, name, model.Facts{}); err != nil {
+			if err := self.WorkflowService.Start(source, name, domain.Facts{}); err != nil {
 				return errors.WithMessagef(err, "Could not start workflow \"%s\" from source \"%s\"", name, source)
 			}
 
@@ -208,7 +208,7 @@ func (self *Web) Start(ctx context.Context) error {
 						}
 					}
 
-					var inputs model.Facts
+					var inputs domain.Facts
 					if inputsStr := req.URL.Query().Get("inputs"); len(inputsStr) > 0 {
 						if err := json.Unmarshal([]byte(inputsStr), &inputs); err != nil {
 							return err
@@ -235,9 +235,9 @@ func (self *Web) Start(ctx context.Context) error {
 					var params struct {
 						Source string
 						Name   *string
-						Inputs model.Facts
+						Inputs domain.Facts
 					}
-					params.Inputs = model.Facts{}
+					params.Inputs = domain.Facts{}
 					if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 						return errors.WithMessage(err, "Could not unmarshal params from request body")
 					}
@@ -285,16 +285,16 @@ func (self *Web) Start(ctx context.Context) error {
 					})
 
 					group.POST("/fact", func(w http.ResponseWriter, req bunrouter.Request) error {
-						instance := req.Context().Value(ctxKeyWorkflowInstance).(model.WorkflowInstance)
+						instance := req.Context().Value(ctxKeyWorkflowInstance).(domain.WorkflowInstance)
 
-						facts := model.Facts{}
+						facts := domain.Facts{}
 						if err := json.NewDecoder(req.Body).Decode(&facts); err != nil {
 							return errors.WithMessage(err, "Could not unmarshal facts from request body")
 						}
 
 						if err := self.MessageQueueService.Publish(
-							model.FactStreamName.Fmt(instance.Name, instance.ID),
-							model.FactStreamName,
+							domain.FactStreamName.Fmt(instance.Name, instance.ID),
+							domain.FactStreamName,
 							facts,
 						); err != nil {
 							return errors.WithMessage(err, "Could not publish fact")
@@ -333,7 +333,7 @@ func (self *Web) Start(ctx context.Context) error {
 						if err != nil {
 							return err
 						}
-						return bunrouter.JSON(w, map[string]*service.LokiOutput{"logs": logs})
+						return bunrouter.JSON(w, map[string]*application.LokiOutput{"logs": logs})
 					}
 				})
 			})
@@ -382,7 +382,7 @@ func makeViewTemplate(route string) *template.Template {
 	t := template.New("")
 	t.Funcs(template.FuncMap{
 		"buildInfo": func() interface{} {
-			return model.BuildInfo
+			return domain.BuildInfo
 		},
 		"route": func() string { return route },
 		"toJson": func(o interface{}, pretty bool) string {

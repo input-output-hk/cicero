@@ -2,6 +2,7 @@ package cicero
 
 import (
 	"context"
+	"github.com/input-output-hk/cicero/src/application"
 	"log"
 	"os"
 	"time"
@@ -10,7 +11,6 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/component"
 	"github.com/input-output-hk/cicero/src/component/web"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
@@ -86,27 +86,27 @@ func (cmd *StartCmd) Run() error {
 	})
 
 	evaluationService := once(func() interface{} {
-		return service.NewEvaluationService(cmd.Evaluator, cmd.Env)
+		return application.NewEvaluationService(cmd.Evaluator, cmd.Env)
 	})
 	messageQueueService := once(func() interface{} {
-		if bridge, err := service.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
+		if bridge, err := application.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
 			logger.Fatalln(err.Error())
 			return err
 		} else {
-			return service.NewMessageQueueService(db().(*pgxpool.Pool), bridge)
+			return application.NewMessageQueueService(db().(*pgxpool.Pool), bridge)
 		}
 	})
 	workflowService := once(func() interface{} {
-		return service.NewWorkflowService(db().(*pgxpool.Pool), messageQueueService().(service.MessageQueueService))
+		return application.NewWorkflowService(db().(*pgxpool.Pool), messageQueueService().(application.MessageQueueService))
 	})
 	actionService := once(func() interface{} {
-		return service.NewActionService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
+		return application.NewActionService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
 	})
 	workflowActionService := once(func() interface{} {
-		return service.NewWorkflowActionService(evaluationService().(service.EvaluationService), workflowService().(service.WorkflowService))
+		return application.NewWorkflowActionService(evaluationService().(application.EvaluationService), workflowService().(application.WorkflowService))
 	})
 	nomadEventService := once(func() interface{} {
-		return service.NewNomadEventService(db().(*pgxpool.Pool), actionService().(service.ActionService))
+		return application.NewNomadEventService(db().(*pgxpool.Pool), actionService().(application.ActionService))
 	})
 
 	supervisor := cmd.newSupervisor(logger)
@@ -114,8 +114,8 @@ func (cmd *StartCmd) Run() error {
 	if start.workflowStart {
 		component := component.WorkflowStartConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
-			MessageQueueService: messageQueueService().(service.MessageQueueService),
-			WorkflowService:     workflowService().(service.WorkflowService),
+			MessageQueueService: messageQueueService().(application.MessageQueueService),
+			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		supervisor.Add(component.Start)
@@ -123,10 +123,10 @@ func (cmd *StartCmd) Run() error {
 
 	if start.workflowInvoke {
 		component := component.WorkflowInvokeConsumer{
-			EvaluationService:   evaluationService().(service.EvaluationService),
-			ActionService:       actionService().(service.ActionService),
-			MessageQueueService: messageQueueService().(service.MessageQueueService),
-			WorkflowService:     workflowService().(service.WorkflowService),
+			EvaluationService:   evaluationService().(application.EvaluationService),
+			ActionService:       actionService().(application.ActionService),
+			MessageQueueService: messageQueueService().(application.MessageQueueService),
+			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 			NomadClient:         nomadClient().(*nomad.Client),
 			// Increase priority of waiting goroutines every second.
@@ -139,8 +139,8 @@ func (cmd *StartCmd) Run() error {
 	if start.workflowFact {
 		component := component.WorkflowFactConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
-			MessageQueueService: messageQueueService().(service.MessageQueueService),
-			WorkflowService:     workflowService().(service.WorkflowService),
+			MessageQueueService: messageQueueService().(application.MessageQueueService),
+			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		supervisor.Add(component.Start)
@@ -149,11 +149,11 @@ func (cmd *StartCmd) Run() error {
 	if start.nomadEvent {
 		component := component.NomadEventConsumer{
 			Logger:                log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
-			MessageQueueService:   messageQueueService().(service.MessageQueueService),
-			WorkflowService:       workflowService().(service.WorkflowService),
-			ActionService:         actionService().(service.ActionService),
-			WorkflowActionService: workflowActionService().(service.WorkflowActionService),
-			NomadEventService:     nomadEventService().(service.NomadEventService),
+			MessageQueueService:   messageQueueService().(application.MessageQueueService),
+			WorkflowService:       workflowService().(application.WorkflowService),
+			ActionService:         actionService().(application.ActionService),
+			WorkflowActionService: workflowActionService().(application.WorkflowActionService),
+			NomadEventService:     nomadEventService().(application.NomadEventService),
 			NomadClient:           nomadClient().(*nomad.Client),
 			Db:                    db().(*pgxpool.Pool),
 		}
@@ -164,11 +164,11 @@ func (cmd *StartCmd) Run() error {
 		component := web.Web{
 			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			Listen:              cmd.WebListen,
-			WorkflowService:     workflowService().(service.WorkflowService),
-			ActionService:       actionService().(service.ActionService),
-			MessageQueueService: messageQueueService().(service.MessageQueueService),
-			NomadEventService:   nomadEventService().(service.NomadEventService),
-			EvaluationService:   evaluationService().(service.EvaluationService),
+			WorkflowService:     workflowService().(application.WorkflowService),
+			ActionService:       actionService().(application.ActionService),
+			MessageQueueService: messageQueueService().(application.MessageQueueService),
+			NomadEventService:   nomadEventService().(application.NomadEventService),
+			EvaluationService:   evaluationService().(application.EvaluationService),
 		}
 		supervisor.Add(component.Start)
 	}

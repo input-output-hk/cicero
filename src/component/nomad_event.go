@@ -2,14 +2,14 @@ package component
 
 import (
 	"context"
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"time"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -17,11 +17,11 @@ import (
 
 type NomadEventConsumer struct {
 	Logger                *log.Logger
-	MessageQueueService   service.MessageQueueService
-	NomadEventService     service.NomadEventService
-	WorkflowService       service.WorkflowService
-	ActionService         service.ActionService
-	WorkflowActionService service.WorkflowActionService
+	MessageQueueService   application.MessageQueueService
+	NomadEventService     application.NomadEventService
+	WorkflowService       application.WorkflowService
+	ActionService         application.ActionService
+	WorkflowActionService application.WorkflowActionService
 	Db                    *pgxpool.Pool
 	NomadClient           *nomad.Client
 }
@@ -124,7 +124,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return nil
 	}
 
-	var facts *model.Facts
+	var facts *domain.Facts
 	switch allocation.ClientStatus {
 	case "complete":
 		facts = &def.Success
@@ -152,8 +152,8 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		}
 
 		if err := self.MessageQueueService.Publish(
-			model.FactStreamName.Fmt(wf.Name, wf.ID),
-			model.FactStreamName,
+			domain.FactStreamName.Fmt(wf.Name, wf.ID),
+			domain.FactStreamName,
 			*facts,
 		); err != nil {
 			return errors.WithMessage(err, "Could not publish fact")

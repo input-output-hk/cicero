@@ -1,19 +1,19 @@
-package service
+package application
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/input-output-hk/cicero/src/model"
 	"github.com/pkg/errors"
 )
 
 type EvaluationService interface {
-	EvaluateWorkflow(src string, name string, id uint64, inputs model.Facts) (model.WorkflowDefinition, error)
+	EvaluateWorkflow(src string, name string, id uint64, inputs domain.Facts) (domain.WorkflowDefinition, error)
 	ListWorkflows(src string) ([]string, error)
 }
 
@@ -31,8 +31,8 @@ func NewEvaluationService(command string, env []string) EvaluationService {
 	}
 }
 
-func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs model.Facts) (model.WorkflowDefinition, error) {
-	var def model.WorkflowDefinition
+func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs domain.Facts) (domain.WorkflowDefinition, error) {
+	var def domain.WorkflowDefinition
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
@@ -70,7 +70,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 	return def, nil
 }
 
-func (e *evaluationService) addEnv(def *model.WorkflowDefinition) {
+func (e *evaluationService) addEnv(def *domain.WorkflowDefinition) {
 	for _, action := range def.Actions {
 		for _, group := range action.Job.TaskGroups {
 			for _, task := range group.Tasks {

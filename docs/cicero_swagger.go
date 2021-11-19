@@ -1,7 +1,7 @@
 package docs
 
 import (
-	cicero "github.com/input-output-hk/cicero/src/model"
+	cicero "github.com/input-output-hk/cicero/src/domain"
 )
 
 // swagger:route GET /api/workflow workflow

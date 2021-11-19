@@ -1,9 +1,10 @@
-package repository
+package persistence
 
 import (
 	"context"
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
@@ -12,13 +13,7 @@ type nomadEventRepository struct {
 	DB *pgxpool.Pool
 }
 
-type NomadEventRepository interface {
-	Save(pgx.Tx, *nomad.Event) error
-	GetLastNomadEvent() (uint64, error)
-	GetEventAllocByWorkflowId(uint64) ([]map[string]interface{}, error)
-}
-
-func NewNomadEventRepository(db *pgxpool.Pool) NomadEventRepository {
+func NewNomadEventRepository(db *pgxpool.Pool) repository.NomadEventRepository {
 	return nomadEventRepository{DB: db}
 }
 

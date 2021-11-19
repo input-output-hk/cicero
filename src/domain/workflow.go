@@ -1,4 +1,4 @@
-package model
+package domain
 
 import (
 	"time"
@@ -36,6 +36,12 @@ type WorkflowInstance struct {
 	Facts     Facts
 	CreatedAt *time.Time
 	UpdatedAt *time.Time
+}
+
+type WorkflowSummary []struct {
+	Name         string
+	NumSources   uint64
+	NumInstances uint64
 }
 
 type Facts map[string]interface{}

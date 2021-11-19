@@ -1,14 +1,15 @@
-package service
+package application
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"log"
 	"os"
 	"time"
 
-	model "github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/repository"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
@@ -16,8 +17,8 @@ import (
 )
 
 type MessageQueueService interface {
-	Publish(string, model.StreamName, model.Facts, ...liftbridge.MessageOption) error
-	Subscribe(context.Context, model.StreamName, liftbridge.Handler, int32) error
+	Publish(string, domain.StreamName, domain.Facts, ...liftbridge.MessageOption) error
+	Subscribe(context.Context, domain.StreamName, liftbridge.Handler, int32) error
 	Save(pgx.Tx, *liftbridge.Message) error
 }
 
@@ -31,7 +32,7 @@ func NewMessageQueueService(db *pgxpool.Pool, bridge liftbridge.Client) MessageQ
 	return &messageQueueService{
 		logger:                 log.New(os.Stderr, "MessageQueueService: ", log.LstdFlags),
 		bridge:                 bridge,
-		messageQueueRepository: repository.NewMessageQueueRepository(db),
+		messageQueueRepository: persistence.NewMessageQueueRepository(db),
 	}
 }
 
@@ -59,7 +60,7 @@ func (m *messageQueueService) createStreams(stream []string) error {
 	return nil
 }
 
-func (m *messageQueueService) Publish(stream string, streamName model.StreamName, facts model.Facts, opts ...liftbridge.MessageOption) error {
+func (m *messageQueueService) Publish(stream string, streamName domain.StreamName, facts domain.Facts, opts ...liftbridge.MessageOption) error {
 	if err := m.createStreams([]string{stream}); err != nil {
 		return errors.WithMessage(err, "Before publishing message")
 	}
@@ -98,7 +99,7 @@ func (m *messageQueueService) subscribe(ctx context.Context, streamName string, 
 	return nil
 }
 
-func (m *messageQueueService) Subscribe(ctx context.Context, streamName model.StreamName, handler liftbridge.Handler, partition int32) (err error) {
+func (m *messageQueueService) Subscribe(ctx context.Context, streamName domain.StreamName, handler liftbridge.Handler, partition int32) (err error) {
 	sName := streamName.String()
 	if err := m.createStreams([]string{sName}); err != nil {
 		return err

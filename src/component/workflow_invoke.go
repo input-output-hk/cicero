@@ -3,13 +3,12 @@ package component
 import (
 	"context"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
@@ -23,10 +22,10 @@ import (
 type WorkflowInvokeConsumer struct {
 	Logger              *log.Logger
 	Limiter             *priority.PriorityLimiter
-	EvaluationService   service.EvaluationService
-	ActionService       service.ActionService
-	MessageQueueService service.MessageQueueService
-	WorkflowService     service.WorkflowService
+	EvaluationService   application.EvaluationService
+	ActionService       application.ActionService
+	MessageQueueService application.MessageQueueService
+	WorkflowService     application.WorkflowService
 	Db                  *pgxpool.Pool
 	NomadClient         *nomad.Client
 }
@@ -34,8 +33,8 @@ type WorkflowInvokeConsumer struct {
 func (self *WorkflowInvokeConsumer) Start(ctx context.Context) error {
 	self.Logger.Println("Starting WorkflowInvokeConsumer")
 
-	if err := self.MessageQueueService.Subscribe(ctx, model.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.InvokeStreamName)
+	if err := self.MessageQueueService.Subscribe(ctx, domain.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.InvokeStreamName)
 	}
 
 	<-ctx.Done()
@@ -49,7 +48,7 @@ func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(
 			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
 		}
 
-		inputs := model.Facts{}
+		inputs := domain.Facts{}
 		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
 			self.Logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
 			self.Logger.Printf("Invalid JSON received, ignoring: %s", err)
@@ -79,7 +78,7 @@ func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(
 	}
 }
 
-func (self *WorkflowInvokeConsumer) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts) error {
+func (self *WorkflowInvokeConsumer) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs domain.Facts) error {
 	wf, err := self.WorkflowService.GetById(wfInstanceId)
 	if err != nil {
 		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
@@ -106,11 +105,11 @@ func (self *WorkflowInvokeConsumer) invokeWorkflow(ctx context.Context, workflow
 	return nil
 }
 
-func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs model.Facts, actionName string, action *model.WorkflowAction) error {
+func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs domain.Facts, actionName string, action *domain.WorkflowAction) error {
 	self.Limiter.Wait(context.Background(), priority.High)
 	defer self.Limiter.Finish()
 
-	var instance *model.ActionInstance
+	var instance *domain.ActionInstance
 	if inst, err := self.ActionService.GetByNameAndWorkflowId(actionName, wfInstanceId); err != nil {
 		if !pgxscan.NotFound(err) {
 			return errors.WithMessage(err, "While getting last action instance")
@@ -124,7 +123,7 @@ func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, wo
 	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if action.IsRunnable() {
 			if instance == nil {
-				instance = &model.ActionInstance{}
+				instance = &domain.ActionInstance{}
 				instance.WorkflowInstanceId = wfInstanceId
 				instance.Name = actionName
 				instance.Facts = inputs

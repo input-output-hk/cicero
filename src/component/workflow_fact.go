@@ -3,13 +3,13 @@ package component
 import (
 	"context"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
@@ -17,16 +17,16 @@ import (
 
 type WorkflowFactConsumer struct {
 	Logger              *log.Logger
-	MessageQueueService service.MessageQueueService
-	WorkflowService     service.WorkflowService
+	MessageQueueService application.MessageQueueService
+	WorkflowService     application.WorkflowService
 	Db                  *pgxpool.Pool
 }
 
 func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
 	self.Logger.Println("Starting WorkflowFactConsumer")
 
-	if err := self.MessageQueueService.Subscribe(ctx, model.FactStreamName, self.onFactMessage, 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.FactStreamName)
+	if err := self.MessageQueueService.Subscribe(ctx, domain.FactStreamName, self.onFactMessage, 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.FactStreamName)
 	}
 
 	<-ctx.Done()
@@ -56,7 +56,7 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 		"time:", msg.Timestamp(),
 	)
 
-	received := model.Facts{}
+	received := domain.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
 		self.Logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
@@ -76,12 +76,12 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 		return
 	}
 
-	var existing model.WorkflowInstance
+	var existing domain.WorkflowInstance
 	if existing, err = self.WorkflowService.GetById(id); err != nil {
 		return
 	}
 
-	merged := model.Facts{}
+	merged := domain.Facts{}
 
 	for k, v := range existing.Facts {
 		merged[k] = v
@@ -105,8 +105,8 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 	self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
 
 	if err := self.MessageQueueService.Publish(
-		model.InvokeStreamName.Fmt(workflowName, id),
-		model.InvokeStreamName,
+		domain.InvokeStreamName.Fmt(workflowName, id),
+		domain.InvokeStreamName,
 		merged,
 	); err != nil {
 		self.Logger.Printf("Couldn't publish workflow invoke message: %s", err)
