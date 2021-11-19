@@ -29,7 +29,7 @@
           gouml = prev.callPackage ./pkgs/gouml.nix { };
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
           webhook-trigger = prev.callPackage ./pkgs/trigger { };
-          nomad-follower = follower.defaultPackage.${prev.system};
+          nomad-follower = follower.defaultPackage."${prev.system}";
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
 
@@ -56,7 +56,7 @@
         , liftbridge-cli, gocritic, go, webhook-trigger, nomad-dev
         , nomad-follower, run-bash, run-python, run-perl, run-js }@pkgs:
         pkgs // {
-          lib = nixpkgs.lib;
+          inherit (nixpkgs) lib;
           defaultPackage = cicero;
         };
 
@@ -246,7 +246,7 @@
                 after = [ "network.target" ];
                 path = with pkgs; [ cicero ];
                 script = ''
-                  exec cicero all
+                  exec cicero start
                 '';
               };
             })

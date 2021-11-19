@@ -41,7 +41,7 @@ job: cicero: group: cicero: {
 				"--liftbridge-addr", #liftbridgeAddr,
 				"--prometheus-addr", #lokiAddr,
 				"--env", "NOMAD_ADDR", "NOMAD_TOKEN",
-				"--listen", ":8888",
+				"--web-listen", ":8888",
 			]
 		}]
 	}
