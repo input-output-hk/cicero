@@ -26,6 +26,7 @@
             prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
           liftbridge = prev.callPackage ./pkgs/liftbridge.nix { };
           liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
+          go = prev.go_1_17;
           gouml = prev.callPackage ./pkgs/gouml.nix { };
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
           webhook-trigger = prev.callPackage ./pkgs/trigger { };
