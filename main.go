@@ -7,6 +7,7 @@ import (
 
 	"github.com/alexflint/go-arg"
 	cicero "github.com/input-output-hk/cicero/src"
+	"github.com/input-output-hk/cicero/src/model"
 )
 
 var buildVersion = "dev"
@@ -22,15 +23,15 @@ func main() {
 		logger.SetOutput(os.Stderr)
 	}
 
+	model.BuildInfo.Version = buildVersion
+	model.BuildInfo.Commit = buildCommit
+
 	abort(parser, Run(parser, args))
 }
 
 type CLI struct {
-	Debug   bool               `arg:"--debug" help:"debugging output"`
-	All     *cicero.AllCmd     `arg:"subcommand:all"`
-	Brain   *cicero.BrainCmd   `arg:"subcommand:brain"`
-	Invoker *cicero.InvokerCmd `arg:"subcommand:invoker"`
-	Web     *cicero.WebCmd     `arg:"subcommand:web"`
+	Debug bool             `arg:"--debug" help:"debugging output"`
+	Start *cicero.StartCmd `arg:"subcommand:start"`
 }
 
 func Version() string {
@@ -57,35 +58,22 @@ func abort(parser *arg.Parser, err error) {
 	}
 }
 
-func parseArgs(args *CLI) (*arg.Parser, error) {
-	parser, err := arg.NewParser(arg.Config{}, args)
+func parseArgs(args *CLI) (parser *arg.Parser, err error) {
+	parser, err = arg.NewParser(arg.Config{}, args)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	err = parser.Parse(os.Args[1:])
-	return parser, err
+	return
 }
 
 func Run(parser *arg.Parser, args *CLI) error {
-	if err := cicero.Init(); err != nil {
-		return err
-	}
-
-	defer cicero.DB.Close()
-
 	switch {
-	case args.Brain != nil:
-		return args.Brain.Run()
-	case args.Invoker != nil:
-		return args.Invoker.Run()
-	case args.Web != nil:
-		return args.Web.Run()
-	case args.All != nil:
-		return args.All.Run()
+	case args.Start != nil:
+		return args.Start.Run()
 	default:
 		parser.WriteHelp(os.Stderr)
 	}
-
 	return nil
 }

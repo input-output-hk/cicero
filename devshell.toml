@@ -62,22 +62,29 @@ name = "psqlc"
 command = "psql -d \"$DATABASE_URL\" \"$@\""
 help = "psql into Cicero DB"
 
+[[commands]]
+name = "dev-run"
+command = "cue export ./jobs -e jobs.dev | nomad run -"
+help = "run postgres, loki, and liftbridge in nomad"
+
 [devshell]
 name = "cicero"
 packages = [
-  "diffutils",
-  "go",
-  "goimports",
-  "gopls",
-  "gocode",
-  "gcc",
-  "sqliteInteractive",
-  "postgresql_12",
-  "gocritic",
-  "fd",
-  "nixfmt",
-  "go-swagger",
-  "grafana-loki",
   "cicero-evaluator-nix",
   "cue",
+  "diffutils",
+  "fd",
+  "gcc",
+  "go",
+  "gocode",
+  "gocritic",
+  "goimports",
+  "gopls",
+  "go-swagger",
+  "grafana-loki",
+  "nixfmt",
+  "nomad-follower",
+  "postgresql_12",
+  "sqliteInteractive",
+  "vector",
 ]

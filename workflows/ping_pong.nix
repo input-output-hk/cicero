@@ -1,7 +1,9 @@
 { id, run }:
 
-let bash = script: run "bash" (import ../workflows-nomad.nix) script;
+let
+  lib = import ../workflows-lib.nix;
 
+  bash = script: lib.addNomadJobDefaults (run "bash" { } script);
 in {
   actions = {
     ping = { ping ? null }: {

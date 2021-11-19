@@ -1,0 +1,35 @@
+{{template "_layout.html" .}}
+
+{{define "main"}}
+	<table class="table">
+		<tr>
+			<th>Name</th>
+			<th># Instances</th>
+			<th># Sources</th>
+		</tr>
+		<tr>
+			<td
+				colspan="3"
+				style="
+					text-align: center;
+					font-style: italic;
+				"
+			>
+				<a href="/workflow/new">
+					Start New Workflow
+				</a>
+			</td>
+		</tr>
+		{{range .}}
+			<tr>
+				<td>
+					<a href="?name={{.Name}}">
+						{{.Name}}
+					</a>
+				</td>
+				<td>{{.NumInstances}}</td>
+				<td>{{.NumSources}}</td>
+			</tr>
+		{{end}}
+	</table>
+{{end}}

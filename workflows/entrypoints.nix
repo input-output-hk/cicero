@@ -1,53 +1,44 @@
-{ id, ... }:
+{ id, run }:
 
-{
+let lib = import ../workflows-lib.nix;
+in {
   actions = {
-    github = { }: {
-      job = (import ../workflows-nomad.nix) // {
-        TaskGroups = [{
-          Name = "webhooks";
-
-          Tasks = [{
-            Name = "webhooks";
-
-            Config = {
-              packages = [
-                "github:input-output-hk/cicero#webhook-trigger"
-                "github:input-output-hk/cicero#cicero-evaluator-nix"
-                "github:nixos/nixpkgs/nixpkgs-unstable#jq"
-                "github:nixos/nixpkgs/nixpkgs-unstable#curl"
-              ];
-              command = "/bin/trigger " + builtins.toFile "trigger.yaml" (builtins.toJSON {
-                settings.host = "0.0.0.0:4567";
-                events = rec {
-                  common = ''
-                    set -exuo pipefail
-                    function prop {
-                        <<< '{payload}' jq -r "$1"
-                    }
-                  '';
-                  pull_request = ''
-                    case '{action}' in
-                        opened | reopened | synchronize ) ;;
-                        * ) exit 0 ;;
-                    esac
-
-                    export CICERO_WORKFLOW_SRC=github:$(prop .pull_request.base.repo.full_name)/$(prop .pull_request.base.sha)
-
-                    readarray -t names <<< $(cicero-evaluator-nix list | jq -r .[])
-                    for name in "''${names[@]}"; do
-                        export name
-                        <<< '{payload}' \
-                        jq -r '{Source: env.CICERO_WORKFLOW_SRC, Name: env.name, Inputs: {pr: .}}' \
-                        | curl "$CICERO_API_URL"/workflow/instance/ --data-binary @-
-                    done
-                  '';
-                };
-              });
-            };
-          }];
-        }];
+    github = { sha ? null, environment ? null, github ? null }: {
+      when = {
+        "sha given" = sha != null;
+        "github hasn't run yet" = github == null;
       };
+
+      job = lib.addNomadJobDefaults (run "bash" {
+        memory = 1024;
+        packages = [
+          "github:nixos/nixpkgs/nixpkgs-unstable#cacert"
+          "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
+          "github:nixos/nixpkgs/nixpkgs-unstable#cue"
+          "github:nixos/nixpkgs/nixpkgs-unstable#gitMinimal"
+          "github:nixos/nixpkgs/nixpkgs-unstable#gnutar"
+          "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
+        ];
+      } ''
+        set -exuo pipefail
+
+        export SSL_CERT_FILE="/current-profile/etc/ssl/certs/ca-bundle.crt"
+        export HOME="$PWD/.home"
+
+        mkdir "$HOME"
+
+        git config --global advice.detachedHead false
+        git clone --quiet https://github.com/input-output-hk/cicero src
+        cd src
+        git checkout ${sha}
+
+        cue export ./jobs -e jobs.webhooks \
+          ${if environment == null then "" else "-t env=${environment}"} \
+          -t 'sha=${sha}' \
+          > job.json
+
+        nomad run job.json
+      '');
     };
   };
 }

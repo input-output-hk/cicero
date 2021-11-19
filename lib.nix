@@ -65,7 +65,7 @@ in rec {
             inherit workflowName actionName;
             job = {
               TaskGroups = [ ];
-            } // lib.optionalAttrs (all lib.id (attrValues when)) job;
+            } // lib.optionalAttrs (all (x: x == true) (attrValues when)) job;
           };
         };
 
@@ -92,7 +92,6 @@ in rec {
         };
 
       run = language: options: script: {
-        inherit (options) Datacenters;
         TaskGroups = [{
           Tasks = [{
             Resources = {
@@ -110,9 +109,15 @@ in rec {
                 "/bin/${
                   self.outputs.legacyPackages.x86_64-linux.${runner}.name
                 }"
-                script
+                "/local/script"
               ];
             };
+            Templates = [{
+              DestPath = "local/script";
+              LeftDelim = "";
+              RightDelim = "";
+              EmbeddedTmpl = script;
+            }];
           }];
         }];
       };

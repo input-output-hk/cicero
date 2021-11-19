@@ -1,0 +1,356 @@
+{{template "_layout.html" .}}
+
+{{define "main"}}
+	{{$scope := "d2dc0bac8e4747b39b78a49cf274328a"}}
+
+	<div id="{{$scope}}">
+		{{with .Instance}}
+			<h1>{{.Name}}</h1>
+
+			<ul>
+				<li><a href="#">Stop</a></li>
+				<li><a href="#">Clone</a></li>
+			</ul>
+
+			<ul class="graph-types">
+				<li>Type:</li>
+				{{range $.graphTypes}}
+					<li>
+						{{if or (eq . $.graph) (and (eq $.graph "") (eq . "flow"))}}
+							{{.}}
+						{{else}}
+							<a href="?graph={{.}}">{{.}}</a>
+						{{end}}
+					</li>
+				{{end}}
+			</ul>
+			<iframe
+				src="/workflow/{{.ID}}/graph?type={{$.graph}}"
+				class="panel"
+			></iframe>
+
+			<table
+				class="table"
+				style="margin: 1em 0"
+			>
+				<tr>
+					<td>Source</td>
+					<td><code>{{.Source}}</code></td>
+				</tr>
+				<tr>
+					<td>Created at</td>
+					<td>{{.CreatedAt}}</td>
+				</tr>
+				<tr>
+					<td>Updated at</td>
+					<td>{{.UpdatedAt}}</td>
+				</tr>
+				<tr>
+					<td>State</td>
+					<td style="display: flex">
+						<textarea
+							readonly
+							style="flex-grow: 1"
+						>{{toJson .Facts true}}</textarea>
+					</td>
+				</tr>
+			</table>
+		{{end}}
+
+		<h2>Actions</h2>
+		<div class="tabs" style="--num-tabs: {{print (len .allocs)}}">
+			{{range $name, $wrapper := .allocs}}
+				<input id="tab-{{$name}}" type="radio" name="tab" checked/>
+				<label for="tab-{{$name}}"><h3>{{$name}}</h3></label>
+				<div style="padding: 1em">
+					{{with $wrapper}}
+						{{with .Alloc}}
+							<div class="action-tables">
+								<table class="table">
+									<tr>
+										<th colspan="2">
+											Allocation
+										</th>
+									</tr>
+									<tr>
+										<th>Status:</th>
+										<td>{{.ClientStatus}}</td>
+									</tr>
+									<tr>
+										<th>Task Group:</th>
+										<td>{{.TaskGroup}}</td>
+									</tr>
+									<tr>
+										<th>Created:</th>
+										<td>{{timeUnixNano .CreateTime}}</td>
+									</tr>
+									<tr>
+										<th>Job:</th>
+										<td>{{.JobID}}</td>
+									</tr>
+									<tr>
+										<th>Node:</th>
+										<td>{{.NodeName}}</td>
+									</tr>
+								</table>
+								{{with .Resources}}
+									<table class="table">
+										<tr>
+											<th colspan="2">
+												Allocated Resources
+											</th>
+										</tr>
+										<tr>
+											<th>Cores:</th>
+											<td>{{.Cores}}</td>
+										</tr>
+										<tr>
+											<th>CPU:</th>
+											<td>{{.CPU}} Mhz</td>
+										</tr>
+										<tr>
+											<th>Disk:</th>
+											<td>{{.DiskMB}} MB</td>
+										</tr>
+										<tr>
+											<th>IOPS:</th>
+											<td>{{.IOPS}}</td>
+										</tr>
+										<tr>
+											<th>Memory Max:</th>
+											<td>{{.MemoryMaxMB}} MB</td>
+										</tr>
+										<tr>
+											<th>Memory:</th>
+											<td>{{.MemoryMB}} MB</td>
+										</tr>
+									</table>
+								{{end}}
+								{{with index .TaskStates $name}}
+									<table class="table">
+										<tr>
+											<th colspan="2">
+												Task
+											</th>
+										</tr>
+										<tr>
+											<th>Failed:</th>
+											<td>{{.Failed}}</td>
+										</tr>
+										<tr>
+											<th>State:</th>
+											<td>{{.State}}</td>
+										</tr>
+										<tr>
+											<th>Started:</th>
+											<td>{{.StartedAt}}</td>
+										</tr>
+										{{if and .FinishedAt .StartedAt}}
+											<tr>
+												<th>Finished:</th>
+												<td>{{.FinishedAt}}</td>
+											</tr>
+											<tr>
+												<th>Duration:</th>
+												<td>{{.FinishedAt.Sub .StartedAt}}</td>
+											</tr>
+										{{end}}
+										{{if gt .Restarts 0}}
+											<tr>
+												<th>Restarts:</th>
+												<td>{{.Restarts}}</td>
+											</tr>
+											<tr>
+												<th>Last Restart:</th>
+												<td>{{.LastRestart}}</td>
+											</tr>
+										{{end}}
+										{{with index $wrapper.Alloc.AllocatedResources.Tasks $name}}
+											<tr>
+												<th>CPU Shares:</th>
+												<td>{{.Cpu.CpuShares}} Mhz</td>
+											</tr>
+											<tr>
+												<th>Memory:</th>
+												<td>{{.Memory.MemoryMB}} MB</td>
+											</tr>
+											{{if gt .Memory.MemoryMaxMB 0}}
+												<tr>
+													<th>Memory Max:</th>
+													<td>{{.Memory.MemoryMaxMB}} MB</td>
+												</tr>
+											{{end}}
+										{{end}}
+									</table>
+								{{end}}
+							</div>
+
+							<h4>Event Logs</h4>
+							<table class="panel log">
+								{{range (index .TaskStates $name).Events}}
+									<tr>
+										<td class="time">{{(timeUnixNano .Time).Format "2006-01-02 15:04:05"}}</td>
+										{{if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting"}}
+											<td class="line">{{.DisplayMessage}}</td>
+										{{else if eq .Type "Not Restarting"}}
+											<td class="line">{{.Type}}: {{.DisplayMessage}}</td>
+										{{else if eq .Type "Terminated"}}
+											<td class="line">
+												{{.Type}}:
+												{{range $key, $value := .Details -}}
+													{{$key}}: {{$value}},
+												{{end}}
+											</td>
+										{{else}}
+											<td>
+												<table class="table">
+													<tr>
+														<td>type</td>
+														<td>details</td>
+														<td>disk_limit</td>
+														<td>display_message</td>
+														<td>download_error</td>
+														<td>driver_error</td>
+														<td>driver_message</td>
+														<td>exit_code</td>
+														<td>failed_sibling</td>
+														<td>fails_task</td>
+														<td>generic_source</td>
+														<td>kill_error</td>
+														<td>kill_reason</td>
+														<td>kill_timeout</td>
+														<td>message</td>
+														<td>restart_reason</td>
+														<td>setup_error</td>
+														<td>signal</td>
+														<td>start_delay</td>
+														<td>task_signal</td>
+														<td>task_signal_reason</td>
+														<td>validation_error</td>
+														<td>vault_error</td>
+													</tr>
+													<tr>
+														<td>{{.Type}}</td>
+														<td>
+															{{range $key, $value := .Details}}
+																{{$key}}: {{$value}}<br/>
+															{{end}}
+														</td>
+														<td>{{.DiskLimit}}</td>
+														<td>{{.DisplayMessage}}</td>
+														<td>{{.DownloadError}}</td>
+														<td>{{.DriverError}}</td>
+														<td>{{.DriverMessage}}</td>
+														<td>{{.ExitCode}}</td>
+														<td>{{.FailedSibling}}</td>
+														<td>{{.FailsTask}}</td>
+														<td>{{.GenericSource}}</td>
+														<td>{{.KillError}}</td>
+														<td>{{.KillReason}}</td>
+														<td>{{.KillTimeout}}</td>
+														<td>{{.Message}}</td>
+														<td>{{.RestartReason}}</td>
+														<td>{{.SetupError}}</td>
+														<td>{{.Signal}}</td>
+														<td>{{.StartDelay}}</td>
+														<td>{{.TaskSignal}}</td>
+														<td>{{.TaskSignalReason}}</td>
+														<td>{{.ValidationError}}</td>
+														<td>{{.VaultError}}</td>
+													</tr>
+												</table>
+											</td>
+										{{end}}
+									</tr>
+								{{end}}
+							</table>
+						{{end}}
+
+						<h4>Task Logs</h4>
+
+						{{if .Logs.Stdout}}
+							<table class="panel log">
+								{{range .Logs.Stdout}}
+									<tr>
+										<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
+										<td class="line">{{.Text}}</td>
+									</tr>
+								{{end}}
+							</table>
+						{{end}}
+
+						{{if .Logs.Stderr}}
+							<table class="panel log">
+								{{range .Logs.Stderr}}
+									<tr class="stderr">
+										<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
+										<td class="line">{{.Text}}</td>
+									</tr>
+								{{end}}
+							</table>
+						{{end}}
+					{{end}}
+				</div>
+			{{end}}
+		</div>
+	</div>
+
+	<style>
+	#{{$scope}} {
+		display: flex;
+		flex-direction: column;
+	}
+
+	#{{$scope}} > iframe {
+		flex-grow: 1;
+		padding: 1%;
+		min-height: 33vh;
+	}
+
+	#{{$scope}} ul.graph-types {
+		display: flex;
+		list-style: none;
+		gap: 1%;
+	}
+
+	#{{$scope}} .action-tables {
+		display: flex;
+		flex-wrap: wrap;
+	}
+
+	#{{$scope}} .action-tables > table {
+		margin: 1em;
+	}
+
+	#{{$scope}} table.log > tbody > tr > td:first-child {
+		border-right: 2px solid var(--border);
+		padding-right: .5em;
+	}
+
+	#{{$scope}} table.log > tbody > tr > td:nth-child(2) {
+		padding-left: .5em;
+	}
+
+	#{{$scope}} td.time, td.line {
+		font-size: 0.7em;
+	}
+
+	#{{$scope}} td.time {
+		white-space: nowrap;
+		user-select: none;
+		width: 7em;
+	}
+
+	#{{$scope}} td.line {
+		font-family: "SFMono-Regular", Monaco, Menlo, Consolas, "Liberation Mono", Courier, monospace;
+		white-space: pre-wrap;
+		vertical-align: middle;
+		word-break: break-word;
+		overflow-wrap: break-word;
+	}
+
+	#{{$scope}} .stderr {
+		color: red;
+	}
+	</style>
+{{end}}

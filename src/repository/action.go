@@ -19,7 +19,7 @@ type ActionRepository interface {
 	GetByNameAndWorkflowId(string, uint64) (model.ActionInstance, error)
 	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, uuid.UUID, model.ActionInstance) error
+	Update(pgx.Tx, model.ActionInstance) error
 }
 
 func NewActionRepository(db *pgxpool.Pool) ActionRepository {
@@ -56,16 +56,16 @@ func (a actionRepository) GetAll() (instances []*model.ActionInstance, err error
 func (a actionRepository) Save(tx pgx.Tx, action *model.ActionInstance) error {
 	return tx.QueryRow(
 		context.Background(),
-		`INSERT INTO action_instances (workflow_instance_id, name, certs) VALUES ($1, $2, $3) RETURNING id`,
-		action.WorkflowInstanceId, action.Name, action.Certs,
+		`INSERT INTO action_instances (workflow_instance_id, name, facts) VALUES ($1, $2, $3) RETURNING id`,
+		action.WorkflowInstanceId, action.Name, action.Facts,
 	).Scan(&action.ID)
 }
 
-func (a actionRepository) Update(tx pgx.Tx, id uuid.UUID, action model.ActionInstance) (err error) {
+func (a actionRepository) Update(tx pgx.Tx, action model.ActionInstance) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
-		`UPDATE action_instances SET finished_at = $2, updated_at = $3, certs = $4 WHERE id = $1`,
-		id, action.FinishedAt, action.UpdatedAt, action.Certs,
+		`UPDATE action_instances SET finished_at = $2, updated_at = $3, facts = $4 WHERE id = $1`,
+		action.ID, action.FinishedAt, action.UpdatedAt, action.Facts,
 	)
 	return
 }

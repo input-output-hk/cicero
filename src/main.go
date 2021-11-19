@@ -1,26 +1,19 @@
 package cicero
 
 import (
+	"os"
+
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/model"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"os"
 )
 
-var DB *pgxpool.Pool
-var nomadClient *nomad.Client
+func NewDb() (db *pgxpool.Pool, err error) {
+	db, err = model.DBConnection(os.Getenv("DATABASE_URL"))
+	return
+}
 
-func Init() error {
-	var err error
-	DB, err = model.DBConnection(os.Getenv("DATABASE_URL"))
-	if err != nil {
-		return err
-	}
-
-	nomadClient, err = nomad.NewClient(nomad.DefaultConfig())
-	if err != nil {
-		return err
-	}
-
-	return nil
+func NewNomadClient() (client *nomad.Client, err error) {
+	client, err = nomad.NewClient(nomad.DefaultConfig())
+	return
 }

@@ -23,38 +23,38 @@ import (
 
 type ActionService interface {
 	GetById(uuid.UUID) (model.ActionInstance, error)
-	GetByNameAndWorkflowId(string, uint64) (model.ActionInstance, error)
+	GetByNameAndWorkflowId(name string, workflowId uint64) (model.ActionInstance, error)
 	GetAll() ([]*model.ActionInstance, error)
 	Save(pgx.Tx, *model.ActionInstance) error
-	Update(pgx.Tx, uuid.UUID, model.ActionInstance) error
+	Update(pgx.Tx, model.ActionInstance) error
 	JobLogs(uuid.UUID) (*LokiOutput, error)
-	ActionLogs(string, string) (*LokiOutput, error)
+	ActionLogs(allocId string, taskGroup string) (*LokiOutput, error)
 }
 
-type ActionServiceImpl struct {
+type actionService struct {
 	logger           *log.Logger
 	actionRepository repository.ActionRepository
 	prometheus       prometheus.Client
 }
 
 func NewActionService(db *pgxpool.Pool, prometheusAddr string) ActionService {
-	impl := ActionServiceImpl{
+	impl := actionService{
 		logger:           log.New(os.Stderr, "ActionService: ", log.LstdFlags),
 		actionRepository: repository.NewActionRepository(db),
 	}
 
-	if prometheus, err := prometheus.NewClient(prometheus.Config{
+	if prom, err := prometheus.NewClient(prometheus.Config{
 		Address: prometheusAddr,
 	}); err != nil {
 		impl.logger.Fatal(err.Error())
 	} else {
-		impl.prometheus = prometheus
+		impl.prometheus = prom
 	}
 
 	return &impl
 }
 
-func (self *ActionServiceImpl) GetById(id uuid.UUID) (action model.ActionInstance, err error) {
+func (self *actionService) GetById(id uuid.UUID) (action model.ActionInstance, err error) {
 	log.Printf("Get Action by id %s", id)
 	action, err = self.actionRepository.GetById(id)
 	if err != nil {
@@ -63,7 +63,7 @@ func (self *ActionServiceImpl) GetById(id uuid.UUID) (action model.ActionInstanc
 	return
 }
 
-func (self *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId uint64) (action model.ActionInstance, err error) {
+func (self *actionService) GetByNameAndWorkflowId(name string, workflowId uint64) (action model.ActionInstance, err error) {
 	log.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = self.actionRepository.GetByNameAndWorkflowId(name, workflowId)
 	if err != nil && !pgxscan.NotFound(err) {
@@ -72,12 +72,12 @@ func (self *ActionServiceImpl) GetByNameAndWorkflowId(name string, workflowId ui
 	return
 }
 
-func (self *ActionServiceImpl) GetAll() ([]*model.ActionInstance, error) {
+func (self *actionService) GetAll() ([]*model.ActionInstance, error) {
 	log.Printf("Get all Actions")
 	return self.actionRepository.GetAll()
 }
 
-func (self *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) error {
+func (self *actionService) Save(tx pgx.Tx, action *model.ActionInstance) error {
 	log.Printf("Saving new Action %#v", action)
 	if err := self.actionRepository.Save(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Action")
@@ -86,12 +86,12 @@ func (self *ActionServiceImpl) Save(tx pgx.Tx, action *model.ActionInstance) err
 	return nil
 }
 
-func (self *ActionServiceImpl) Update(tx pgx.Tx, id uuid.UUID, action model.ActionInstance) error {
-	log.Printf("Update Action %#v with id %s", action, id)
-	if err := self.actionRepository.Update(tx, id, action); err != nil {
-		return errors.WithMessagef(err, "Couldn't update Action with id: %s", id)
+func (self *actionService) Update(tx pgx.Tx, action model.ActionInstance) error {
+	log.Printf("Update Action %s", action.ID.String())
+	if err := self.actionRepository.Update(tx, action); err != nil {
+		return errors.WithMessagef(err, "Couldn't update Action with id: %s", action.ID)
 	}
-	log.Printf("Updated Action %#v with id %s", action, id)
+	log.Printf("Updated Action %s", action.ID.String())
 	return nil
 }
 
@@ -105,22 +105,22 @@ type LokiOutput struct {
 	Stdout []LokiLine
 }
 
-func (self *ActionServiceImpl) JobLogs(nomadJobID uuid.UUID) (*LokiOutput, error) {
+func (self *actionService) JobLogs(nomadJobID uuid.UUID) (*LokiOutput, error) {
 	return self.LokiQueryRange(fmt.Sprintf(
-		`{nomad_job_id="%s"}`,
+		`{nomad_job_id=%q}`,
 		nomadJobID.String(),
 	))
 }
 
-func (self *ActionServiceImpl) ActionLogs(allocID string, taskGroup string) (*LokiOutput, error) {
+func (self *actionService) ActionLogs(allocID, taskGroup string) (*LokiOutput, error) {
 	return self.LokiQueryRange(fmt.Sprintf(
-		`{nomad_alloc_id="%s",nomad_task_group="%s"}`,
+		`{nomad_alloc_id=%q,nomad_task_group=%q}`,
 		allocID,
 		taskGroup,
 	))
 }
 
-func (self *ActionServiceImpl) LokiQueryRange(query string) (*LokiOutput, error) {
+func (self *actionService) LokiQueryRange(query string) (*LokiOutput, error) {
 	linesToFetch := 10000
 	// TODO: figure out the correct value for our infra, 5000 is the default
 	// configuration in loki
@@ -137,7 +137,7 @@ func (self *ActionServiceImpl) LokiQueryRange(query string) (*LokiOutput, error)
 		req, err := http.NewRequest(
 			"GET",
 			self.prometheus.URL("/loki/api/v1/query_range", nil).String(),
-			nil,
+			http.NoBody,
 		)
 		if err != nil {
 			return output, err
@@ -155,6 +155,10 @@ func (self *ActionServiceImpl) LokiQueryRange(query string) (*LokiOutput, error)
 		fmt.Println(req)
 
 		done, body, err := self.prometheus.Do(ctx, req)
+		if err != nil {
+			return output, errors.WithMessage(err, "Failed to talk with loki")
+		}
+
 		if done.StatusCode/100 != 2 {
 			return output, fmt.Errorf("Error response %d from Loki: %s (%v)", done.StatusCode, string(body), err)
 		}
@@ -180,7 +184,7 @@ func (self *ActionServiceImpl) LokiQueryRange(query string) (*LokiOutput, error)
 
 			for _, entry := range stream.Entries {
 				if ok && source == "stderr" {
-					output.Stdout = append(output.Stdout, LokiLine{entry.Timestamp, entry.Line})
+					output.Stderr = append(output.Stderr, LokiLine{entry.Timestamp, entry.Line})
 				} else {
 					output.Stdout = append(output.Stdout, LokiLine{entry.Timestamp, entry.Line})
 				}

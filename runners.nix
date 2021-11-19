@@ -11,10 +11,9 @@ let
         prev.lib.makeBinPath
         (with final; [ coreutils gnutar xz liftbridge-cli ])
       }"
-      export CICERO_SCRIPT="$1"
+      export CICERO_SCRIPT=$(< "$1")
       exec ${drv}
     '';
-
 in {
   run-bash = runner (prev.writers.writeBash drvName ''
     eval "$CICERO_SCRIPT"

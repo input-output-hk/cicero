@@ -1,4 +1,4 @@
-package cicero
+package web
 
 import (
 	"errors"
@@ -123,15 +123,16 @@ func RenderWorkflowGraphInputs(wf model.WorkflowDefinition, instance *model.Work
 				SymbolSize: symbolSize,
 			}
 			if instance != nil {
-				for cert := range instance.Certs {
-					if cert == input {
-						node.Symbol = "diamond"
-						node.Category = 1
-						node.Y = 0
-						node.X = 0
-						node.SymbolSize = symbolSize * 1.5
-						break
+				for fact := range instance.Facts {
+					if fact != input {
+						continue
 					}
+					node.Symbol = "diamond"
+					node.Category = 1
+					node.Y = 0
+					node.X = 0
+					node.SymbolSize = symbolSize * 1.5
+					break
 				}
 			}
 
