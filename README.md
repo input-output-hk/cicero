@@ -38,7 +38,7 @@ Migrate the database:
 
 Run the application:
 
-    go run . all
+    go run . start
 
 Access WebUI:
 
