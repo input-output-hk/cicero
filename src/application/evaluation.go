@@ -3,7 +3,7 @@ package application
 import (
 	"encoding/json"
 	"fmt"
-	
+
 	"log"
 	"os"
 	"os/exec"
@@ -80,9 +80,9 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 		if job, err := json.Marshal(action.Job); err != nil {
 			return def, err
 		} else if job, err := jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
-			Body:     []byte(`{"job":` + string(job) + "}"),
-			AllowFS:  false,
-			Strict:   true,
+			Body:    []byte(`{"job":` + string(job) + "}"),
+			AllowFS: false,
+			Strict:  true,
 		}); err != nil {
 			return def, err
 		} else {
