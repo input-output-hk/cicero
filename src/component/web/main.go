@@ -46,7 +46,7 @@ func (self *Web) Start(ctx context.Context) error {
 				return
 			} else {
 				writeSuccessLogs("Return summary of workflows", self.Logger)
-				makeViewTemplate("workflow/").Execute(w, summary)
+				makeViewTemplate("workflow").Execute(w, summary)
 				return
 			}
 		} else {
@@ -476,6 +476,8 @@ func (self *Web) Start(ctx context.Context) error {
 		writeSuccessLogs("Return from wildcard route", self.Logger)
 		makeViewTemplate(route).Execute(w, mux.Vars)
 	}).Methods("GET")
+
+	router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("src/component/web/static"))))
 
 	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		writeSuccessLogs("Return index.html", self.Logger)

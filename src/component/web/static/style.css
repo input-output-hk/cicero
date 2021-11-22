@@ -1,0 +1,63 @@
+html {
+	background: cornsilk;
+	--accent: burlywood;
+	--accent-rgb: 222, 184, 135;
+	--border: gainsboro;
+	--border-rgb: 220, 220, 220;
+
+	font-family: Sans-Serif;
+}
+
+table.table {
+	border-spacing: 0;
+	border-collapse: collapse;
+}
+
+table.table th,
+table.table td {
+	border: 3px solid var(--border);
+	padding: .5em;
+}
+table.table tr:nth-child(even) {
+	background: var(--border);
+}
+
+button.link {
+	background: none !important;
+	border: none;
+	padding: 0 !important;
+	color: #069;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.panel {
+	border: 5px groove var(--border);
+}
+
+.tabs {
+	display: grid;
+	grid-template-rows: auto 1fr;
+}
+.tabs > label {
+	grid-row: 1;
+	border-bottom: 1px solid var(--border);
+	text-align: center;
+	border-radius: 5px 5px 0 0;
+}
+.tabs > input {
+	display: none;
+}
+.tabs > input:checked + label {
+	border: 2px solid var(--border);
+	border-bottom: none;
+	background: linear-gradient(to bottom, rgba(var(--accent-rgb), 25%), rgba(var(--accent-rgb), 0%));
+}
+.tabs > div {
+	grid-row: 2;
+	grid-column: 1 / calc(var(--num-tabs) + 1);
+	display: none;
+}
+.tabs > input:checked + label + div {
+	display: block;
+}
