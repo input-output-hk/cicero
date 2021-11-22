@@ -21,7 +21,6 @@ type StartCmd struct {
 
 	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
 	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluator      string   `arg:"--evaluator" default:"cicero-evaluator-nix"`
 	Env            []string `arg:"--env"`
 
 	WebListen string `arg:"--web-listen" default:":8080"`
@@ -86,7 +85,7 @@ func (cmd *StartCmd) Run() error {
 	})
 
 	evaluationService := once(func() interface{} {
-		return application.NewEvaluationService(cmd.Evaluator, cmd.Env)
+		return application.NewEvaluationService(cmd.Env)
 	})
 	messageQueueService := once(func() interface{} {
 		if bridge, err := application.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {

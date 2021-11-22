@@ -1,14 +1,18 @@
 package application
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
+	getter "github.com/hashicorp/go-getter/v2"
 	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/pkg/errors"
@@ -19,17 +23,70 @@ type EvaluationService interface {
 	ListWorkflows(src string) ([]string, error)
 }
 
-type evaluationService struct {
-	Command string
-	Env     []string // NAME=VALUE or just NAME to inherit from process environment
-	logger  *log.Logger
+func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
+	fetchUrl, err = url.Parse(src)
+	if err != nil {
+		return
+	}
+
+	evaluator = fetchUrl.Fragment
+	fetchUrl.Fragment = ""
+	fetchUrl.RawFragment = ""
+
+	if evaluator == "" {
+		err = errors.New("No evaluator given in workflow source: " + src)
+		return
+	}
+
+	return
 }
 
-func NewEvaluationService(command string, env []string) EvaluationService {
+type evaluationService struct {
+	Env    []string // NAME=VALUE or just NAME to inherit from process environment
+	logger *log.Logger
+}
+
+func NewEvaluationService(env []string) EvaluationService {
 	return &evaluationService{
-		Command: command,
-		Env:     env,
-		logger:  log.New(os.Stderr, "evaluationService: ", log.LstdFlags),
+		Env:    env,
+		logger: log.New(os.Stderr, "evaluationService: ", log.LstdFlags),
+	}
+}
+
+func (e *evaluationService) evaluate(src string, command string, extraEnv ...string) ([]byte, error) {
+	fetchUrl, evaluator, err := parseSource(src)
+	if err != nil {
+		return nil, err
+	}
+
+	cacheDir := os.Getenv("CICERO_CACHE_DIR")
+	if cacheDir == "" {
+		cacheDir = ".cache"
+	}
+
+	dst, err := filepath.Abs(cacheDir + "/" + base64.RawURLEncoding.EncodeToString([]byte(src)))
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := getter.GetAny(context.Background(), dst, fetchUrl.String())
+	if err != nil {
+		return nil, err
+	}
+	if result.Dst != dst {
+		return nil, errors.WithMessage(err, "go-getter did not download to the given directory. This should never happen™")
+	}
+
+	cmd := exec.Command("cicero-evaluator-"+evaluator, command)
+	extraEnv = append(extraEnv, "CICERO_WORKFLOW_SRC="+dst)
+	cmd.Env = append(os.Environ(), extraEnv...)
+
+	e.logger.Printf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
+
+	if output, err := cmd.Output(); err != nil {
+		return nil, errors.WithMessagef(err, "Failed to evaluate. Output: %s", output)
+	} else {
+		return output, err
 	}
 }
 
@@ -41,24 +98,13 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 		return def, errors.WithMessagef(err, "Could not marshal workflow inputs to json: %s", inputs)
 	}
 
-	cmd := exec.Command(
-		e.Command,
-		"eval",
+	output, err := e.evaluate(src, "eval",
+		"CICERO_WORKFLOW_NAME="+name,
+		"CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id),
+		"CICERO_WORKFLOW_INPUTS="+string(inputsJson),
 	)
-	extraEnv := []string{
-		"CICERO_WORKFLOW_SRC=" + src,
-		"CICERO_WORKFLOW_NAME=" + name,
-		"CICERO_WORKFLOW_INSTANCE_ID=" + fmt.Sprintf("%d", id),
-		"CICERO_WORKFLOW_INPUTS=" + string(inputsJson),
-	}
-	cmd.Env = append(os.Environ(), extraEnv...)
-
-	e.logger.Printf("running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
-	output, err := cmd.Output()
-
 	if err != nil {
-		e.logger.Println(string(output))
-		return def, errors.WithMessage(err, "Failed to evaluate workflow")
+		return def, err
 	}
 
 	freeformDef := struct {
@@ -123,24 +169,13 @@ func (e *evaluationService) addEnv(def *domain.WorkflowDefinition) {
 }
 
 func (e *evaluationService) ListWorkflows(src string) ([]string, error) {
-	var names []string
-
-	cmd := exec.Command(
-		e.Command,
-		"list",
-	)
-	extraEnv := []string{"CICERO_WORKFLOW_SRC=" + src}
-	cmd.Env = append(os.Environ(), extraEnv...)
-
-	e.logger.Printf("running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
-	output, err := cmd.Output()
-
+	output, err := e.evaluate(src, "list")
 	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to list workflows")
+		return nil, err
 	}
 
-	err = json.Unmarshal(output, &names)
-	if err != nil {
+	var names []string
+	if err := json.Unmarshal(output, &names); err != nil {
 		e.logger.Println(string(output))
 		return nil, errors.WithMessage(err, "While unmarshaling workflow names")
 	}
