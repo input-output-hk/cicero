@@ -3,12 +3,14 @@ package application
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/input-output-hk/cicero/src/domain"
+	
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/hashicorp/nomad/jobspec2"
+	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/pkg/errors"
 )
 
@@ -59,10 +61,42 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 		return def, errors.WithMessage(err, "Failed to evaluate workflow")
 	}
 
-	err = json.Unmarshal(output, &def)
+	freeformDef := struct {
+		domain.WorkflowDefinition
+		Actions map[string]struct {
+			domain.WorkflowAction
+			Job interface{} `json:"job"`
+		} `json:"actions"`
+	}{}
+
+	err = json.Unmarshal(output, &freeformDef)
 	if err != nil {
 		e.logger.Println(string(output))
-		return def, errors.WithMessage(err, "While unmarshaling WorkflowDefinition")
+		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
+	}
+
+	def.Actions = map[string]*domain.WorkflowAction{}
+	for actionName, action := range freeformDef.Actions {
+		if job, err := json.Marshal(action.Job); err != nil {
+			return def, err
+		} else if job, err := jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
+			Body:     []byte(`{"job":` + string(job) + "}"),
+			AllowFS:  false,
+			Strict:   true,
+		}); err != nil {
+			return def, err
+		} else {
+			def.Name = freeformDef.Name
+			def.Source = freeformDef.Source
+			def.Meta = freeformDef.Meta
+			def.Actions[actionName] = &domain.WorkflowAction{
+				Failure: action.Failure,
+				Success: action.Success,
+				Inputs:  action.Inputs,
+				When:    action.When,
+				Job:     *job,
+			}
+		}
 	}
 
 	e.addEnv(&def)
