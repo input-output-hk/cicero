@@ -27,7 +27,8 @@ in rec {
   callWorkflow = workflow:
     { id ? null, inputs ? { } }:
     let
-      inherit (builtins) all attrNames attrValues fromJSON functionArgs typeOf;
+      inherit (builtins)
+        all attrNames attrValues fromJSON functionArgs typeOf mapAttrs;
 
       parsedInputs = {
         "set" = inputs;
@@ -35,37 +36,28 @@ in rec {
       }.${typeOf inputs};
 
       importedWorkflow =
-        if builtins.isFunction workflow then workflow else (import workflow);
+        if builtins.isFunction workflow then workflow else import workflow;
 
-      hydrateNomadJob = { workflowName, actionName, job }:
+      hydrateNomadJob = mapAttrs (k: job:
         assert !(job ? ID); # workflow authors must not set an ID
-        lib.recursiveUpdate job {
-          Name = "${workflowName}/${actionName}";
-
+        lib.recursiveUpdate job ({
           type = "batch";
-
-          TaskGroups = map (group:
-            lib.recursiveUpdate group {
-              Name = actionName;
-
-              Tasks = map (task:
-                lib.recursiveUpdate {
-                  Name = actionName;
-                  Driver = "nix";
-                  Config = task.Config;
-                } task) group.Tasks;
-            }) job.TaskGroups;
-        };
+        } // lib.optionalAttrs (job ? group) {
+          group = mapAttrs (k: group:
+            lib.recursiveUpdate group (lib.optionalAttrs (group ? task) {
+              task =
+                mapAttrs (k: task: lib.recursiveUpdate { driver = "nix"; } task)
+                group.task;
+            })) job.group;
+        }));
 
       mkActionState = { workflowName, actionName, job, inputs, when ? { }
         , success ? { ${actionName} = true; }
         , failure ? { ${actionName} = false; } }: {
           inherit when inputs success failure;
           job = hydrateNomadJob {
-            inherit workflowName actionName;
-            job = {
-              TaskGroups = [ ];
-            } // lib.optionalAttrs (all (x: x == true) (attrValues when)) job;
+            "${workflowName}/${actionName}" =
+              lib.optionalAttrs (all (x: x == true) (attrValues when)) job;
           };
         };
 
@@ -85,21 +77,24 @@ in rec {
               workflowName = name;
             } // (action filteredInputs));
 
-          transformedActions = lib.mapAttrs transformAction actions;
+          transformedActions = mapAttrs transformAction actions;
         in {
           inherit name version meta;
           actions = transformedActions;
         };
 
-      run = language: options: script: {
-        TaskGroups = [{
-          Tasks = [{
-            Resources = {
-              MemoryMB = options.memory or 300;
-              CPU = options.cpu or null;
-              Cores = options.cores or null;
+      run = language: options: script:
+        let groupAndTaskName = "run-${language}";
+        in {
+          group.${options.group or groupAndTaskName}.task.${
+            options.task or groupAndTaskName
+          } = {
+            resources = {
+              memory = options.memory or 300;
+              cpu = options.cpu or null;
+              cores = options.cores or null;
             };
-            Config = let runner = "run-${language}";
+            config = let runner = "run-${language}";
             in {
               packages = [ "github:input-output-hk/cicero/main#${runner}" ]
                 ++ (options.packages or [ ]);
@@ -112,15 +107,14 @@ in rec {
                 "/local/script"
               ];
             };
-            Templates = [{
-              DestPath = "local/script";
-              LeftDelim = "";
-              RightDelim = "";
-              EmbeddedTmpl = script;
+            template = [{
+              destination = "local/script";
+              left_delimiter = "";
+              right_delimiter = "";
+              data = script;
             }];
-          }];
-        }];
-      };
+          };
+        };
     in transformWorkflow (importedWorkflow { inherit id run; });
 
   # Recurses through a directory, considering every file a workflow.
@@ -144,15 +138,15 @@ in rec {
 
   # Like `listWorkflows` but calls every workflow.
   callWorkflows = dir:
-    lib.mapAttrs (name: wf:
+    builtins.mapAttrs (name: wf:
       let wfWithName = workflowWithDefaults { inherit name; } (import wf);
       in callWorkflow wfWithName) (listWorkflows dir);
 
   callWorkflowsWithDefaults = defaults: dir:
-    lib.mapAttrs (k: workflowWithDefaults defaults) (callWorkflows dir);
+    builtins.mapAttrs (k: workflowWithDefaults defaults) (callWorkflows dir);
 
   workflowWithDefaults = defaults: innerWorkflow: args:
     defaults
-    // lib.mapAttrs (k: v: if v == null then defaults.${k} or null else v)
+    // builtins.mapAttrs (k: v: if v == null then defaults.${k} or null else v)
     (innerWorkflow args);
 }
