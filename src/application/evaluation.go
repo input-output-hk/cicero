@@ -128,7 +128,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 
 	freeformDef := struct {
 		domain.WorkflowDefinition
-		Actions map[string]struct {
+		Actions map[string]*struct {
 			domain.WorkflowAction
 			Job interface{} `json:"job"`
 		} `json:"actions"`
