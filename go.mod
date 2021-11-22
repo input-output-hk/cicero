@@ -22,6 +22,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/uptrace/bunrouter v1.0.0-rc.2
 	github.com/vivek-ng/concurrency-limiter v0.8.2
+	github.com/adrg/xdg v0.4.0
 )
 
 require (

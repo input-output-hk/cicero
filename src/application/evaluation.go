@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/pkg/errors"
+	"github.com/adrg/xdg"
 )
 
 type EvaluationService interface {
@@ -61,8 +62,9 @@ func (e *evaluationService) evaluate(src string, command string, extraEnv ...str
 
 	cacheDir := os.Getenv("CICERO_CACHE_DIR")
 	if cacheDir == "" {
-		cacheDir = ".cache"
+		cacheDir = xdg.CacheHome + "/cicero"
 	}
+	cacheDir += "/sources"
 
 	dst, err := filepath.Abs(cacheDir + "/" + base64.RawURLEncoding.EncodeToString([]byte(src)))
 	if err != nil {
