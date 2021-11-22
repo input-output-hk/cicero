@@ -45,8 +45,8 @@ func (self *Web) Start(ctx context.Context) error {
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 				return
 			} else {
-				writeSuccessLogs(w, "Return summary of workflows", http.StatusOK, self.Logger)
-				makeViewTemplate("workflow").Execute(w, summary)
+				writeSuccessLogs("Return summary of workflows", self.Logger)
+				makeViewTemplate("workflow/").Execute(w, summary)
 				return
 			}
 		} else {
@@ -55,7 +55,7 @@ func (self *Web) Start(ctx context.Context) error {
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 				return
 			} else {
-				writeSuccessLogs(w, "Return workflow/index-name.html", http.StatusOK, self.Logger)
+				writeSuccessLogs("Return workflow/index-name.html", self.Logger)
 				makeViewTemplate("workflow/index-name.html").Execute(w, map[string]interface{}{
 					"Name":      name,
 					"Instances": instances,
@@ -106,13 +106,13 @@ func (self *Web) Start(ctx context.Context) error {
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 				return
 			}
-			http.Redirect(w, req, "/workflow", 302)
+			http.Redirect(w, req, "/workflow/", 302)
 			return
 		}
 
 		// step 3
 		if len(name) > 0 {
-			writeSuccessLogs(w, "Return workflow/new.html", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return workflow/new.html", self.Logger)
 			makeViewTemplate(templateName).Execute(w, map[string]interface{}{
 				"Source": source,
 				"Name":   name,
@@ -126,7 +126,7 @@ func (self *Web) Start(ctx context.Context) error {
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
 		} else {
-			writeSuccessLogs(w, "Return workflow/new.html", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return workflow/new.html", self.Logger)
 			makeViewTemplate(templateName).Execute(w, map[string]interface{}{
 				"Source": source,
 				"Names":  names,
@@ -162,7 +162,7 @@ func (self *Web) Start(ctx context.Context) error {
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 				return
 			}
-			writeSuccessLogs(w, "Return workflow/[id].html", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return workflow/[id].html", self.Logger)
 			makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
 				"Instance":   instance,
 				"graph":      req.URL.Query().Get("graph"),
@@ -235,7 +235,8 @@ func (self *Web) Start(ctx context.Context) error {
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
 		} else {
-			writeSuccessLogs(w, "Return workflows to client", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return workflows to client", self.Logger)
+			prepareJsonResponse(w, 200)
 			json.NewEncoder(w).Encode(wfs)
 		}
 	}).Methods("GET")
@@ -268,7 +269,8 @@ func (self *Web) Start(ctx context.Context) error {
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
 		} else {
-			writeSuccessLogs(w, "Return evaluated workflow to client", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return evaluated workflow to client", self.Logger)
+			prepareJsonResponse(w, 200)
 			json.NewEncoder(w).Encode(wf)
 		}
 	}).Methods("GET")
@@ -281,7 +283,8 @@ func (self *Web) Start(ctx context.Context) error {
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
 		} else {
-			writeSuccessLogs(w, "Return all workflow services", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return all workflow services", self.Logger)
+			prepareJsonResponse(w, 200)
 			json.NewEncoder(w).Encode(instances)
 		}
 	}).Methods("GET")
@@ -321,8 +324,7 @@ func (self *Web) Start(ctx context.Context) error {
 			}
 		}
 
-		writeSuccessLogs(w, "Started workflow service successfully", 204, self.Logger)
-		w.WriteHeader(204)
+		writeSuccessLogs("Started workflow service successfully", self.Logger)
 	}).Methods("POST")
 
 	apiWorkflowInstanceRouter.HandleFunc("/{id}", func(w http.ResponseWriter, req *http.Request) {
@@ -344,7 +346,8 @@ func (self *Web) Start(ctx context.Context) error {
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
 		} else {
-			writeSuccessLogs(w, "Return workflow service", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return workflow service", self.Logger)
+			prepareJsonResponse(w, 200)
 			json.NewEncoder(w).Encode(instance)
 		}
 
@@ -387,7 +390,7 @@ func (self *Web) Start(ctx context.Context) error {
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 				return
 			}
-			writeSuccessLogs(w, "Published fact successfully", 204, self.Logger)
+			writeSuccessLogs("Published fact successfully", self.Logger)
 			w.WriteHeader(204)
 		}
 	}).Methods("POST")
@@ -400,7 +403,8 @@ func (self *Web) Start(ctx context.Context) error {
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
 		} else {
-			writeSuccessLogs(w, "Return all action services", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return all action services", self.Logger)
+			prepareJsonResponse(w, 200)
 			json.NewEncoder(w).Encode(actions)
 		}
 	}).Methods("GET")
@@ -424,7 +428,8 @@ func (self *Web) Start(ctx context.Context) error {
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
 		} else {
-			writeSuccessLogs(w, "Return action service", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return action service", self.Logger)
+			prepareJsonResponse(w, 200)
 			json.NewEncoder(w).Encode(action)
 		}
 	}).Methods("GET")
@@ -451,7 +456,8 @@ func (self *Web) Start(ctx context.Context) error {
 				return
 			}
 
-			writeSuccessLogs(w, "Return job logs", http.StatusOK, self.Logger)
+			writeSuccessLogs("Return job logs", self.Logger)
+			prepareJsonResponse(w, 200)
 			json.NewEncoder(w).Encode(map[string]*service.LokiOutput{"logs": logs})
 		}
 	}).Methods("GET")
@@ -467,13 +473,13 @@ func (self *Web) Start(ctx context.Context) error {
 		if mimeType := mime.TypeByExtension(path.Ext(route)); mimeType != "" {
 			w.Header()["Content-Type"] = []string{mimeType}
 		}
-		writeSuccessLogs(w, "Return from wildcard route", http.StatusOK, self.Logger)
+		writeSuccessLogs("Return from wildcard route", self.Logger)
 		makeViewTemplate(route).Execute(w, mux.Vars)
 	}).Methods("GET")
 
 	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		writeSuccessLogs("Return index.html", self.Logger)
 		makeViewTemplate("index.html").Execute(w, nil)
-		writeSuccessLogs(w, "Return index.html", http.StatusOK, self.Logger)
 	}).Methods("GET")
 
 	server := &http.Server{Addr: self.Listen, Handler: router}
@@ -590,9 +596,12 @@ func writeHttpErrorAndLogs(w http.ResponseWriter, err error, httpStatusCode int,
 	logger.Println(err.Error())
 }
 
-func writeSuccessLogs(w http.ResponseWriter, msg string, httpStatusCode int, logger *log.Logger) {
-	// TODO Implement different Log Levels (Info, Warning, Error etc.)
+func prepareJsonResponse(w http.ResponseWriter, httpStatus int) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(httpStatus)
+}
+
+func writeSuccessLogs(msg string, logger *log.Logger) {
+	// TODO Implement different Log Levels (Info, Warning, Error etc.)
 	logger.Println(msg)
 }
