@@ -1,15 +1,15 @@
 package cicero
 
 import (
+	"github.com/input-output-hk/cicero/src/domain"
 	"os"
 
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/model"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 func NewDb() (db *pgxpool.Pool, err error) {
-	db, err = model.DBConnection(os.Getenv("DATABASE_URL"))
+	db, err = domain.DBConnection(os.Getenv("DATABASE_URL"))
 	return
 }
 

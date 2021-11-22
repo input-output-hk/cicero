@@ -1,4 +1,4 @@
-package model
+package domain
 
 var BuildInfo struct {
 	Version string

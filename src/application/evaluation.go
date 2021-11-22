@@ -1,20 +1,21 @@
-package service
+package application
 
 import (
 	"encoding/json"
 	"fmt"
+	
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/hashicorp/nomad/jobspec2"
-	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/pkg/errors"
 )
 
 type EvaluationService interface {
-	EvaluateWorkflow(src string, name string, id uint64, inputs model.Facts) (model.WorkflowDefinition, error)
+	EvaluateWorkflow(src string, name string, id uint64, inputs domain.Facts) (domain.WorkflowDefinition, error)
 	ListWorkflows(src string) ([]string, error)
 }
 
@@ -32,8 +33,8 @@ func NewEvaluationService(command string, env []string) EvaluationService {
 	}
 }
 
-func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs model.Facts) (model.WorkflowDefinition, error) {
-	var def model.WorkflowDefinition
+func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs domain.Facts) (domain.WorkflowDefinition, error) {
+	var def domain.WorkflowDefinition
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
@@ -61,9 +62,9 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 	}
 
 	freeformDef := struct {
-		model.WorkflowDefinition
+		domain.WorkflowDefinition
 		Actions map[string]struct {
-			model.WorkflowAction
+			domain.WorkflowAction
 			Job interface{} `json:"job"`
 		} `json:"actions"`
 	}{}
@@ -74,7 +75,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
 	}
 
-	def.Actions = map[string]*model.WorkflowAction{}
+	def.Actions = map[string]*domain.WorkflowAction{}
 	for actionName, action := range freeformDef.Actions {
 		if job, err := json.Marshal(action.Job); err != nil {
 			return def, err
@@ -88,7 +89,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 			def.Name = freeformDef.Name
 			def.Source = freeformDef.Source
 			def.Meta = freeformDef.Meta
-			def.Actions[actionName] = &model.WorkflowAction{
+			def.Actions[actionName] = &domain.WorkflowAction{
 				Failure: action.Failure,
 				Success: action.Success,
 				Inputs:  action.Inputs,
@@ -103,7 +104,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 	return def, nil
 }
 
-func (e *evaluationService) addEnv(def *model.WorkflowDefinition) {
+func (e *evaluationService) addEnv(def *domain.WorkflowDefinition) {
 	for _, action := range def.Actions {
 		for _, group := range action.Job.TaskGroups {
 			for _, task := range group.Tasks {

@@ -1,9 +1,10 @@
-package repository
+package persistence
 
 import (
 	"context"
 	"github.com/georgysavva/scany/pgxscan"
-	"github.com/input-output-hk/cicero/src/model"
+	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
@@ -12,26 +13,11 @@ type workflowRepository struct {
 	DB *pgxpool.Pool
 }
 
-type WorkflowRepository interface {
-	GetSummary() (WorkflowSummary, error)
-	GetAll() ([]*model.WorkflowInstance, error)
-	GetAllByName(string) ([]*model.WorkflowInstance, error)
-	GetById(uint64) (model.WorkflowInstance, error)
-	Save(pgx.Tx, *model.WorkflowInstance) error
-	Update(pgx.Tx, model.WorkflowInstance) error
-}
-
-type WorkflowSummary []struct {
-	Name         string
-	NumSources   uint64
-	NumInstances uint64
-}
-
-func NewWorkflowRepository(db *pgxpool.Pool) WorkflowRepository {
+func NewWorkflowRepository(db *pgxpool.Pool) repository.WorkflowRepository {
 	return workflowRepository{DB: db}
 }
 
-func (w workflowRepository) GetById(id uint64) (instance model.WorkflowInstance, err error) {
+func (w workflowRepository) GetById(id uint64) (instance domain.WorkflowInstance, err error) {
 	err = pgxscan.Get(
 		context.Background(), w.DB, &instance,
 		`SELECT * FROM workflow_instances WHERE id = $1`,
@@ -40,7 +26,7 @@ func (w workflowRepository) GetById(id uint64) (instance model.WorkflowInstance,
 	return
 }
 
-func (w workflowRepository) GetSummary() (summary WorkflowSummary, err error) {
+func (w workflowRepository) GetSummary() (summary domain.WorkflowSummary, err error) {
 	err = pgxscan.Select(
 		context.Background(), w.DB, &summary,
 		`SELECT name, (SELECT COUNT(*) FROM workflow_instances WHERE name = wf_i.name) AS num_instances, COUNT(DISTINCT source) AS num_sources FROM workflow_instances wf_i GROUP BY name`,
@@ -48,7 +34,7 @@ func (w workflowRepository) GetSummary() (summary WorkflowSummary, err error) {
 	return
 }
 
-func (w workflowRepository) GetAll() (instances []*model.WorkflowInstance, err error) {
+func (w workflowRepository) GetAll() (instances []*domain.WorkflowInstance, err error) {
 	err = pgxscan.Select(
 		context.Background(), w.DB, &instances,
 		`SELECT * FROM workflow_instances ORDER BY id DESC`,
@@ -56,7 +42,7 @@ func (w workflowRepository) GetAll() (instances []*model.WorkflowInstance, err e
 	return
 }
 
-func (w workflowRepository) GetAllByName(name string) (instances []*model.WorkflowInstance, err error) {
+func (w workflowRepository) GetAllByName(name string) (instances []*domain.WorkflowInstance, err error) {
 	err = pgxscan.Select(
 		context.Background(), w.DB, &instances,
 		`SELECT * FROM workflow_instances WHERE name = $1 ORDER BY id DESC`,
@@ -65,7 +51,7 @@ func (w workflowRepository) GetAllByName(name string) (instances []*model.Workfl
 	return
 }
 
-func (w workflowRepository) Update(tx pgx.Tx, workflow model.WorkflowInstance) (err error) {
+func (w workflowRepository) Update(tx pgx.Tx, workflow domain.WorkflowInstance) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
 		`UPDATE workflow_instances SET facts = $2, updated_at = $3 WHERE id = $1`,
@@ -74,7 +60,7 @@ func (w workflowRepository) Update(tx pgx.Tx, workflow model.WorkflowInstance) (
 	return
 }
 
-func (w workflowRepository) Save(tx pgx.Tx, workflow *model.WorkflowInstance) error {
+func (w workflowRepository) Save(tx pgx.Tx, workflow *domain.WorkflowInstance) error {
 	return tx.QueryRow(
 		context.Background(),
 		`INSERT INTO workflow_instances (source, name, facts) VALUES ($1, $2, $3) RETURNING id`,

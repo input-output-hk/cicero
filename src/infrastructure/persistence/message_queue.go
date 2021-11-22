@@ -1,8 +1,9 @@
-package repository
+package persistence
 
 import (
 	"context"
 	"github.com/georgysavva/scany/pgxscan"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
@@ -12,12 +13,7 @@ type messageQueueRepository struct {
 	DB *pgxpool.Pool
 }
 
-type MessageQueueRepository interface {
-	GetOffset(string) (int64, error)
-	Save(pgx.Tx, map[string][]byte, *liftbridge.Message) error
-}
-
-func NewMessageQueueRepository(db *pgxpool.Pool) MessageQueueRepository {
+func NewMessageQueueRepository(db *pgxpool.Pool) repository.MessageQueueRepository {
 	return messageQueueRepository{db}
 }
 

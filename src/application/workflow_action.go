@@ -1,15 +1,15 @@
-package service
+package application
 
 import (
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
 
-	"github.com/input-output-hk/cicero/src/model"
 	"github.com/pkg/errors"
 )
 
 type WorkflowActionService interface {
-	GetWorkflowAction(model.ActionInstance) (model.WorkflowAction, error)
+	GetWorkflowAction(domain.ActionInstance) (domain.WorkflowAction, error)
 }
 
 type workflowActionService struct {
@@ -26,7 +26,7 @@ func NewWorkflowActionService(evaluationService EvaluationService, workflowServi
 	}
 }
 
-func (w *workflowActionService) GetWorkflowAction(action model.ActionInstance) (def model.WorkflowAction, err error) {
+func (w *workflowActionService) GetWorkflowAction(action domain.ActionInstance) (def domain.WorkflowAction, err error) {
 	wf, err := w.workflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not get workflow instance for workflow instance with ID %d", action.WorkflowInstanceId)

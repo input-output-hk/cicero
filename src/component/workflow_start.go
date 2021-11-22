@@ -3,11 +3,11 @@ package component
 import (
 	"context"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"strings"
 
-	"github.com/input-output-hk/cicero/src/model"
-	"github.com/input-output-hk/cicero/src/service"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
@@ -16,16 +16,16 @@ import (
 
 type WorkflowStartConsumer struct {
 	Logger              *log.Logger
-	MessageQueueService service.MessageQueueService
-	WorkflowService     service.WorkflowService
+	MessageQueueService application.MessageQueueService
+	WorkflowService     application.WorkflowService
 	Db                  *pgxpool.Pool
 }
 
 func (self *WorkflowStartConsumer) Start(ctx context.Context) error {
 	self.Logger.Println("Starting WorkflowStartConsumer")
 
-	if err := self.MessageQueueService.Subscribe(ctx, model.StartStreamName, self.onStartMessage, 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", model.StartStreamName)
+	if err := self.MessageQueueService.Subscribe(ctx, domain.StartStreamName, self.onStartMessage, 0); err != nil {
+		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.StartStreamName)
 	}
 
 	<-ctx.Done()
@@ -50,7 +50,7 @@ func (self *WorkflowStartConsumer) onStartMessage(msg *liftbridge.Message, err e
 		"time:", msg.Timestamp(),
 	)
 
-	received := model.Facts{}
+	received := domain.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
 		self.Logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
@@ -74,7 +74,7 @@ func (self *WorkflowStartConsumer) onStartMessage(msg *liftbridge.Message, err e
 		source = string(sourceFromMsg)
 	}
 
-	workflow := model.WorkflowInstance{
+	workflow := domain.WorkflowInstance{
 		Name:   workflowName,
 		Source: source,
 		Facts:  received,
@@ -86,7 +86,7 @@ func (self *WorkflowStartConsumer) onStartMessage(msg *liftbridge.Message, err e
 	}
 }
 
-func (self *WorkflowStartConsumer) insertWorkflow(ctx context.Context, workflow *model.WorkflowInstance) error {
+func (self *WorkflowStartConsumer) insertWorkflow(ctx context.Context, workflow *domain.WorkflowInstance) error {
 	var tx pgx.Tx
 	if t, err := self.Db.Begin(ctx); err != nil {
 		self.Logger.Printf("%s", err)
@@ -104,8 +104,8 @@ func (self *WorkflowStartConsumer) insertWorkflow(ctx context.Context, workflow 
 	self.Logger.Printf("Created workflow with ID %d", workflow.ID)
 
 	self.MessageQueueService.Publish(
-		model.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
-		model.InvokeStreamName,
+		domain.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
+		domain.InvokeStreamName,
 		workflow.Facts,
 	)
 
