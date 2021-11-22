@@ -39,7 +39,8 @@ func (self *Web) Start(ctx context.Context) error {
 	)
 
 	router.GET("/", func(w http.ResponseWriter, req bunrouter.Request) error {
-		return makeViewTemplate("index.html").Execute(w, nil)
+		http.Redirect(w, req.Request, "/workflow", 302)
+		return nil
 	})
 
 	router.GET("/*route", func(w http.ResponseWriter, req bunrouter.Request) error {
