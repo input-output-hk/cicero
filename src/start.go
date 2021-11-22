@@ -21,6 +21,7 @@ type StartCmd struct {
 
 	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
 	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
+	Evaluators     []string `arg:"--evaluators"`
 	Env            []string `arg:"--env"`
 
 	WebListen string `arg:"--web-listen" default:":8080"`
@@ -66,6 +67,11 @@ func (cmd *StartCmd) Run() error {
 		start.web = true
 	}
 
+	// default to all evaluators we ship
+	if len(cmd.Evaluators) == 0 {
+		cmd.Evaluators = []string{"nix"}
+	}
+
 	db := once(func() interface{} {
 		if db, err := NewDb(); err != nil {
 			logger.Fatalln(err.Error())
@@ -85,7 +91,7 @@ func (cmd *StartCmd) Run() error {
 	})
 
 	evaluationService := once(func() interface{} {
-		return application.NewEvaluationService(cmd.Env)
+		return application.NewEvaluationService(cmd.Evaluators, cmd.Env)
 	})
 	messageQueueService := once(func() interface{} {
 		if bridge, err := application.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {

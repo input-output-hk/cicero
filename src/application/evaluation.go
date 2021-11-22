@@ -12,11 +12,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/adrg/xdg"
 	getter "github.com/hashicorp/go-getter/v2"
 	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/pkg/errors"
-	"github.com/adrg/xdg"
 )
 
 type EvaluationService interface {
@@ -34,23 +34,20 @@ func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
 	fetchUrl.Fragment = ""
 	fetchUrl.RawFragment = ""
 
-	if evaluator == "" {
-		err = errors.New("No evaluator given in workflow source: " + src)
-		return
-	}
-
 	return
 }
 
 type evaluationService struct {
-	Env    []string // NAME=VALUE or just NAME to inherit from process environment
-	logger *log.Logger
+	Evaluators []string // Default evaluators. Will be tried in order if none is given for a source.
+	Env        []string // NAME=VALUE or just NAME to inherit from process environment
+	logger     *log.Logger
 }
 
-func NewEvaluationService(env []string) EvaluationService {
+func NewEvaluationService(evaluators []string, env []string) EvaluationService {
 	return &evaluationService{
-		Env:    env,
-		logger: log.New(os.Stderr, "evaluationService: ", log.LstdFlags),
+		Evaluators: evaluators,
+		Env:        env,
+		logger:     log.New(os.Stderr, "evaluationService: ", log.LstdFlags),
 	}
 }
 
@@ -79,16 +76,36 @@ func (e *evaluationService) evaluate(src string, command string, extraEnv ...str
 		return nil, errors.WithMessage(err, "go-getter did not download to the given directory. This should never happen™")
 	}
 
-	cmd := exec.Command("cicero-evaluator-"+evaluator, command)
-	extraEnv = append(extraEnv, "CICERO_WORKFLOW_SRC="+dst)
-	cmd.Env = append(os.Environ(), extraEnv...)
+	tryEval := func(evaluator string) ([]byte, error) {
+		cmd := exec.Command("cicero-evaluator-"+evaluator, command)
+		extraEnv = append(extraEnv, "CICERO_WORKFLOW_SRC="+dst)
+		cmd.Env = append(os.Environ(), extraEnv...)
 
-	e.logger.Printf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
+		e.logger.Printf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
 
-	if output, err := cmd.Output(); err != nil {
-		return nil, errors.WithMessagef(err, "Failed to evaluate. Output: %s", output)
+		if output, err := cmd.Output(); err != nil {
+			return nil, errors.WithMessagef(err, "Failed to evaluate. Output: %s", output)
+		} else {
+			return output, err
+		}
+	}
+
+	if evaluator != "" {
+		if output, err := tryEval(evaluator); err != nil {
+			return nil, errors.WithMessagef(err, `Evaluator "%s" from workflow source failed`, evaluator)
+		} else {
+			return output, nil
+		}
 	} else {
-		return output, err
+		e.logger.Println("No evaluator given in source, trying all")
+		for _, evaluator := range e.Evaluators {
+			if output, err := tryEval(evaluator); err != nil {
+				e.logger.Printf(`Evaluator "%s" failed: %s`, evaluator, err.Error())
+			} else {
+				return output, nil
+			}
+		}
+		return nil, errors.New("No evaluator succeeded")
 	}
 }
 
