@@ -61,6 +61,10 @@ func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[st
 	}
 
 	for _, result := range results {
+		if result["alloc"] == nil {
+			continue
+		}
+
 		alloc := &nomad.Allocation{}
 		err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
 		if err != nil {
