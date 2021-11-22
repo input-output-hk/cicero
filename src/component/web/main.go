@@ -86,7 +86,8 @@ func (self *Web) Start(ctx context.Context) error {
 		// step 1
 		if source == "" {
 			err := errors.New("Could not read empty source, reroute to default route")
-			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
+			// TODO Show error in ViewTemplate
+			self.Logger.Println(err.Error())
 			makeViewTemplate(templateName).Execute(w, map[string]interface{}{})
 			return
 		}
