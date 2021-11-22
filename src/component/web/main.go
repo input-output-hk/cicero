@@ -85,8 +85,10 @@ func (self *Web) Start(ctx context.Context) error {
 
 		// step 1
 		if source == "" {
-			err = errors.New("Could not read empty source")
-			return makeViewTemplate(templateName).Execute(w, map[string]interface{}{})
+			err := errors.New("Could not read empty source, reroute to default route")
+			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
+			makeViewTemplate(templateName).Execute(w, map[string]interface{}{})
+			return
 		}
 
 		// step 4
@@ -104,30 +106,32 @@ func (self *Web) Start(ctx context.Context) error {
 				writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 				return
 			}
-			http.Redirect(w, req.Request, "/workflow", 302)
-			return nil
+			http.Redirect(w, req, "/workflow", 302)
+			return
 		}
 
 		// step 3
 		if len(name) > 0 {
 			writeSuccessLogs(w, "Return workflow/new.html", http.StatusOK, self.Logger)
-			return makeViewTemplate(templateName).Execute(w, map[string]interface{}{
+			makeViewTemplate(templateName).Execute(w, map[string]interface{}{
 				"Source": source,
 				"Name":   name,
 			})
+			return
 		}
 
 		// step 2
 		if names, err := self.EvaluationService.ListWorkflows(source); err != nil {
 			err = errors.WithMessagef(err, "Could not get list of workflows by source \"%s\"", source)
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
-			return err
+			return
 		} else {
 			writeSuccessLogs(w, "Return workflow/new.html", http.StatusOK, self.Logger)
-			return makeViewTemplate(templateName).Execute(w, map[string]interface{}{
+			makeViewTemplate(templateName).Execute(w, map[string]interface{}{
 				"Source": source,
 				"Names":  names,
 			})
+			return
 		}
 	}).Methods("GET")
 
@@ -159,14 +163,14 @@ func (self *Web) Start(ctx context.Context) error {
 				return
 			}
 			writeSuccessLogs(w, "Return workflow/[id].html", http.StatusOK, self.Logger)
-			return makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
+			makeViewTemplate("workflow/[id].html").Execute(w, map[string]interface{}{
 				"Instance":   instance,
 				"graph":      req.URL.Query().Get("graph"),
 				"graphTypes": WorkflowGraphTypeStrings(),
 				"allocs":     allocs,
 			})
 		}
-	}).Method("GET")
+	}).Methods("GET")
 
 	workflowRouter.HandleFunc("{id}/graph", func(w http.ResponseWriter, req *http.Request) {
 
@@ -193,7 +197,7 @@ func (self *Web) Start(ctx context.Context) error {
 			return
 		}
 
-		def, err := self.evaluator.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Certs)
+		def, err := self.EvaluationService.EvaluateWorkflow(instance.Source, instance.Name, instance.ID, instance.Facts)
 		if err != nil {
 			err = errors.WithMessagef(err, "Could not evaluate workflow with id \"%s\"", id)
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
@@ -248,7 +252,7 @@ func (self *Web) Start(ctx context.Context) error {
 			}
 		}
 
-		var inputs model.WorkflowCerts
+		var inputs model.Facts
 		if inputsStr := req.URL.Query().Get("inputs"); len(inputsStr) > 0 {
 			if err := json.Unmarshal([]byte(inputsStr), &inputs); err != nil {
 				err = errors.WithMessagef(err, "Could not unmarshal inputs \"%s\"", inputs)
@@ -272,7 +276,7 @@ func (self *Web) Start(ctx context.Context) error {
 	apiWorkflowInstanceRouter := apiWorkflowRouter.PathPrefix("/instance}").Subrouter()
 	apiWorkflowInstanceRouter.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 
-		if instances, err := (*self.workflowService).GetAll(); err != nil {
+		if instances, err := self.WorkflowService.GetAll(); err != nil {
 			err = errors.WithMessagef(err, "Could not get all workflow services")
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
@@ -286,8 +290,8 @@ func (self *Web) Start(ctx context.Context) error {
 
 		var params struct {
 			Source string
-			Name   string
-			Inputs model.WorkflowCerts
+			Name   *string
+			Inputs model.Facts
 		}
 		if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 			err = errors.WithMessagef(err, "Could not decode params from request body")
@@ -311,7 +315,7 @@ func (self *Web) Start(ctx context.Context) error {
 
 						err = errors.WithMessagef(err, "Could not start workflow service")
 						writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
-						return err
+						return
 					}
 				}
 			}
@@ -361,7 +365,7 @@ func (self *Web) Start(ctx context.Context) error {
 			err = errors.WithMessagef(err, "Could not parse id", id)
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
-		} else if instance, err := (*self.workflowService).GetById(id); err != nil {
+		} else if instance, err := self.WorkflowService.GetById(id); err != nil {
 			err = errors.WithMessagef(err, "Could not get workflow service by id", id)
 			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
 			return
@@ -455,11 +459,16 @@ func (self *Web) Start(ctx context.Context) error {
 	router.HandleFunc("/*route", func(w http.ResponseWriter, req *http.Request) {
 		vars := mux.Vars(req)
 		route, ok := vars["route"]
+		if !ok {
+			err := errors.New("Could not read empty route")
+			writeHttpErrorAndLogs(w, err, http.StatusInternalServerError, self.Logger)
+			return
+		}
 		if mimeType := mime.TypeByExtension(path.Ext(route)); mimeType != "" {
 			w.Header()["Content-Type"] = []string{mimeType}
 		}
 		writeSuccessLogs(w, "Return from wildcard route", http.StatusOK, self.Logger)
-		return makeViewTemplate(route).Execute(w, req.Params().Map())
+		makeViewTemplate(route).Execute(w, mux.Vars)
 	}).Methods("GET")
 
 	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
