@@ -99,7 +99,7 @@ job: webhooks: group: webhooks: {
 						<<< '{payload}' jq -r '{
 						    Source: "github.com/\\(.repository.full_name)?ref=\\(.pull_request.base.sha)",
 						    Inputs: {"github-event": .}
-						}' | curl "\(#ciceroApiUrl)/workflow/instance/" --data-binary @-
+						}' | curl "\(#ciceroApiUrl)/workflow/instance" --data-binary @-
 						"""
 				}
 			})
