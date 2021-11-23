@@ -1,4 +1,4 @@
-{{template "_layout.html" .}}
+{{template "layout.html" .}}
 
 {{define "main"}}
 	<h1>Start Workflow</h1>
@@ -7,7 +7,7 @@
 		<!-- step 1 -->
 		<div style="margin: 1em 0">
 			<h3>Enter source:</h3>
-			<form>
+			<form method="GET" action="/workflow/new">
 				<input
 					name="source"
 					placeholder="github.com/input-output-hk/cicero"
@@ -26,7 +26,7 @@
 		<ul>
 			{{range .Names}}
 				<li>
-					<form>
+					<form method="GET" action="/workflow/new">
 						<input type="hidden" name="source" value="{{$.Source}}"/>
 						<input type="hidden" name="name" value="{{.}}"/>
 						<button class="link">{{.}}</button>
@@ -37,7 +37,7 @@
 	{{else}}
 		<!-- step 3 -->
 		<h3>Specify inputs for "{{.Name}}"</h3>
-		<form>
+		<form method="GET" action="/workflow/new">
 			<input type="hidden" name="source" value="{{.Source}}"/>
 			<input type="hidden" name="name" value="{{.Name}}"/>
 			<textarea name="inputs" placeholder="{}" style="display: block">{}</textarea>

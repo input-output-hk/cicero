@@ -2,13 +2,13 @@ package cicero
 
 import (
 	"context"
-	"github.com/input-output-hk/cicero/src/application"
 	"log"
 	"os"
 	"time"
 
 	"cirello.io/oversight"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/component"
 	"github.com/input-output-hk/cicero/src/component/web"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -117,17 +117,17 @@ func (cmd *StartCmd) Run() error {
 	supervisor := cmd.newSupervisor(logger)
 
 	if start.workflowStart {
-		component := component.WorkflowStartConsumer{
+		child := component.WorkflowStartConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 		}
-		supervisor.Add(component.Start)
+		supervisor.Add(child.Start)
 	}
 
 	if start.workflowInvoke {
-		component := component.WorkflowInvokeConsumer{
+		child := component.WorkflowInvokeConsumer{
 			EvaluationService:   evaluationService().(application.EvaluationService),
 			ActionService:       actionService().(application.ActionService),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
@@ -138,21 +138,21 @@ func (cmd *StartCmd) Run() error {
 			Limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
 			Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
 		}
-		supervisor.Add(component.Start)
+		supervisor.Add(child.Start)
 	}
 
 	if start.workflowFact {
-		component := component.WorkflowFactConsumer{
+		child := component.WorkflowFactConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 		}
-		supervisor.Add(component.Start)
+		supervisor.Add(child.Start)
 	}
 
 	if start.nomadEvent {
-		component := component.NomadEventConsumer{
+		child := component.NomadEventConsumer{
 			Logger:                log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
 			MessageQueueService:   messageQueueService().(application.MessageQueueService),
 			WorkflowService:       workflowService().(application.WorkflowService),
@@ -162,11 +162,11 @@ func (cmd *StartCmd) Run() error {
 			NomadClient:           nomadClient().(*nomad.Client),
 			Db:                    db().(*pgxpool.Pool),
 		}
-		supervisor.Add(component.Start)
+		supervisor.Add(child.Start)
 	}
 
 	if start.web {
-		component := web.Web{
+		child := web.Web{
 			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			Listen:              cmd.WebListen,
 			WorkflowService:     workflowService().(application.WorkflowService),
@@ -175,7 +175,7 @@ func (cmd *StartCmd) Run() error {
 			NomadEventService:   nomadEventService().(application.NomadEventService),
 			EvaluationService:   evaluationService().(application.EvaluationService),
 		}
-		supervisor.Add(component.Start)
+		supervisor.Add(child.Start)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

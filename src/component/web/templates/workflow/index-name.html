@@ -1,4 +1,4 @@
-{{template "_layout.html" .}}
+{{template "layout.html" .}}
 
 {{define "main"}}
 	<h1>{{.Name}}</h1>
@@ -13,7 +13,7 @@
 		</tr>
 		{{range .Instances}}
 			<tr>
-				<td><a href="{{.ID}}">{{.ID}}</a></td>
+				<td><a href="/workflow/{{.ID}}">{{.ID}}</a></td>
 				<td><code>{{.Source}}</code></td>
 				<td>{{.CreatedAt}}</td>
 				<td>{{.UpdatedAt}}</td>
