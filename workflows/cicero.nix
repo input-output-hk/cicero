@@ -4,6 +4,7 @@ let
   lib = import ../workflows-lib.nix;
 
   defaultPackages = [
+    "github:input-output-hk/cicero#cicero-std"
     "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
     "github:nixos/nixpkgs/nixpkgs-unstable#gnutar"
     "github:nixos/nixpkgs/nixpkgs-unstable#xz"
@@ -24,6 +25,36 @@ let
     git clone --quiet ${pr.head.repo.clone_url} src
     cd src
     git checkout ${pr.head.sha}
+  '';
+
+  workflowName = "cicero"; # TODO get passed in from lib.nix?
+
+  reportGithubStatus = pr: actionName: script: ''
+    set -euxo pipefail
+
+    function report {
+      cicero-std github status ${pr.statuses_url} \
+        --arg state "$1" \
+        --arg description "Workflow #${id}" \
+        --arg workflow_id ${id} \
+        --arg workflow_name '${workflowName}' \
+        --arg action_name '${actionName}' # FIXME escape
+    }
+
+    function err {
+      report error
+    }
+    trap err ERR
+
+    report pending
+
+    if {
+      ${script}
+    }; then
+      report success
+    else
+      report failure
+    fi
   '';
 in {
   actions = {
@@ -51,11 +82,11 @@ in {
           "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#gocritic"
           "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#go"
         ];
-      } ''
+      } (reportGithubStatus pr "gocritic" ''
         ${clone pr}
 
         gocritic check -enableAll ./...
-      '');
+      ''));
     };
 
     nixfmt = { pr ? null, nixfmt ? null }: {
@@ -70,11 +101,11 @@ in {
           "github:nixos/nixpkgs/nixpkgs-unstable#fd"
           "github:nixos/nixpkgs/nixpkgs-unstable#nixfmt"
         ];
-      } ''
+      } (reportGithubStatus pr "nixfmt" ''
         ${clone pr}
 
         fd -e nix -X nixfmt -c
-      '');
+      ''));
     };
 
     build = { pr ? null, gocritic ? null, nixfmt ? null, build ? null }: {
@@ -89,12 +120,12 @@ in {
         cpu = 16000;
         packages = defaultPackages
           ++ [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
-      } ''
+      } (reportGithubStatus pr "build" ''
         ${clone pr}
 
         echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
         nix build
-      '');
+      ''));
     };
 
     deploy = { pr ? null, environment ? null, gocritic ? null, nixfmt ? null
@@ -110,7 +141,7 @@ in {
             "github:nixos/nixpkgs/nixpkgs-unstable#cue"
             "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
           ];
-        } ''
+        } (reportGithubStatus pr "deploy" ''
           ${clone pr}
 
           cue export ./jobs -e jobs.cicero \
@@ -118,7 +149,7 @@ in {
             -t 'sha=${pr.head.sha}' \
             > job.json
           nomad run job.json
-        '');
+        ''));
       };
   };
 }
