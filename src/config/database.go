@@ -1,7 +1,8 @@
-package domain
+package config
 
 import (
 	"context"
+	"os"
 
 	"github.com/jackc/pgtype"
 	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
@@ -10,8 +11,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-func DBConnection(url string) (*pgxpool.Pool, error) {
-	if url == "" {
+func DBConnection() (*pgxpool.Pool, error) {
+	url := os.Getenv("DATABASE_URL")
+	if len(url) == 0{
 		return nil, errors.New("The DATABASE_URL environment variable is not set or empty")
 	}
 
@@ -20,6 +22,7 @@ func DBConnection(url string) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
+	//TODO: log configuration
 	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		conn.ConnInfo().RegisterDataType(pgtype.DataType{
 			Value: &pgtypeuuid.UUID{},
