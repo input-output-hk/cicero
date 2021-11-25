@@ -13,7 +13,7 @@ import (
 
 func DBConnection() (*pgxpool.Pool, error) {
 	url := os.Getenv("DATABASE_URL")
-	if len(url) == 0{
+	if len(url) == 0 {
 		return nil, errors.New("The DATABASE_URL environment variable is not set or empty")
 	}
 
