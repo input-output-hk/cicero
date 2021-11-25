@@ -137,31 +137,38 @@ in {
       ''));
     };
 
-    deploy = { pr ? null, environment ? null, gocritic ? null, nixfmt ? null
-      , build ? null, deploy ? null }: {
-        when = {
-          "build passes" = build;
-          "deploy hasn't run yet" = deploy == null;
-        };
+    deploy = { pr ? null, environment ? null, build ? null, deploy ? null }: {
+      when = {
+        # TODO This action is not ready as is and should be split into two.
+        # For PRs, it should spin up a dev instance, see if it becomes healthy,
+        # maybe run a simple workflow like ping_pong on it,
+        # and finally shut it down again.
+        # Actual deployments should not be done for PRs
+        # but only on merges into master or some other branch.
+        never = false;
 
-        job = lib.addNomadJobDefaults (run "bash" {
-          memory = 1024;
-          packages = defaultPackages ++ [
-            "github:nixos/nixpkgs/nixpkgs-unstable#cue"
-            "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
-          ];
-          # XXX currently required to show logs in UI
-          group = "deploy";
-          task = "deploy";
-        } (reportGithubStatus pr "deploy" ''
-          ${clone pr}
-
-          cue export ./jobs -e jobs.cicero \
-            ${if environment == null then "" else "-t env=${environment}"} \
-            -t 'sha=${pr.head.sha}' \
-            > job.json
-          nomad run job.json
-        ''));
+        "build passes" = build;
+        "deploy hasn't run yet" = deploy == null;
       };
+
+      job = lib.addNomadJobDefaults (run "bash" {
+        memory = 1024;
+        packages = defaultPackages ++ [
+          "github:nixos/nixpkgs/nixpkgs-unstable#cue"
+          "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
+        ];
+        # XXX currently required to show logs in UI
+        group = "deploy";
+        task = "deploy";
+      } (reportGithubStatus pr "deploy" ''
+        ${clone pr}
+
+        cue export ./jobs -e jobs.cicero \
+          ${if environment == null then "" else "-t env=${environment}"} \
+          -t 'sha=${pr.head.sha}' \
+          > job.json
+        nomad run job.json
+      ''));
+    };
   };
 }
