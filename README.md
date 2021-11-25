@@ -44,6 +44,11 @@ Access WebUI:
 
     open localhost:8080 in browser
 
+Access OpenAPI3 Schema:
+
+    open localhost:8080/documentation/json in browser // for json
+    open localhost:8080/documentation/yaml in browser // for yaml
+
 # How To …
 
 See the commands listed by:
