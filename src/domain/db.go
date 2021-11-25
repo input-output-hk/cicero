@@ -10,6 +10,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+type PgxIface interface {
+	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
+}
+
 func DBConnection(url string) (*pgxpool.Pool, error) {
 	if url == "" {
 		return nil, errors.New("The DATABASE_URL environment variable is not set or empty")

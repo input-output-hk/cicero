@@ -4,16 +4,16 @@ import (
 	"context"
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type nomadEventRepository struct {
-	DB *pgxpool.Pool
+	DB domain.PgxIface
 }
 
-func NewNomadEventRepository(db *pgxpool.Pool) repository.NomadEventRepository {
+func NewNomadEventRepository(db domain.PgxIface) repository.NomadEventRepository {
 	return nomadEventRepository{DB: db}
 }
 

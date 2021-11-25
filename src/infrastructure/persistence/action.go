@@ -8,14 +8,13 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type actionRepository struct {
-	DB *pgxpool.Pool
+	DB domain.PgxIface
 }
 
-func NewActionRepository(db *pgxpool.Pool) repository.ActionRepository {
+func NewActionRepository(db domain.PgxIface) repository.ActionRepository {
 	return actionRepository{DB: db}
 }
 

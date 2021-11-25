@@ -3,17 +3,17 @@ package persistence
 import (
 	"context"
 	"github.com/georgysavva/scany/pgxscan"
+	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 )
 
 type messageQueueRepository struct {
-	DB *pgxpool.Pool
+	DB domain.PgxIface
 }
 
-func NewMessageQueueRepository(db *pgxpool.Pool) repository.MessageQueueRepository {
+func NewMessageQueueRepository(db domain.PgxIface) repository.MessageQueueRepository {
 	return messageQueueRepository{db}
 }
 

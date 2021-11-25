@@ -4,16 +4,18 @@ go 1.17
 
 require (
 	cirello.io/oversight v1.0.3
+	github.com/adrg/xdg v0.4.0
 	github.com/alexflint/go-arg v1.4.2
 	github.com/georgysavva/scany v0.2.9
 	github.com/go-echarts/go-echarts/v2 v2.2.5-0.20211026072344-dc05f25cd7c2
 	github.com/google/uuid v1.1.2
+	github.com/gorilla/mux v1.7.4
 	github.com/grafana/loki v1.6.1
 	github.com/hashicorp/go-getter/v2 v2.0.0
 	github.com/hashicorp/nomad v1.2.0
 	github.com/hashicorp/nomad/api v0.0.0-20211119134719-5a43a1af285d
-	github.com/jackc/pgtype v1.8.1
-	github.com/jackc/pgx/v4 v4.13.0
+	github.com/jackc/pgtype v1.9.0
+	github.com/jackc/pgx/v4 v4.14.0
 	github.com/liftbridge-io/go-liftbridge/v2 v2.1.1-0.20210415162858-141bb940599b
 	github.com/liftbridge-io/liftbridge v1.7.0
 	github.com/pkg/errors v0.9.1
@@ -22,7 +24,6 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/uptrace/bunrouter v1.0.0-rc.2
 	github.com/vivek-ng/concurrency-limiter v0.8.2
-	github.com/adrg/xdg v0.4.0
 )
 
 require (
@@ -54,7 +55,6 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/go-cmp v0.5.5 // indirect
 	github.com/google/tink/go v1.5.0 // indirect
-	github.com/gorilla/mux v1.7.4 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.1-0.20200228141219-3ce3d519df39 // indirect
 	github.com/hako/durafmt v0.0.0-20200605151348-3a43fc422dd9 // indirect
@@ -74,12 +74,12 @@ require (
 	github.com/hashicorp/hcl/v2 v2.9.2-0.20210407182552-eb14f8319bdc // indirect
 	github.com/hashicorp/raft v1.1.3-0.20200211192230-365023de17e6 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgconn v1.10.0 // indirect
+	github.com/jackc/pgconn v1.10.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgproto3/v2 v2.1.1 // indirect
+	github.com/jackc/pgproto3/v2 v2.2.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
-	github.com/jackc/puddle v1.1.3 // indirect
+	github.com/jackc/puddle v1.2.0 // indirect
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/klauspost/compress v1.13.4 // indirect
 	github.com/liftbridge-io/liftbridge-api v1.7.0 // indirect
@@ -108,6 +108,7 @@ require (
 	github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02 // indirect
 	github.com/opentracing-contrib/go-stdlib v1.0.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
+	github.com/pashagolub/pgxmock v1.4.2 // indirect
 	github.com/pelletier/go-toml v1.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
@@ -134,8 +135,8 @@ require (
 	go.etcd.io/bbolt v1.3.5 // indirect
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/goleak v1.1.12 // indirect
-	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
-	golang.org/x/net v0.0.0-20211108170745-6635138e15ea // indirect
+	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871 // indirect
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20211107104306-e0b2ad06fe42 // indirect
 	golang.org/x/text v0.3.7 // indirect
