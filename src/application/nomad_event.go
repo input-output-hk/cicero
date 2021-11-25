@@ -2,12 +2,12 @@ package application
 
 import (
 	"encoding/json"
-	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"log"
 	"os"
 
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -54,7 +54,6 @@ type AllocWrapper struct {
 
 func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[string]AllocWrapper, error) {
 	allocs := map[string]AllocWrapper{}
-	results := []map[string]interface{}{}
 	n.logger.Printf("Get EventAlloc by WorkflowId: %d", workflowId)
 	results, err := n.nomadEventRepository.GetEventAllocByWorkflowId(workflowId)
 	if err != nil {

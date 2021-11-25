@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"log"
 	"net/http"
 	"os"
@@ -15,7 +13,9 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/grafana/loki/pkg/loghttp"
+	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -134,7 +134,6 @@ func (self *actionService) LokiQueryRange(query string) (*LokiOutput, error) {
 
 	// TODO: reduce allocations in this loop
 	for {
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 		req, err := http.NewRequest(
 			"GET",
 			self.prometheus.URL("/loki/api/v1/query_range", nil).String(),
@@ -155,7 +154,7 @@ func (self *actionService) LokiQueryRange(query string) (*LokiOutput, error) {
 		fmt.Println(req.URL.Query())
 		fmt.Println(req)
 
-		done, body, err := self.prometheus.Do(ctx, req)
+		done, body, err := self.prometheus.Do(context.Background(), req)
 		if err != nil {
 			return output, errors.WithMessage(err, "Failed to talk with loki")
 		}
