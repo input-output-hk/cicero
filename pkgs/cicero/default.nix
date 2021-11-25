@@ -2,8 +2,8 @@
 
 buildGoModule rec {
   pname = "cicero";
-  version = "2021.11.19.003";
-  vendorSha256 = "sha256-M1XAsps+u8ktxDALOKVEoP7LDXwbIYs7WZf6SiQxrhM=";
+  version = "2021.11.25.001";
+  vendorSha256 = "sha256-NVZW+GobgjxjZSykbasSJoXe3dBtocX/90YtYfRAA2k=";
 
   src = flake.inputs.inclusive.lib.inclusive ../../. [
     ./.
