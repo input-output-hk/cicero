@@ -7,7 +7,6 @@ buildGoModule rec {
 
   src = flake.inputs.inclusive.lib.inclusive ../../. [
     ./.
-    ../../db
     ../../go.mod
     ../../go.sum
     ../../main.go
