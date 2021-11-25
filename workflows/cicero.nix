@@ -82,6 +82,9 @@ in {
           "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#gocritic"
           "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#go"
         ];
+        # XXX currently required to show logs in UI
+        group = "gocritic";
+        task = "gocritic";
       } (reportGithubStatus pr "gocritic" ''
         ${clone pr}
 
@@ -101,6 +104,9 @@ in {
           "github:nixos/nixpkgs/nixpkgs-unstable#fd"
           "github:nixos/nixpkgs/nixpkgs-unstable#nixfmt"
         ];
+        # XXX currently required to show logs in UI
+        group = "nixfmt";
+        task = "nixfmt";
       } (reportGithubStatus pr "nixfmt" ''
         ${clone pr}
 
@@ -120,6 +126,9 @@ in {
         cpu = 16000;
         packages = defaultPackages
           ++ [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
+        # XXX currently required to show logs in UI
+        group = "build";
+        task = "build";
       } (reportGithubStatus pr "build" ''
         ${clone pr}
 
@@ -141,6 +150,9 @@ in {
             "github:nixos/nixpkgs/nixpkgs-unstable#cue"
             "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
           ];
+          # XXX currently required to show logs in UI
+          group = "deploy";
+          task = "deploy";
         } (reportGithubStatus pr "deploy" ''
           ${clone pr}
 
