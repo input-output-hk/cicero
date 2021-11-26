@@ -11,6 +11,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+type PgxIface interface {
+	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
+}
+
 func DBConnection() (*pgxpool.Pool, error) {
 	url := os.Getenv("DATABASE_URL")
 	if len(url) == 0 {

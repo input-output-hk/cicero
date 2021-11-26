@@ -2,20 +2,20 @@ package persistence
 
 import (
 	"context"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type actionRepository struct {
-	DB *pgxpool.Pool
+	DB config.PgxIface
 }
 
-func NewActionRepository(db *pgxpool.Pool) repository.ActionRepository {
+func NewActionRepository(db config.PgxIface) repository.ActionRepository {
 	return actionRepository{DB: db}
 }
 
