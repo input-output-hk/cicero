@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 
@@ -11,10 +12,10 @@ import (
 )
 
 type actionRepository struct {
-	DB domain.PgxIface
+	DB config.PgxIface
 }
 
-func NewActionRepository(db domain.PgxIface) repository.ActionRepository {
+func NewActionRepository(db config.PgxIface) repository.ActionRepository {
 	return actionRepository{DB: db}
 }
 

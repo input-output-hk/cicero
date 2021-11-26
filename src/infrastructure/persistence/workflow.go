@@ -3,16 +3,17 @@ package persistence
 import (
 	"context"
 	"github.com/georgysavva/scany/pgxscan"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
 )
 
 type workflowRepository struct {
-	DB domain.PgxIface
+	DB config.PgxIface
 }
 
-func NewWorkflowRepository(db domain.PgxIface) repository.WorkflowRepository {
+func NewWorkflowRepository(db config.PgxIface) repository.WorkflowRepository {
 	return workflowRepository{DB: db}
 }
 
