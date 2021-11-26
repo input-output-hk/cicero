@@ -22,6 +22,7 @@
       overlay = final: prev:
         {
           cicero = prev.callPackage ./pkgs/cicero { flake = self; };
+          cicero-std = prev.callPackage ./pkgs/cicero/std { };
           cicero-evaluator-nix =
             prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
           liftbridge = prev.callPackage ./pkgs/liftbridge.nix { };
@@ -53,7 +54,7 @@
           '';
         } // (import ./runners.nix final prev);
 
-      packages = { cicero, cicero-evaluator-nix, cicero-entrypoint, liftbridge
+      packages = { cicero, cicero-std, cicero-evaluator-nix, cicero-entrypoint, liftbridge
         , liftbridge-cli, gocritic, go, webhook-trigger, nomad-dev
         , nomad-follower, run-bash, run-python, run-perl, run-js }@pkgs:
         pkgs // {

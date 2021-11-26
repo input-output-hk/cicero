@@ -40,7 +40,7 @@ package = "damon"
 
 [[commands]]
 name = "lint"
-command = "gocritic check -enableAll ./... && fd -e nix -X nixfmt -c"
+command = "golangci-lint run && gocritic check -enableAll ./... && fd -e nix -X nixfmt -c"
 help = "Run code linters"
 
 [[commands]]

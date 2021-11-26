@@ -57,12 +57,6 @@ func (self *Web) Error(w http.ResponseWriter, err error, status int) {
 	http.Error(w, err.Error(), status)
 }
 
-func (self *Web) writeHttpErrorAndLogs(w http.ResponseWriter, err error, httpStatusCode int) {
-	// TODO Implement different Log Levels (Info, Warning, Error etc.)
-	http.Error(w, err.Error(), httpStatusCode)
-	self.Logger.Println(err.Error())
-}
-
 func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

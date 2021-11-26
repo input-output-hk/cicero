@@ -3,13 +3,18 @@
 let
   lib = import ../workflows-lib.nix;
 
-  bash = script: lib.addNomadJobDefaults (run "bash" { } script);
+  bash = groupAndTaskName: script:
+    lib.addNomadJobDefaults (run "bash" {
+      # XXX currently required to show logs in UI
+      group = groupAndTaskName;
+      task = groupAndTaskName;
+    } script);
 in {
   actions = {
     ping = { ping ? null }: {
       when."ping missing" = ping == null;
 
-      job = bash ''
+      job = bash "ping" ''
         echo running ping ${id}
       '';
     };
@@ -20,7 +25,7 @@ in {
         "pong missing" = pong == null;
       };
 
-      job = bash ''
+      job = bash "pong" ''
         echo running pong ${id}
       '';
     };
@@ -31,7 +36,7 @@ in {
         "pingpong missing" = pingpong == null;
       };
 
-      job = bash ''
+      job = bash "pingpong" ''
         echo running pingpong ${id}
       '';
     };

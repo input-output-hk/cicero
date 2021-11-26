@@ -3,13 +3,13 @@ package application
 import (
 	"context"
 	"encoding/json"
-	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"log"
 	"os"
 	"time"
 
+	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
@@ -34,12 +34,6 @@ func NewMessageQueueService(db *pgxpool.Pool, bridge liftbridge.Client) MessageQ
 		bridge:                 bridge,
 		messageQueueRepository: persistence.NewMessageQueueRepository(db),
 	}
-}
-
-//TODO: move to init method
-func LiftbridgeConnect(addr string) (liftbridge.Client, error) {
-	client, err := liftbridge.Connect([]string{addr})
-	return client, errors.WithMessage(err, "Couldn't connect to NATS")
 }
 
 func (m *messageQueueService) createStreams(stream []string) error {
@@ -119,7 +113,7 @@ func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error
 	headers := message.Headers()
 	delete(headers, "subject")
 	for k, v := range headers {
-		if v == nil || len(v) == 0 {
+		if len(v) == 0 {
 			delete(headers, k)
 		}
 	}
