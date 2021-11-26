@@ -1,4 +1,4 @@
-package cicero
+package config
 
 import (
 	"fmt"

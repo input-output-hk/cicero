@@ -2,6 +2,7 @@ package cicero
 
 import (
 	"context"
+	"github.com/input-output-hk/cicero/src/config"
 	"log"
 	"os"
 	"time"
@@ -73,7 +74,7 @@ func (cmd *StartCmd) Run() error {
 	}
 
 	db := once(func() interface{} {
-		if db, err := NewDb(); err != nil {
+		if db, err := config.DBConnection(); err != nil {
 			logger.Fatalln(err.Error())
 			return err
 		} else {
@@ -82,7 +83,7 @@ func (cmd *StartCmd) Run() error {
 	})
 
 	nomadClient := once(func() interface{} {
-		if client, err := NewNomadClient(); err != nil {
+		if client, err := config.NewNomadClient(); err != nil {
 			logger.Fatalln(err.Error())
 			return err
 		} else {
@@ -94,7 +95,7 @@ func (cmd *StartCmd) Run() error {
 		return application.NewEvaluationService(cmd.Evaluators, cmd.Env)
 	})
 	messageQueueService := once(func() interface{} {
-		if bridge, err := application.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
+		if bridge, err := config.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
 			logger.Fatalln(err.Error())
 			return err
 		} else {

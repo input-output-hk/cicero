@@ -36,12 +36,6 @@ func NewMessageQueueService(db *pgxpool.Pool, bridge liftbridge.Client) MessageQ
 	}
 }
 
-//TODO: move to init method
-func LiftbridgeConnect(addr string) (liftbridge.Client, error) {
-	client, err := liftbridge.Connect([]string{addr})
-	return client, errors.WithMessage(err, "Couldn't connect to NATS")
-}
-
 func (m *messageQueueService) createStreams(stream []string) error {
 	for _, streamName := range stream {
 		if err := m.bridge.CreateStream(
