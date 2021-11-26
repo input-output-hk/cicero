@@ -3,17 +3,17 @@ package persistence
 import (
 	"context"
 	"github.com/georgysavva/scany/pgxscan"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type workflowRepository struct {
-	DB *pgxpool.Pool
+	DB config.PgxIface
 }
 
-func NewWorkflowRepository(db *pgxpool.Pool) repository.WorkflowRepository {
+func NewWorkflowRepository(db config.PgxIface) repository.WorkflowRepository {
 	return workflowRepository{DB: db}
 }
 
@@ -63,7 +63,7 @@ func (w workflowRepository) Update(tx pgx.Tx, workflow domain.WorkflowInstance) 
 func (w workflowRepository) Save(tx pgx.Tx, workflow *domain.WorkflowInstance) error {
 	return tx.QueryRow(
 		context.Background(),
-		`INSERT INTO workflow_instances (source, name, facts) VALUES ($1, $2, $3) RETURNING id`,
+		`INSERT INTO workflow_instances (source, name, facts) VALUES ($1, $2, $3) RETURNING id, created_at`,
 		workflow.Source, workflow.Name, workflow.Facts,
-	).Scan(&workflow.ID)
+	).Scan(&workflow.ID, &workflow.CreatedAt)
 }

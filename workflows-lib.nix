@@ -13,6 +13,7 @@
           task = builtins.mapAttrs (k: task:
             task // {
               env = {
+                CICERO_WEB_URL = "http://127.0.0.1:8080";
                 CICERO_API_URL = "http://127.0.0.1:8080/api";
               } // task.env or { };
             }) group.task;

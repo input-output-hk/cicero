@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -144,22 +145,27 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 	for actionName, action := range freeformDef.Actions {
 		if job, err := json.Marshal(action.Job); err != nil {
 			return def, err
-		} else if job, err := jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
-			Body:    []byte(`{"job":` + string(job) + "}"),
-			AllowFS: false,
-			Strict:  true,
-		}); err != nil {
-			return def, err
 		} else {
-			def.Name = freeformDef.Name
-			def.Source = freeformDef.Source
-			def.Meta = freeformDef.Meta
-			def.Actions[actionName] = &domain.WorkflowAction{
-				Failure: action.Failure,
-				Success: action.Success,
-				Inputs:  action.Inputs,
-				When:    action.When,
-				Job:     *job,
+			// escape HCL variable interpolation
+			job = bytes.ReplaceAll(job, []byte("${"), []byte("$${"))
+
+			if job, err := jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
+				Body:    []byte(`{"job":` + string(job) + "}"),
+				AllowFS: false,
+				Strict:  true,
+			}); err != nil {
+				return def, err
+			} else {
+				def.Name = freeformDef.Name
+				def.Source = freeformDef.Source
+				def.Meta = freeformDef.Meta
+				def.Actions[actionName] = &domain.WorkflowAction{
+					Failure: action.Failure,
+					Success: action.Success,
+					Inputs:  action.Inputs,
+					When:    action.When,
+					Job:     *job,
+				}
 			}
 		}
 	}

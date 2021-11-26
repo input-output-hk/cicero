@@ -70,3 +70,16 @@ nix develop
 3100 - Loki, HTTP
 9095 - Loki, GRPC
 ```
+
+# Development
+
+Formats Go source code
+
+```
+go fmt ./...
+```
+Run test with coverage
+
+```
+go test -cover ./...
+```
