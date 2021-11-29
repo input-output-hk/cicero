@@ -15,7 +15,6 @@ import (
 	"testing"
 )
 
-
 type WorkflowRepositoryMocked struct {
 	mock.Mock
 }
@@ -32,8 +31,13 @@ func (w *WorkflowRepositoryMocked) GetAllByName(s string) ([]*domain.WorkflowIns
 	panic("implement me")
 }
 
-func (w *WorkflowRepositoryMocked) GetById(id uint64) (domain.WorkflowInstance, error) {
-	panic("implement me")
+func (w *WorkflowRepositoryMocked) GetById(id uint64) (workflow domain.WorkflowInstance, err error) {
+	args := w.Called(id)
+	if args.Get(0) != nil {
+		workflow = args.Get(0).(domain.WorkflowInstance)
+	}
+	err = args.Error(1)
+	return
 }
 
 func (w *WorkflowRepositoryMocked) Save(tx pgx.Tx, instance *domain.WorkflowInstance) error {
@@ -61,7 +65,7 @@ func (m *MessageQueueServiceMocked) Save(tx pgx.Tx, message *liftbridge.Message)
 	panic("implement me")
 }
 
-func buildTransactionMocked() (tx pgx.Tx, err error){
+func buildTransactionMocked() (tx pgx.Tx, err error) {
 	mock, err := pgxmock.NewConn()
 	if err != nil {
 		err = errors.WithMessage(err, "an error '%s' was not expected when opening a stub database connection")
@@ -78,7 +82,7 @@ func buildWorkflowApplicationMocked(workflowRepositoryMocked *WorkflowRepository
 	return &workflowService{
 		workflowRepository:  workflowRepositoryMocked,
 		messageQueueService: messageQueueServiceMocked,
-		logger: log.New(os.Stderr, "WorkflowApplicationTest: ", log.LstdFlags),
+		logger:              log.New(os.Stderr, "WorkflowApplicationTest: ", log.LstdFlags),
 	}
 }
 
@@ -86,12 +90,7 @@ func TestSavingWorkflowSuccess(t *testing.T) {
 	t.Parallel()
 
 	//given
-	workflow := &domain.WorkflowInstance{
-		ID: uint64(1),
-		Name:   "Name",
-		Source: "Source",
-		Facts:  domain.Facts{},
-	}
+	workflow := &domain.WorkflowInstance{ID: uint64(1)}
 	workflowRepository := new(WorkflowRepositoryMocked)
 	messageQueueService := new(MessageQueueServiceMocked)
 	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
@@ -106,19 +105,14 @@ func TestSavingWorkflowSuccess(t *testing.T) {
 
 	//then
 	assert.Equal(t, nil, err, "No error")
-	messageQueueService.AssertExpectations(t)
+	workflowRepository.AssertExpectations(t)
 }
 
 func TestSavingWorkflowFailure(t *testing.T) {
 	t.Parallel()
 
 	//given
-	workflow := &domain.WorkflowInstance{
-		ID: uint64(1),
-		Name:   "Name",
-		Source: "Source",
-		Facts:  domain.Facts{},
-	}
+	workflow := &domain.WorkflowInstance{ID: uint64(1)}
 	workflowRepository := new(WorkflowRepositoryMocked)
 	messageQueueService := new(MessageQueueServiceMocked)
 	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
@@ -135,5 +129,45 @@ func TestSavingWorkflowFailure(t *testing.T) {
 	//then
 	assert.NotEqual(t, nil, err, "An error is thrown if connection to DB from repository fails")
 	assert.Equal(t, err.Error(), fmt.Errorf("Couldn't insert workflow: %s", errorMessage).Error())
-	messageQueueService.AssertExpectations(t)
+	workflowRepository.AssertExpectations(t)
+}
+
+func TestGettingWorkflowByIdSuccess(t *testing.T) {
+	t.Parallel()
+
+	//given
+	workflowId := uint64(1)
+	workflow := domain.WorkflowInstance{ID: uint64(1)}
+	workflowRepository := new(WorkflowRepositoryMocked)
+	messageQueueService := new(MessageQueueServiceMocked)
+	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	workflowRepository.On("GetById", workflowId).Return(workflow, nil)
+
+	//when
+	workflowResult, err := workflowService.GetById(workflowId)
+
+	//then
+	assert.Equal(t, nil, err, "No error")
+	assert.Equal(t, workflowResult, workflow)
+	workflowRepository.AssertExpectations(t)
+}
+
+func TestGettingWorkflowByIdFailure(t *testing.T) {
+	t.Parallel()
+
+	//given
+	workflowId := uint64(1)
+	workflowRepository := new(WorkflowRepositoryMocked)
+	messageQueueService := new(MessageQueueServiceMocked)
+	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	errorMessage := "Some error"
+	workflowRepository.On("GetById", workflowId).Return(nil, errors.New(errorMessage))
+
+	//when
+	_, err := workflowService.GetById(workflowId)
+
+	//then
+	assert.NotEqual(t, nil, err, "An error is thrown if connection to DB from repository fails")
+	assert.Equal(t, err.Error(), fmt.Errorf("Couldn't select existing workflow for id %d: %s", workflowId, errorMessage).Error())
+	workflowRepository.AssertExpectations(t)
 }
