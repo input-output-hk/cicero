@@ -371,7 +371,6 @@ var workflowParam struct {
 }
 
 func (self *Web) ApiWorkflowInstancePost(w http.ResponseWriter, req *http.Request) {
-
 	workflowParam.Inputs = domain.Facts{}
 	if err := json.NewDecoder(req.Body).Decode(&workflowParam); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal params from request body"))
