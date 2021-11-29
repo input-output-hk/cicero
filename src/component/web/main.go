@@ -40,9 +40,8 @@ func (self *Web) Start(ctx context.Context) error {
 			},
 		},
 	})
-
 	if err != nil {
-		self.Logger.Printf("Failed to create swagger router: %s", err.Error())
+		return errors.WithMessage(err, "Failed to create swagger router")
 	}
 
 	// sorted alphabetically, please keep it this way
@@ -66,7 +65,7 @@ func (self *Web) Start(ctx context.Context) error {
 	// creates /documentation/json and /documentation/yaml routes
 	err = r.GenerateAndExposeSwagger()
 	if err != nil {
-		self.Logger.Printf("Failed to generate and expose swagger: %s", err.Error())
+		return errors.WithMessage(err, "Failed to generate and expose swagger: %s")
 	}
 
 	server := &http.Server{Addr: self.Listen, Handler: muxRouter}
