@@ -8,6 +8,7 @@ require (
 	github.com/alexflint/go-arg v1.4.2
 	github.com/davidebianchi/gswagger v0.3.0
 	github.com/georgysavva/scany v0.2.9
+	github.com/getkin/kin-openapi v0.83.0
 	github.com/go-echarts/go-echarts/v2 v2.2.5-0.20211026072344-dc05f25cd7c2
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/mux v1.8.0
@@ -19,6 +20,7 @@ require (
 	github.com/jackc/pgx/v4 v4.14.0
 	github.com/liftbridge-io/go-liftbridge/v2 v2.1.1-0.20210415162858-141bb940599b
 	github.com/liftbridge-io/liftbridge v1.7.0
+	github.com/pashagolub/pgxmock v1.4.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
 	github.com/sirupsen/logrus v1.7.0
@@ -46,7 +48,6 @@ require (
 	github.com/edsrzf/mmap-go v1.0.0 // indirect
 	github.com/fatih/color v1.9.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
-	github.com/getkin/kin-openapi v0.83.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-logfmt/logfmt v0.5.0 // indirect
@@ -85,7 +86,7 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.2.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
-	github.com/jackc/puddle v1.1.3 // indirect
+	github.com/jackc/puddle v1.2.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/klauspost/compress v1.13.4 // indirect
@@ -116,7 +117,6 @@ require (
 	github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02 // indirect
 	github.com/opentracing-contrib/go-stdlib v1.0.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
-	github.com/pashagolub/pgxmock v1.4.2 // indirect
 	github.com/pelletier/go-toml v1.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
