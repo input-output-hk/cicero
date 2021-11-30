@@ -53,8 +53,14 @@ type MessageQueueServiceMocked struct {
 	mock.Mock
 }
 
+func (m *MessageQueueServiceMocked) BuildMessage(name string, value []byte) liftbridge.MessageOption {
+	args := m.Called(name, value)
+	return args.Get(0).(liftbridge.MessageOption)
+}
+
 func (m *MessageQueueServiceMocked) Publish(stream string, streamName domain.StreamName, facts domain.Facts, opts ...liftbridge.MessageOption) error {
-	panic("implement me")
+	args := m.Called(stream, streamName, facts, opts)
+	return args.Error(0)
 }
 
 func (m *MessageQueueServiceMocked) Subscribe(ctx context.Context, name domain.StreamName, handler liftbridge.Handler, i int32) error {
@@ -127,7 +133,6 @@ func TestSavingWorkflowFailure(t *testing.T) {
 	err = workflowService.Save(tx, workflow)
 
 	//then
-	assert.NotEqual(t, nil, err, "An error is thrown if connection to DB from repository fails")
 	assert.Equal(t, err.Error(), fmt.Errorf("Couldn't insert workflow: %s", errorMessage).Error())
 	workflowRepository.AssertExpectations(t)
 }
@@ -167,7 +172,59 @@ func TestGettingWorkflowByIdFailure(t *testing.T) {
 	_, err := workflowService.GetById(workflowId)
 
 	//then
-	assert.NotEqual(t, nil, err, "An error is thrown if connection to DB from repository fails")
 	assert.Equal(t, err.Error(), fmt.Errorf("Couldn't select existing workflow for id %d: %s", workflowId, errorMessage).Error())
 	workflowRepository.AssertExpectations(t)
+}
+
+func TestStartWorkflowSuccess(t *testing.T) {
+	t.Parallel()
+
+	//given
+	source := "source"
+	name := "name"
+	inputs := domain.Facts{}
+	sourceBytes := []byte(source)
+	workflowRepository := new(WorkflowRepositoryMocked)
+	messageQueueService := new(MessageQueueServiceMocked)
+	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	messageQueueService.On("BuildMessage", source, sourceBytes).Return(liftbridge.Header(source, sourceBytes))
+	messageQueueService.On("Publish",
+		domain.StartStreamName.Fmt(name),
+		domain.StartStreamName,
+		inputs,
+		mock.AnythingOfType("[]liftbridge.MessageOption")).Return(nil)
+
+	//when
+	err := workflowService.Start(source, name, inputs)
+
+	//then
+	assert.Equal(t, nil, err, "No error")
+	messageQueueService.AssertExpectations(t)
+}
+
+func TestStartWorkflowFailure(t *testing.T) {
+	t.Parallel()
+
+	//given
+	source := "source"
+	name := "name"
+	inputs := domain.Facts{}
+	sourceBytes := []byte(source)
+	workflowRepository := new(WorkflowRepositoryMocked)
+	messageQueueService := new(MessageQueueServiceMocked)
+	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	errorMessage := "Some Error"
+	messageQueueService.On("BuildMessage", source, sourceBytes).Return(liftbridge.Header(source, sourceBytes))
+	messageQueueService.On("Publish",
+		domain.StartStreamName.Fmt(name),
+		domain.StartStreamName,
+		inputs,
+		mock.AnythingOfType("[]liftbridge.MessageOption")).Return(errors.New(errorMessage))
+
+	//when
+	err := workflowService.Start(source, name, inputs)
+
+	//then
+	assert.Equal(t, errorMessage, err.Error())
+	messageQueueService.AssertExpectations(t)
 }

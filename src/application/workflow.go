@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 )
 
@@ -82,6 +81,6 @@ func (s *workflowService) Start(source string, name string, inputs domain.Facts)
 		domain.StartStreamName.Fmt(name),
 		domain.StartStreamName,
 		inputs,
-		liftbridge.Header("source", []byte(source)),
+		s.messageQueueService.BuildMessage("source", []byte(source)),
 	)
 }
