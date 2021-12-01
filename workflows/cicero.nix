@@ -1,7 +1,7 @@
-{ std, lib }:
+{ std, lib } @ args:
 
 let
-  wfLib = import ../workflows-lib.nix;
+  wfLib = import ../workflows-lib.nix args;
 
   defaultPackages = [
     "github:input-output-hk/cicero#cicero-std"
@@ -30,14 +30,14 @@ in
 
     gocritic = { pr ? null, gocritic ? null }: {
       when = {
-        # "PR received >${workflow.name}/${toString workflow.id}#${action.name}<" = pr != null;
+        # "PR received >${action.actions.workflow.name}/${toString action.actions.workflow.id}#${action.name}<" = pr != null;
         "PR received" = pr != null;
         "gocritic hasn't run yet" = gocritic == null;
       };
 
-      job = with std; chain [
-        # (singleTask action)
-
+      job = with std; [
+        wfLib.jobDefaults
+        singleTask
         {
           resources.memory = 1024;
           config.packages = data-merge.append (defaultPackages ++ [
@@ -45,14 +45,8 @@ in
             "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#go"
           ]);
         }
-
-        # (github.reportStatus {
-        #   inherit workflow action;
-        #   inherit (pr) statuses_url;
-        # })
-
+        (github.reportStatus pr.statuses_url)
         (git.clone pr.head)
-
         (script "bash" ''
           gocritic check -enableAll ./...
         '')

@@ -22,7 +22,7 @@ in rec {
     { id ? null, inputs ? { } }:
     let
       inherit (builtins)
-        all attrNames attrValues fromJSON functionArgs typeOf mapAttrs;
+        all attrNames attrValues fromJSON typeOf mapAttrs;
 
       parsedInputs = {
         "set" = inputs;
@@ -59,7 +59,7 @@ in rec {
         inherit meta;
         actions = mapAttrs (actionName: action:
           let
-            inputNames = attrNames (functionArgs action);
+            inputNames = attrNames (lib.functionArgs action);
 
             intersection =
               lib.intersectLists inputNames (attrNames parsedInputs);

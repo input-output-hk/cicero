@@ -7,45 +7,190 @@ in
 
 rec {
   workflows = rec {
-    mkWorkflow = wf: { name, id } @ info: let
-      wfFn = if builtins.typeOf wf == "set" then (_: wf) else wf;
-      initWf = wfFn (wfFn info // info);
+    /*
+      Convenience for defining and wrapping a workflow.
+
+      Takes an attribute set of "spec workflow" arguments
+      as its first argument but drops any unknown keys.
+
+      The second argument is a "std workflow".
+
+      This allows access to any possible extra args before
+      calling `mkWorkflow` with the "spec workflow" args.
+
+      Useful if you get std itself passed as an extra arg,
+      as you need to access std to call `mkWorkflow`.
+    */
+    callWorkflow = { name, id, ... } @ args:
+      lib.flip mkWorkflow { inherit name id; };
+
+    /*
+      Takes a "std workflow" and returns a "spec workflow".
+
+      The "spec workflow" is a function that takes a set
+      `{ name, id }` as its only argument and returns
+      the final JSON that the cicero evaluator parses.
+
+      The "std workflow" is the set or function
+      which layout is specific to `mkWorkflow`.
+      It is similar to a "spec workflow".
+      I'll try to briefly visualize it here:
+
+      ```nix
+      [workflow:] {
+        actions = [actions:] {
+          <name> = [action:] { factFoo ? null }: {
+            when.conditionFoo = factFoo != null;
+            job = …;
+          };
+        };
+      }
+
+      `job` is the JSON representation a Nomad job's HCL or
+      a list that is passed to the `chain` function (see its docs).
+
+      The arguments in brackets are optional,
+      meaning that either a function with a single argument
+      or an attribute set is allowed in their place.
+
+      If the function form is used, that first argument
+      is the result of the function itself for recursive access
+      with specific extra keys added:
+      - workflow: { name, id, <self keys…> }
+      - actions: { workflow, <self keys…> }
+      - action: { actions, <self keys…> }
+
+      This allows access to the parent structure
+      from any place in the hierarchy.
+      ```
+    */
+    mkWorkflow = wf: { name, id } @ wfInfo: let
+      wfFn =
+        if builtins.typeOf wf == "set"
+        then (_: wf)
+        else wf;
+      initWf = wfFn (wfFn wfInfo // wfInfo);
     in initWf // {
       actions = let
-        actionsFn = if builtins.typeOf initWf.actions == "set" then (_: initWf.actions) else initWf.actions;
-      in mkActions (actionsFn (actionsFn { /* placeholder / no info yet */ }));
+        actionsFn =
+          if builtins.typeOf initWf.actions == "set"
+          then (_: initWf.actions)
+          else initWf.actions;
+        actionsInfo = { workflow = initWf // wfInfo; };
+        initActions = actionsFn (actionsFn actionsInfo // actionsInfo);
+      in mkActions initActions actionsInfo;
     };
 
-    mkActions = lib.mapAttrs mkAction;
+    mkActions = actions: actionsInfo:
+      builtins.mapAttrs (mkAction (actions // actionsInfo)) actions;
 
-    mkAction = name: action: let
-      actionFn = if builtins.typeOf (action {}) == "set" then (_: action) else action;
-      info = { inherit name; };
+    mkAction = actions: name: action: let
+      # actionRaw = { fact ? null }: { when = …; job = …; }
+      actionRaw =
+        if builtins.typeOf (action {}) == "set"
+        then action
+        else (action {});
+      actionRawArgs = builtins.functionArgs actionRaw;
+
+      # actionFn = self: { fact ? null }: { when = …; job = …; }
+      actionFn =
+        if builtins.typeOf (action {}) == "set"
+        then (_: action)
+        else action;
+
+      info = { inherit name actions; };
+
+      actionFnArg = actionFn info {} // info;
+      initAction = actionFn actionFnArg;
+
+      wrapper = facts:
+        let result = initAction facts; in
+        result // {
+          job =
+            if builtins.typeOf result.job == "list"
+            then chain actionFnArg result.job
+            else result.job;
+        };
     in
-      actionFn (actionFn info {} // info);
+      # We need to `setFunctionArgs` because that information is lost
+      # as the `wrapper` just takes `facts:`, leading to no facts
+      # being passed to this action as it appears like it takes none.
+      lib.setFunctionArgs wrapper actionRawArgs;
   };
 
   jobs.singleTask = { name, ... }: task: {
     group.${name}.task.${name} = task;
   };
 
-  tasks = {
-    chains = {
-      chain = steps:
-        lib.foldr (a: b:
-          if builtins.typeOf a == "set"
-          then data-merge.merge b a
-          else a b
-        ) {} steps;
+  tasks.script = language: script: let
+    runner = "run-${language}";
+    scriptName = builtins.hashString "md5" script;
+  in {
+    config = {
+      packages = [ "github:input-output-hk/cicero/${self.rev or ""}#${runner}" ];
+      command = [
+        # It is ok to hard-code the system here
+        # because we only care about the derivation name.
+        "/bin/${
+          self.outputs.legacyPackages.x86_64-linux.${runner}.name
+        }"
+        "/local/scripts/${language}/${scriptName}"
+      ];
+    };
 
+    template = [ {
+      destination = "local/scripts/${language}/${scriptName}";
+      left_delimiter = "";
+      right_delimiter = "";
+      data = script;
+    } ];
+  };
+
+  /*
+    Chains are a concise way to write jobs.
+    Put simply chains are a fold-right of wrappers.
+
+    Each "step/link/part" (no name defined) of a chain
+    is a function that takes some specific arguments
+    (usually supplied directly in the workflow),
+    the action that this job is being defined for
+    (usually supplied via usage of the `chain` function, not directly),
+    and the next "step/link/part" (also through the `chain` function).
+    It returns the job as an attribute set.
+
+    This simple contract sometimes allows to use other functions
+    that are not primarily meant to be used in a chain, or use
+    functions that are meant for chains by themselves.
+  */
+  chains = {
+    /*
+      The main entrypoint to chains.
+
+      For simplicity, plain attribute sets
+      are also allowed. They will simply be merged
+      with the next (if any) "step/link/part"
+      using `data-merge.merge`.
+    */
+    chain = action: steps:
+      lib.foldr (a: b:
+        if builtins.typeOf a == "set"
+        then data-merge.merge b a
+        else (a action) b
+      ) {} steps;
+
+    tasks = {
       /*
+        Like `script` but the second argument is
+        a function that takes the command of the
+        next script and returns the new script.
+
         Example:
 
         ```nix
         wrapScript "bash" (inner: ''
-          echo 'Running...'
+          echo 'Running …'
           time ${lib.escapeShellArgs inner}
-          echo 'Finished.'
+          echo '… finished.'
         '')
         ```
       */
@@ -59,7 +204,7 @@ rec {
           template = data-merge.append outer.template;
         };
 
-      git.clone = { repo, sha, ... }: next:
+      git.clone = { repo, sha, ... }: action: next:
         data-merge.merge
           (wrapScript "bash" (next: ''
             set -exuo pipefail
@@ -82,17 +227,17 @@ rec {
             ];
           };
 
-      github.reportStatus = { statuses_url, workflow, action }: next:
+      github.reportStatus = statuses_url: action: next:
         data-merge.merge
-          (wrapScript "bash" (next: ''
+          (wrapScript "bash" (inner: ''
             set -euxo pipefail
 
             function report {
               cicero-std github status ${lib.escapeShellArg statuses_url} \
                 --arg state "$1" \
-                --arg description 'Workflow #'${lib.escapeShellArg workflow.id} \
-                --arg workflow_id ${lib.escapeShellArg workflow.id} \
-                --arg workflow_name ${lib.escapeShellArg workflow.name} \
+                --arg description 'Workflow #'${lib.escapeShellArg action.actions.workflow.id} \
+                --arg workflow_id ${lib.escapeShellArg action.actions.workflow.id} \
+                --arg workflow_name ${lib.escapeShellArg action.actions.workflow.name} \
                 --arg action_name ${lib.escapeShellArg action.name}
             }
 
@@ -103,7 +248,7 @@ rec {
 
             report pending
 
-            if ${lib.escapeShellArgs next}; then
+            if ${lib.escapeShellArgs inner}; then
               report success
             else
               report failure
@@ -115,35 +260,12 @@ rec {
             ];
           };
     };
-
-    script = language: script: let
-      runner = "run-${language}";
-      scriptName = builtins.hashString "md5" script;
-    in {
-      config = {
-        packages = [ "github:input-output-hk/cicero/${self.rev or ""}#${runner}" ];
-        command = [
-          # It is ok to hard-code the system here
-          # because we only care about the derivation name.
-          "/bin/${
-            self.outputs.legacyPackages.x86_64-linux.${runner}.name
-          }"
-          "/local/scripts/${language}/${scriptName}"
-        ];
-      };
-
-      template = [ {
-        destination = "local/scripts/${language}/${scriptName}";
-        left_delimiter = "";
-        right_delimiter = "";
-        data = script;
-      } ];
-    };
   };
 
-  inherit (workflows) mkWorkflow;
+  inherit (workflows) callWorkflow mkWorkflow;
   inherit (jobs) singleTask;
   inherit (tasks) script;
-  inherit (tasks.chains) chain wrapScript git github;
+  inherit (chains) chain;
+  inherit (chains.tasks) wrapScript git github;
   inherit data-merge;
 }
