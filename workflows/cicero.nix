@@ -12,8 +12,8 @@ let
   ];
 in
 
-workflow: {
-  actions = actions: {
+{
+  actions = {
     /*
     pr = action: { pr ? null, github-event ? { } }: {
       when = {
@@ -28,14 +28,15 @@ workflow: {
     };
     */
 
-    gocritic = action: { pr ? null, gocritic ? null }: {
+    gocritic = { pr ? null, gocritic ? null }: {
       when = {
-        "PR received >${workflow.name}/${toString workflow.id}#${action.name}<" = pr != null;
+        # "PR received >${workflow.name}/${toString workflow.id}#${action.name}<" = pr != null;
+        "PR received" = pr != null;
         "gocritic hasn't run yet" = gocritic == null;
       };
 
       job = with std; chain [
-        (singleTask action)
+        # (singleTask action)
 
         {
           resources.memory = 1024;
@@ -45,10 +46,10 @@ workflow: {
           ]);
         }
 
-        (github.reportStatus {
-          inherit workflow action;
-          inherit (pr) statuses_url;
-        })
+        # (github.reportStatus {
+        #   inherit workflow action;
+        #   inherit (pr) statuses_url;
+        # })
 
         (git.clone pr.head)
 

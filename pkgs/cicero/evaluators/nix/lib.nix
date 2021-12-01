@@ -8,16 +8,21 @@ in
 rec {
   workflows = rec {
     mkWorkflow = wf: { name, id } @ info: let
-      initWf = wf (wf info // info);
+      wfFn = if builtins.typeOf wf == "set" then (_: wf) else wf;
+      initWf = wfFn (wfFn info // info);
     in initWf // {
-      actions = mkActions (initWf.actions (initWf.actions { /* placeholder / no info yet */ }));
+      actions = let
+        actionsFn = if builtins.typeOf initWf.actions == "set" then (_: initWf.actions) else initWf.actions;
+      in mkActions (actionsFn (actionsFn { /* placeholder / no info yet */ }));
     };
 
     mkActions = lib.mapAttrs mkAction;
 
-    mkAction = name: action:
-      let info = { inherit name; }; in
-      action (action info {} // info);
+    mkAction = name: action: let
+      actionFn = if builtins.typeOf (action {}) == "set" then (_: action) else action;
+      info = { inherit name; };
+    in
+      actionFn (actionFn info {} // info);
   };
 
   jobs.singleTask = { name, ... }: task: {
