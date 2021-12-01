@@ -1,8 +1,8 @@
-{ std, lib }:
+self:
 
 let
-  inherit (std.data-merge) merge;
-  inherit (lib) mapAttrs;
+  inherit (self.lib.std.data-merge) merge;
+  inherit (self.inputs.nixpkgs.lib) mapAttrs;
 in
 
 {

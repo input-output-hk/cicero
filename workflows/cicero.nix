@@ -1,7 +1,9 @@
-{ std, lib } @ args:
+{ self, ... } @ args:
 
 let
-  wfLib = import ../workflows-lib.nix args;
+  inherit (self.lib) std;
+
+  wfLib = import ../workflows-lib.nix self;
 
   defaultPackages = [
     "github:input-output-hk/cicero#cicero-std"
@@ -12,25 +14,29 @@ let
   ];
 in
 
-{
+std.callWorkflow args {
   actions = {
-    /*
-    pr = action: { pr ? null, github-event ? { } }: {
+    pr = { pr ? null, github-event ? { } }: {
       when = {
-        "not yet started: ${workflow.name}/${toString workflow.id}" = pr == null;
+        "not yet started" = pr == null;
         "GitHub event is a PR event" = github-event ? pull_request;
       };
+
       success.pr =
-        github-event.pull_request or null; # TODO make it possible to drop `or null`
-      job = wfLib.addNomadJobDefaults (run "bash" { } ''
-        echo 'TODO make it possible to omit would-be no-op jobs?'
-      '');
+        # TODO make it possible to drop `or null` using lazier evaluation
+        github-event.pull_request or null;
+
+      job = with std; [
+        wfLib.jobDefaults
+        singleTask
+        (script "bash" ''
+          echo 'TODO make it possible to omit would-be no-op jobs'
+        '')
+      ];
     };
-    */
 
     gocritic = { pr ? null, gocritic ? null }: {
       when = {
-        # "PR received >${action.actions.workflow.name}/${toString action.actions.workflow.id}#${action.name}<" = pr != null;
         "PR received" = pr != null;
         "gocritic hasn't run yet" = gocritic == null;
       };

@@ -72,9 +72,7 @@ in rec {
             inputs = inputNames;
           } // action filteredInputs)) actions;
       };
-
-      stdWorkflow = importedWorkflow { inherit std; };
-    in mkWorkflowState (std.mkWorkflow stdWorkflow { inherit name id; });
+    in mkWorkflowState (importedWorkflow { inherit name id; });
 
   # Recurses through a directory, considering every file a workflow.
   # The path of the file from the starting directory is used as name.
