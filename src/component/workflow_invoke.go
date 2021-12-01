@@ -27,7 +27,7 @@ type WorkflowInvokeConsumer struct {
 	MessageQueueService application.MessageQueueService
 	WorkflowService     application.WorkflowService
 	Db                  *pgxpool.Pool
-	NomadClient         *nomad.Client
+	NomadClient         application.NomadClient
 }
 
 func (self *WorkflowInvokeConsumer) Start(ctx context.Context) error {
@@ -144,14 +144,14 @@ func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, wo
 			actionInstanceId := instance.ID.String()
 			action.Job.ID = &actionInstanceId
 
-			if response, _, err := self.NomadClient.Jobs().Register(&action.Job, &nomad.WriteOptions{}); err != nil {
+			if response, _, err := self.NomadClient.JobsRegister(&action.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run action")
 			} else if len(response.Warnings) > 0 {
 				self.Logger.Println(response.Warnings)
 			}
 
 		} else if instance != nil {
-			if _, _, err := self.NomadClient.Jobs().Deregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
+			if _, _, err := self.NomadClient.JobsDeregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to stop action")
 			}
 

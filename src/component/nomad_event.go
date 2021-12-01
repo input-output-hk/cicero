@@ -21,9 +21,9 @@ type NomadEventConsumer struct {
 	NomadEventService     application.NomadEventService
 	WorkflowService       application.WorkflowService
 	ActionService         application.ActionService
-	WorkflowActionService application.WorkflowActionService
+	EvaluationService     application.EvaluationService
 	Db                    *pgxpool.Pool
-	NomadClient           *nomad.Client
+	NomadClient           application.NomadClient
 }
 
 func (self *NomadEventConsumer) Start(ctx context.Context) error {
@@ -37,18 +37,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 
 	self.Logger.Println("Listening to Nomad events starting at index", index)
 
-	stream, err := self.NomadClient.EventStream().Stream(
-		ctx,
-		map[nomad.Topic][]string{
-			nomad.TopicDeployment: {string(nomad.TopicAll)},
-			nomad.TopicEvaluation: {string(nomad.TopicAll)},
-			nomad.TopicAllocation: {string(nomad.TopicAll)},
-			nomad.TopicJob:        {string(nomad.TopicAll)},
-			nomad.TopicNode:       {string(nomad.TopicAll)},
-		},
-		index,
-		nil,
-	)
+	stream, err := self.NomadClient.EventStream(ctx, index)
 	if err != nil {
 		return errors.WithMessage(err, "Could not listen to Nomad events")
 	}
@@ -95,6 +84,23 @@ func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event) error {
 	return nil
 }
 
+func (self *NomadEventConsumer) getWorkflowAction(action domain.ActionInstance) (def domain.WorkflowAction, err error) {
+	wf, err := self.WorkflowService.GetById(action.WorkflowInstanceId)
+	if err != nil {
+		err = errors.WithMessagef(err, "Could not get workflow instance for workflow instance with ID %d", action.WorkflowInstanceId)
+		return
+	}
+
+	wfDef, err := self.EvaluationService.EvaluateWorkflow(wf.Source, wf.Name, wf.ID, wf.Facts)
+	if err != nil {
+		err = errors.WithMessagef(err, "Could not evaluate definition for workflow instance %#v", wf)
+		return
+	}
+
+	def = *wfDef.Actions[action.Name]
+	return
+}
+
 func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation) error {
 	if !allocation.ClientTerminalStatus() {
 		self.Logger.Printf("Ignoring allocation event with non-terminal client status \"%s\"", allocation.ClientStatus)
@@ -115,7 +121,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return err
 	}
 
-	def, err := self.WorkflowActionService.GetWorkflowAction(action)
+	def, err := self.getWorkflowAction(action)
 	if err != nil {
 		// TODO We don't want to crash here (for example if a workflow source disappeared)
 		// but we don't want to silently ignore it either - should this pop up in the web UI somewhere?
