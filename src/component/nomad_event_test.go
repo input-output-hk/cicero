@@ -58,9 +58,9 @@ func (n *NomadClientMocked) JobsDeregister(jobID string, purge bool, q *nomad.Wr
 
 func buildNomadEventConsumerMocked(nomadEventServiceMocked *NomadEventServiceMocked, nomadClientMocked *NomadClientMocked) *NomadEventConsumer {
 	return &NomadEventConsumer{
-		Logger:                log.New(os.Stderr, "NomadEventConsumerTest: ", log.LstdFlags),
-		NomadEventService:   nomadEventServiceMocked,
-		NomadClient:         nomadClientMocked,
+		Logger:            log.New(os.Stderr, "NomadEventConsumerTest: ", log.LstdFlags),
+		NomadEventService: nomadEventServiceMocked,
+		NomadClient:       nomadClientMocked,
 	}
 }
 
@@ -76,7 +76,7 @@ func TestStartWorkflowFailureToListenNomadEvent(t *testing.T) {
 	nomadEventConsumer := buildNomadEventConsumerMocked(nomadEventService, nomadClient)
 	nomadEventService.On("GetLastNomadEvent").Return(eventId, nil)
 	errorMessage := "Some error"
-	nomadClient.On("EventStream", ctx, eventId + 1).Return(stream, errors.New(errorMessage))
+	nomadClient.On("EventStream", ctx, eventId+1).Return(stream, errors.New(errorMessage))
 
 	err := nomadEventConsumer.Start(ctx)
 

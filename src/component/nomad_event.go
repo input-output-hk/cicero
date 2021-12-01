@@ -16,14 +16,14 @@ import (
 )
 
 type NomadEventConsumer struct {
-	Logger                *log.Logger
-	MessageQueueService   application.MessageQueueService
-	NomadEventService     application.NomadEventService
-	WorkflowService       application.WorkflowService
-	ActionService         application.ActionService
-	EvaluationService     application.EvaluationService
-	Db                    *pgxpool.Pool
-	NomadClient           application.NomadClient
+	Logger              *log.Logger
+	MessageQueueService application.MessageQueueService
+	NomadEventService   application.NomadEventService
+	WorkflowService     application.WorkflowService
+	ActionService       application.ActionService
+	EvaluationService   application.EvaluationService
+	Db                  *pgxpool.Pool
+	NomadClient         application.NomadClient
 }
 
 func (self *NomadEventConsumer) Start(ctx context.Context) error {

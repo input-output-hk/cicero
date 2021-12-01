@@ -12,7 +12,7 @@ type NomadClient interface {
 }
 
 type nomadClient struct {
-	nClient           *nomad.Client
+	nClient *nomad.Client
 }
 
 func NewNomadClient(nClient *nomad.Client) NomadClient {

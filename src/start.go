@@ -154,14 +154,14 @@ func (cmd *StartCmd) Run() error {
 
 	if start.nomadEvent {
 		child := component.NomadEventConsumer{
-			Logger:                log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
-			MessageQueueService:   messageQueueService().(application.MessageQueueService),
-			WorkflowService:       workflowService().(application.WorkflowService),
-			ActionService:         actionService().(application.ActionService),
-			EvaluationService:     evaluationService().(application.EvaluationService),
-			NomadEventService:     nomadEventService().(application.NomadEventService),
-			NomadClient:           nomadClientWrapper().(application.NomadClient),
-			Db:                    db().(*pgxpool.Pool),
+			Logger:              log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
+			MessageQueueService: messageQueueService().(application.MessageQueueService),
+			WorkflowService:     workflowService().(application.WorkflowService),
+			ActionService:       actionService().(application.ActionService),
+			EvaluationService:   evaluationService().(application.EvaluationService),
+			NomadEventService:   nomadEventService().(application.NomadEventService),
+			NomadClient:         nomadClientWrapper().(application.NomadClient),
+			Db:                  db().(*pgxpool.Pool),
 		}
 		supervisor.Add(child.Start)
 	}
