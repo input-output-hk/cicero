@@ -44,7 +44,7 @@ type evaluationService struct {
 	logger     *log.Logger
 }
 
-func NewEvaluationService(evaluators []string, env []string) EvaluationService {
+func NewEvaluationService(evaluators, env []string) EvaluationService {
 	return &evaluationService{
 		Evaluators: evaluators,
 		Env:        env,
@@ -52,7 +52,7 @@ func NewEvaluationService(evaluators []string, env []string) EvaluationService {
 	}
 }
 
-func (e *evaluationService) evaluate(src string, command string, extraEnv ...string) ([]byte, error) {
+func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([]byte, error) {
 	fetchUrl, evaluator, err := parseSource(src)
 	if err != nil {
 		return nil, err

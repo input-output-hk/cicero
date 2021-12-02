@@ -24,7 +24,7 @@ func TestShouldGetWorkflowById(t *testing.T) {
 		UpdatedAt: &now,
 	}
 
-	//given
+	// given
 	mock, err := pgxmock.NewConn()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
@@ -60,7 +60,7 @@ func TestShouldSaveWorkflow(t *testing.T) {
 		Facts:  domain.Facts{},
 	}
 
-	//given
+	// given
 	mock, err := pgxmock.NewConn()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
