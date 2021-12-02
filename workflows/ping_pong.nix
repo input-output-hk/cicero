@@ -1,26 +1,23 @@
-{ self, id, ... } @ args:
+{ self, id, ... }@args:
 
 let
   inherit (self.lib) std;
 
   wfLib = import ../workflows-lib.nix self;
 
-  simple = [
-    wfLib.jobDefaults
-    std.singleTask
-  ];
-in
+  simple = [ wfLib.jobDefaults std.singleTask ];
 
-std.callWorkflow args {
+in std.callWorkflow args {
   actions = {
     ping = { ping ? null }: {
       when."ping missing" = ping == null;
 
-      job = with std; simple ++ [
-        (script "bash" ''
-          echo running ping ${toString id}
-        '')
-      ];
+      job = with std;
+        simple ++ [
+          (script "bash" ''
+            echo running ping ${toString id}
+          '')
+        ];
     };
 
     pong = { ping ? null, pong ? null }: {
@@ -29,11 +26,12 @@ std.callWorkflow args {
         "pong missing" = pong == null;
       };
 
-      job = with std; simple ++ [
-        (script "bash" ''
-          echo running pong ${toString id}
-        '')
-      ];
+      job = with std;
+        simple ++ [
+          (script "bash" ''
+            echo running pong ${toString id}
+          '')
+        ];
     };
 
     pingpong = { pong ? null, pingpong ? null }: {
@@ -42,11 +40,12 @@ std.callWorkflow args {
         "pingpong missing" = pingpong == null;
       };
 
-      job = with std; simple ++ [
-        (script "bash" ''
-          echo running pingpong ${toString id}
-        '')
-      ];
+      job = with std;
+        simple ++ [
+          (script "bash" ''
+            echo running pingpong ${toString id}
+          '')
+        ];
     };
   };
 }

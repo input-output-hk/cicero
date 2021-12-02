@@ -1,4 +1,4 @@
-{ self, ... } @ args:
+{ self, ... }@args:
 
 let
   inherit (self.inputs.nixpkgs) lib;
@@ -6,10 +6,12 @@ let
 
   wfLib = import ../workflows-lib.nix self;
 
-  pkg = pkg: "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev or "nixpkgs-unstable"}#${pkg}";
-in
+  pkg = pkg:
+    "github:NixOS/nixpkgs/${
+      self.inputs.nixpkgs.rev or "nixpkgs-unstable"
+    }#${pkg}";
 
-std.callWorkflow args {
+in std.callWorkflow args {
   actions = {
     github = { sha ? null, environment ? null, github ? null }: {
       when = {
@@ -26,14 +28,14 @@ std.callWorkflow args {
         })
         {
           resources.memory = 1024;
-          config.packages = data-merge.append (map pkg [
-            "cue"
-            "nomad"
-          ]);
+          config.packages = data-merge.append (map pkg [ "cue" "nomad" ]);
         }
         (script "bash" ''
           cue export ./jobs -e jobs.webhooks \
-            ${lib.optionalString (environment != null) "-t env=${lib.escapeShellArg environment}"} \
+            ${
+              lib.optionalString (environment != null)
+              "-t env=${lib.escapeShellArg environment}"
+            } \
             -t sha=${lib.escapeShellArg sha} \
             > job.json
           nomad run job.json

@@ -18,10 +18,7 @@ in {
     fi
 
     # not necessary, just convenience
-    export PATH="$PATH:${
-      prev.lib.makeBinPath
-      (with final; [ coreutils ])
-    }"
+    export PATH="$PATH:${prev.lib.makeBinPath (with final; [ coreutils ])}"
 
     eval "$CICERO_SCRIPT"
   '');

@@ -1,16 +1,15 @@
 self:
 
-/*
-  A "spec workflow" is a function of the form:
+/* A "spec workflow" is a function of the form:
 
- ```nix
- { name, id }: {
-   actions.tick = { tick ? null }: {
-     when."hasn't run yet" = tick != null;
-     job = …; # nomad HCL job spec in JSON format
-   };
- }
- ```
+   ```nix
+   { name, id }: {
+     actions.tick = { tick ? null }: {
+       when."hasn't run yet" = tick != null;
+       job = …; # nomad HCL job spec in JSON format
+     };
+   }
+   ```
 */
 
 let inherit (self.inputs.nixpkgs) lib;
@@ -20,8 +19,7 @@ in rec {
   callWorkflow = name: workflow:
     { id ? null, inputs ? { } }:
     let
-      inherit (builtins)
-        all attrNames attrValues fromJSON typeOf mapAttrs;
+      inherit (builtins) all attrNames attrValues fromJSON typeOf mapAttrs;
 
       parsedInputs = {
         "set" = inputs;
@@ -90,7 +88,9 @@ in rec {
     builtins.mapAttrs (k: workflowWithDefaults defaults) (callWorkflows dir);
 
   callWorkflowsWithExtraArgs = extras: dir:
-    builtins.mapAttrs (k: v: callWorkflow k (workflowWithExtraArgs extras (import v))) (listWorkflows dir);
+    builtins.mapAttrs
+    (k: v: callWorkflow k (workflowWithExtraArgs extras (import v)))
+    (listWorkflows dir);
 
   workflowWithDefaults = defaults: innerWorkflow: args:
     defaults
