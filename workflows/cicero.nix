@@ -1,16 +1,17 @@
 { self, ... } @ args:
 
 let
+  inherit (self.inputs.nixpkgs) lib;
   inherit (self.lib) std;
 
   wfLib = import ../workflows-lib.nix self;
 
-  defaultPackages = [
-    "github:input-output-hk/cicero#cicero-std"
-    "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
-    "github:nixos/nixpkgs/nixpkgs-unstable#gnutar"
-    "github:nixos/nixpkgs/nixpkgs-unstable#xz"
-    # "github:nixos/nixpkgs/nixpkgs-unstable#cacert" # TODO does having this automatically set SSL_CERT_FILE?
+  nixpkg = pkg: "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev or "nixpkgs-unstable"}#${pkg}";
+  ciceropkg = pkg: "github:input-output-hk/cicero/${self.rev or ""}#${pkg}";
+
+  simple = [
+    wfLib.jobDefaults
+    std.singleTask
   ];
 in
 
@@ -26,9 +27,7 @@ std.callWorkflow args {
         # TODO make it possible to drop `or null` using lazier evaluation
         github-event.pull_request or null;
 
-      job = with std; [
-        wfLib.jobDefaults
-        singleTask
+      job = with std; simple ++ [
         (script "bash" ''
           echo 'TODO make it possible to omit would-be no-op jobs'
         '')
@@ -41,16 +40,14 @@ std.callWorkflow args {
         "gocritic hasn't run yet" = gocritic == null;
       };
 
-      job = with std; [
-        wfLib.jobDefaults
-        singleTask
+      job = with std; simple ++ [
         (github.reportStatus pr.statuses_url)
         (git.clone pr.head)
         {
           resources.memory = 1024;
-          config.packages = data-merge.append (defaultPackages ++ [
-            "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#gocritic"
-            "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#go"
+          config.packages = data-merge.append (map ciceropkg [
+            "gocritic"
+            "go"
           ]);
         }
         (script "bash" ''
@@ -65,16 +62,14 @@ std.callWorkflow args {
         "nixfmt hasn't run yet" = nixfmt == null;
       };
 
-      job = with std; [
-        wfLib.jobDefaults
-        singleTask
+      job = with std; simple ++ [
         (github.reportStatus pr.statuses_url)
         (git.clone pr.head)
         {
           resources.memory = 2 * 1024;
-          config.packages = data-merge.append (defaultPackages ++ [
-            "github:nixos/nixpkgs/nixpkgs-unstable#fd"
-            "github:nixos/nixpkgs/nixpkgs-unstable#nixfmt"
+          config.packages = data-merge.append (map nixpkg [
+            "fd"
+            "nixfmt"
           ]);
         }
         (script "bash" ''
@@ -90,9 +85,7 @@ std.callWorkflow args {
         "build hasn't run yet" = build == null;
       };
 
-      job = with std; [
-        wfLib.jobDefaults
-        singleTask
+      job = with std; simple ++ [
         (github.reportStatus pr.statuses_url)
         (git.clone pr.head)
         {
@@ -100,9 +93,9 @@ std.callWorkflow args {
             memory = 4 * 1024;
             cpu = 16000;
           };
-          config.packages = data-merge.append (defaultPackages ++ [
+          config.packages = data-merge.append [
             "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix"
-          ]);
+          ];
         }
         (script "bash" ''
           echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
@@ -125,21 +118,19 @@ std.callWorkflow args {
         "deploy hasn't run yet" = deploy == null;
       };
 
-      job = with std; [
-        wfLib.jobDefaults
-        singleTask
+      job = with std; simple ++ [
         (github.reportStatus pr.statuses_url)
         (git.clone pr.head)
         {
           resources.memory = 1024;
-          config.packages = data-merge.append (defaultPackages ++ [
-            "github:nixos/nixpkgs/nixpkgs-unstable#cue"
-            "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
+          config.packages = data-merge.append (map nixpkg [
+            "cue"
+            "nomad"
           ]);
         }
         (script "bash" ''
           cue export ./jobs -e jobs.cicero \
-              ${if environment == null then "" else "-t env=${environment}"} \
+              ${lib.optionalString (environment != null) "-t env=${lib.escapeShellArg environment}"} \
               -t 'sha=${pr.head.sha}' \
               > job.json
           nomad run job.json
