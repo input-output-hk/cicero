@@ -1,22 +1,26 @@
-{ id, run }:
+{ self, id, ... } @ args:
 
 let
-  lib = import ../workflows-lib.nix;
+  inherit (self.lib) std;
 
-  bash = groupAndTaskName: script:
-    lib.addNomadJobDefaults (run "bash" {
-      # XXX currently required to show logs in UI
-      group = groupAndTaskName;
-      task = groupAndTaskName;
-    } script);
-in {
+  wfLib = import ../workflows-lib.nix self;
+
+  simple = [
+    wfLib.jobDefaults
+    std.singleTask
+  ];
+in
+
+std.callWorkflow args {
   actions = {
     ping = { ping ? null }: {
       when."ping missing" = ping == null;
 
-      job = bash "ping" ''
-        echo running ping ${id}
-      '';
+      job = with std; simple ++ [
+        (script "bash" ''
+          echo running ping ${toString id}
+        '')
+      ];
     };
 
     pong = { ping ? null, pong ? null }: {
@@ -25,9 +29,11 @@ in {
         "pong missing" = pong == null;
       };
 
-      job = bash "pong" ''
-        echo running pong ${id}
-      '';
+      job = with std; simple ++ [
+        (script "bash" ''
+          echo running pong ${toString id}
+        '')
+      ];
     };
 
     pingpong = { pong ? null, pingpong ? null }: {
@@ -36,9 +42,11 @@ in {
         "pingpong missing" = pingpong == null;
       };
 
-      job = bash "pingpong" ''
-        echo running pingpong ${id}
-      '';
+      job = with std; simple ++ [
+        (script "bash" ''
+          echo running pingpong ${toString id}
+        '')
+      ];
     };
   };
 }
