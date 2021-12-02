@@ -223,7 +223,8 @@ rec {
           '') next)
           {
             config.packages = data-merge.append [
-              "github:nixos/nixpkgs/nixpkgs-unstable#gitMinimal"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev or "nixpkgs-unstable"}#gitMinimal"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev or "nixpkgs-unstable"}#cacert"
             ];
           };
 
