@@ -96,6 +96,11 @@ in std.callWorkflow args {
           }
           (script "bash" ''
             echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
+
+            export NIX_CONFIG="
+            experimental-features = nix-command flakes
+            "
+
             nix build
           '')
         ];
