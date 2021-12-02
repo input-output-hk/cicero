@@ -14,9 +14,20 @@ writers.writeBash "cicero-std_github_status" ''
   shift
 
   # TODO Only get from vault. Env var is just for development.
-  if [[ -z "$GITHUB_TOKEN" ]]; then
+  if [[ -z "''${GITHUB_TOKEN:-}" ]]; then
     GITHUB_TOKEN=$(vault kv get -field=token kv/data/cicero/github)
   fi
+
+  function cleanup {
+    rm "$secret_headers"
+  }
+  trap cleanup EXIT
+
+  secret_headers="$(mktemp)"
+
+  cat >> "$secret_headers" <<EOF
+  Authorization: token $GITHUB_TOKEN
+  EOF
 
   jq "$@" -nc '{
     state: $state,
@@ -26,6 +37,6 @@ writers.writeBash "cicero-std_github_status" ''
   }' \
   | curl "$url" \
     -H 'Accept: application/vnd.github.v3+json' \
-    -H "Authorization: token $GITHUB_TOKEN" \
+    -H @"$secret_headers" \
     --data-binary @-
 ''
