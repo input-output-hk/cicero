@@ -35,7 +35,7 @@ func (w *workflowActionService) GetWorkflowAction(action domain.ActionInstance) 
 
 	wfDef, err := w.evaluationService.EvaluateWorkflow(wf.Source, wf.Name, wf.ID, wf.Facts)
 	if err != nil {
-		err = errors.WithMessagef(err, "Could not evaluate definition for workflow instance %#v", wf)
+		err = errors.WithMessagef(err, "Could not evaluate definition for workflow instance %d", wf.ID)
 		return
 	}
 
