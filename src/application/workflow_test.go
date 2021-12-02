@@ -3,7 +3,9 @@ package application
 import (
 	"context"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/application/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
+	repositoryMocks "github.com/input-output-hk/cicero/src/domain/repository/mocks"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pashagolub/pgxmock"
@@ -14,62 +16,6 @@ import (
 	"os"
 	"testing"
 )
-
-type WorkflowRepositoryMocked struct {
-	mock.Mock
-}
-
-func (w *WorkflowRepositoryMocked) GetSummary() (domain.WorkflowSummary, error) {
-	panic("implement me")
-}
-
-func (w *WorkflowRepositoryMocked) GetAll() ([]*domain.WorkflowInstance, error) {
-	panic("implement me")
-}
-
-func (w *WorkflowRepositoryMocked) GetAllByName(s string) ([]*domain.WorkflowInstance, error) {
-	panic("implement me")
-}
-
-func (w *WorkflowRepositoryMocked) GetById(id uint64) (workflow domain.WorkflowInstance, err error) {
-	args := w.Called(id)
-	if args.Get(0) != nil {
-		workflow = args.Get(0).(domain.WorkflowInstance)
-	}
-	err = args.Error(1)
-	return
-}
-
-func (w *WorkflowRepositoryMocked) Save(tx pgx.Tx, instance *domain.WorkflowInstance) error {
-	args := w.Called(tx, instance)
-	return args.Error(0)
-}
-
-func (w *WorkflowRepositoryMocked) Update(tx pgx.Tx, instance domain.WorkflowInstance) error {
-	panic("implement me")
-}
-
-type MessageQueueServiceMocked struct {
-	mock.Mock
-}
-
-func (m *MessageQueueServiceMocked) BuildMessage(name string, value []byte) liftbridge.MessageOption {
-	args := m.Called(name, value)
-	return args.Get(0).(liftbridge.MessageOption)
-}
-
-func (m *MessageQueueServiceMocked) Publish(stream string, streamName domain.StreamName, facts domain.Facts, opts ...liftbridge.MessageOption) error {
-	args := m.Called(stream, streamName, facts, opts)
-	return args.Error(0)
-}
-
-func (m *MessageQueueServiceMocked) Subscribe(ctx context.Context, name domain.StreamName, handler liftbridge.Handler, i int32) error {
-	panic("implement me")
-}
-
-func (m *MessageQueueServiceMocked) Save(tx pgx.Tx, message *liftbridge.Message) error {
-	panic("implement me")
-}
 
 func buildTransactionMocked() (tx pgx.Tx, err error) {
 	mock, err := pgxmock.NewConn()
@@ -84,7 +30,7 @@ func buildTransactionMocked() (tx pgx.Tx, err error) {
 	return
 }
 
-func buildWorkflowApplicationMocked(workflowRepositoryMocked *WorkflowRepositoryMocked, messageQueueServiceMocked *MessageQueueServiceMocked) *workflowService {
+func buildWorkflowApplication(workflowRepositoryMocked *repositoryMocks.WorkflowRepository, messageQueueServiceMocked *mocks.MessageQueueService) *workflowService {
 	return &workflowService{
 		workflowRepository:  workflowRepositoryMocked,
 		messageQueueService: messageQueueServiceMocked,
@@ -97,9 +43,9 @@ func TestSavingWorkflowSuccess(t *testing.T) {
 
 	//given
 	workflow := &domain.WorkflowInstance{ID: uint64(1)}
-	workflowRepository := new(WorkflowRepositoryMocked)
-	messageQueueService := new(MessageQueueServiceMocked)
-	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	workflowRepository := &repositoryMocks.WorkflowRepository{}
+	messageQueueService := &mocks.MessageQueueService{}
+	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	tx, err := buildTransactionMocked()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
@@ -119,9 +65,9 @@ func TestSavingWorkflowFailure(t *testing.T) {
 
 	//given
 	workflow := &domain.WorkflowInstance{ID: uint64(1)}
-	workflowRepository := new(WorkflowRepositoryMocked)
-	messageQueueService := new(MessageQueueServiceMocked)
-	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	workflowRepository := &repositoryMocks.WorkflowRepository{}
+	messageQueueService := &mocks.MessageQueueService{}
+	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	tx, err := buildTransactionMocked()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
@@ -143,9 +89,9 @@ func TestGettingWorkflowByIdSuccess(t *testing.T) {
 	//given
 	workflowId := uint64(1)
 	workflow := domain.WorkflowInstance{ID: uint64(1)}
-	workflowRepository := new(WorkflowRepositoryMocked)
-	messageQueueService := new(MessageQueueServiceMocked)
-	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	workflowRepository := &repositoryMocks.WorkflowRepository{}
+	messageQueueService := &mocks.MessageQueueService{}
+	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	workflowRepository.On("GetById", workflowId).Return(workflow, nil)
 
 	//when
@@ -162,11 +108,11 @@ func TestGettingWorkflowByIdFailure(t *testing.T) {
 
 	//given
 	workflowId := uint64(1)
-	workflowRepository := new(WorkflowRepositoryMocked)
-	messageQueueService := new(MessageQueueServiceMocked)
-	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	workflowRepository := &repositoryMocks.WorkflowRepository{}
+	messageQueueService := &mocks.MessageQueueService{}
+	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	errorMessage := "Some error"
-	workflowRepository.On("GetById", workflowId).Return(nil, errors.New(errorMessage))
+	workflowRepository.On("GetById", workflowId).Return(domain.WorkflowInstance{}, errors.New(errorMessage))
 
 	//when
 	_, err := workflowService.GetById(workflowId)
@@ -184,15 +130,16 @@ func TestStartWorkflowSuccess(t *testing.T) {
 	name := "name"
 	inputs := domain.Facts{}
 	sourceBytes := []byte(source)
-	workflowRepository := new(WorkflowRepositoryMocked)
-	messageQueueService := new(MessageQueueServiceMocked)
-	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
-	messageQueueService.On("BuildMessage", source, sourceBytes).Return(liftbridge.Header(source, sourceBytes))
+	message := liftbridge.Header(source, sourceBytes)
+	workflowRepository := &repositoryMocks.WorkflowRepository{}
+	messageQueueService := &mocks.MessageQueueService{}
+	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
+	messageQueueService.On("BuildMessage", source, sourceBytes).Return(message)
 	messageQueueService.On("Publish",
 		domain.StartStreamName.Fmt(name),
 		domain.StartStreamName,
 		inputs,
-		mock.AnythingOfType("[]liftbridge.MessageOption")).Return(nil)
+		mock.AnythingOfType("liftbridge.MessageOption")).Return(nil)
 
 	//when
 	err := workflowService.Start(source, name, inputs)
@@ -210,16 +157,16 @@ func TestStartWorkflowFailure(t *testing.T) {
 	name := "name"
 	inputs := domain.Facts{}
 	sourceBytes := []byte(source)
-	workflowRepository := new(WorkflowRepositoryMocked)
-	messageQueueService := new(MessageQueueServiceMocked)
-	workflowService := buildWorkflowApplicationMocked(workflowRepository, messageQueueService)
+	workflowRepository := &repositoryMocks.WorkflowRepository{}
+	messageQueueService := &mocks.MessageQueueService{}
+	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	errorMessage := "Some Error"
 	messageQueueService.On("BuildMessage", source, sourceBytes).Return(liftbridge.Header(source, sourceBytes))
 	messageQueueService.On("Publish",
 		domain.StartStreamName.Fmt(name),
 		domain.StartStreamName,
 		inputs,
-		mock.AnythingOfType("[]liftbridge.MessageOption")).Return(errors.New(errorMessage))
+		mock.AnythingOfType("liftbridge.MessageOption")).Return(errors.New(errorMessage))
 
 	//when
 	err := workflowService.Start(source, name, inputs)

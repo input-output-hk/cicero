@@ -4,7 +4,7 @@ package mocks
 
 import (
 	api "github.com/hashicorp/nomad/api"
-	application "github.com/input-output-hk/cicero/src/application"
+	domain "github.com/input-output-hk/cicero/src/domain"
 	mock "github.com/stretchr/testify/mock"
 
 	pgx "github.com/jackc/pgx/v4"
@@ -16,15 +16,15 @@ type NomadEventService struct {
 }
 
 // GetEventAllocByWorkflowId provides a mock function with given fields: _a0
-func (_m *NomadEventService) GetEventAllocByWorkflowId(_a0 uint64) (map[string]application.AllocWrapper, error) {
+func (_m *NomadEventService) GetEventAllocByWorkflowId(_a0 uint64) (map[string]domain.AllocWrapper, error) {
 	ret := _m.Called(_a0)
 
-	var r0 map[string]application.AllocWrapper
-	if rf, ok := ret.Get(0).(func(uint64) map[string]application.AllocWrapper); ok {
+	var r0 map[string]domain.AllocWrapper
+	if rf, ok := ret.Get(0).(func(uint64) map[string]domain.AllocWrapper); ok {
 		r0 = rf(_a0)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string]application.AllocWrapper)
+			r0 = ret.Get(0).(map[string]domain.AllocWrapper)
 		}
 	}
 
