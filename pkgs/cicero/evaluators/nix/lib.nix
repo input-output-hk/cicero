@@ -252,7 +252,9 @@ rec {
             if ${lib.escapeShellArgs inner}; then
               report success
             else
+              status=$?
               report failure
+              exit $status
             fi
           '') next)
           {
