@@ -6,16 +6,23 @@ let
   runner = drv:
     prev.writers.writeBashBin "${drv.name}-runner" ''
       set -euo pipefail
-
-      export PATH="$PATH:${
-        prev.lib.makeBinPath
-        (with final; [ coreutils gnutar xz ])
-      }"
       export CICERO_SCRIPT=$(< "$1")
       exec ${drv}
     '';
 in {
   run-bash = runner (prev.writers.writeBash "${commonName}-bash" ''
+    set -euo pipefail
+
+    if [[ -n "''${CICERO_DEBUG:-}" ]]; then
+      set -x
+    fi
+
+    # not necessary, just convenience
+    export PATH="$PATH:${
+      prev.lib.makeBinPath
+      (with final; [ coreutils ])
+    }"
+
     eval "$CICERO_SCRIPT"
   '');
 

@@ -142,15 +142,7 @@ rec {
       destination = "local/scripts/${language}/${scriptName}";
       left_delimiter = "";
       right_delimiter = "";
-      data = ''
-        set -euo pipefail
-
-        if [[ -n "''${CICERO_STD_DEBUG:-}" ]]; then
-          set -x
-        fi
-
-        ${script}
-      '';
+      data = script;
     } ];
   };
 
@@ -237,13 +229,40 @@ rec {
       github.reportStatus = statuses_url: action: next:
         data-merge.merge
           (wrapScript "bash" (inner: ''
+            export SSL_CERT_FILE=/current-profile/etc/ssl/certs/ca-bundle.crt
+
+            # TODO Only get from vault. Env var is just for development.
+            if [[ -z "''${GITHUB_TOKEN:-}" ]]; then
+              GITHUB_TOKEN=$(vault kv get -field=token kv/data/cicero/github)
+            fi
+
+            function cleanup {
+              rm -f "$secret_headers"
+            }
+            trap cleanup EXIT
+
+            secret_headers="$(mktemp)"
+
+            cat >> "$secret_headers" <<EOF
+            Authorization: token $GITHUB_TOKEN
+            EOF
+
             function report {
-              cicero-std github status ${lib.escapeShellArg statuses_url} \
+              jq -nc '{
+                state: $state,
+                context: "\($workflow_name):\($action_name)",
+                description: $description,
+                target_url: "\(env.CICERO_WEB_URL)/workflow/\($workflow_id)#\($action_name)",
+              }' \
                 --arg state "$1" \
                 --arg description 'Workflow #'${lib.escapeShellArg action.actions.workflow.id} \
                 --arg workflow_id ${lib.escapeShellArg action.actions.workflow.id} \
                 --arg workflow_name ${lib.escapeShellArg action.actions.workflow.name} \
-                --arg action_name ${lib.escapeShellArg action.name}
+                --arg action_name ${lib.escapeShellArg action.name} \
+              | curl ${lib.escapeShellArg statuses_url} \
+                -H 'Accept: application/vnd.github.v3+json' \
+                -H @"$secret_headers" \
+                --data-binary @-
             }
 
             function err {
@@ -263,7 +282,10 @@ rec {
           '') next)
           {
             config.packages = data-merge.append [
-              "github:input-output-hk/cicero/${self.rev or ""}#cicero-std"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#vault"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
             ];
           };
     };
