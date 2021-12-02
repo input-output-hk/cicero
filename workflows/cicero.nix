@@ -130,9 +130,9 @@ std.callWorkflow args {
         }
         (script "bash" ''
           cue export ./jobs -e jobs.cicero \
-              ${lib.optionalString (environment != null) "-t env=${lib.escapeShellArg environment}"} \
-              -t 'sha=${pr.head.sha}' \
-              > job.json
+            ${lib.optionalString (environment != null) "-t env=${lib.escapeShellArg environment}"} \
+            -t 'sha=${pr.head.sha}' \
+            > job.json
           nomad run job.json
         '')
       ];
