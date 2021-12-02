@@ -1,7 +1,11 @@
 { lib, writers, curl, cacert, jq, vault }:
 
 writers.writeBash "cicero-std_github_status" ''
-  set -euxo pipefail
+  set -euo pipefail
+
+  if [[ -n "''${CICERO_STD_DEBUG:-}" ]]; then
+    set -x
+  fi
 
   export PATH="$PATH:${lib.makeBinPath [ curl jq vault ]}"
   export SSL_CERT_FILE="${cacert}/etc/ssl/certs/ca-bundle.crt"

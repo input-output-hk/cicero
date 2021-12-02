@@ -142,7 +142,15 @@ rec {
       destination = "local/scripts/${language}/${scriptName}";
       left_delimiter = "";
       right_delimiter = "";
-      data = script;
+      data = ''
+        set -euo pipefail
+
+        if [[ -n "''${CICERO_STD_DEBUG:-}" ]]; then
+          set -x
+        fi
+
+        ${script}
+      '';
     } ];
   };
 
@@ -207,8 +215,6 @@ rec {
       git.clone = { repo, sha, ... }: action: next:
         data-merge.merge
           (wrapScript "bash" (next: ''
-            set -exuo pipefail
-
             export SSL_CERT_FILE=/current-profile/etc/ssl/certs/ca-bundle.crt
             export HOME="$PWD/.home"
 
@@ -231,8 +237,6 @@ rec {
       github.reportStatus = statuses_url: action: next:
         data-merge.merge
           (wrapScript "bash" (inner: ''
-            set -euxo pipefail
-
             function report {
               cicero-std github status ${lib.escapeShellArg statuses_url} \
                 --arg state "$1" \

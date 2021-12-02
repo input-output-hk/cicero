@@ -5,7 +5,7 @@ let
 
   runner = drv:
     prev.writers.writeBashBin "${drv.name}-runner" ''
-      set -exuo pipefail
+      set -euo pipefail
 
       export PATH="$PATH:${
         prev.lib.makeBinPath
