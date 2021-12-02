@@ -1,17 +1,16 @@
 self:
 
-/* A workflow is a function of the form:
+/*
+  A "spec workflow" is a function of the form:
 
-   ```nix
-   { std }: { name, id }: {
-     actions.tick = { tick ? null }: {
-       when."hasn't run yet" = tick != null;
-       job = std.job.default (std.task.script "bash" {} ''
-         echo tick
-       '');
-     };
-   }
-   ```
+ ```nix
+ { name, id }: {
+   actions.tick = { tick ? null }: {
+     when."hasn't run yet" = tick != null;
+     job = …; # nomad HCL job spec in JSON format
+   };
+ }
+ ```
 */
 
 let inherit (self.inputs.nixpkgs) lib;
