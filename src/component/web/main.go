@@ -151,10 +151,12 @@ func (self *Web) WorkflowNewGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// step 2
-	if names, err := self.EvaluationService.ListWorkflows(source); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "While listing workflows for %q", source))
-	} else {
-		render(templateName, w, map[string]interface{}{"Source": source, "Names": names})
+	if source != "" {
+		if names, err := self.EvaluationService.ListWorkflows(source); err != nil {
+			self.ServerError(w, errors.WithMessagef(err, "While listing workflows for %q", source))
+		} else {
+			render(templateName, w, map[string]interface{}{"Source": source, "Names": names})
+		}
 	}
 }
 
