@@ -260,6 +260,7 @@ rec {
                 --arg workflow_name ${lib.escapeShellArg action.actions.workflow.name} \
                 --arg action_name ${lib.escapeShellArg action.name} \
               | curl ${lib.escapeShellArg statuses_url} \
+                > /dev/null --no-progress-meter \
                 -H 'Accept: application/vnd.github.v3+json' \
                 -H @"$secret_headers" \
                 --data-binary @-
