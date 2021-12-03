@@ -3,6 +3,10 @@ package application
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"testing"
+
 	"github.com/input-output-hk/cicero/src/application/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
 	repositoryMocks "github.com/input-output-hk/cicero/src/domain/repository/mocks"
@@ -12,20 +16,17 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log"
-	"os"
-	"testing"
 )
 
 func buildTransactionMocked() (tx pgx.Tx, err error) {
 	dbMock, err := pgxmock.NewConn()
 	if err != nil {
-		err = errors.WithMessage(err, "an error '%s' was not expected when opening a stub database connection")
+		err = errors.WithMessage(err, "an error was not expected when opening a stub database connection")
 	}
 	dbMock.ExpectBegin()
 	tx, err = dbMock.Begin(context.Background())
 	if err != nil {
-		err = errors.WithMessage(err, "an error '%s' was not expected when Begin a Tx in database")
+		err = errors.WithMessage(err, "an error was not expected when beginning a DB transaction")
 	}
 	return
 }
@@ -70,7 +71,7 @@ func TestSavingWorkflowFailure(t *testing.T) {
 	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	tx, err := buildTransactionMocked()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
+		t.Fatalf("an error '%s' was not expected when beginning a DB transaction", err)
 	}
 	errorMessage := "Some error"
 	workflowRepository.On("Save", tx, workflow).Return(errors.New(errorMessage))

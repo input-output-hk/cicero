@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/application/mocks"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"os"
 	"testing"
+
+	nomad "github.com/hashicorp/nomad/api"
+	"github.com/input-output-hk/cicero/src/application/mocks"
+	"github.com/stretchr/testify/assert"
 )
 
 func buildNomadEventConsumerMocked(nomadEventServiceMocked *mocks.NomadEventService, nomadClientMocked *mocks.NomadClient) *NomadEventConsumer {
