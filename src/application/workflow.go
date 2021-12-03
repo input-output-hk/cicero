@@ -76,7 +76,7 @@ func (s *workflowService) Update(tx pgx.Tx, workflow domain.WorkflowInstance) er
 	return nil
 }
 
-func (s *workflowService) Start(source string, name string, inputs domain.Facts) error {
+func (s *workflowService) Start(source, name string, inputs domain.Facts) error {
 	return s.messageQueueService.Publish(
 		domain.StartStreamName.Fmt(name),
 		domain.StartStreamName,
