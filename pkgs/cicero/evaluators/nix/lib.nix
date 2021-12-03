@@ -3,7 +3,6 @@ self:
 let
   inherit (self.inputs.nixpkgs) lib;
   inherit (self.inputs) data-merge;
-
 in rec {
   workflows = rec {
     /* Convenience for defining and wrapping a workflow.
