@@ -13,10 +13,12 @@ let
   ciceropkg = pkg: "github:input-output-hk/cicero/${self.rev or ""}#${pkg}";
 
   simple = [ wfLib.jobDefaults std.singleTask ];
-  setup = pr: with std; [
-    (lib.optionalAttrs (pr ? statuses_url) (github.reportStatus pr.statuses_url))
-    (git.clone pr.head)
-  ];
+  setup = pr:
+    with std; [
+      (lib.optionalAttrs (pr ? statuses_url)
+        (github.reportStatus pr.statuses_url))
+      (git.clone pr.head)
+    ];
 in std.callWorkflow args {
   actions = {
     pr = { pr ? null, github-event ? { } }: {
