@@ -142,12 +142,16 @@ in rec {
      Put simply chains are a fold-right of wrappers.
 
      Each "step/link/part" (no name defined) of a chain
-     is a function that takes some specific arguments
-     (usually supplied directly in the workflow),
-     the action that this job is being defined for
-     (usually supplied via usage of the `chain` function, not directly),
-     and the next "step/link/part" (also through the `chain` function).
+     is a function that takes the action that this job
+     is being defined for as its first argument
+     and the next "step/link/part" as its second argument.
+     These argument are supplied automatically when called
+     by the `chain` function.
      It returns the job as an attribute set.
+
+     Most "steps/links/parts" are created from a builder function
+     that takes some specific arguments which are usually given
+     directly in the workflow definition.
 
      This simple contract sometimes allows to use other functions
      that are not primarily meant to be used in a chain, or use
