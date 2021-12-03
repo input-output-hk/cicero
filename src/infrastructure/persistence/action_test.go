@@ -25,7 +25,7 @@ func TestShouldGetActionById(t *testing.T) {
 		FinishedAt:         &now,
 	}
 
-	//given
+	// given
 	mock, err := pgxmock.NewConn()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
@@ -66,7 +66,7 @@ func TestShouldUpdateAction(t *testing.T) {
 		FinishedAt:         &now,
 	}
 
-	//given
+	// given
 	mock, err := pgxmock.NewConn()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)

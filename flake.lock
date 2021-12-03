@@ -1,5 +1,23 @@
 {
   "nodes": {
+    "data-merge": {
+      "inputs": {
+        "nixlib": "nixlib"
+      },
+      "locked": {
+        "lastModified": 1635967744,
+        "narHash": "sha256-01065dNad3BIepNzrpYuYInxq/ynqtGMSsIiNqjND7E=",
+        "owner": "divnix",
+        "repo": "data-merge",
+        "rev": "68bd71f980f75cf73bc5071982eddfe6bc089768",
+        "type": "github"
+      },
+      "original": {
+        "owner": "divnix",
+        "repo": "data-merge",
+        "type": "github"
+      }
+    },
     "devshell": {
       "locked": {
         "lastModified": 1632436039,
@@ -141,6 +159,21 @@
         "type": "github"
       }
     },
+    "nixlib": {
+      "locked": {
+        "lastModified": 1638059559,
+        "narHash": "sha256-cCGV2TCDLN+iwHxoplk4uZOvc7TqdlsW5nBVcu943IU=",
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "rev": "44e0fa2ab408508a60dd4f213d75fd0c64262dde",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1634821460,
@@ -207,6 +240,7 @@
     },
     "root": {
       "inputs": {
+        "data-merge": "data-merge",
         "devshell": "devshell",
         "driver": "driver",
         "follower": "follower",

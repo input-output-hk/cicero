@@ -1,73 +1,37 @@
-{ id, run }:
+{ self, ... }@args:
 
 let
-  lib = import ../workflows-lib.nix;
+  inherit (self.inputs.nixpkgs) lib;
+  inherit (self.lib) std;
 
-  defaultPackages = [
-    "github:input-output-hk/cicero#cicero-std"
-    "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
-    "github:nixos/nixpkgs/nixpkgs-unstable#gnutar"
-    "github:nixos/nixpkgs/nixpkgs-unstable#xz"
-    "github:nixos/nixpkgs/nixpkgs-unstable#cacert"
-    "github:nixos/nixpkgs/nixpkgs-unstable#gitMinimal"
-  ];
+  wfLib = import ../workflows-lib.nix self;
 
-  clone = pr: ''
-    set -exuo pipefail
+  nixpkg = pkg:
+    "github:NixOS/nixpkgs/${
+      self.inputs.nixpkgs.rev or "nixpkgs-unstable"
+    }#${pkg}";
+  ciceropkg = pkg: "github:input-output-hk/cicero/${self.rev or ""}#${pkg}";
 
-    export NIX_CONFIG="experimental-features = nix-command flakes"
-    export SSL_CERT_FILE="/current-profile/etc/ssl/certs/ca-bundle.crt"
-    export HOME="$PWD/.home"
+  simple = [ wfLib.jobDefaults std.singleTask ];
 
-    mkdir "$HOME"
-
-    git config --global advice.detachedHead false
-    git clone --quiet ${pr.head.repo.clone_url} src
-    cd src
-    git checkout ${pr.head.sha}
-  '';
-
-  workflowName = "cicero"; # TODO get passed in from lib.nix?
-
-  reportGithubStatus = pr: actionName: script: ''
-    set -euxo pipefail
-
-    function report {
-      cicero-std github status ${pr.statuses_url} \
-        --arg state "$1" \
-        --arg description "Workflow #${id}" \
-        --arg workflow_id ${id} \
-        --arg workflow_name '${workflowName}' \
-        --arg action_name '${actionName}' # FIXME escape
-    }
-
-    function err {
-      report error
-    }
-    trap err ERR
-
-    report pending
-
-    if {
-      ${script}
-    }; then
-      report success
-    else
-      report failure
-    fi
-  '';
-in {
+in std.callWorkflow args {
   actions = {
     pr = { pr ? null, github-event ? { } }: {
       when = {
         "not yet started" = pr == null;
         "GitHub event is a PR event" = github-event ? pull_request;
       };
+
       success.pr =
-        github-event.pull_request or null; # TODO make it possible to drop `or null`
-      job = lib.addNomadJobDefaults (run "bash" { } ''
-        echo 'TODO make it possible to omit would-be no-op jobs?'
-      '');
+        # TODO make it possible to drop `or null` using lazier evaluation
+        github-event.pull_request or null;
+
+      job = with std;
+        simple ++ [
+          (script "bash" ''
+            echo 'TODO make it possible to omit would-be no-op jobs'
+          '')
+        ];
     };
 
     gocritic = { pr ? null, gocritic ? null }: {
@@ -76,20 +40,19 @@ in {
         "gocritic hasn't run yet" = gocritic == null;
       };
 
-      job = lib.addNomadJobDefaults (run "bash" {
-        memory = 1024;
-        packages = defaultPackages ++ [
-          "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#gocritic"
-          "github:input-output-hk/cicero/69f334ee30ec406bc3a2720b49b7189c2a3b3da1#go"
+      job = with std;
+        simple ++ [
+          (github.reportStatus pr.statuses_url)
+          (git.clone pr.head)
+          {
+            resources.memory = 1024;
+            config.packages =
+              data-merge.append (map ciceropkg [ "gocritic" "go" ]);
+          }
+          (script "bash" ''
+            gocritic check -enableAll ./...
+          '')
         ];
-        # XXX currently required to show logs in UI
-        group = "gocritic";
-        task = "gocritic";
-      } (reportGithubStatus pr "gocritic" ''
-        ${clone pr}
-
-        gocritic check -enableAll ./...
-      ''));
     };
 
     nixfmt = { pr ? null, nixfmt ? null }: {
@@ -98,20 +61,18 @@ in {
         "nixfmt hasn't run yet" = nixfmt == null;
       };
 
-      job = lib.addNomadJobDefaults (run "bash" {
-        memory = 2 * 1024;
-        packages = defaultPackages ++ [
-          "github:nixos/nixpkgs/nixpkgs-unstable#fd"
-          "github:nixos/nixpkgs/nixpkgs-unstable#nixfmt"
+      job = with std;
+        simple ++ [
+          (github.reportStatus pr.statuses_url)
+          (git.clone pr.head)
+          {
+            resources.memory = 2 * 1024;
+            config.packages = data-merge.append (map nixpkg [ "fd" "nixfmt" ]);
+          }
+          (script "bash" ''
+            fd -e nix -X nixfmt -c
+          '')
         ];
-        # XXX currently required to show logs in UI
-        group = "nixfmt";
-        task = "nixfmt";
-      } (reportGithubStatus pr "nixfmt" ''
-        ${clone pr}
-
-        fd -e nix -X nixfmt -c
-      ''));
     };
 
     build = { pr ? null, gocritic ? null, nixfmt ? null, build ? null }: {
@@ -121,20 +82,28 @@ in {
         "build hasn't run yet" = build == null;
       };
 
-      job = lib.addNomadJobDefaults (run "bash" {
-        memory = 4 * 1024;
-        cpu = 16000;
-        packages = defaultPackages
-          ++ [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
-        # XXX currently required to show logs in UI
-        group = "build";
-        task = "build";
-      } (reportGithubStatus pr "build" ''
-        ${clone pr}
+      job = with std;
+        simple ++ [
+          (github.reportStatus pr.statuses_url)
+          (git.clone pr.head)
+          {
+            resources = {
+              memory = 4 * 1024;
+              cpu = 16000;
+            };
+            config.packages = data-merge.append
+              [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
+          }
+          (script "bash" ''
+            echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
 
-        echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
-        nix build
-      ''));
+            export NIX_CONFIG="
+            experimental-features = nix-command flakes
+            "
+
+            nix build
+          '')
+        ];
     };
 
     deploy = { pr ? null, environment ? null, build ? null, deploy ? null }: {
@@ -151,24 +120,25 @@ in {
         "deploy hasn't run yet" = deploy == null;
       };
 
-      job = lib.addNomadJobDefaults (run "bash" {
-        memory = 1024;
-        packages = defaultPackages ++ [
-          "github:nixos/nixpkgs/nixpkgs-unstable#cue"
-          "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
+      job = with std;
+        simple ++ [
+          (github.reportStatus pr.statuses_url)
+          (git.clone pr.head)
+          {
+            resources.memory = 1024;
+            config.packages = data-merge.append (map nixpkg [ "cue" "nomad" ]);
+          }
+          (script "bash" ''
+            cue export ./jobs -e jobs.cicero \
+              ${
+                lib.optionalString (environment != null)
+                "-t env=${lib.escapeShellArg environment}"
+              } \
+              -t 'sha=${pr.head.sha}' \
+              > job.json
+            nomad run job.json
+          '')
         ];
-        # XXX currently required to show logs in UI
-        group = "deploy";
-        task = "deploy";
-      } (reportGithubStatus pr "deploy" ''
-        ${clone pr}
-
-        cue export ./jobs -e jobs.cicero \
-          ${if environment == null then "" else "-t env=${environment}"} \
-          -t 'sha=${pr.head.sha}' \
-          > job.json
-        nomad run job.json
-      ''));
     };
   };
 }

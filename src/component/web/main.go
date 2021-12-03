@@ -128,7 +128,7 @@ func (self *Web) WorkflowNewGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// step 4
-	if len(inputsJson) > 0 {
+	if inputsJson != "" {
 		facts, err := self.parseFacts([]byte(inputsJson))
 		if err != nil {
 			self.ClientError(w, err)
@@ -145,16 +145,18 @@ func (self *Web) WorkflowNewGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// step 3
-	if len(name) > 0 {
+	if name != "" {
 		render(templateName, w, map[string]interface{}{"Source": source, "Name": name})
 		return
 	}
 
 	// step 2
-	if names, err := self.EvaluationService.ListWorkflows(source); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "While listing workflows for %q", source))
-	} else {
-		render(templateName, w, map[string]interface{}{"Source": source, "Names": names})
+	if source != "" {
+		if names, err := self.EvaluationService.ListWorkflows(source); err != nil {
+			self.ServerError(w, errors.WithMessagef(err, "While listing workflows for %q", source))
+		} else {
+			render(templateName, w, map[string]interface{}{"Source": source, "Names": names})
+		}
 	}
 }
 

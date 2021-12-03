@@ -1,44 +1,46 @@
-{ id, run }:
+{ self, ... }@args:
 
-let lib = import ../workflows-lib.nix;
-in {
+let
+  inherit (self.inputs.nixpkgs) lib;
+  inherit (self.lib) std;
+
+  wfLib = import ../workflows-lib.nix self;
+
+  pkg = pkg:
+    "github:NixOS/nixpkgs/${
+      self.inputs.nixpkgs.rev or "nixpkgs-unstable"
+    }#${pkg}";
+
+in std.callWorkflow args {
   actions = {
     github = { sha ? null, environment ? null, github ? null }: {
       when = {
         "sha given" = sha != null;
-        "github hasn't run yet" = github == null;
+        "has not run yet" = github == null;
       };
 
-      job = lib.addNomadJobDefaults (run "bash" {
-        memory = 1024;
-        packages = [
-          "github:nixos/nixpkgs/nixpkgs-unstable#cacert"
-          "github:nixos/nixpkgs/nixpkgs-unstable#coreutils"
-          "github:nixos/nixpkgs/nixpkgs-unstable#cue"
-          "github:nixos/nixpkgs/nixpkgs-unstable#gitMinimal"
-          "github:nixos/nixpkgs/nixpkgs-unstable#gnutar"
-          "github:nixos/nixpkgs/nixpkgs-unstable#nomad"
-        ];
-      } ''
-        set -exuo pipefail
-
-        export SSL_CERT_FILE="/current-profile/etc/ssl/certs/ca-bundle.crt"
-        export HOME="$PWD/.home"
-
-        mkdir "$HOME"
-
-        git config --global advice.detachedHead false
-        git clone --quiet https://github.com/input-output-hk/cicero src
-        cd src
-        git checkout ${sha}
-
-        cue export ./jobs -e jobs.webhooks \
-          ${if environment == null then "" else "-t env=${environment}"} \
-          -t 'sha=${sha}' \
-          > job.json
-
-        nomad run job.json
-      '');
+      job = with std; [
+        wfLib.jobDefaults
+        singleTask
+        (git.clone {
+          repo.clone_url = "https://github.com/input-output-hk/cicero";
+          inherit sha;
+        })
+        {
+          resources.memory = 1024;
+          config.packages = data-merge.append (map pkg [ "cue" "nomad" ]);
+        }
+        (script "bash" ''
+          cue export ./jobs -e jobs.webhooks \
+            ${
+              lib.optionalString (environment != null)
+              "-t env=${lib.escapeShellArg environment}"
+            } \
+            -t sha=${lib.escapeShellArg sha} \
+            > job.json
+          nomad run job.json
+        '')
+      ];
     };
   };
 }

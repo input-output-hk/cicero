@@ -9,6 +9,7 @@
     utils.url = "github:kreisys/flake-utils";
     driver.url = "github:input-output-hk/nomad-driver-nix";
     follower.url = "github:input-output-hk/nomad-follower";
+    data-merge.url = "github:divnix/data-merge";
   };
 
   outputs =
@@ -54,8 +55,8 @@
           '';
         } // (import ./runners.nix final prev);
 
-      packages = { cicero, cicero-std, cicero-evaluator-nix, cicero-entrypoint, liftbridge
-        , liftbridge-cli, gocritic, go, webhook-trigger, nomad-dev
+      packages = { cicero, cicero-std, cicero-evaluator-nix, cicero-entrypoint
+        , liftbridge, liftbridge-cli, gocritic, go, webhook-trigger, nomad-dev
         , nomad-follower, run-bash, run-python, run-perl, run-js }@pkgs:
         pkgs // {
           inherit (nixpkgs) lib;
@@ -259,9 +260,8 @@
       extraOutputs.lib = import ./lib.nix self;
 
       extraOutputs.ciceroWorkflows =
-        self.outputs.lib.callWorkflowsWithDefaults {
-          version = self.rev or null;
-        } ./workflows;
+        self.outputs.lib.callWorkflowsWithExtraArgs { inherit self; }
+        ./workflows;
 
       hydraJobs = { cicero }@pkgs: pkgs;
 
