@@ -6,7 +6,6 @@ let
   wfLib = import ../workflows-lib.nix self;
 
   simple = [ wfLib.jobDefaults std.singleTask ];
-
 in std.callWorkflow args {
   actions = {
     ping = { ping ? null }: {
