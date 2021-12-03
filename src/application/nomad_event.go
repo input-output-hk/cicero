@@ -2,6 +2,7 @@ package application
 
 import (
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
 
@@ -16,7 +17,7 @@ import (
 type NomadEventService interface {
 	Save(pgx.Tx, *nomad.Event) error
 	GetLastNomadEvent() (uint64, error)
-	GetEventAllocByWorkflowId(uint64) (map[string]AllocWrapper, error)
+	GetEventAllocByWorkflowId(uint64) (map[string]domain.AllocWrapper, error)
 }
 
 type nomadEventService struct {
@@ -47,13 +48,8 @@ func (n *nomadEventService) GetLastNomadEvent() (uint64, error) {
 	return n.nomadEventRepository.GetLastNomadEvent()
 }
 
-type AllocWrapper struct {
-	Alloc *nomad.Allocation
-	Logs  *LokiOutput
-}
-
-func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[string]AllocWrapper, error) {
-	allocs := map[string]AllocWrapper{}
+func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[string]domain.AllocWrapper, error) {
+	allocs := map[string]domain.AllocWrapper{}
 	n.logger.Printf("Get EventAlloc by WorkflowId: %d", workflowId)
 	results, err := n.nomadEventRepository.GetEventAllocByWorkflowId(workflowId)
 	if err != nil {
@@ -76,7 +72,7 @@ func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[st
 			return nil, err
 		}
 
-		allocs[result["name"].(string)] = AllocWrapper{Alloc: alloc, Logs: logs}
+		allocs[result["name"].(string)] = domain.AllocWrapper{Alloc: alloc, Logs: logs}
 	}
 	n.logger.Printf("EventAlloc by WorkflowId: %d - %#v", workflowId, allocs)
 	return allocs, nil

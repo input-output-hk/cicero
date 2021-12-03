@@ -20,6 +20,7 @@ type MessageQueueService interface {
 	Publish(string, domain.StreamName, domain.Facts, ...liftbridge.MessageOption) error
 	Subscribe(context.Context, domain.StreamName, liftbridge.Handler, int32) error
 	Save(pgx.Tx, *liftbridge.Message) error
+	BuildMessage(string, []byte) liftbridge.MessageOption
 }
 
 type messageQueueService struct {
@@ -34,6 +35,10 @@ func NewMessageQueueService(db *pgxpool.Pool, bridge liftbridge.Client) MessageQ
 		bridge:                 bridge,
 		messageQueueRepository: persistence.NewMessageQueueRepository(db),
 	}
+}
+
+func (m *messageQueueService) BuildMessage(name string, value []byte) liftbridge.MessageOption {
+	return liftbridge.Header(name, value)
 }
 
 func (m *messageQueueService) createStreams(stream []string) error {

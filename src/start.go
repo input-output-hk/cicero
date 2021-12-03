@@ -90,6 +90,9 @@ func (cmd *StartCmd) Run() error {
 			return client
 		}
 	})
+	nomadClientWrapper := once(func() interface{} {
+		return application.NewNomadClient(nomadClient().(*nomad.Client))
+	})
 
 	evaluationService := once(func() interface{} {
 		return application.NewEvaluationService(cmd.Evaluators, cmd.Env)
@@ -107,9 +110,6 @@ func (cmd *StartCmd) Run() error {
 	})
 	actionService := once(func() interface{} {
 		return application.NewActionService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
-	})
-	workflowActionService := once(func() interface{} {
-		return application.NewWorkflowActionService(evaluationService().(application.EvaluationService), workflowService().(application.WorkflowService))
 	})
 	nomadEventService := once(func() interface{} {
 		return application.NewNomadEventService(db().(*pgxpool.Pool), actionService().(application.ActionService))
@@ -134,7 +134,7 @@ func (cmd *StartCmd) Run() error {
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
-			NomadClient:         nomadClient().(*nomad.Client),
+			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			// Increase priority of waiting goroutines every second.
 			Limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
 			Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
@@ -154,14 +154,14 @@ func (cmd *StartCmd) Run() error {
 
 	if start.nomadEvent {
 		child := component.NomadEventConsumer{
-			Logger:                log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
-			MessageQueueService:   messageQueueService().(application.MessageQueueService),
-			WorkflowService:       workflowService().(application.WorkflowService),
-			ActionService:         actionService().(application.ActionService),
-			WorkflowActionService: workflowActionService().(application.WorkflowActionService),
-			NomadEventService:     nomadEventService().(application.NomadEventService),
-			NomadClient:           nomadClient().(*nomad.Client),
-			Db:                    db().(*pgxpool.Pool),
+			Logger:              log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
+			MessageQueueService: messageQueueService().(application.MessageQueueService),
+			WorkflowService:     workflowService().(application.WorkflowService),
+			ActionService:       actionService().(application.ActionService),
+			EvaluationService:   evaluationService().(application.EvaluationService),
+			NomadEventService:   nomadEventService().(application.NomadEventService),
+			NomadClient:         nomadClientWrapper().(application.NomadClient),
+			Db:                  db().(*pgxpool.Pool),
 		}
 		supervisor.Add(child.Start)
 	}

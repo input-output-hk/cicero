@@ -28,8 +28,8 @@ type ActionService interface {
 	GetAll() ([]*domain.ActionInstance, error)
 	Save(pgx.Tx, *domain.ActionInstance) error
 	Update(pgx.Tx, domain.ActionInstance) error
-	JobLogs(uuid.UUID) (*LokiOutput, error)
-	ActionLogs(allocId string, taskGroup string) (*LokiOutput, error)
+	JobLogs(uuid.UUID) (*domain.LokiOutput, error)
+	ActionLogs(allocId string, taskGroup string) (*domain.LokiOutput, error)
 }
 
 type actionService struct {
@@ -96,24 +96,14 @@ func (self *actionService) Update(tx pgx.Tx, action domain.ActionInstance) error
 	return nil
 }
 
-type LokiLine struct {
-	Time time.Time
-	Text string
-}
-
-type LokiOutput struct {
-	Stderr []LokiLine
-	Stdout []LokiLine
-}
-
-func (self *actionService) JobLogs(nomadJobID uuid.UUID) (*LokiOutput, error) {
+func (self *actionService) JobLogs(nomadJobID uuid.UUID) (*domain.LokiOutput, error) {
 	return self.LokiQueryRange(fmt.Sprintf(
 		`{nomad_job_id=%q}`,
 		nomadJobID.String(),
 	))
 }
 
-func (self *actionService) ActionLogs(allocID, taskGroup string) (*LokiOutput, error) {
+func (self *actionService) ActionLogs(allocID, taskGroup string) (*domain.LokiOutput, error) {
 	return self.LokiQueryRange(fmt.Sprintf(
 		`{nomad_alloc_id=%q,nomad_task_group=%q}`,
 		allocID,
@@ -121,15 +111,15 @@ func (self *actionService) ActionLogs(allocID, taskGroup string) (*LokiOutput, e
 	))
 }
 
-func (self *actionService) LokiQueryRange(query string) (*LokiOutput, error) {
+func (self *actionService) LokiQueryRange(query string) (*domain.LokiOutput, error) {
 	linesToFetch := 10000
 	// TODO: figure out the correct value for our infra, 5000 is the default
 	// configuration in loki
 	var limit int64 = 5000
 	from := time.Unix(0, 0)
-	output := &LokiOutput{
-		Stdout: []LokiLine{},
-		Stderr: []LokiLine{},
+	output := &domain.LokiOutput{
+		Stdout: []domain.LokiLine{},
+		Stderr: []domain.LokiLine{},
 	}
 
 	// TODO: reduce allocations in this loop
@@ -184,9 +174,9 @@ func (self *actionService) LokiQueryRange(query string) (*LokiOutput, error) {
 
 			for _, entry := range stream.Entries {
 				if ok && source == "stderr" {
-					output.Stderr = append(output.Stderr, LokiLine{entry.Timestamp, entry.Line})
+					output.Stderr = append(output.Stderr, domain.LokiLine{entry.Timestamp, entry.Line})
 				} else {
-					output.Stdout = append(output.Stdout, LokiLine{entry.Timestamp, entry.Line})
+					output.Stdout = append(output.Stdout, domain.LokiLine{entry.Timestamp, entry.Line})
 				}
 
 				if (len(output.Stdout) + len(output.Stderr)) >= linesToFetch {

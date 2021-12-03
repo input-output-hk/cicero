@@ -606,7 +606,7 @@ func (self *Web) ApiActionIdLogsGet(w http.ResponseWriter, req *http.Request) {
 	} else if logs, err := self.ActionService.JobLogs(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
-		self.json(w, map[string]*application.LokiOutput{"logs": logs}, 200)
+		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, 200)
 	}
 }
 
@@ -621,7 +621,7 @@ func genApiActionIdLogsGetSwagDef() swagger.Definitions {
 		Responses: map[int]swagger.ContentValue{
 			200: {
 				Content: swagger.Content{
-					"text/html": {Value: map[string]*application.LokiOutput{"logs": {}}},
+					"text/html": {Value: map[string]*domain.LokiOutput{"logs": {}}},
 				},
 				Description: "OK",
 			},
