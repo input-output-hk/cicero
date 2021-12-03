@@ -80,7 +80,7 @@ func TestSavingWorkflowFailure(t *testing.T) {
 	err = workflowService.Save(tx, workflow)
 
 	// then
-	assert.Equal(t, err.Error(), fmt.Errorf("Couldn't insert workflow: %s", errorMessage).Error())
+	assert.Equal(t, err.Error(), fmt.Errorf("Could not insert workflow: %s", errorMessage).Error())
 	workflowRepository.AssertExpectations(t)
 }
 
@@ -119,7 +119,7 @@ func TestGettingWorkflowByIdFailure(t *testing.T) {
 	_, err := workflowService.GetById(workflowId)
 
 	// then
-	assert.Equal(t, err.Error(), fmt.Errorf("Couldn't select existing workflow for id %d: %s", workflowId, errorMessage).Error())
+	assert.Equal(t, err.Error(), fmt.Errorf("Could not select existing workflow for id %d: %s", workflowId, errorMessage).Error())
 	workflowRepository.AssertExpectations(t)
 }
 
