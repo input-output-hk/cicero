@@ -45,7 +45,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	for {
 		events := <-stream
 		if events.Err != nil {
-			return errors.WithMessage(err, "Error getting next events from Nomad event stream")
+			return errors.WithMessage(events.Err, "Error getting next events from Nomad event stream")
 		}
 
 		if events.Index < index {
