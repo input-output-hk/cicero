@@ -114,7 +114,7 @@ func (m *messageQueueService) Subscribe(ctx context.Context, streamName domain.S
 }
 
 func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error {
-	m.logger.Printf("Saving new Message %#v", message)
+	m.logger.Printf("Saving new Message on stream %s, partition %d, offset %d", message.Stream(), message.Partition(), message.Offset())
 	headers := message.Headers()
 	delete(headers, "subject")
 	for k, v := range headers {
@@ -125,7 +125,7 @@ func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error
 	if err := m.messageQueueRepository.Save(tx, headers, message); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Message")
 	}
-	m.logger.Printf("Message created %#v", message)
+	m.logger.Printf("Message created")
 	return nil
 }
 

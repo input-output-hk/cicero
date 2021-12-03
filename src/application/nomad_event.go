@@ -74,6 +74,6 @@ func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[st
 
 		allocs[result["name"].(string)] = domain.AllocWrapper{Alloc: alloc, Logs: logs}
 	}
-	n.logger.Printf("EventAlloc by WorkflowId: %d - %#v", workflowId, allocs)
+	n.logger.Printf("Got EventAlloc by WorkflowId: %d", workflowId)
 	return allocs, nil
 }

@@ -79,11 +79,11 @@ func (self *actionService) GetAll() ([]*domain.ActionInstance, error) {
 }
 
 func (self *actionService) Save(tx pgx.Tx, action *domain.ActionInstance) error {
-	log.Printf("Saving new Action %#v", action)
+	log.Printf("Saving new Action named %s", action.Name)
 	if err := self.actionRepository.Save(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Action")
 	}
-	log.Printf("Created Action %#v", action)
+	log.Printf("Created Action %s", action.ID)
 	return nil
 }
 
