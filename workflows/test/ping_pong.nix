@@ -3,7 +3,7 @@
 let
   inherit (self.lib) std;
 
-  wfLib = import ../workflows-lib.nix self;
+  wfLib = import ../../workflows-lib.nix self;
 
   simple = [ wfLib.jobDefaults std.singleTask ];
 in std.callWorkflow args {
