@@ -13,7 +13,10 @@ let
   ciceropkg = pkg: "github:input-output-hk/cicero/${self.rev or ""}#${pkg}";
 
   simple = [ wfLib.jobDefaults std.singleTask ];
-
+  setup = pr: with std; [
+    (lib.optionalAttrs (pr ? statuses_url) (github.reportStatus pr.statuses_url))
+    (git.clone pr.head)
+  ];
 in std.callWorkflow args {
   actions = {
     pr = { pr ? null, github-event ? { } }: {
@@ -41,9 +44,7 @@ in std.callWorkflow args {
       };
 
       job = with std;
-        simple ++ [
-          (github.reportStatus pr.statuses_url)
-          (git.clone pr.head)
+        simple ++ (setup pr) ++ [
           {
             resources.memory = 1024;
             config.packages =
@@ -62,9 +63,7 @@ in std.callWorkflow args {
       };
 
       job = with std;
-        simple ++ [
-          (github.reportStatus pr.statuses_url)
-          (git.clone pr.head)
+        simple ++ (setup pr) ++ [
           {
             resources.memory = 2 * 1024;
             config.packages = data-merge.append (map nixpkg [ "fd" "nixfmt" ]);
@@ -83,9 +82,7 @@ in std.callWorkflow args {
       };
 
       job = with std;
-        simple ++ [
-          (github.reportStatus pr.statuses_url)
-          (git.clone pr.head)
+        simple ++ (setup pr) ++ [
           {
             resources = {
               memory = 4 * 1024;
@@ -121,9 +118,7 @@ in std.callWorkflow args {
       };
 
       job = with std;
-        simple ++ [
-          (github.reportStatus pr.statuses_url)
-          (git.clone pr.head)
+        simple ++ (setup pr) ++ [
           {
             resources.memory = 1024;
             config.packages = data-merge.append (map nixpkg [ "cue" "nomad" ]);
