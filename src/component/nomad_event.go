@@ -3,6 +3,7 @@ package component
 import (
 	"context"
 	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 )
 
@@ -22,7 +22,7 @@ type NomadEventConsumer struct {
 	WorkflowService     application.WorkflowService
 	ActionService       application.ActionService
 	EvaluationService   application.EvaluationService
-	Db                  *pgxpool.Pool
+	Db                  config.PgxIface
 	NomadClient         application.NomadClient
 }
 
@@ -60,12 +60,12 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 				return errors.WithMessage(err, "Error handling Nomad event")
 			}
 
-			//TODO: must be transactional with the message process
-			if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-				return self.NomadEventService.Save(tx, &event)
+			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+				ee := self.NomadEventService.Save(tx, &event)
+				return ee
 			}); err != nil {
 				self.Logger.Println("Could not complete Db transaction")
-				return err
+				return errors.WithMessage(err, "Error Saving the Nomad event")
 			}
 		}
 

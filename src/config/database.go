@@ -13,6 +13,7 @@ import (
 
 type PgxIface interface {
 	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
+	BeginFunc(context.Context, func(pgx.Tx) error) error
 }
 
 func DBConnection() (*pgxpool.Pool, error) {
