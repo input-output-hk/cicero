@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"strconv"
@@ -13,7 +14,6 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
@@ -26,7 +26,7 @@ type WorkflowInvokeConsumer struct {
 	ActionService       application.ActionService
 	MessageQueueService application.MessageQueueService
 	WorkflowService     application.WorkflowService
-	Db                  *pgxpool.Pool
+	Db                  config.PgxIface
 	NomadClient         application.NomadClient
 }
 

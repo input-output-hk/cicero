@@ -6,8 +6,7 @@ import (
 	"fmt"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/application/mocks"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/pashagolub/pgxmock"
+	configMocks "github.com/input-output-hk/cicero/src/config/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"log"
@@ -16,7 +15,7 @@ import (
 )
 
 func buildNomadEventConsumerMocked(nomadEventServiceMocked *mocks.NomadEventService,
-	nomadClientMocked *mocks.NomadClient, db config.PgxIface) *NomadEventConsumer {
+	nomadClientMocked *mocks.NomadClient, db *configMocks.PgxIface) *NomadEventConsumer {
 	return &NomadEventConsumer{
 		Logger:            log.New(os.Stderr, "NomadEventConsumerTest: ", log.LstdFlags),
 		NomadEventService: nomadEventServiceMocked,
@@ -25,7 +24,7 @@ func buildNomadEventConsumerMocked(nomadEventServiceMocked *mocks.NomadEventServ
 	}
 }
 
-/*func generateEvents(events []nomad.Events) <-chan *nomad.Events {
+func generateEvents(events []nomad.Events) <-chan *nomad.Events {
 	rc := make(chan *nomad.Events, len(events))
 	go func() {
 		defer close(rc)
@@ -34,19 +33,6 @@ func buildNomadEventConsumerMocked(nomadEventServiceMocked *mocks.NomadEventServ
 		}
 	}()
 	return rc
-}*/
-
-func generateEvents(ctx context.Context, events []nomad.Events) <-chan *nomad.Events {
-	dst := make(chan *nomad.Events)
-	go func() {
-		defer close(dst)
-		for _, event := range events {
-			dst <- &event
-		}
-		<-ctx.Done()
-		return
-	}()
-	return dst
 }
 
 func TestStartWorkflowFailureToListenNomadEvent(t *testing.T) {
@@ -55,7 +41,7 @@ func TestStartWorkflowFailureToListenNomadEvent(t *testing.T) {
 	//given
 	eventId := uint64(1)
 	ctx := context.Background()
-	stream := generateEvents(ctx, []nomad.Events{})
+	stream := generateEvents([]nomad.Events{})
 	nomadEventService := &mocks.NomadEventService{}
 	nomadClient := &mocks.NomadClient{}
 	nomadEventConsumer := buildNomadEventConsumerMocked(nomadEventService, nomadClient, nil)
@@ -82,7 +68,7 @@ func TestStartWorkflowFailureGettingNextEvents(t *testing.T) {
 	events := []nomad.Events{
 		{Err: errors.New(errorMessage)},
 	}
-	stream := generateEvents(ctx, events)
+	stream := generateEvents(events)
 	nomadEventService := &mocks.NomadEventService{}
 	nomadClient := &mocks.NomadClient{}
 	nomadEventConsumer := buildNomadEventConsumerMocked(nomadEventService, nomadClient, nil)
@@ -98,14 +84,16 @@ func TestStartWorkflowFailureGettingNextEvents(t *testing.T) {
 	nomadClient.AssertExpectations(t)
 }
 
-/*func TestStartWorkflowGettingEventAllocationFailure(t *testing.T) {
+func TestStartWorkflowGettingEventAllocationFailure(t *testing.T) {
 	t.Parallel()
 
 	//given
 	eventId := uint64(1)
 	ctx := context.Background()
-	event1 := nomad.Events{Index: uint64(1), Events: []nomad.Event{{Topic: "Allocation"}}}
-	event2 := nomad.Events{Index: uint64(2), Events: []nomad.Event{{Topic: "Allocation"}}}
+	event1 := nomad.Events{Index: uint64(1), Events: []nomad.Event{{Topic: "Allocation", Type: "AllocationUpdated"}}}
+	event2 := nomad.Events{Index: uint64(2), Events: []nomad.Event{{Topic: "Allocation", Type: "AllocationUpdated", Payload: map[string]interface{}{
+		"Job": "dsf2",
+	}}}}
 	events := []nomad.Events{event1, event2}
 	stream := generateEvents(events)
 	nomadEventService := &mocks.NomadEventService{}
@@ -118,20 +106,10 @@ func TestStartWorkflowFailureGettingNextEvents(t *testing.T) {
 	err := nomadEventConsumer.Start(ctx)
 
 	//then
-	assert.Equal(t, err.Error(), "Error getting Nomad event's allocation")
+	assert.Contains(t, err.Error(), "Error handling Nomad event")
+	assert.Contains(t, err.Error(), "Error getting Nomad event's allocation")
 	nomadEventService.AssertExpectations(t)
 	nomadClient.AssertExpectations(t)
-}*/
-
-func mockConnection(t *testing.T) pgxmock.PgxConnIface {
-	t.Helper()
-
-	conn, err := pgxmock.NewConn(pgxmock.QueryMatcherOption(pgxmock.QueryMatcherEqual))
-	assert.NoError(t, err)
-
-	conn.MatchExpectationsInOrder(true)
-
-	return conn
 }
 
 func TestStartWorkflowFailureToSaveEvent(t *testing.T) {
@@ -144,19 +122,15 @@ func TestStartWorkflowFailureToSaveEvent(t *testing.T) {
 	event1 := nomad.Events{Index: uint64(1), Events: []nomad.Event{{Topic: "Allocation"}}}
 	event2 := nomad.Events{Index: uint64(2), Events: []nomad.Event{{Topic: "Allocation"}}}
 	events := []nomad.Events{event1, event2}
-	stream := generateEvents(ctx, events)
+	stream := generateEvents(events)
 
-	dbMocked := mockConnection(t)
-	defer dbMocked.Close(context.Background())
-	dbMocked.ExpectBegin()
-	dbMocked.ExpectCommit()
-	dbMocked.ExpectRollback()
+	db := &configMocks.PgxIface{}
 	nomadEventService := &mocks.NomadEventService{}
 	nomadClient := &mocks.NomadClient{}
-	nomadEventConsumer := buildNomadEventConsumerMocked(nomadEventService, nomadClient, dbMocked)
+	nomadEventConsumer := buildNomadEventConsumerMocked(nomadEventService, nomadClient, db)
 	nomadEventService.On("GetLastNomadEvent").Return(eventId, nil)
 	nomadClient.On("EventStream", ctx, eventId+1).Return(stream, nil)
-	nomadEventService.On("Save", mock.AnythingOfType("*pgxmock.pgxmock"), mock.AnythingOfType("*api.Event")).Return(errors.New(errorMessage))
+	db.On("BeginFunc", ctx, mock.AnythingOfType("func(pgx.Tx) error")).Return(errors.New(errorMessage))
 
 	//when
 	err := nomadEventConsumer.Start(ctx)
@@ -165,59 +139,5 @@ func TestStartWorkflowFailureToSaveEvent(t *testing.T) {
 	assert.Equal(t, err.Error(), fmt.Errorf("Error Saving the Nomad event: %s", errorMessage).Error())
 	nomadEventService.AssertExpectations(t)
 	nomadClient.AssertExpectations(t)
-}
-
-func TestStartWorkflowFailureToSaveEvent2(t *testing.T) {
-	t.Parallel()
-
-	//given
-	eventId := uint64(1)
-	ctx := context.Background()
-	errorMessage := "Some error"
-	event1 := nomad.Events{Index: uint64(1), Events: []nomad.Event{{Topic: "Allocation"}}}
-	event2 := nomad.Events{Index: uint64(2), Events: []nomad.Event{{Topic: "Allocation"}}}
-	events := []nomad.Events{event1, event2}
-	stream := generateEvents(ctx, events)
-	/*dbMocked, err := pgxmock.NewConn()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer dbMocked.Close(ctx)
-	dbMocked.ExpectBegin()
-	dbMocked.ExpectCommit()
-	tx, err := dbMocked.Begin(ctx)
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
-	}
-	defer tx.Rollback(ctx)
-	dbMocked.ExpectBegin()
-	dbMocked.ExpectCommit()*/
-	dbMocked := mockConnection(t)
-	dbMocked.ExpectBegin()
-	dbMocked.ExpectCommit()
-
-	dbMocked.ExpectBegin()
-	dbMocked.ExpectCommit()
-
-	dbMocked.ExpectBegin()
-	dbMocked.ExpectCommit()
-
-	dbMocked.ExpectBegin()
-	dbMocked.ExpectCommit()
-	//dbMocked.ExpectRollback()
-
-	nomadEventService := &mocks.NomadEventService{}
-	nomadClient := &mocks.NomadClient{}
-	nomadEventConsumer := buildNomadEventConsumerMocked(nomadEventService, nomadClient, dbMocked)
-	nomadEventService.On("GetLastNomadEvent").Return(eventId, nil)
-	nomadClient.On("EventStream", ctx, eventId+1).Return(stream, nil)
-	nomadEventService.On("Save", mock.AnythingOfType("*pgxmock.pgxmock"), mock.AnythingOfType("*api.Event")).Return(errors.New(errorMessage))
-
-	//when
-	err := nomadEventConsumer.Start(ctx)
-
-	//then
-	assert.Equal(t, err.Error(), "Error Saving the Nomad event")
-	nomadEventService.AssertExpectations(t)
-	nomadClient.AssertExpectations(t)
+	db.AssertExpectations(t)
 }
