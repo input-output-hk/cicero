@@ -174,9 +174,9 @@ func (self *actionService) LokiQueryRange(query string) (*domain.LokiOutput, err
 
 			for _, entry := range stream.Entries {
 				if ok && source == "stderr" {
-					output.Stderr = append(output.Stderr, domain.LokiLine{entry.Timestamp, entry.Line})
+					output.Stderr = append(output.Stderr, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line})
 				} else {
-					output.Stdout = append(output.Stdout, domain.LokiLine{entry.Timestamp, entry.Line})
+					output.Stdout = append(output.Stdout, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line})
 				}
 
 				if (len(output.Stdout) + len(output.Stderr)) >= linesToFetch {

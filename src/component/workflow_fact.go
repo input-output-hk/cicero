@@ -70,7 +70,7 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 		return
 	}
 
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := self.MessageQueueService.Save(tx, msg); err != nil {
 		return

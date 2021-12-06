@@ -124,7 +124,9 @@ func (cmd *StartCmd) Run() error {
 			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 		}
-		supervisor.Add(child.Start)
+		if err := supervisor.Add(child.Start); err != nil {
+			return err
+		}
 	}
 
 	if start.workflowInvoke {
@@ -139,7 +141,9 @@ func (cmd *StartCmd) Run() error {
 			Limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
 			Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
 		}
-		supervisor.Add(child.Start)
+		if err := supervisor.Add(child.Start); err != nil {
+			return err
+		}
 	}
 
 	if start.workflowFact {
@@ -149,7 +153,9 @@ func (cmd *StartCmd) Run() error {
 			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
 		}
-		supervisor.Add(child.Start)
+		if err := supervisor.Add(child.Start); err != nil {
+			return err
+		}
 	}
 
 	if start.nomadEvent {
@@ -163,7 +169,9 @@ func (cmd *StartCmd) Run() error {
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			Db:                  db().(*pgxpool.Pool),
 		}
-		supervisor.Add(child.Start)
+		if err := supervisor.Add(child.Start); err != nil {
+			return err
+		}
 	}
 
 	if start.web {
@@ -176,7 +184,9 @@ func (cmd *StartCmd) Run() error {
 			NomadEventService:   nomadEventService().(application.NomadEventService),
 			EvaluationService:   evaluationService().(application.EvaluationService),
 		}
-		supervisor.Add(child.Start)
+		if err := supervisor.Add(child.Start); err != nil {
+			return err
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

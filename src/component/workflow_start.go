@@ -95,7 +95,7 @@ func (self *WorkflowStartConsumer) insertWorkflow(ctx context.Context, workflow 
 		tx = t
 	}
 
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	if err := self.WorkflowService.Save(tx, workflow); err != nil {
 		return errors.WithMessage(err, "Could not insert workflow instance")
@@ -103,7 +103,7 @@ func (self *WorkflowStartConsumer) insertWorkflow(ctx context.Context, workflow 
 
 	self.Logger.Printf("Created workflow with ID %d", workflow.ID)
 
-	self.MessageQueueService.Publish(
+	_ = self.MessageQueueService.Publish(
 		domain.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
 		domain.InvokeStreamName,
 		workflow.Facts,

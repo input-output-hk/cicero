@@ -22,6 +22,7 @@ func buildTransactionMocked() (tx pgx.Tx, err error) {
 	dbMock, err := pgxmock.NewConn()
 	if err != nil {
 		err = errors.WithMessage(err, "an error was not expected when opening a stub database connection")
+		return
 	}
 	dbMock.ExpectBegin()
 	tx, err = dbMock.Begin(context.Background())

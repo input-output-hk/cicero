@@ -45,15 +45,33 @@ func (self *Web) Start(ctx context.Context) error {
 	}
 
 	// sorted alphabetically, please keep it this way
-	r.AddRoute(http.MethodGet, "/api/action/{id}/logs", self.ApiActionIdLogsGet, genApiActionIdLogsGetSwagDef())
-	r.AddRoute(http.MethodGet, "/api/action/{id}", self.ApiActionIdGet, genApiActionIdGetSwagDef())
-	r.AddRoute(http.MethodGet, "/api/action", self.ApiActionGet, genApiActionGetSwagDef())
-	r.AddRoute(http.MethodGet, "/api/workflow/definition/{source}/{name}", self.ApiWorkflowDefinitionSourceNameGet, genApiWorkflowDefinitionSourceNameGetSwagDef())
-	r.AddRoute(http.MethodGet, "/api/workflow/definition/{source}", self.ApiWorkflowDefinitionSourceGet, genApiWorkflowDefinitionSourceGetSwagDef())
-	r.AddRoute(http.MethodPost, "/api/workflow/instance/{id}/fact", self.ApiWorkflowInstanceIdFactPost, genApiWorkflowInstanceIdFactPostSwagDef())
-	r.AddRoute(http.MethodGet, "/api/workflow/instance/{id}", self.ApiWorkflowInstanceIdGet, genApiWorkflowInstanceIdGetSwagDef())
-	r.AddRoute(http.MethodGet, "/api/workflow/instance", self.ApiWorkflowInstanceGet, genApiWorkflowInstanceGetSwagDef())
-	r.AddRoute(http.MethodPost, "/api/workflow/instance", self.ApiWorkflowInstancePost, genApiWorkflowInstancePostSwagDef())
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}/logs", self.ApiActionIdLogsGet, genApiActionIdLogsGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}", self.ApiActionIdGet, genApiActionIdGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/action", self.ApiActionGet, genApiActionGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/definition/{source}/{name}", self.ApiWorkflowDefinitionSourceNameGet, genApiWorkflowDefinitionSourceNameGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/definition/{source}", self.ApiWorkflowDefinitionSourceGet, genApiWorkflowDefinitionSourceGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodPost, "/api/workflow/instance/{id}/fact", self.ApiWorkflowInstanceIdFactPost, genApiWorkflowInstanceIdFactPostSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/instance/{id}", self.ApiWorkflowInstanceIdGet, genApiWorkflowInstanceIdGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/instance", self.ApiWorkflowInstanceGet, genApiWorkflowInstanceGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodPost, "/api/workflow/instance", self.ApiWorkflowInstancePost, genApiWorkflowInstancePostSwagDef()); err != nil {
+		return err
+	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/{id:[0-9]+}/graph", self.WorkflowIdGraphGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/{id:[0-9]+}", self.WorkflowIdGet).Methods("GET")
@@ -97,17 +115,21 @@ func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
 	if name == "" {
 		if summary, err := self.WorkflowService.GetSummary(); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Couldn't get summary of workflows"))
-		} else {
-			render("workflow/index.html", w, summary)
+			return
+		} else if err := render("workflow/index.html", w, summary); err != nil {
+			self.ServerError(w, err)
+			return
 		}
 	} else {
 		if instances, err := self.WorkflowService.GetAllByName(name); err != nil {
 			self.ServerError(w, errors.WithMessagef(err, "Couldn't get workflows by name: %q", name))
-		} else {
-			render("workflow/index-name.html", w, map[string]interface{}{
-				"Name":      name,
-				"Instances": instances,
-			})
+			return
+		} else if err := render("workflow/index-name.html", w, map[string]interface{}{
+			"Name":      name,
+			"Instances": instances,
+		}); err != nil {
+			self.ServerError(w, err)
+			return
 		}
 	}
 }
@@ -146,7 +168,10 @@ func (self *Web) WorkflowNewGet(w http.ResponseWriter, req *http.Request) {
 
 	// step 3
 	if name != "" {
-		render(templateName, w, map[string]interface{}{"Source": source, "Name": name})
+		if err := render(templateName, w, map[string]interface{}{"Source": source, "Name": name}); err != nil {
+			self.ServerError(w, err)
+			return
+		}
 		return
 	}
 
@@ -154,8 +179,10 @@ func (self *Web) WorkflowNewGet(w http.ResponseWriter, req *http.Request) {
 	if source != "" {
 		if names, err := self.EvaluationService.ListWorkflows(source); err != nil {
 			self.ServerError(w, errors.WithMessagef(err, "While listing workflows for %q", source))
-		} else {
-			render(templateName, w, map[string]interface{}{"Source": source, "Names": names})
+			return
+		} else if err := render(templateName, w, map[string]interface{}{"Source": source, "Names": names}); err != nil {
+			self.ServerError(w, err)
+			return
 		}
 	}
 }
@@ -190,12 +217,15 @@ func (self *Web) WorkflowIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	render("workflow/[id].html", w, map[string]interface{}{
+	if err := render("workflow/[id].html", w, map[string]interface{}{
 		"Instance":   instance,
 		"graph":      req.URL.Query().Get("graph"),
 		"graphTypes": WorkflowGraphTypeStrings(),
 		"allocs":     allocs,
-	})
+	}); err != nil {
+		self.ServerError(w, err)
+		return
+	}
 }
 
 func (self *Web) WorkflowIdGraphGet(w http.ResponseWriter, req *http.Request) {
