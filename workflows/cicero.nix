@@ -6,19 +6,15 @@ let
 
   wfLib = import ../workflows-lib.nix self;
 
-  nixpkg = pkg:
-    "github:NixOS/nixpkgs/${
-      self.inputs.nixpkgs.rev or "nixpkgs-unstable"
-    }#${pkg}";
+  nixpkg = pkg: "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#${pkg}";
   ciceropkg = pkg: "github:input-output-hk/cicero/${self.rev or ""}#${pkg}";
 
   simple = [ wfLib.jobDefaults std.singleTask ];
-  setup = pr:
-    with std; [
-      (lib.optionalAttrs (pr ? statuses_url)
-        (github.reportStatus pr.statuses_url))
-      (git.clone pr.head)
-    ];
+  setup = pr: [
+    (lib.optionalAttrs (pr ? statuses_url)
+      (std.github.reportStatus pr.statuses_url))
+    (std.git.clone pr.head)
+  ];
 in std.callWorkflow args {
   actions = {
     pr = { pr ? null, github-event ? { } }: {
@@ -31,12 +27,11 @@ in std.callWorkflow args {
         # TODO make it possible to drop `or null` using lazier evaluation
         github-event.pull_request or null;
 
-      job = with std;
-        simple ++ [
-          (script "bash" ''
-            echo 'TODO make it possible to omit would-be no-op jobs'
-          '')
-        ];
+      job = simple ++ [
+        (std.script "bash" ''
+          echo 'TODO make it possible to omit would-be no-op jobs'
+        '')
+      ];
     };
 
     gocritic = { pr ? null, gocritic ? null }: {
@@ -45,17 +40,16 @@ in std.callWorkflow args {
         "gocritic hasn't run yet" = gocritic == null;
       };
 
-      job = with std;
-        simple ++ (setup pr) ++ [
-          {
-            resources.memory = 1024;
-            config.packages =
-              data-merge.append (map ciceropkg [ "gocritic" "go" ]);
-          }
-          (script "bash" ''
-            gocritic check -enableAll ./...
-          '')
-        ];
+      job = simple ++ (setup pr) ++ [
+        {
+          resources.memory = 1024;
+          config.packages =
+            std.data-merge.append (map ciceropkg [ "gocritic" "go" ]);
+        }
+        (std.script "bash" ''
+          gocritic check -enableAll ./...
+        '')
+      ];
     };
 
     nixfmt = { pr ? null, nixfmt ? null }: {
@@ -64,16 +58,16 @@ in std.callWorkflow args {
         "nixfmt hasn't run yet" = nixfmt == null;
       };
 
-      job = with std;
-        simple ++ (setup pr) ++ [
-          {
-            resources.memory = 2 * 1024;
-            config.packages = data-merge.append (map nixpkg [ "fd" "nixfmt" ]);
-          }
-          (script "bash" ''
-            fd -e nix -X nixfmt -c
-          '')
-        ];
+      job = simple ++ (setup pr) ++ [
+        {
+          resources.memory = 2 * 1024;
+          config.packages =
+            std.data-merge.append (map nixpkg [ "fd" "nixfmt" ]);
+        }
+        (std.script "bash" ''
+          fd -e nix -X nixfmt -c
+        '')
+      ];
     };
 
     build = { pr ? null, gocritic ? null, nixfmt ? null, build ? null }: {
@@ -83,26 +77,25 @@ in std.callWorkflow args {
         "build hasn't run yet" = build == null;
       };
 
-      job = with std;
-        simple ++ (setup pr) ++ [
-          {
-            resources = {
-              memory = 4 * 1024;
-              cpu = 16000;
-            };
-            config.packages = data-merge.append
-              [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
-          }
-          (script "bash" ''
-            echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
+      job = simple ++ (setup pr) ++ [
+        {
+          resources = {
+            memory = 4 * 1024;
+            cpu = 16000;
+          };
+          config.packages = std.data-merge.append
+            [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
+        }
+        (std.script "bash" ''
+          echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
 
-            export NIX_CONFIG="
-            experimental-features = nix-command flakes
-            "
+          export NIX_CONFIG="
+          experimental-features = nix-command flakes
+          "
 
-            nix build
-          '')
-        ];
+          nix build
+        '')
+      ];
     };
 
     deploy = { pr ? null, environment ? null, build ? null, deploy ? null }: {
@@ -119,23 +112,23 @@ in std.callWorkflow args {
         "deploy hasn't run yet" = deploy == null;
       };
 
-      job = with std;
-        simple ++ (setup pr) ++ [
-          {
-            resources.memory = 1024;
-            config.packages = data-merge.append (map nixpkg [ "cue" "nomad" ]);
-          }
-          (script "bash" ''
-            cue export ./jobs -e jobs.cicero \
-              ${
-                lib.optionalString (environment != null)
-                "-t env=${lib.escapeShellArg environment}"
-              } \
-              -t 'sha=${pr.head.sha}' \
-              > job.json
-            nomad run job.json
-          '')
-        ];
+      job = simple ++ (setup pr) ++ [
+        {
+          resources.memory = 1024;
+          config.packages =
+            std.data-merge.append (map nixpkg [ "cue" "nomad" ]);
+        }
+        (std.script "bash" ''
+          cue export ./jobs -e jobs.cicero \
+            ${
+              lib.optionalString (environment != null)
+              "-t env=${lib.escapeShellArg environment}"
+            } \
+            -t 'sha=${pr.head.sha}' \
+            > job.json
+          nomad run job.json
+        '')
+      ];
     };
   };
 }
