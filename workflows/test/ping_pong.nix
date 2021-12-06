@@ -11,12 +11,11 @@ in std.callWorkflow args {
     ping = { ping ? null }: {
       when."ping missing" = ping == null;
 
-      job = with std;
-        simple ++ [
-          (script "bash" ''
-            echo running ping ${toString id}
-          '')
-        ];
+      job = simple ++ [
+        (std.script "bash" ''
+          echo running ping ${toString id}
+        '')
+      ];
     };
 
     pong = { ping ? null, pong ? null }: {
@@ -25,12 +24,11 @@ in std.callWorkflow args {
         "pong missing" = pong == null;
       };
 
-      job = with std;
-        simple ++ [
-          (script "bash" ''
-            echo running pong ${toString id}
-          '')
-        ];
+      job = simple ++ [
+        (std.script "bash" ''
+          echo running pong ${toString id}
+        '')
+      ];
     };
 
     pingpong = { pong ? null, pingpong ? null }: {
@@ -39,12 +37,11 @@ in std.callWorkflow args {
         "pingpong missing" = pingpong == null;
       };
 
-      job = with std;
-        simple ++ [
-          (script "bash" ''
-            echo running pingpong ${toString id}
-          '')
-        ];
+      job = simple ++ [
+        (std.script "bash" ''
+          echo running pingpong ${toString id}
+        '')
+      ];
     };
   };
 }
