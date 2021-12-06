@@ -187,15 +187,14 @@ in rec {
          ```
       */
       wrapScript = language: outerFn: action: inner:
-        let outer = script language (outerFn inner.config.command or []);
-        in data-merge.merge
-        (lib.recursiveUpdate inner {
+        let outer = script language (outerFn inner.config.command or [ ]);
+        in data-merge.merge (lib.recursiveUpdate inner {
           config.command = outer.config.command;
 
           # XXX we have to pre-create these keys because they may not be present
           # see https://github.com/divnix/data-merge/issues/1
-          config.packages = inner.config.packages or [];
-          template = inner.template or [];
+          config.packages = inner.config.packages or [ ];
+          template = inner.template or [ ];
         }) {
           config.packages = data-merge.append outer.config.packages;
           template = data-merge.append outer.template;
@@ -203,18 +202,18 @@ in rec {
 
       nix = {
         install = action: next:
-          data-merge.merge
+          data-merge.merge (lib.recursiveUpdate next {
             # XXX we have to pre-create `config.packages` because it may not be present
             # see https://github.com/divnix/data-merge/issues/1
-            (lib.recursiveUpdate next { config.packages = next.config.packages or []; })
-            {
-              config.packages = data-merge.append
-                [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
-              env.NIX_CONFIG = ''
-                experimental-features = nix-command flakes
-                ${next.env.NIX_CONFIG or ""}
-              '';
-            };
+            config.packages = next.config.packages or [ ];
+          }) {
+            config.packages = data-merge.append
+              [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
+            env.NIX_CONFIG = ''
+              experimental-features = nix-command flakes
+              ${next.env.NIX_CONFIG or ""}
+            '';
+          };
 
         develop = action: next:
           nix.install action (wrapScript "bash" (next: ''
@@ -234,12 +233,12 @@ in rec {
       };
 
       makes = target: action: next:
-        data-merge.merge
-          (wrapScript "bash" (next: ''
-            m ${lib.escapeShellArg target}
-            ${lib.escapeShellArgs next}
-          '') action next)
-          { config.packages = data-merge.append [ "github:fluidattacks/makes" ]; };
+        data-merge.merge (wrapScript "bash" (next: ''
+          m ${lib.escapeShellArg target}
+          ${lib.escapeShellArgs next}
+        '') action next) {
+          config.packages = data-merge.append [ "github:fluidattacks/makes" ];
+        };
 
       git.clone = { repo, sha, ... }:
         action: next:
