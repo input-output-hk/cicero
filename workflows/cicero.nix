@@ -78,23 +78,17 @@ in std.callWorkflow args {
       };
 
       job = simple ++ (setup pr) ++ [
+        (std.wrapScript "bash" (next: ''
+          echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
+          ${lib.escapeShellArgs next}
+        ''))
         {
           resources = {
             memory = 4 * 1024;
             cpu = 16000;
           };
-          config.packages = std.data-merge.append
-            [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
         }
-        (std.script "bash" ''
-          echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
-
-          export NIX_CONFIG="
-          experimental-features = nix-command flakes
-          "
-
-          nix build
-        '')
+        std.nix.build
       ];
     };
 

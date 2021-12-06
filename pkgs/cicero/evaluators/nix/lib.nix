@@ -201,6 +201,46 @@ in rec {
           template = data-merge.append outer.template;
         };
 
+      nix = {
+        install = action: next:
+          data-merge.merge
+            # XXX we have to pre-create `config.packages` because it may not be present
+            # see https://github.com/divnix/data-merge/issues/1
+            (lib.recursiveUpdate next { config.packages = next.config.packages or []; })
+            {
+              config.packages = data-merge.append
+                [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
+              env.NIX_CONFIG = ''
+                experimental-features = nix-command flakes
+                ${next.env.NIX_CONFIG or ""}
+              '';
+            };
+
+        develop = action: next:
+          nix.install action (wrapScript "bash" (next: ''
+            nix --extra-experimental-features 'nix-command flakes' \
+              develop -c ${lib.escapeShellArgs next}
+          '') action next);
+
+        build = action: next:
+          nix.install action (wrapScript "bash" (next: ''
+            if [[ -f flake.nix ]]; then
+              nix build
+            else
+              nix-build
+            fi
+            ${lib.escapeShellArgs next}
+          '') action next);
+      };
+
+      makes = target: action: next:
+        data-merge.merge
+          (wrapScript "bash" (next: ''
+            m ${lib.escapeShellArg target}
+            ${lib.escapeShellArgs next}
+          '') action next)
+          { config.packages = data-merge.append [ "github:fluidattacks/makes" ]; };
+
       git.clone = { repo, sha, ... }:
         action: next:
         data-merge.merge (wrapScript "bash" (next: ''
@@ -296,6 +336,6 @@ in rec {
   inherit (jobs) singleTask;
   inherit (tasks) script;
   inherit (chains) chain;
-  inherit (chains.tasks) wrapScript git github;
+  inherit (chains.tasks) wrapScript nix makes git github;
   inherit data-merge;
 }
