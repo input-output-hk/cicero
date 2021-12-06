@@ -61,8 +61,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 			}
 
 			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-				ee := self.NomadEventService.Save(tx, &event)
-				return ee
+				return self.NomadEventService.Save(tx, &event)
 			}); err != nil {
 				self.Logger.Println("Could not complete Db transaction")
 				return errors.WithMessage(err, "Error Saving the Nomad event")
