@@ -3,13 +3,14 @@ package component
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"strings"
 
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 )
@@ -18,7 +19,7 @@ type WorkflowStartConsumer struct {
 	Logger              *log.Logger
 	MessageQueueService application.MessageQueueService
 	WorkflowService     application.WorkflowService
-	Db                  *pgxpool.Pool
+	Db                  config.PgxIface
 }
 
 func (self *WorkflowStartConsumer) Start(ctx context.Context) error {
@@ -36,9 +37,28 @@ func (self *WorkflowStartConsumer) Start(ctx context.Context) error {
 func (self *WorkflowStartConsumer) onStartMessage(msg *liftbridge.Message, err error) {
 	if err != nil {
 		self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
+		//TODO: What happens in this case?
 	}
 
+	workflowDetail, err := self.getWorkflowDetailToProcess(msg)
+	if err != nil {
+		self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
+		return
+	}
+
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		return self.processMessage(tx, workflowDetail, msg)
+	}); err != nil {
+		self.Logger.Println(fmt.Printf("Could not process fact message: %v with error %s", msg, err))
+		return
+	}
+}
+
+func (self *WorkflowStartConsumer) getWorkflowDetailToProcess(msg *liftbridge.Message) (*domain.WorkflowInstance, error) {
 	parts := strings.Split(msg.Subject(), ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("Invalid Message received, ignoring: %s", msg.Subject())
+	}
 	workflowName := parts[1]
 
 	self.Logger.Printf("Received start for workflow %s", workflowName)
@@ -53,65 +73,37 @@ func (self *WorkflowStartConsumer) onStartMessage(msg *liftbridge.Message, err e
 	received := domain.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
-		self.Logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
-		return
+		return nil, errors.Errorf("Invalid JSON received, ignoring: %s", unmarshalErr)
 	}
-
-	//TODO: must be transactional with the message process
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		err := self.MessageQueueService.Save(tx, msg)
-		return err
-	}); err != nil {
-		self.Logger.Printf("Could not complete db transaction")
-		return
-	}
-
 	var source string
 	if sourceFromMsg, sourceGiven := msg.Headers()["source"]; !sourceGiven {
-		self.Logger.Printf("No source given for workflow %s", workflowName)
-		return
+		return nil, errors.Errorf("No source given for workflow %s", workflowName)
 	} else {
 		source = string(sourceFromMsg)
 	}
 
-	workflow := domain.WorkflowInstance{
+	return &domain.WorkflowInstance{
 		Name:   workflowName,
 		Source: source,
 		Facts:  received,
-	}
-
-	//TODO: FIXME this context to be transactional
-	if err = self.insertWorkflow(context.Background(), &workflow); err != nil {
-		self.Logger.Printf("Failed to insert new workflow: %s", err)
-	}
+	}, nil
 }
 
-func (self *WorkflowStartConsumer) insertWorkflow(ctx context.Context, workflow *domain.WorkflowInstance) error {
-	var tx pgx.Tx
-	if t, err := self.Db.Begin(ctx); err != nil {
+func (self *WorkflowStartConsumer) processMessage(tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) (err error) {
+	if err = self.MessageQueueService.Save(tx, msg); err != nil {
 		self.Logger.Printf("%s", err)
 		return err
-	} else {
-		tx = t
 	}
-
-	defer tx.Rollback(ctx)
 
 	if err := self.WorkflowService.Save(tx, workflow); err != nil {
 		return errors.WithMessage(err, "Could not insert workflow instance")
 	}
-
-	self.Logger.Printf("Created workflow with ID %d", workflow.ID)
 
 	self.MessageQueueService.Publish(
 		domain.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
 		domain.InvokeStreamName,
 		workflow.Facts,
 	)
-
-	if err := tx.Commit(context.Background()); err != nil {
-		self.Logger.Printf("Couldn't complete transaction: %s", err)
-	}
-
+	self.Logger.Printf("Created workflow with ID %d", workflow.ID)
 	return nil
 }
