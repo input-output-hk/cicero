@@ -186,8 +186,8 @@ in rec {
          '')
          ```
       */
-      wrapScript = language: outerFn: inner:
-        let outer = script language (outerFn inner.config.command);
+      wrapScript = language: outerFn: action: inner:
+        let outer = script language (outerFn inner.config.command or []);
         in data-merge.merge
         (lib.recursiveUpdate inner { config.command = outer.config.command; }) {
           config.packages = data-merge.append outer.config.packages;
@@ -208,7 +208,7 @@ in rec {
           git checkout ${lib.escapeShellArg sha}
 
           ${lib.escapeShellArgs next}
-        '') next) {
+        '') action next) {
           config.packages = data-merge.append [
             "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#gitMinimal"
             "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
@@ -274,7 +274,7 @@ in rec {
             report failure
             exit $status
           fi
-        '') next) {
+        '') action next) {
           config.packages = data-merge.append [
             "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
             "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
