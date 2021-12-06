@@ -41,11 +41,8 @@ in std.callWorkflow args {
       };
 
       job = simple ++ (setup pr) ++ [
-        {
-          resources.memory = 1024;
-          config.packages =
-            std.data-merge.append (map ciceropkg [ "gocritic" "go" ]);
-        }
+        { resources.memory = 1024; }
+        std.nix.develop
         (std.script "bash" ''
           gocritic check -enableAll ./...
         '')
@@ -59,11 +56,8 @@ in std.callWorkflow args {
       };
 
       job = simple ++ (setup pr) ++ [
-        {
-          resources.memory = 2 * 1024;
-          config.packages =
-            std.data-merge.append (map nixpkg [ "fd" "nixfmt" ]);
-        }
+        { resources.memory = 2 * 1024; }
+        std.nix.develop
         (std.script "bash" ''
           fd -e nix -X nixfmt -c
         '')
@@ -107,11 +101,8 @@ in std.callWorkflow args {
       };
 
       job = simple ++ (setup pr) ++ [
-        {
-          resources.memory = 1024;
-          config.packages =
-            std.data-merge.append (map nixpkg [ "cue" "nomad" ]);
-        }
+        { resources.memory = 1024; }
+        std.nix.develop
         (std.script "bash" ''
           cue export ./jobs -e jobs.cicero \
             ${
