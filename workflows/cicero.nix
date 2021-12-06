@@ -49,6 +49,21 @@ in std.callWorkflow args {
       ];
     };
 
+    golangci-lint = { pr ? null, golangci-lint ? null }: {
+      when = {
+        "PR received" = pr != null;
+        "golangci-lint hasn't run yet" = golangci-lint == null;
+      };
+
+      job = simple ++ (setup pr) ++ [
+        { resources.memory = 1024; }
+        std.nix.develop
+        (std.script "bash" ''
+          golangci-lint run
+        '')
+      ];
+    };
+
     nixfmt = { pr ? null, nixfmt ? null }: {
       when = {
         "PR received" = pr != null;
