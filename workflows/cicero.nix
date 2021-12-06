@@ -6,9 +6,6 @@ let
 
   wfLib = import ../workflows-lib.nix self;
 
-  nixpkg = pkg: "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#${pkg}";
-  ciceropkg = pkg: "github:input-output-hk/cicero/${self.rev or ""}#${pkg}";
-
   simple = [ wfLib.jobDefaults std.singleTask ];
   setup = pr: [
     (lib.optionalAttrs (pr ? statuses_url)
