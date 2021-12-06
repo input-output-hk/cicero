@@ -189,7 +189,14 @@ in rec {
       wrapScript = language: outerFn: action: inner:
         let outer = script language (outerFn inner.config.command or []);
         in data-merge.merge
-        (lib.recursiveUpdate inner { config.command = outer.config.command; }) {
+        (lib.recursiveUpdate inner {
+          config.command = outer.config.command;
+
+          # XXX we have to pre-create these keys because they may not be present
+          # see https://github.com/divnix/data-merge/issues/1
+          config.packages = inner.config.packages or [];
+          template = inner.template or [];
+        }) {
           config.packages = data-merge.append outer.config.packages;
           template = data-merge.append outer.template;
         };
