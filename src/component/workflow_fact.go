@@ -42,9 +42,9 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 		//TODO: What happens in this case?
 	}
 
-	wMessageDetail, err := self.getWorkflowMessageDetail(msg)
+	wMessageDetail, err := self.getFactsDetail(msg)
 	if err != nil {
-		self.Logger.Printf("Invalid Workflow ID received, ignoring: %s", msg.Subject())
+		self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
 		return
 	}
 
@@ -58,13 +58,13 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 	}
 }
 
-type WorkflowMessageDetail struct {
+type WorkflowFactsDetail struct {
 	Id    uint64
 	Name  string
 	Facts domain.Facts
 }
 
-func (self *WorkflowFactConsumer) getWorkflowMessageDetail(msg *liftbridge.Message) (*WorkflowMessageDetail, error) {
+func (self *WorkflowFactConsumer) getFactsDetail(msg *liftbridge.Message) (*WorkflowFactsDetail, error) {
 	parts := strings.Split(msg.Subject(), ".")
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("Invalid Message received, ignoring: %s", msg.Subject())
@@ -89,20 +89,20 @@ func (self *WorkflowFactConsumer) getWorkflowMessageDetail(msg *liftbridge.Messa
 	if unmarshalErr != nil {
 		return nil, errors.WithMessagef(err, "Invalid JSON received, ignoring: %s", unmarshalErr)
 	}
-	return &WorkflowMessageDetail{
+	return &WorkflowFactsDetail{
 		Id:    id,
 		Name:  workflowName,
 		Facts: received,
 	}, nil
 }
 
-func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, wMessageDetail *WorkflowMessageDetail, msg *liftbridge.Message) (err error) {
+func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, workflowFactsDetail *WorkflowFactsDetail, msg *liftbridge.Message) (err error) {
 	if err = self.MessageQueueService.Save(tx, msg); err != nil {
 		self.Logger.Printf("%s", err)
 		return err
 	}
 	var existing domain.WorkflowInstance
-	if existing, err = self.WorkflowService.GetById(wMessageDetail.Id); err != nil {
+	if existing, err = self.WorkflowService.GetById(workflowFactsDetail.Id); err != nil {
 		return err
 	}
 	merged := domain.Facts{}
@@ -111,7 +111,7 @@ func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, wMessageDetail *Work
 		merged[k] = v
 	}
 
-	for k, v := range wMessageDetail.Facts {
+	for k, v := range workflowFactsDetail.Facts {
 		merged[k] = v
 	}
 
@@ -125,16 +125,15 @@ func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, wMessageDetail *Work
 	}
 
 	// TODO: only invoke when there was a change to the facts?
-
-	self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
-
 	if err := self.MessageQueueService.Publish(
-		domain.InvokeStreamName.Fmt(wMessageDetail.Name, wMessageDetail.Id),
+		domain.InvokeStreamName.Fmt(workflowFactsDetail.Name, workflowFactsDetail.Id),
 		domain.InvokeStreamName,
 		merged,
 	); err != nil {
 		self.Logger.Printf("Couldn't publish workflow invoke message: %s", err)
 		return err
 	}
-	return err
+
+	self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
+	return nil
 }
