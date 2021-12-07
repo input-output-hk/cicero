@@ -118,7 +118,7 @@ func (self *WorkflowInvokeConsumer) processMessage(ctx context.Context, tx pgx.T
 	}
 
 	for actionName, action := range workflowDefinition.Actions {
-		if err := self.invokeWorkflowAction(ctx, tx, workflow.ID, workflow.Facts, actionName, action); err != nil {
+		if err := self.invokeWorkflowAction(ctx, tx, workflow.Name, workflow.ID, workflow.Facts, actionName, action); err != nil {
 			return err
 		}
 	}
@@ -126,9 +126,20 @@ func (self *WorkflowInvokeConsumer) processMessage(ctx context.Context, tx pgx.T
 	return nil
 }
 
-func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, tx pgx.Tx, wfInstanceId uint64, inputs domain.Facts, actionName string, action *domain.WorkflowAction) error {
+func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, tx pgx.Tx, workflowName string, wfInstanceId uint64, inputs domain.Facts, actionName string, action *domain.WorkflowAction) error {
 	self.Limiter.Wait(ctx, priority.High) //TODO: What is the ctx to use in this case?
 	defer self.Limiter.Finish()
+
+	if action.IsDecision() && action.IsRunnable() {
+		if err := self.MessageQueueService.Publish(
+			domain.FactStreamName.Fmt(workflowName, wfInstanceId),
+			domain.FactStreamName,
+			action.Success,
+		); err != nil {
+			return errors.WithMessage(err, "Could not publish fact")
+		}
+		return nil
+	}
 
 	var instance *domain.ActionInstance
 	if inst, err := self.ActionService.GetByNameAndWorkflowId(actionName, wfInstanceId); err != nil {
@@ -163,12 +174,11 @@ func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, tx
 		actionInstanceId := instance.ID.String()
 		action.Job.ID = &actionInstanceId
 
-		if response, _, err := self.NomadClient.JobsRegister(&action.Job, &nomad.WriteOptions{}); err != nil {
+		if response, _, err := self.NomadClient.JobsRegister(action.Job, &nomad.WriteOptions{}); err != nil {
 			return errors.WithMessage(err, "Failed to run action")
 		} else if len(response.Warnings) > 0 {
 			self.Logger.Println(response.Warnings)
 		}
-
 	} else if instance != nil {
 		if _, _, err := self.NomadClient.JobsDeregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
 			return errors.WithMessage(err, "Failed to stop action")

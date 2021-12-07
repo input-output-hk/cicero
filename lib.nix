@@ -44,8 +44,11 @@ in rec {
 
       mkActionState = { actionName, job, inputs, when ? { }
         , success ? { ${actionName} = true; }
-        , failure ? { ${actionName} = false; } }: {
-          inherit when inputs success failure;
+        , failure ? { ${actionName} = false; } }:
+        {
+          inherit when inputs success;
+        } // lib.optionalAttrs (job != null) {
+          inherit failure;
           job = hydrateNomadJob {
             "${name}/${actionName}" =
               lib.optionalAttrs (all (x: x == true) (attrValues when)) job;

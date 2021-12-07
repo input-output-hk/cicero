@@ -144,7 +144,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 		domain.WorkflowDefinition
 		Actions map[string]*struct {
 			domain.WorkflowAction
-			Job interface{} `json:"job"`
+			Job *interface{} `json:"job"`
 		} `json:"actions"`
 	}{}
 
@@ -154,9 +154,22 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
 	}
 
+	def.Name = freeformDef.Name
+	def.Meta = freeformDef.Meta
 	def.Actions = map[string]*domain.WorkflowAction{}
 	for actionName, action := range freeformDef.Actions {
-		if job, err := json.Marshal(action.Job); err != nil {
+		def.Actions[actionName] = &domain.WorkflowAction{
+			Failure: action.Failure,
+			Success: action.Success,
+			Inputs:  action.Inputs,
+			When:    action.When,
+		}
+
+		if action.Job == nil {
+			continue
+		}
+
+		if job, err := json.Marshal(*action.Job); err != nil {
 			return def, err
 		} else {
 			// escape HCL variable interpolation
@@ -169,15 +182,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 			}); err != nil {
 				return def, err
 			} else {
-				def.Name = freeformDef.Name
-				def.Meta = freeformDef.Meta
-				def.Actions[actionName] = &domain.WorkflowAction{
-					Failure: action.Failure,
-					Success: action.Success,
-					Inputs:  action.Inputs,
-					When:    action.When,
-					Job:     *job,
-				}
+				def.Actions[actionName].Job = job
 			}
 		}
 	}
@@ -189,6 +194,9 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 
 func (e *evaluationService) addEnv(def *domain.WorkflowDefinition) {
 	for _, action := range def.Actions {
+		if action.Job == nil {
+			continue
+		}
 		for _, group := range action.Job.TaskGroups {
 			for _, task := range group.Tasks {
 				for _, envSpec := range e.Env {

@@ -6,8 +6,9 @@ let
 
   wfLib = import ../workflows-lib.nix self;
 
-  simple = [ wfLib.jobDefaults std.singleTask ];
-  setup = pr: [
+  common = pr: [
+    wfLib.jobDefaults
+    std.singleTask
     (lib.optionalAttrs (pr ? statuses_url)
       (std.github.reportStatus pr.statuses_url))
     (std.git.clone pr.head)
@@ -20,15 +21,7 @@ in std.callWorkflow args {
         "GitHub event is a PR event" = github-event ? pull_request;
       };
 
-      success.pr =
-        # TODO make it possible to drop `or null` using lazier evaluation
-        github-event.pull_request or null;
-
-      job = simple ++ [
-        (std.script "bash" ''
-          echo 'TODO make it possible to omit would-be no-op jobs'
-        '')
-      ];
+      success.pr = github-event.pull_request or null;
     };
 
     gocritic = { pr ? null, gocritic ? null }: {
@@ -37,7 +30,7 @@ in std.callWorkflow args {
         "gocritic hasn't run yet" = gocritic == null;
       };
 
-      job = simple ++ (setup pr) ++ [
+      job = (common pr) ++ [
         { resources.memory = 1024; }
         std.nix.develop
         (std.script "bash" ''
@@ -52,7 +45,7 @@ in std.callWorkflow args {
         "golangci-lint hasn't run yet" = golangci-lint == null;
       };
 
-      job = simple ++ (setup pr) ++ [
+      job = (common pr) ++ [
         { resources.memory = 1024; }
         std.nix.develop
         (std.script "bash" ''
@@ -67,7 +60,7 @@ in std.callWorkflow args {
         "nixfmt hasn't run yet" = nixfmt == null;
       };
 
-      job = simple ++ (setup pr) ++ [
+      job = (common pr) ++ [
         { resources.memory = 2 * 1024; }
         std.nix.develop
         (std.script "bash" ''
@@ -83,7 +76,7 @@ in std.callWorkflow args {
         "build hasn't run yet" = build == null;
       };
 
-      job = simple ++ (setup pr) ++ [
+      job = (common pr) ++ [
         (std.wrapScript "bash" (next: ''
           echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
           ${lib.escapeShellArgs next}
@@ -112,7 +105,7 @@ in std.callWorkflow args {
         "deploy hasn't run yet" = deploy == null;
       };
 
-      job = simple ++ (setup pr) ++ [
+      job = (common pr) ++ [
         { resources.memory = 1024; }
         std.nix.develop
         (std.script "bash" ''

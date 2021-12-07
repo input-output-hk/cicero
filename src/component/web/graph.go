@@ -49,7 +49,15 @@ func RenderWorkflowGraphFlow(wf domain.WorkflowDefinition, w io.Writer) error {
 			Symbol:     "circle",
 			SymbolSize: symbolSize,
 		}
-		if action.IsRunnable() {
+		if action.IsDecision() {
+			if action.IsRunnable() {
+				node.Symbol = "arrow"
+				node.Category = 3
+			} else {
+				node.Symbol = "triangle"
+				node.Category = 2
+			}
+		} else if action.IsRunnable() {
 			node.Symbol = "diamond"
 			node.Category = 1
 			node.Y = 0
@@ -87,8 +95,10 @@ func RenderWorkflowGraphFlow(wf domain.WorkflowDefinition, w io.Writer) error {
 		charts.WithGraphChartOpts(opts.GraphChart{
 			EdgeSymbol: []string{"none", "arrow"},
 			Categories: []*opts.GraphCategory{
-				{Name: "Not Runnable"},
-				{Name: "Runnable"},
+				{Name: "Action"},
+				{Name: "Action (runnable)"},
+				{Name: "Decision"},
+				{Name: "Decision (runnable)"},
 			},
 		}),
 	}, w)

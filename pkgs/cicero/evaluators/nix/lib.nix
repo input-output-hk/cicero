@@ -44,6 +44,7 @@ in rec {
 
        `job` is the JSON representation a Nomad job's HCL or
        a list that is passed to the `chain` function (see its docs).
+       It may be null or absent entirely.
 
        The arguments in brackets are optional,
        meaning that either a function with a single argument
@@ -100,10 +101,13 @@ in rec {
         wrapper = facts:
           let result = initAction facts;
           in result // {
-            job = if builtins.typeOf result.job == "list" then
-              chain actionFnArg result.job
+            job = if result ? job then
+              if builtins.typeOf result.job == "list" then
+                chain actionFnArg result.job
+              else
+                result.job
             else
-              result.job;
+              null;
           };
         # We need to `setFunctionArgs` because that information is lost
         # as the `wrapper` just takes `facts:`, leading to no facts

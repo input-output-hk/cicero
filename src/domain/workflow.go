@@ -21,7 +21,11 @@ type WorkflowAction struct {
 	Success Facts           `json:"success"`
 	Inputs  []string        `json:"inputs"`
 	When    map[string]bool `json:"when"`
-	Job     nomad.Job       `json:"job"`
+	Job     *nomad.Job      `json:"job"`
+}
+
+func (s *WorkflowAction) IsDecision() bool {
+	return s.Job == nil
 }
 
 func (s *WorkflowAction) IsRunnable() bool {
