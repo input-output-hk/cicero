@@ -330,13 +330,16 @@ func (self *Web) WorkflowGraphPlainGet(w http.ResponseWriter, req *http.Request)
 	case WorkflowGraphTypeFlow:
 		if err := RenderWorkflowGraphFlow(def, w); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Failed to render flow graph"))
+			return
 		}
 	case WorkflowGraphTypeInputs:
 		if err := RenderWorkflowGraphInputs(def, state, w); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Failed to render input graph"))
+			return
 		}
 	default:
-		self.ClientError(w, errors.WithMessagef(err, "Unknown graph type: %q", graphTypeStr))
+		self.ClientError(w, errors.New("Unknown graph type: "+graphTypeStr))
+		return
 	}
 }
 
@@ -346,6 +349,7 @@ func (self *Web) ApiWorkflowDefinitionSourceGet(w http.ResponseWriter, req *http
 
 	if wfs, err := self.EvaluationService.ListWorkflows(source); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to list workflows"))
+		return
 	} else {
 		self.json(w, wfs, 200)
 	}
@@ -396,6 +400,7 @@ func (self *Web) ApiWorkflowDefinitionSourceNameGet(w http.ResponseWriter, req *
 
 	if wf, err := self.EvaluationService.EvaluateWorkflow(source, name, id, facts); err != nil {
 		self.ServerError(w, err)
+		return
 	} else {
 		self.json(w, wf, 200)
 	}
