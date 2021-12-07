@@ -85,7 +85,14 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 		e.logger.Printf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
 
 		if output, err := cmd.Output(); err != nil {
-			return nil, errors.WithMessagef(err, "Failed to evaluate. Output: %s", output)
+			message := "Failed to evaluate"
+
+			var errExit *exec.ExitError
+			if errors.As(err, &errExit) {
+				message += fmt.Sprintf("\nStdout: %s\nStderr: %s", output, errExit.Stderr)
+			}
+
+			return nil, errors.WithMessage(err, message)
 		} else {
 			return output, err
 		}
@@ -99,14 +106,20 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 		}
 	} else {
 		e.logger.Println("No evaluator given in source, trying all")
+		messages := ""
 		for _, evaluator := range e.Evaluators {
 			if output, err := tryEval(evaluator); err != nil {
-				e.logger.Printf(`Evaluator "%s" failed: %s`, evaluator, err.Error())
+				message := fmt.Sprintf(`Evaluator "%s" failed: %s`, evaluator, err.Error())
+				if messages != "" {
+					messages += "\n"
+				}
+				messages += message
+				e.logger.Print(message)
 			} else {
 				return output, nil
 			}
 		}
-		return nil, errors.New("No evaluator succeeded")
+		return nil, errors.New("No evaluator succeeded.\n" + messages)
 	}
 }
 
