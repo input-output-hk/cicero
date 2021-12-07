@@ -157,7 +157,6 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 				return def, err
 			} else {
 				def.Name = freeformDef.Name
-				def.Source = freeformDef.Source
 				def.Meta = freeformDef.Meta
 				def.Actions[actionName] = &domain.WorkflowAction{
 					Failure: action.Failure,

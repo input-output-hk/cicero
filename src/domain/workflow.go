@@ -12,7 +12,6 @@ type WorkflowDefinitions map[string]*WorkflowDefinition
 
 type WorkflowDefinition struct {
 	Name    string                     `json:"name"`
-	Source  string                     `json:"source"`
 	Meta    map[string]interface{}     `json:"meta"`
 	Actions map[string]*WorkflowAction `json:"actions"`
 }
