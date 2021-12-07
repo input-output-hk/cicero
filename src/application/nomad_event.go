@@ -2,6 +2,7 @@ package application
 
 import (
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 )
 
@@ -26,7 +26,7 @@ type nomadEventService struct {
 	actionService        ActionService
 }
 
-func NewNomadEventService(db *pgxpool.Pool, actionService ActionService) NomadEventService {
+func NewNomadEventService(db config.PgxIface, actionService ActionService) NomadEventService {
 	return &nomadEventService{
 		logger:               log.New(os.Stderr, "NomadEventService: ", log.LstdFlags),
 		nomadEventRepository: persistence.NewNomadEventRepository(db),
