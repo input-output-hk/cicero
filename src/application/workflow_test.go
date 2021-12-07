@@ -3,6 +3,10 @@ package application
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
+	"testing"
+
 	"github.com/input-output-hk/cicero/src/application/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
 	repositoryMocks "github.com/input-output-hk/cicero/src/domain/repository/mocks"
@@ -12,20 +16,18 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log"
-	"os"
-	"testing"
 )
 
 func buildTransactionMocked() (tx pgx.Tx, err error) {
-	mock, err := pgxmock.NewConn()
+	dbMock, err := pgxmock.NewConn()
 	if err != nil {
-		err = errors.WithMessage(err, "an error '%s' was not expected when opening a stub database connection")
+		err = errors.WithMessage(err, "an error was not expected when opening a stub database connection")
+		return
 	}
-	mock.ExpectBegin()
-	tx, err = mock.Begin(context.Background())
+	dbMock.ExpectBegin()
+	tx, err = dbMock.Begin(context.Background())
 	if err != nil {
-		err = errors.WithMessage(err, "an error '%s' was not expected when Begin a Tx in database")
+		err = errors.WithMessage(err, "an error was not expected when beginning a DB transaction")
 	}
 	return
 }
@@ -41,21 +43,21 @@ func buildWorkflowApplication(workflowRepositoryMocked *repositoryMocks.Workflow
 func TestSavingWorkflowSuccess(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	workflow := &domain.WorkflowInstance{ID: uint64(1)}
 	workflowRepository := &repositoryMocks.WorkflowRepository{}
 	messageQueueService := &mocks.MessageQueueService{}
 	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	tx, err := buildTransactionMocked()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
+		t.Fatalf("an error '%s' was not expected when beginning a DB transaction", err)
 	}
 	workflowRepository.On("Save", tx, workflow).Return(nil)
 
-	//when
+	// when
 	err = workflowService.Save(tx, workflow)
 
-	//then
+	// then
 	assert.Equal(t, nil, err, "No error")
 	workflowRepository.AssertExpectations(t)
 }
@@ -63,30 +65,30 @@ func TestSavingWorkflowSuccess(t *testing.T) {
 func TestSavingWorkflowFailure(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	workflow := &domain.WorkflowInstance{ID: uint64(1)}
 	workflowRepository := &repositoryMocks.WorkflowRepository{}
 	messageQueueService := &mocks.MessageQueueService{}
 	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	tx, err := buildTransactionMocked()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
+		t.Fatalf("an error '%s' was not expected when beginning a DB transaction", err)
 	}
 	errorMessage := "Some error"
 	workflowRepository.On("Save", tx, workflow).Return(errors.New(errorMessage))
 
-	//when
+	// when
 	err = workflowService.Save(tx, workflow)
 
-	//then
-	assert.Equal(t, err.Error(), fmt.Errorf("Couldn't insert workflow: %s", errorMessage).Error())
+	// then
+	assert.Equal(t, err.Error(), fmt.Errorf("Could not insert workflow: %s", errorMessage).Error())
 	workflowRepository.AssertExpectations(t)
 }
 
 func TestGettingWorkflowByIdSuccess(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	workflowId := uint64(1)
 	workflow := domain.WorkflowInstance{ID: uint64(1)}
 	workflowRepository := &repositoryMocks.WorkflowRepository{}
@@ -94,10 +96,10 @@ func TestGettingWorkflowByIdSuccess(t *testing.T) {
 	workflowService := buildWorkflowApplication(workflowRepository, messageQueueService)
 	workflowRepository.On("GetById", workflowId).Return(workflow, nil)
 
-	//when
+	// when
 	workflowResult, err := workflowService.GetById(workflowId)
 
-	//then
+	// then
 	assert.Equal(t, nil, err, "No error")
 	assert.Equal(t, workflowResult, workflow)
 	workflowRepository.AssertExpectations(t)
@@ -106,7 +108,7 @@ func TestGettingWorkflowByIdSuccess(t *testing.T) {
 func TestGettingWorkflowByIdFailure(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	workflowId := uint64(1)
 	workflowRepository := &repositoryMocks.WorkflowRepository{}
 	messageQueueService := &mocks.MessageQueueService{}
@@ -114,18 +116,18 @@ func TestGettingWorkflowByIdFailure(t *testing.T) {
 	errorMessage := "Some error"
 	workflowRepository.On("GetById", workflowId).Return(domain.WorkflowInstance{}, errors.New(errorMessage))
 
-	//when
+	// when
 	_, err := workflowService.GetById(workflowId)
 
-	//then
-	assert.Equal(t, err.Error(), fmt.Errorf("Couldn't select existing workflow for id %d: %s", workflowId, errorMessage).Error())
+	// then
+	assert.Equal(t, err.Error(), fmt.Errorf("Could not select existing workflow for id %d: %s", workflowId, errorMessage).Error())
 	workflowRepository.AssertExpectations(t)
 }
 
 func TestStartWorkflowSuccess(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	source := "source"
 	name := "name"
 	inputs := domain.Facts{}
@@ -141,10 +143,10 @@ func TestStartWorkflowSuccess(t *testing.T) {
 		inputs,
 		mock.AnythingOfType("liftbridge.MessageOption")).Return(nil)
 
-	//when
+	// when
 	err := workflowService.Start(source, name, inputs)
 
-	//then
+	// then
 	assert.Equal(t, nil, err, "No error")
 	messageQueueService.AssertExpectations(t)
 }
@@ -152,7 +154,7 @@ func TestStartWorkflowSuccess(t *testing.T) {
 func TestStartWorkflowFailure(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	source := "source"
 	name := "name"
 	inputs := domain.Facts{}
@@ -168,10 +170,10 @@ func TestStartWorkflowFailure(t *testing.T) {
 		inputs,
 		mock.AnythingOfType("liftbridge.MessageOption")).Return(errors.New(errorMessage))
 
-	//when
+	// when
 	err := workflowService.Start(source, name, inputs)
 
-	//then
+	// then
 	assert.Equal(t, errorMessage, err.Error())
 	messageQueueService.AssertExpectations(t)
 }

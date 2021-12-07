@@ -54,12 +54,12 @@ func startLiftbridge(t *testing.T) *server.Server {
 	// Configure the first server as a seed.
 	s1Config := getTestConfig("a", true, 0)
 	s1 := runServerWithConfig(t, s1Config)
-	defer s1.Stop()
+	defer func() { _ = s1.Stop() }()
 
 	// Configure second server which should automatically join the first.
 	s2Config := getTestConfig("b", false, 0)
 	s2 := runServerWithConfig(t, s2Config)
-	defer s2.Stop()
+	defer func() { _ = s2.Stop() }()
 
 	var leader *server.Server
 	for {

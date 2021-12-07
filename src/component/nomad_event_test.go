@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"testing"
+
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/application/mocks"
 	configMocks "github.com/input-output-hk/cicero/src/config/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log"
-	"os"
-	"testing"
 )
 
 func buildNomadEventConsumerMocked(nomadEventServiceMocked *mocks.NomadEventService,
@@ -38,7 +39,7 @@ func generateEvents(events []nomad.Events) <-chan *nomad.Events {
 func TestStartWorkflowFailureToListenNomadEvent(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	eventId := uint64(1)
 	ctx := context.Background()
 	stream := generateEvents([]nomad.Events{})
@@ -49,10 +50,10 @@ func TestStartWorkflowFailureToListenNomadEvent(t *testing.T) {
 	errorMessage := "Some error"
 	nomadClient.On("EventStream", ctx, eventId+1).Return(stream, errors.New(errorMessage))
 
-	//when
+	// when
 	err := nomadEventConsumer.Start(ctx)
 
-	//then
+	// then
 	assert.Equal(t, err.Error(), fmt.Errorf("Could not listen to Nomad events: %s", errorMessage).Error())
 	nomadEventService.AssertExpectations(t)
 	nomadClient.AssertExpectations(t)
@@ -61,7 +62,7 @@ func TestStartWorkflowFailureToListenNomadEvent(t *testing.T) {
 func TestStartWorkflowFailureGettingNextEvents(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	eventId := uint64(1)
 	ctx := context.Background()
 	errorMessage := "Some error"
@@ -75,10 +76,10 @@ func TestStartWorkflowFailureGettingNextEvents(t *testing.T) {
 	nomadEventService.On("GetLastNomadEvent").Return(eventId, nil)
 	nomadClient.On("EventStream", ctx, eventId+1).Return(stream, nil)
 
-	//when
+	// when
 	err := nomadEventConsumer.Start(ctx)
 
-	//then
+	// then
 	assert.Equal(t, err.Error(), fmt.Errorf("Error getting next events from Nomad event stream: %s", errorMessage).Error())
 	nomadEventService.AssertExpectations(t)
 	nomadClient.AssertExpectations(t)
@@ -102,10 +103,10 @@ func TestStartWorkflowGettingEventAllocationFailure(t *testing.T) {
 	nomadEventService.On("GetLastNomadEvent").Return(eventId, nil)
 	nomadClient.On("EventStream", ctx, eventId+1).Return(stream, nil)
 
-	//when
+	// when
 	err := nomadEventConsumer.Start(ctx)
 
-	//then
+	// then
 	assert.Contains(t, err.Error(), "Error handling Nomad event")
 	assert.Contains(t, err.Error(), "Error getting Nomad event's allocation")
 	nomadEventService.AssertExpectations(t)
@@ -115,7 +116,7 @@ func TestStartWorkflowGettingEventAllocationFailure(t *testing.T) {
 func TestStartWorkflowFailureToSaveEvent(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	eventId := uint64(1)
 	ctx := context.Background()
 	errorMessage := "Some error"

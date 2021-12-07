@@ -54,29 +54,29 @@ func (s *workflowService) GetAllByName(name string) ([]*domain.WorkflowInstance,
 func (s *workflowService) GetById(id uint64) (workflow domain.WorkflowInstance, err error) {
 	s.logger.Printf("Get Workflow by id %d", id)
 	workflow, err = s.workflowRepository.GetById(id)
-	err = errors.WithMessagef(err, "Couldn't select existing workflow for id %d", id)
+	err = errors.WithMessagef(err, "Could not select existing workflow for id %d", id)
 	return
 }
 
 func (s *workflowService) Save(tx pgx.Tx, workflow *domain.WorkflowInstance) error {
-	s.logger.Printf("Saving new Workflow %#v", workflow)
+	s.logger.Printf("Saving new Workflow %s", workflow.Name)
 	if err := s.workflowRepository.Save(tx, workflow); err != nil {
-		return errors.WithMessagef(err, "Couldn't insert workflow")
+		return errors.WithMessage(err, "Could not insert workflow")
 	}
-	s.logger.Printf("Created workflow %#v", workflow)
+	s.logger.Printf("Created workflow %d", workflow.ID)
 	return nil
 }
 
 func (s *workflowService) Update(tx pgx.Tx, workflow domain.WorkflowInstance) error {
-	s.logger.Printf("Update workflow %#v", workflow)
+	s.logger.Printf("Update workflow %d", workflow.ID)
 	if err := s.workflowRepository.Update(tx, workflow); err != nil {
-		return errors.WithMessage(err, "Couldn't update workflow")
+		return errors.WithMessage(err, "Could not update workflow")
 	}
-	s.logger.Printf("Updated workflow %#v", workflow)
+	s.logger.Printf("Updated workflow %d", workflow.ID)
 	return nil
 }
 
-func (s *workflowService) Start(source string, name string, inputs domain.Facts) error {
+func (s *workflowService) Start(source, name string, inputs domain.Facts) error {
 	return s.messageQueueService.Publish(
 		domain.StartStreamName.Fmt(name),
 		domain.StartStreamName,

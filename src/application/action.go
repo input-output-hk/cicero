@@ -56,7 +56,7 @@ func NewActionService(db config.PgxIface, prometheusAddr string) ActionService {
 }
 
 func (self *actionService) GetById(id uuid.UUID) (action domain.ActionInstance, err error) {
-	log.Printf("Get Action by id %s", id)
+	self.logger.Printf("Get Action by id %s", id)
 	action, err = self.actionRepository.GetById(id)
 	if err != nil {
 		err = errors.WithMessagef(err, "Couldn't select existing Action for id: %s", id)
@@ -65,7 +65,7 @@ func (self *actionService) GetById(id uuid.UUID) (action domain.ActionInstance, 
 }
 
 func (self *actionService) GetByNameAndWorkflowId(name string, workflowId uint64) (action domain.ActionInstance, err error) {
-	log.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
+	self.logger.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = self.actionRepository.GetByNameAndWorkflowId(name, workflowId)
 	if err != nil && !pgxscan.NotFound(err) {
 		err = errors.WithMessagef(err, "Couldn't select existing Action for name %s and workflow_instance_id %d", name, workflowId)
@@ -74,25 +74,25 @@ func (self *actionService) GetByNameAndWorkflowId(name string, workflowId uint64
 }
 
 func (self *actionService) GetAll() ([]*domain.ActionInstance, error) {
-	log.Printf("Get all Actions")
+	self.logger.Printf("Get all Actions")
 	return self.actionRepository.GetAll()
 }
 
 func (self *actionService) Save(tx pgx.Tx, action *domain.ActionInstance) error {
-	log.Printf("Saving new Action %#v", action)
+	self.logger.Printf("Saving new Action named %s", action.Name)
 	if err := self.actionRepository.Save(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Action")
 	}
-	log.Printf("Created Action %#v", action)
+	self.logger.Printf("Created Action %s", action.ID)
 	return nil
 }
 
 func (self *actionService) Update(tx pgx.Tx, action domain.ActionInstance) error {
-	log.Printf("Update Action %s", action.ID.String())
+	self.logger.Printf("Update Action %s", action.ID.String())
 	if err := self.actionRepository.Update(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't update Action with id: %s", action.ID)
 	}
-	log.Printf("Updated Action %s", action.ID.String())
+	self.logger.Printf("Updated Action %s", action.ID.String())
 	return nil
 }
 
@@ -174,9 +174,9 @@ func (self *actionService) LokiQueryRange(query string) (*domain.LokiOutput, err
 
 			for _, entry := range stream.Entries {
 				if ok && source == "stderr" {
-					output.Stderr = append(output.Stderr, domain.LokiLine{entry.Timestamp, entry.Line})
+					output.Stderr = append(output.Stderr, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line})
 				} else {
-					output.Stdout = append(output.Stdout, domain.LokiLine{entry.Timestamp, entry.Line})
+					output.Stdout = append(output.Stdout, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line})
 				}
 
 				if (len(output.Stdout) + len(output.Stderr)) >= linesToFetch {

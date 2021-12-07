@@ -82,7 +82,7 @@ func TestShouldUpdateAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// when
 	err = repository.Update(tx, action)

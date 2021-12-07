@@ -60,7 +60,10 @@ func (self *Web) Error(w http.ResponseWriter, err error, status int) {
 func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(obj)
+	if err := json.NewEncoder(w).Encode(obj); err != nil {
+		self.ServerError(w, err)
+		return
+	}
 }
 
 var layout *template.Template

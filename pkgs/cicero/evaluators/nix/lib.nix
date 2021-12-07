@@ -3,7 +3,6 @@ self:
 let
   inherit (self.inputs.nixpkgs) lib;
   inherit (self.inputs) data-merge;
-
 in rec {
   workflows = rec {
     /* Convenience for defining and wrapping a workflow.
@@ -142,12 +141,16 @@ in rec {
      Put simply chains are a fold-right of wrappers.
 
      Each "step/link/part" (no name defined) of a chain
-     is a function that takes some specific arguments
-     (usually supplied directly in the workflow),
-     the action that this job is being defined for
-     (usually supplied via usage of the `chain` function, not directly),
-     and the next "step/link/part" (also through the `chain` function).
+     is a function that takes the action that this job
+     is being defined for as its first argument
+     and the next "step/link/part" as its second argument.
+     These argument are supplied automatically when called
+     by the `chain` function.
      It returns the job as an attribute set.
+
+     Most "steps/links/parts" are created from a builder function
+     that takes some specific arguments which are usually given
+     directly in the workflow definition.
 
      This simple contract sometimes allows to use other functions
      that are not primarily meant to be used in a chain, or use
@@ -183,12 +186,58 @@ in rec {
          '')
          ```
       */
-      wrapScript = language: outerFn: inner:
-        let outer = script language (outerFn inner.config.command);
-        in data-merge.merge
-        (lib.recursiveUpdate inner { config.command = outer.config.command; }) {
+      wrapScript = language: outerFn: action: inner:
+        let outer = script language (outerFn inner.config.command or [ ]);
+        in data-merge.merge (lib.recursiveUpdate inner {
+          config.command = outer.config.command;
+
+          # XXX we have to pre-create these keys because they may not be present
+          # see https://github.com/divnix/data-merge/issues/1
+          config.packages = inner.config.packages or [ ];
+          template = inner.template or [ ];
+        }) {
           config.packages = data-merge.append outer.config.packages;
           template = data-merge.append outer.template;
+        };
+
+      nix = {
+        install = action: next:
+          data-merge.merge (lib.recursiveUpdate next {
+            # XXX we have to pre-create `config.packages` because it may not be present
+            # see https://github.com/divnix/data-merge/issues/1
+            config.packages = next.config.packages or [ ];
+          }) {
+            config.packages = data-merge.append
+              [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
+            env.NIX_CONFIG = ''
+              experimental-features = nix-command flakes
+              ${next.env.NIX_CONFIG or ""}
+            '';
+          };
+
+        develop = action: next:
+          nix.install action (wrapScript "bash" (next: ''
+            nix --extra-experimental-features 'nix-command flakes' \
+              develop -c ${lib.escapeShellArgs next}
+          '') action next);
+
+        build = action: next:
+          nix.install action (wrapScript "bash" (next: ''
+            if [[ -f flake.nix ]]; then
+              nix build
+            else
+              nix-build
+            fi
+            ${lib.escapeShellArgs next}
+          '') action next);
+      };
+
+      makes = target: action: next:
+        data-merge.merge (wrapScript "bash" (next: ''
+          m ${lib.escapeShellArg target}
+          ${lib.escapeShellArgs next}
+        '') action next) {
+          config.packages = data-merge.append [ "github:fluidattacks/makes" ];
         };
 
       git.clone = { repo, sha, ... }:
@@ -205,7 +254,7 @@ in rec {
           git checkout ${lib.escapeShellArg sha}
 
           ${lib.escapeShellArgs next}
-        '') next) {
+        '') action next) {
           config.packages = data-merge.append [
             "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#gitMinimal"
             "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
@@ -271,7 +320,7 @@ in rec {
             report failure
             exit $status
           fi
-        '') next) {
+        '') action next) {
           config.packages = data-merge.append [
             "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
             "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
@@ -286,6 +335,6 @@ in rec {
   inherit (jobs) singleTask;
   inherit (tasks) script;
   inherit (chains) chain;
-  inherit (chains.tasks) wrapScript git github;
+  inherit (chains.tasks) wrapScript nix makes git github;
   inherit data-merge;
 }

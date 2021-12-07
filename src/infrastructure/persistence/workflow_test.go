@@ -65,7 +65,7 @@ func TestShouldSaveWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
-	defer mock.Close(context.Background())
+	defer func() { _ = mock.Close(context.Background()) }()
 	rows := mock.NewRows([]string{"id", "created_at"}).AddRow(workflowId, &now)
 	mock.ExpectBegin()
 	mock.ExpectQuery("INSERT INTO workflow_instances").WithArgs(workflow.Source, workflow.Name, workflow.Facts).WillReturnRows(rows)
@@ -77,7 +77,7 @@ func TestShouldSaveWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// when
 	err = repository.Save(tx, &workflow)
