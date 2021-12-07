@@ -3,14 +3,16 @@ package component
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/jackc/pgx/v4"
 	"log"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 )
@@ -19,13 +21,13 @@ type WorkflowFactConsumer struct {
 	Logger              *log.Logger
 	MessageQueueService application.MessageQueueService
 	WorkflowService     application.WorkflowService
-	Db                  *pgxpool.Pool
+	Db                  config.PgxIface
 }
 
 func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
 	self.Logger.Println("Starting WorkflowFactConsumer")
 
-	if err := self.MessageQueueService.Subscribe(ctx, domain.FactStreamName, self.onFactMessage, 0); err != nil {
+	if err := self.MessageQueueService.Subscribe(ctx, domain.FactStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.FactStreamName)
 	}
 
@@ -34,17 +36,37 @@ func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
 	return nil
 }
 
-func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err error) {
-	if err != nil {
-		self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
-	}
+func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
+	return func(msg *liftbridge.Message, err error) {
+		if err != nil {
+			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
+			//TODO: If err is not nil, the subscription will be terminated
+		}
 
+		wMessageDetail, err := self.getFactsDetail(msg)
+		if err != nil {
+			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
+			return
+		}
+
+		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+			return self.processMessage(tx, wMessageDetail, msg)
+		}); err != nil {
+			self.Logger.Println(fmt.Printf("Could not process fact message: %v with error %s", msg, err))
+			return
+		}
+	}
+}
+
+func (self *WorkflowFactConsumer) getFactsDetail(msg *liftbridge.Message) (*domain.WorkflowInstance, error) {
 	parts := strings.Split(msg.Subject(), ".")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("Invalid Message received, ignoring: %s", msg.Subject())
+	}
 	workflowName := parts[1]
 	id, err := strconv.ParseUint(parts[2], 10, 64)
 	if err != nil {
-		self.Logger.Printf("Invalid Workflow ID received, ignoring: %s", msg.Subject())
-		return
+		return nil, errors.WithMessagef(err, "Invalid Workflow ID received, ignoring: %s", msg.Subject())
 	}
 
 	self.Logger.Printf("Received update for workflow %s %d", workflowName, id)
@@ -59,35 +81,31 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 	received := domain.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
-		self.Logger.Printf("Invalid JSON received, ignoring: %s", unmarshalErr)
-		return
+		return nil, errors.Errorf("Invalid JSON received, ignoring: %s", unmarshalErr)
 	}
+	return &domain.WorkflowInstance{
+		ID:    id,
+		Name:  workflowName,
+		Facts: received,
+	}, nil
+}
 
-	ctx := context.Background()
-	tx, err := self.Db.Begin(ctx)
-	if err != nil {
+func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) (err error) {
+	if err = self.MessageQueueService.Save(tx, msg); err != nil {
 		self.Logger.Printf("%s", err)
-		return
+		return err
 	}
-
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if err := self.MessageQueueService.Save(tx, msg); err != nil {
-		return
-	}
-
 	var existing domain.WorkflowInstance
-	if existing, err = self.WorkflowService.GetById(id); err != nil {
-		return
+	if existing, err = self.WorkflowService.GetById(workflow.ID); err != nil {
+		return err
 	}
-
 	merged := domain.Facts{}
 
 	for k, v := range existing.Facts {
 		merged[k] = v
 	}
 
-	for k, v := range received {
+	for k, v := range workflow.Facts {
 		merged[k] = v
 	}
 
@@ -97,24 +115,19 @@ func (self *WorkflowFactConsumer) onFactMessage(msg *liftbridge.Message, err err
 
 	if err := self.WorkflowService.Update(tx, existing); err != nil {
 		self.Logger.Printf("Error while updating workflow: %s", err)
-		return
+		return err
 	}
 
 	// TODO: only invoke when there was a change to the facts?
-
-	self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
-
 	if err := self.MessageQueueService.Publish(
-		domain.InvokeStreamName.Fmt(workflowName, id),
+		domain.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
 		domain.InvokeStreamName,
 		merged,
 	); err != nil {
 		self.Logger.Printf("Couldn't publish workflow invoke message: %s", err)
-		return
+		return err
 	}
 
-	if err = tx.Commit(context.Background()); err != nil {
-		self.Logger.Printf("Couldn't complete transaction: %s", err)
-		return
-	}
+	self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
+	return nil
 }

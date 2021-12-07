@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/config"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +18,6 @@ import (
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/api"
 )
@@ -38,7 +38,7 @@ type actionService struct {
 	prometheus       prometheus.Client
 }
 
-func NewActionService(db *pgxpool.Pool, prometheusAddr string) ActionService {
+func NewActionService(db config.PgxIface, prometheusAddr string) ActionService {
 	impl := actionService{
 		logger:           log.New(os.Stderr, "ActionService: ", log.LstdFlags),
 		actionRepository: persistence.NewActionRepository(db),

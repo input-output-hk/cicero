@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/config"
 	"log"
 	"os"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 )
@@ -29,7 +29,7 @@ type messageQueueService struct {
 	messageQueueRepository repository.MessageQueueRepository
 }
 
-func NewMessageQueueService(db *pgxpool.Pool, bridge liftbridge.Client) MessageQueueService {
+func NewMessageQueueService(db config.PgxIface, bridge liftbridge.Client) MessageQueueService {
 	return &messageQueueService{
 		logger:                 log.New(os.Stderr, "MessageQueueService: ", log.LstdFlags),
 		bridge:                 bridge,

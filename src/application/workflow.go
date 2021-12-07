@@ -1,6 +1,7 @@
 package application
 
 import (
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
@@ -8,7 +9,6 @@ import (
 	"os"
 
 	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 )
 
@@ -28,7 +28,7 @@ type workflowService struct {
 	messageQueueService MessageQueueService
 }
 
-func NewWorkflowService(db *pgxpool.Pool, messageQueueService MessageQueueService) WorkflowService {
+func NewWorkflowService(db config.PgxIface, messageQueueService MessageQueueService) WorkflowService {
 	return &workflowService{
 		logger:              log.New(os.Stderr, "WorkflowApplication: ", log.LstdFlags),
 		workflowRepository:  persistence.NewWorkflowRepository(db),
