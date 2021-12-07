@@ -12,21 +12,9 @@
 				<li><a href="#">Clone</a></li>
 			</ul>
 
-			<ul class="graph-types">
-				<li>Type:</li>
-				{{range $.graphTypes}}
-					<li>
-						{{if or (eq . $.graph) (and (eq $.graph "") (eq . "flow"))}}
-							{{.}}
-						{{else}}
-							<a href="?graph={{.}}">{{.}}</a>
-						{{end}}
-					</li>
-				{{end}}
-			</ul>
 			<iframe
-				src="/workflow/{{.ID}}/graph?type={{$.graph}}"
-				class="panel"
+				class="iframe"
+				src="/workflow/{{.ID}}/graph"
 			></iframe>
 
 			<table
@@ -307,12 +295,6 @@
 		flex-grow: 1;
 		padding: 1%;
 		min-height: 33vh;
-	}
-
-	#{{$scope}} ul.graph-types {
-		display: flex;
-		list-style: none;
-		gap: 1%;
 	}
 
 	#{{$scope}} .action-tables {

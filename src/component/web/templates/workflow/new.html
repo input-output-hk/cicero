@@ -37,11 +37,46 @@
 	{{else}}
 		<!-- step 3 -->
 		<h3>Specify inputs for "{{.Name}}"</h3>
-		<form method="GET" action="/workflow/new">
+		<form method="GET" action="/workflow/new" style="
+			display: flex;
+			flex-direction: column;
+		">
 			<input type="hidden" name="source" value="{{.Source}}"/>
 			<input type="hidden" name="name" value="{{.Name}}"/>
-			<textarea name="inputs" placeholder="{}" style="display: block">{}</textarea>
-			<button>Start!</button>
+
+			<!-- placeholder to allow submission of this form to the graph iframe -->
+			<input type="hidden" name="id" value="0"/>
+
+			<textarea
+				name="inputs" placeholder="{}"
+				rows="10" cols="50"
+			>{{toJson .Inputs true}}</textarea>
+
+			<div style="
+				margin-top: 1em;
+				margin-bottom: 2em;
+				display: flex;
+				gap: 1em
+			">
+				<button
+					formaction="/workflow/graph"
+					formtarget="graph"
+				>
+					Update Graph
+				</button>
+				<button>Start!</input>
+			</div>
+
+			<iframe
+				name="graph"
+				src="/workflow/graph?source={{.Source}}&name={{.Name}}&inputs={{toJson .Inputs false}}&id=0"
+				class="iframe"
+				style="
+					flex-grow: 1;
+					min-height: 33vh;
+					height: 45vh;
+				"
+			></iframe>
 		</form>
 	{{end}}
 {{end}}

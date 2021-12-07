@@ -2,10 +2,11 @@ package web
 
 import (
 	"errors"
-	"github.com/input-output-hk/cicero/src/domain"
 	"io"
 	"math"
 	"strings"
+
+	"github.com/input-output-hk/cicero/src/domain"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
@@ -103,7 +104,7 @@ func containsString(s []string, v string) bool {
 	return false
 }
 
-func RenderWorkflowGraphInputs(wf domain.WorkflowDefinition, instance *domain.WorkflowInstance, w io.Writer) error {
+func RenderWorkflowGraphInputs(wf domain.WorkflowDefinition, state domain.Facts, w io.Writer) error {
 	nodes := make([]opts.GraphNode, 0)
 	links := make([]opts.GraphLink, 0)
 
@@ -121,18 +122,16 @@ func RenderWorkflowGraphInputs(wf domain.WorkflowDefinition, instance *domain.Wo
 				Symbol:     "circle",
 				SymbolSize: symbolSize,
 			}
-			if instance != nil {
-				for fact := range instance.Facts {
-					if fact != input {
-						continue
-					}
-					node.Symbol = "diamond"
-					node.Category = 1
-					node.Y = 0
-					node.X = 0
-					node.SymbolSize = symbolSize * 1.5
-					break
+			for fact := range state {
+				if fact != input {
+					continue
 				}
+				node.Symbol = "diamond"
+				node.Category = 1
+				node.Y = 0
+				node.X = 0
+				node.SymbolSize = symbolSize * 1.5
+				break
 			}
 
 			nodes = append(nodes, node)
