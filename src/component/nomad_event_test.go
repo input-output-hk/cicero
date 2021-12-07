@@ -88,7 +88,7 @@ func TestStartWorkflowFailureGettingNextEvents(t *testing.T) {
 func TestStartWorkflowGettingEventAllocationFailure(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	eventId := uint64(1)
 	ctx := context.Background()
 	event1 := nomad.Events{Index: uint64(1), Events: []nomad.Event{{Topic: "Allocation", Type: "AllocationUpdated"}}}
@@ -133,10 +133,10 @@ func TestStartWorkflowFailureToSaveEvent(t *testing.T) {
 	nomadClient.On("EventStream", ctx, eventId+1).Return(stream, nil)
 	db.On("BeginFunc", ctx, mock.AnythingOfType("func(pgx.Tx) error")).Return(errors.New(errorMessage))
 
-	//when
+	// when
 	err := nomadEventConsumer.Start(ctx)
 
-	//then
+	// then
 	assert.Equal(t, err.Error(), fmt.Errorf("Error Saving the Nomad event: %s", errorMessage).Error())
 	nomadEventService.AssertExpectations(t)
 	nomadClient.AssertExpectations(t)

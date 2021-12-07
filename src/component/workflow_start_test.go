@@ -24,21 +24,21 @@ func buildWorkflowStartConsumerMocked(messageQueueService *mocks.MessageQueueSer
 func TestGettingWorkflowDetailFailure(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	msg := &liftbridge.Message{}
 	workflowFactConsumer := buildWorkflowStartConsumerMocked(nil, nil)
 
-	//when
+	// when
 	_, err := workflowFactConsumer.getWorkflowDetailToProcess(msg)
 
-	//then
+	// then
 	assert.Equal(t, err.Error(), "Invalid Message received, ignoring: ")
 }
 
 func TestProcessWorkflowToStartSuccess(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	ctx := context.Background()
 	message := &liftbridge.Message{}
 	db, err := pgxmock.NewConn()
@@ -51,7 +51,7 @@ func TestProcessWorkflowToStartSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	wInstance := &domain.WorkflowInstance{
 		ID:    uint64(1),
 		Name:  "name",
@@ -67,10 +67,10 @@ func TestProcessWorkflowToStartSuccess(t *testing.T) {
 		domain.InvokeStreamName,
 		wInstance.Facts).Return(nil)
 
-	//when
+	// when
 	err = workflowFactConsumer.processMessage(tx, wInstance, message)
 
-	//then
+	// then
 	assert.Nil(t, err)
 	workflowService.AssertExpectations(t)
 	messageQueueService.AssertExpectations(t)

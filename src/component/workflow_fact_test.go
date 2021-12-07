@@ -26,21 +26,21 @@ func buildWorkflowFactConsumerMocked(messageQueueService *mocks.MessageQueueServ
 func TestGettingFactDetailFailure(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	msg := &liftbridge.Message{}
 	workflowFactConsumer := buildWorkflowFactConsumerMocked(nil, nil)
 
-	//when
+	// when
 	_, err := workflowFactConsumer.getFactsDetail(msg)
 
-	//then
+	// then
 	assert.Equal(t, err.Error(), "Invalid Message received, ignoring: ")
 }
 
 func TestUpdatingFactsFailure(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	ctx := context.Background()
 	message := &liftbridge.Message{}
 	db, err := pgxmock.NewConn()
@@ -53,7 +53,7 @@ func TestUpdatingFactsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	wId := uint64(1)
 	wMessageDetail := &domain.WorkflowInstance{
 		ID:    wId,
@@ -69,10 +69,10 @@ func TestUpdatingFactsFailure(t *testing.T) {
 	errorMessage := "Some error"
 	workflowService.On("Update", tx, mock.AnythingOfType("domain.WorkflowInstance")).Return(errors.New(errorMessage))
 
-	//when
+	// when
 	err = workflowFactConsumer.processMessage(tx, wMessageDetail, message)
 
-	//then
+	// then
 	assert.Equal(t, err.Error(), errorMessage)
 	workflowService.AssertExpectations(t)
 	messageQueueService.AssertExpectations(t)
@@ -81,7 +81,7 @@ func TestUpdatingFactsFailure(t *testing.T) {
 func TestProcessFactsSuccess(t *testing.T) {
 	t.Parallel()
 
-	//given
+	// given
 	ctx := context.Background()
 	message := &liftbridge.Message{}
 	db, err := pgxmock.NewConn()
@@ -94,7 +94,7 @@ func TestProcessFactsSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	wId := uint64(1)
 	wMessageDetail := &domain.WorkflowInstance{
 		ID:    wId,
@@ -113,10 +113,10 @@ func TestProcessFactsSuccess(t *testing.T) {
 		domain.InvokeStreamName,
 		wMessageDetail.Facts).Return(nil)
 
-	//when
+	// when
 	err = workflowFactConsumer.processMessage(tx, wMessageDetail, message)
 
-	//then
+	// then
 	assert.Nil(t, err)
 	workflowService.AssertExpectations(t)
 	messageQueueService.AssertExpectations(t)

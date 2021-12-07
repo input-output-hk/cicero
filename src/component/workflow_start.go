@@ -91,8 +91,8 @@ func (self *WorkflowStartConsumer) getWorkflowDetailToProcess(msg *liftbridge.Me
 	}, nil
 }
 
-func (self *WorkflowStartConsumer) processMessage(tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) (err error) {
-	if err = self.MessageQueueService.Save(tx, msg); err != nil {
+func (self *WorkflowStartConsumer) processMessage(tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) error {
+	if err := self.MessageQueueService.Save(tx, msg); err != nil {
 		self.Logger.Printf("%s", err)
 		return err
 	}
@@ -101,11 +101,13 @@ func (self *WorkflowStartConsumer) processMessage(tx pgx.Tx, workflow *domain.Wo
 		return errors.WithMessage(err, "Could not insert workflow instance")
 	}
 
-	self.MessageQueueService.Publish(
+	if err := self.MessageQueueService.Publish(
 		domain.InvokeStreamName.Fmt(workflow.Name, workflow.ID),
 		domain.InvokeStreamName,
 		workflow.Facts,
-	)
+	); err != nil {
+		return err
+	}
 	self.Logger.Printf("Created workflow with ID %d", workflow.ID)
 	return nil
 }
