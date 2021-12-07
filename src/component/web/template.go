@@ -8,11 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/pkg/errors"
 )
 
 //go:embed templates
@@ -20,25 +18,6 @@ var templatesFs embed.FS
 
 //go:embed static
 var staticFs embed.FS
-
-func (self *Web) parseId(orig string) (uint64, error) {
-	id, err := strconv.ParseUint(orig, 10, 64)
-	if err != nil {
-		return 0, errors.WithMessagef(err, "Failed to parse id: %q", orig)
-	}
-
-	return id, nil
-}
-
-func (self *Web) parseFacts(orig []byte) (domain.Facts, error) {
-	facts := domain.Facts{}
-	err := json.Unmarshal(orig, &facts)
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to parse facts")
-	}
-
-	return facts, nil
-}
 
 func (self *Web) ServerError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)

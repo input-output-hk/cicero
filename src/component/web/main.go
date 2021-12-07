@@ -747,3 +747,22 @@ func genApiActionIdLogsGetSwagDef() swagger.Definitions {
 type errorResponse struct {
 	Message string `json:"message"`
 }
+
+func (self *Web) parseId(orig string) (uint64, error) {
+	id, err := strconv.ParseUint(orig, 10, 64)
+	if err != nil {
+		return 0, errors.WithMessagef(err, "Failed to parse id: %q", orig)
+	}
+
+	return id, nil
+}
+
+func (self *Web) parseFacts(orig []byte) (domain.Facts, error) {
+	facts := domain.Facts{}
+	err := json.Unmarshal(orig, &facts)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to parse facts")
+	}
+
+	return facts, nil
+}
