@@ -25,7 +25,7 @@ type WorkflowStartConsumer struct {
 func (self *WorkflowStartConsumer) Start(ctx context.Context) error {
 	self.Logger.Println("Starting WorkflowStartConsumer")
 
-	if err := self.MessageQueueService.Subscribe(ctx, domain.StartStreamName, self.onStartMessage, 0); err != nil {
+	if err := self.MessageQueueService.Subscribe(ctx, domain.StartStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.StartStreamName)
 	}
 
@@ -34,23 +34,25 @@ func (self *WorkflowStartConsumer) Start(ctx context.Context) error {
 	return nil
 }
 
-func (self *WorkflowStartConsumer) onStartMessage(msg *liftbridge.Message, err error) {
-	if err != nil {
-		self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
-		//TODO: What happens in this case?
-	}
+func (self *WorkflowStartConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
+	return func(msg *liftbridge.Message, err error) {
+		if err != nil {
+			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
+			//TODO: If err is not nil, the subscription will be terminated
+		}
 
-	workflowDetail, err := self.getWorkflowDetailToProcess(msg)
-	if err != nil {
-		self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
-		return
-	}
+		workflowDetail, err := self.getWorkflowDetailToProcess(msg)
+		if err != nil {
+			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
+			return
+		}
 
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		return self.processMessage(tx, workflowDetail, msg)
-	}); err != nil {
-		self.Logger.Println(fmt.Printf("Could not process fact message: %v with error %s", msg, err))
-		return
+		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+			return self.processMessage(tx, workflowDetail, msg)
+		}); err != nil {
+			self.Logger.Println(fmt.Printf("Could not process fact message: %v with error %s", msg, err))
+			return
+		}
 	}
 }
 
