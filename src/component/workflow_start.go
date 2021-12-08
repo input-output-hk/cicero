@@ -40,12 +40,19 @@ func (self *WorkflowStartConsumer) invokerSubscriber(ctx context.Context) func(*
 			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
 			//TODO: If err is not nil, the subscription will be terminated
 		}
-
+		self.Logger.Println("Processing message",
+			"stream:", msg.Stream(),
+			"subject:", msg.Subject(),
+			"offset:", msg.Offset(),
+			"value:", string(msg.Value()),
+			"time:", msg.Timestamp(),
+		)
 		workflowDetail, err := self.getWorkflowDetailToProcess(msg)
 		if err != nil {
 			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
 			return
 		}
+		self.Logger.Println(fmt.Printf("Received start for workflow with NAME: %s, SOURCE: %v, FACTS: %v", workflowDetail.Name, workflowDetail.Source, workflowDetail.Facts))
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(tx, workflowDetail, msg)
@@ -62,16 +69,6 @@ func (self *WorkflowStartConsumer) getWorkflowDetailToProcess(msg *liftbridge.Me
 		return nil, fmt.Errorf("Invalid Message received, ignoring: %s", msg.Subject())
 	}
 	workflowName := parts[1]
-
-	self.Logger.Printf("Received start for workflow %s", workflowName)
-	self.Logger.Println(
-		"stream:", msg.Stream(),
-		"subject:", msg.Subject(),
-		"offset:", msg.Offset(),
-		"value:", string(msg.Value()),
-		"time:", msg.Timestamp(),
-	)
-
 	received := domain.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
@@ -83,7 +80,6 @@ func (self *WorkflowStartConsumer) getWorkflowDetailToProcess(msg *liftbridge.Me
 	} else {
 		source = string(sourceFromMsg)
 	}
-
 	return &domain.WorkflowInstance{
 		Name:   workflowName,
 		Source: source,
@@ -93,8 +89,7 @@ func (self *WorkflowStartConsumer) getWorkflowDetailToProcess(msg *liftbridge.Me
 
 func (self *WorkflowStartConsumer) processMessage(tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) error {
 	if err := self.MessageQueueService.Save(tx, msg); err != nil {
-		self.Logger.Printf("%s", err)
-		return err
+		return errors.WithMessagef(err, "Could not save message event %v", msg)
 	}
 
 	if err := self.WorkflowService.Save(tx, workflow); err != nil {

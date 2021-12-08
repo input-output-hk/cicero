@@ -49,12 +49,20 @@ func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(
 			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
 			//TODO: If err is not nil, the subscription will be terminated
 		}
+		self.Logger.Println("Processing message",
+			"stream:", msg.Stream(),
+			"subject:", msg.Subject(),
+			"offset:", msg.Offset(),
+			"value:", string(msg.Value()),
+			"time:", msg.Timestamp(),
+		)
 
 		wMessageDetail, err := self.getWorkflowDetails(msg)
 		if err != nil {
 			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
 			return
 		}
+		self.Logger.Println(fmt.Printf("Invoked workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(ctx, tx, wMessageDetail, msg)
@@ -79,14 +87,6 @@ func (self *WorkflowInvokeConsumer) getWorkflowDetails(msg *liftbridge.Message) 
 	if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
 		return nil, errors.Errorf("Invalid JSON received, ignoring: %s", err)
 	}
-	self.Logger.Printf("Invoked workflow %s %d", workflowName, wfInstanceId)
-	self.Logger.Println(
-		"stream:", msg.Stream(),
-		"subject:", msg.Subject(),
-		"offset:", msg.Offset(),
-		"value:", string(msg.Value()),
-		"time:", msg.Timestamp(),
-	)
 	return &domain.WorkflowInstance{
 		ID:    wfInstanceId,
 		Name:  workflowName,
@@ -96,13 +96,12 @@ func (self *WorkflowInvokeConsumer) getWorkflowDetails(msg *liftbridge.Message) 
 
 func (self *WorkflowInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) error {
 	if err := self.MessageQueueService.Save(tx, msg); err != nil {
-		self.Logger.Printf("%s", err)
-		return err
+		return errors.WithMessagef(err, "Could not save message event %v", msg)
 	}
 
 	wf, err := self.WorkflowService.GetById(workflow.ID)
 	if err != nil {
-		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
+		return errors.WithMessagef(err, "Could not find workflow instance with ID %d", workflow.ID)
 	}
 
 	// We don't actually need workflowName because the instance already knows its name.
