@@ -5,10 +5,9 @@ import (
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/application/mocks"
+	configMocks "github.com/input-output-hk/cicero/src/config/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
-	"github.com/pashagolub/pgxmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/vivek-ng/concurrency-limiter/priority"
@@ -33,21 +32,6 @@ func buildWorkflowInvokeConsumerMocked(messageQueueService *mocks.MessageQueueSe
 	}
 }
 
-func buildTransaction(ctx context.Context, t *testing.T) pgx.Tx {
-	db, err := pgxmock.NewConn()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close(ctx)
-	db.ExpectBegin()
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	return tx
-}
-
 func TestGettingWorflowDetailFailure(t *testing.T) {
 	t.Parallel()
 
@@ -68,7 +52,7 @@ func TestProcessWorkflowWithDifferentNameFailure(t *testing.T) {
 	// given
 	ctx := context.Background()
 	message := &liftbridge.Message{}
-	tx := buildTransaction(ctx, t)
+	tx := configMocks.BuildTransaction(ctx, t)
 	wId := uint64(1)
 	wMessageDetail := &domain.WorkflowInstance{
 		ID:    wId,
@@ -99,7 +83,7 @@ func TestProcessWorkflowWithoutActionsSuccess(t *testing.T) {
 	// given
 	ctx := context.Background()
 	message := &liftbridge.Message{}
-	tx := buildTransaction(ctx, t)
+	tx := configMocks.BuildTransaction(ctx, t)
 	wId := uint64(1)
 	wName := "name"
 	wMessageDetail := &domain.WorkflowInstance{
@@ -135,7 +119,7 @@ func TestInvokeWorkflowActionSuccess(t *testing.T) {
 
 	// given
 	ctx := context.Background()
-	tx := buildTransaction(ctx, t)
+	tx := configMocks.BuildTransaction(ctx, t)
 	wId := uint64(1)
 	wFacts := domain.Facts{}
 	actionName := "name"

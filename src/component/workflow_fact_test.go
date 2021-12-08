@@ -3,9 +3,9 @@ package component
 import (
 	"context"
 	"github.com/input-output-hk/cicero/src/application/mocks"
+	configMocks "github.com/input-output-hk/cicero/src/config/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/liftbridge-io/go-liftbridge/v2"
-	"github.com/pashagolub/pgxmock"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -43,17 +43,7 @@ func TestUpdatingFactsFailure(t *testing.T) {
 	// given
 	ctx := context.Background()
 	message := &liftbridge.Message{}
-	db, err := pgxmock.NewConn()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close(ctx)
-	db.ExpectBegin()
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	tx := configMocks.BuildTransaction(ctx, t)
 	wId := uint64(1)
 	wMessageDetail := &domain.WorkflowInstance{
 		ID:    wId,
@@ -70,7 +60,7 @@ func TestUpdatingFactsFailure(t *testing.T) {
 	workflowService.On("Update", tx, mock.AnythingOfType("domain.WorkflowInstance")).Return(errors.New(errorMessage))
 
 	// when
-	err = workflowFactConsumer.processMessage(tx, wMessageDetail, message)
+	err := workflowFactConsumer.processMessage(tx, wMessageDetail, message)
 
 	// then
 	assert.Equal(t, err.Error(), errorMessage)
@@ -84,17 +74,7 @@ func TestProcessFactsSuccess(t *testing.T) {
 	// given
 	ctx := context.Background()
 	message := &liftbridge.Message{}
-	db, err := pgxmock.NewConn()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close(ctx)
-	db.ExpectBegin()
-	tx, err := db.Begin(ctx)
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	tx := configMocks.BuildTransaction(ctx, t)
 	wId := uint64(1)
 	wMessageDetail := &domain.WorkflowInstance{
 		ID:    wId,
@@ -114,7 +94,7 @@ func TestProcessFactsSuccess(t *testing.T) {
 		wMessageDetail.Facts).Return(nil)
 
 	// when
-	err = workflowFactConsumer.processMessage(tx, wMessageDetail, message)
+	err := workflowFactConsumer.processMessage(tx, wMessageDetail, message)
 
 	// then
 	assert.Nil(t, err)
