@@ -72,7 +72,7 @@ func TestProcessWorkflowWithDifferentNameFailure(t *testing.T) {
 	err := workflowInvokeConsumer.processMessage(ctx, tx, wMessageDetail, message)
 
 	// then
-	assert.Equal(t, err.Error(), "Workflow name given does not match name of instance: name != anotherName")
+	assert.Equal(t, err.Error(), `Workflow name given does not match name of instance: "name" != "anotherName"`)
 	workflowService.AssertExpectations(t)
 	messageQueueService.AssertExpectations(t)
 }
