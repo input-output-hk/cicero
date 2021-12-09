@@ -119,8 +119,8 @@ func TestStartWorkflowProcessNomadEventFailure(t *testing.T) {
 	// when
 	err := nomadEventConsumer.Start(ctx)
 
-	// then
-	assert.Equal(t, err.Error(), errorMessage)
+ 	// then
+	assert.Equal(t, err.Error(), "Error processing Nomad event with index: 0: " + errorMessage)
 	nomadEventService.AssertExpectations(t)
 	nomadClient.AssertExpectations(t)
 	db.AssertExpectations(t)
