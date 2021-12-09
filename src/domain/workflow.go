@@ -25,7 +25,12 @@ type WorkflowAction struct {
 }
 
 func (s *WorkflowAction) IsRunnable() bool {
-	return len(s.Job.TaskGroups) > 0
+	for _, cond := range s.When {
+		if !cond {
+			return false
+		}
+	}
+	return true
 }
 
 type WorkflowInstance struct {
