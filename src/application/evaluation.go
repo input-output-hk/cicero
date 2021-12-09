@@ -109,7 +109,7 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 		messages := ""
 		for _, evaluator := range e.Evaluators {
 			if output, err := tryEval(evaluator); err != nil {
-				message := fmt.Sprintf(`Evaluator "%s" failed: %s`, evaluator, err.Error())
+				message := fmt.Sprintf(`Evaluator %q failed: %s`, evaluator, err.Error())
 				if messages != "" {
 					messages += "\n"
 				}
