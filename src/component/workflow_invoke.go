@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/input-output-hk/cicero/src/application"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/config"
+	"github.com/input-output-hk/cicero/src/domain"
 
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
@@ -108,7 +109,7 @@ func (self *WorkflowInvokeConsumer) processMessage(ctx context.Context, tx pgx.T
 	// We would only need it if instance IDs were not globally unique, but only per workflow name.
 	// TODO Decide whether we want instance IDs to be unique per workflow name or globally.
 	if wf.Name != workflow.Name {
-		return errors.New("Workflow name given does not match name of instance: " + workflow.Name + " != " + wf.Name)
+		return fmt.Errorf("Workflow name given does not match name of instance: %q != %q", workflow.Name, wf.Name)
 	}
 
 	workflowDefinition, err := self.EvaluationService.EvaluateWorkflow(wf.Source, workflow.Name, workflow.ID, workflow.Facts)
