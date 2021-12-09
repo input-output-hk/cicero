@@ -130,13 +130,15 @@ func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, tx
 	self.Limiter.Wait(ctx, priority.High) //TODO: What is the ctx to use in this case?
 	defer self.Limiter.Finish()
 
-	if action.IsDecision() && action.IsRunnable() {
-		if err := self.MessageQueueService.Publish(
-			domain.FactStreamName.Fmt(workflowName, wfInstanceId),
-			domain.FactStreamName,
-			action.Success,
-		); err != nil {
-			return errors.WithMessage(err, "Could not publish fact")
+	if action.IsDecision() {
+		if action.IsRunnable() {
+			if err := self.MessageQueueService.Publish(
+				domain.FactStreamName.Fmt(workflowName, wfInstanceId),
+				domain.FactStreamName,
+				action.Success,
+			); err != nil {
+				return errors.WithMessage(err, "Could not publish fact")
+			}
 		}
 		return nil
 	}
