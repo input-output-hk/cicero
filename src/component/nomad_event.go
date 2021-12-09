@@ -58,7 +58,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 
 		for _, event := range events.Events {
 			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-				self.Logger.Println(fmt.Printf("Processing Nomad Event %v", event))
+				self.Logger.Println("Processing Nomad Event with index:", event.Index)
 				return self.processNomadEvent(&event, tx)
 			}); err != nil {
 				self.Logger.Println(fmt.Printf("Error processing the event %v with error %s", event, err))
