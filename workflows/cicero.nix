@@ -69,9 +69,10 @@ in std.callWorkflow args {
       ];
     };
 
-    build = { pr ? null, gocritic ? null, nixfmt ? null, build ? null }: {
+    build = { pr ? null, gocritic ? null, golangci-lint ? null, nixfmt ? null, build ? null }: {
       when = {
         "gocritic passes" = gocritic;
+        "golangci-lint passes" = golangci-lint;
         "nixfmt passes" = nixfmt;
         "build hasn't run yet" = build == null;
       };
