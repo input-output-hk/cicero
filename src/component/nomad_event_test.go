@@ -126,7 +126,7 @@ func TestStartWorkflowProcessNomadEventFailure(t *testing.T) {
 	db.AssertExpectations(t)
 }
 
-func Test_sdf(t *testing.T) {
+func TestStartWorkflowProcessNomadEventSuccess(t *testing.T) {
 	t.Parallel()
 
 	// given

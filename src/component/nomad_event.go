@@ -74,7 +74,7 @@ func (self *NomadEventConsumer) processNomadEvent(event *nomad.Event, tx pgx.Tx)
 		return errors.WithMessage(err, "Error handling Nomad event")
 	}
 	if err := self.NomadEventService.Save(tx, event); err != nil {
-		return errors.WithMessage(err, "Error Saving the Nomad event")
+		return errors.WithMessage(err, "Error to save Nomad event")
 	}
 	return nil
 }
@@ -164,7 +164,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		domain.FactStreamName,
 		*facts,
 	); err != nil {
-		return errors.WithMessage(err, "Could not publish fact")
+		return errors.WithMessage(err, "Could not publish facts")
 	}
 
 	return nil
