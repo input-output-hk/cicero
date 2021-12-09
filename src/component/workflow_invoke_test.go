@@ -127,6 +127,8 @@ func TestInvokeWorkflowActionSuccess(t *testing.T) {
 	actionInstance := domain.ActionInstance{
 		ID: uuid.New(),
 	}
+	actionIDString := actionInstance.ID.String()
+	action.Job.ID = &actionIDString
 	actionService := &mocks.ActionService{}
 	nomadClient := &mocks.NomadClient{}
 	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(nil,
@@ -135,6 +137,9 @@ func TestInvokeWorkflowActionSuccess(t *testing.T) {
 		actionService,
 		nomadClient)
 	actionService.On("GetByNameAndWorkflowId", actionName, wId).Return(actionInstance, nil)
+	nomadClient.
+		On("JobsRegister", &action.Job, &nomad.WriteOptions{}).
+		Return(&nomad.JobRegisterResponse{}, &nomad.WriteMeta{}, nil)
 	nomadClient.On("JobsDeregister", actionInstance.ID.String(),
 		false, &nomad.WriteOptions{}).Return(
 		"result", &nomad.WriteMeta{}, nil)
