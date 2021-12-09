@@ -2,12 +2,12 @@ package component
 
 import (
 	"context"
-	"fmt"
+	"log"
+	"time"
+
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
-	"log"
-	"time"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
@@ -61,8 +61,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 				self.Logger.Println("Processing Nomad Event with index:", event.Index)
 				return self.processNomadEvent(&event, tx)
 			}); err != nil {
-				self.Logger.Println(fmt.Printf("Error processing the event %v with error %s", event, err))
-				return err
+				return errors.WithMessagef(err, "Error processing Nomad event with index: %d", event.Index)
 			}
 		}
 
