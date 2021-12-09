@@ -2,18 +2,20 @@ package component
 
 import (
 	"context"
-	"github.com/google/uuid"
-	nomad "github.com/hashicorp/nomad/api"
+	"log"
+	"os"
+	"testing"
+
 	"github.com/input-output-hk/cicero/src/application/mocks"
 	configMocks "github.com/input-output-hk/cicero/src/config/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
+
+	"github.com/google/uuid"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/vivek-ng/concurrency-limiter/priority"
-	"log"
-	"os"
-	"testing"
 )
 
 func buildWorkflowInvokeConsumerMocked(messageQueueService *mocks.MessageQueueService,
@@ -65,8 +67,12 @@ func TestProcessWorkflowWithDifferentNameFailure(t *testing.T) {
 	messageQueueService := &mocks.MessageQueueService{}
 	workflowService := &mocks.WorkflowService{}
 	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(messageQueueService, workflowService, nil, nil, nil)
-	messageQueueService.On("Save", tx, message).Return(nil)
-	workflowService.On("GetById", wId).Return(wInstance, nil)
+	messageQueueService.
+		On("Save", tx, message).
+		Return(nil)
+	workflowService.
+		On("GetById", wId).
+		Return(wInstance, nil)
 
 	// when
 	err := workflowInvokeConsumer.processMessage(ctx, tx, wMessageDetail, message)
@@ -100,9 +106,15 @@ func TestProcessWorkflowWithoutActionsSuccess(t *testing.T) {
 	workflowService := &mocks.WorkflowService{}
 	evaluateWorkflow := &mocks.EvaluationService{}
 	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(messageQueueService, workflowService, evaluateWorkflow, nil, nil)
-	messageQueueService.On("Save", tx, message).Return(nil)
-	workflowService.On("GetById", wId).Return(wInstance, nil)
-	evaluateWorkflow.On("EvaluateWorkflow", wInstance.Source, wMessageDetail.Name, wMessageDetail.ID, wMessageDetail.Facts).Return(workflowDefinition, nil)
+	messageQueueService.
+		On("Save", tx, message).
+		Return(nil)
+	workflowService.
+		On("GetById", wId).
+		Return(wInstance, nil)
+	evaluateWorkflow.
+		On("EvaluateWorkflow", wInstance.Source, wMessageDetail.Name, wMessageDetail.ID, wMessageDetail.Facts).
+		Return(workflowDefinition, nil)
 
 	// when
 	err := workflowInvokeConsumer.processMessage(ctx, tx, wMessageDetail, message)
@@ -120,33 +132,29 @@ func TestInvokeWorkflowActionSuccess(t *testing.T) {
 	// given
 	ctx := context.Background()
 	tx := configMocks.BuildTransaction(ctx, t)
+	wName := "name"
 	wId := uint64(1)
 	wFacts := domain.Facts{}
 	actionName := "name"
-	action := &domain.WorkflowAction{}
-	actionInstance := domain.ActionInstance{
-		ID: uuid.New(),
-	}
-	actionIDString := actionInstance.ID.String()
-	action.Job.ID = &actionIDString
+	action := &domain.WorkflowAction{Job: &nomad.Job{}}
+	actionInstance := domain.ActionInstance{ID: uuid.New()}
+	actionInstanceIdString := actionInstance.ID.String()
+	action.Job.ID = &actionInstanceIdString
 	actionService := &mocks.ActionService{}
 	nomadClient := &mocks.NomadClient{}
-	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(nil,
-		nil,
-		nil,
-		actionService,
-		nomadClient)
-	actionService.On("GetByNameAndWorkflowId", actionName, wId).Return(actionInstance, nil)
+	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(nil, nil, nil, actionService, nomadClient)
+	actionService.
+		On("GetByNameAndWorkflowId", actionName, wId).
+		Return(actionInstance, nil)
 	nomadClient.
-		On("JobsRegister", &action.Job, &nomad.WriteOptions{}).
+		On("JobsRegister", action.Job, &nomad.WriteOptions{}).
 		Return(&nomad.JobRegisterResponse{}, &nomad.WriteMeta{}, nil)
-	nomadClient.On("JobsDeregister", actionInstance.ID.String(),
-		false, &nomad.WriteOptions{}).Return(
-		"result", &nomad.WriteMeta{}, nil)
-	actionService.On("Update", tx, mock.AnythingOfType("domain.ActionInstance")).Return(nil)
+	actionService.
+		On("Update", tx, mock.AnythingOfType("domain.ActionInstance")).
+		Return(nil)
 
 	// when
-	err := workflowInvokeConsumer.invokeWorkflowAction(ctx, tx, wId, wFacts, actionName, action)
+	err := workflowInvokeConsumer.invokeWorkflowAction(ctx, tx, wName, wId, wFacts, actionName, action)
 
 	// then
 	assert.Nil(t, err)
