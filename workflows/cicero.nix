@@ -69,28 +69,29 @@ in std.callWorkflow args {
       ];
     };
 
-    build = { pr ? null, gocritic ? null, golangci-lint ? null, nixfmt ? null, build ? null }: {
-      when = {
-        "gocritic passes" = gocritic;
-        "golangci-lint passes" = golangci-lint;
-        "nixfmt passes" = nixfmt;
-        "build hasn't run yet" = build == null;
-      };
+    build = { pr ? null, gocritic ? null, golangci-lint ? null, nixfmt ? null
+      , build ? null }: {
+        when = {
+          "gocritic passes" = gocritic;
+          "golangci-lint passes" = golangci-lint;
+          "nixfmt passes" = nixfmt;
+          "build hasn't run yet" = build == null;
+        };
 
-      job = (common pr) ++ [
-        (std.wrapScript "bash" (next: ''
-          echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
-          ${lib.escapeShellArgs next}
-        ''))
-        {
-          resources = {
-            memory = 4 * 1024;
-            cpu = 16000;
-          };
-        }
-        std.nix.build
-      ];
-    };
+        job = (common pr) ++ [
+          (std.wrapScript "bash" (next: ''
+            echo "nameserver ''${NAMESERVER:-1.1.1.1}" > /etc/resolv.conf
+            ${lib.escapeShellArgs next}
+          ''))
+          {
+            resources = {
+              memory = 4 * 1024;
+              cpu = 16000;
+            };
+          }
+          std.nix.build
+        ];
+      };
 
     deploy = { pr ? null, environment ? null, build ? null, deploy ? null }: {
       when = {
