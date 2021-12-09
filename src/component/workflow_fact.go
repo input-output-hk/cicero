@@ -42,12 +42,19 @@ func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*l
 			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
 			//TODO: If err is not nil, the subscription will be terminated
 		}
-
+		self.Logger.Println("Processing message",
+			"stream:", msg.Stream(),
+			"subject:", msg.Subject(),
+			"offset:", msg.Offset(),
+			"value:", string(msg.Value()),
+			"time:", msg.Timestamp(),
+		)
 		wMessageDetail, err := self.getFactsDetail(msg)
 		if err != nil {
 			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
 			return
 		}
+		self.Logger.Println(fmt.Printf("Received update for workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(tx, wMessageDetail, msg)
@@ -68,16 +75,6 @@ func (self *WorkflowFactConsumer) getFactsDetail(msg *liftbridge.Message) (*doma
 	if err != nil {
 		return nil, errors.WithMessagef(err, "Invalid Workflow ID received, ignoring: %s", msg.Subject())
 	}
-
-	self.Logger.Printf("Received update for workflow %s %d", workflowName, id)
-	self.Logger.Println(
-		"stream:", msg.Stream(),
-		"subject:", msg.Subject(),
-		"offset:", msg.Offset(),
-		"value:", string(msg.Value()),
-		"time:", msg.Timestamp(),
-	)
-
 	received := domain.Facts{}
 	unmarshalErr := json.Unmarshal(msg.Value(), &received)
 	if unmarshalErr != nil {
@@ -92,8 +89,7 @@ func (self *WorkflowFactConsumer) getFactsDetail(msg *liftbridge.Message) (*doma
 
 func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) (err error) {
 	if err = self.MessageQueueService.Save(tx, msg); err != nil {
-		self.Logger.Printf("%s", err)
-		return err
+		return errors.WithMessagef(err, "Could not save message event %v", msg)
 	}
 	var existing domain.WorkflowInstance
 	if existing, err = self.WorkflowService.GetById(workflow.ID); err != nil {

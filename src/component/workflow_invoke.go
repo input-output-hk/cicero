@@ -3,6 +3,7 @@ package component
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -46,58 +47,77 @@ func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
 			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
+			//TODO: If err is not nil, the subscription will be terminated
 		}
+		self.Logger.Println("Processing message",
+			"stream:", msg.Stream(),
+			"subject:", msg.Subject(),
+			"offset:", msg.Offset(),
+			"value:", string(msg.Value()),
+			"time:", msg.Timestamp(),
+		)
 
-		inputs := domain.Facts{}
-		if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
-			self.Logger.Println(msg.Timestamp(), msg.Offset(), string(msg.Key()), inputs)
-			self.Logger.Printf("Invalid JSON received, ignoring: %s", err)
-			return
-		}
-
-		parts := strings.Split(msg.Subject(), ".")
-		workflowName := parts[1]
-		wfInstanceId, err := strconv.ParseUint(parts[2], 10, 64)
+		wMessageDetail, err := self.getWorkflowDetails(msg)
 		if err != nil {
-			self.Logger.Printf("Invalid Workflow Instance ID received, ignoring: %s", msg.Subject())
+			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
 			return
 		}
+		self.Logger.Println(fmt.Printf("Invoked workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
 
-		//TODO: must be transactional with the message process
-		if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-			err := self.MessageQueueService.Save(tx, msg)
-			return err
+		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+			return self.processMessage(ctx, tx, wMessageDetail, msg)
 		}); err != nil {
-			self.Logger.Printf("Could not complete Db transaction")
+			self.Logger.Println(fmt.Printf("Could not process workflow invoke message: %v with error %s", msg, err))
 			return
-		}
-
-		if err := self.invokeWorkflow(ctx, workflowName, wfInstanceId, inputs); err != nil {
-			self.Logger.Println("Failed to invoke workflow", err)
 		}
 	}
 }
 
-func (self *WorkflowInvokeConsumer) invokeWorkflow(ctx context.Context, workflowName string, wfInstanceId uint64, inputs domain.Facts) error {
-	wf, err := self.WorkflowService.GetById(wfInstanceId)
+func (self *WorkflowInvokeConsumer) getWorkflowDetails(msg *liftbridge.Message) (*domain.WorkflowInstance, error) {
+	parts := strings.Split(msg.Subject(), ".")
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("Invalid Message received, ignoring: %s", msg.Subject())
+	}
+	workflowName := parts[1]
+	wfInstanceId, err := strconv.ParseUint(parts[2], 10, 64)
 	if err != nil {
-		return errors.WithMessage(err, "Could not find workflow instance with ID %d")
+		return nil, errors.WithMessagef(err, "Invalid Workflow ID received, ignoring: %s", msg.Subject())
+	}
+	inputs := domain.Facts{}
+	if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
+		return nil, errors.Errorf("Invalid JSON received, ignoring: %s", err)
+	}
+	return &domain.WorkflowInstance{
+		ID:    wfInstanceId,
+		Name:  workflowName,
+		Facts: inputs,
+	}, nil
+}
+
+func (self *WorkflowInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) error {
+	if err := self.MessageQueueService.Save(tx, msg); err != nil {
+		return errors.WithMessagef(err, "Could not save message event %v", msg)
+	}
+
+	wf, err := self.WorkflowService.GetById(workflow.ID)
+	if err != nil {
+		return errors.WithMessagef(err, "Could not find workflow instance with ID %d", workflow.ID)
 	}
 
 	// We don't actually need workflowName because the instance already knows its name.
 	// We would only need it if instance IDs were not globally unique, but only per workflow name.
 	// TODO Decide whether we want instance IDs to be unique per workflow name or globally.
-	if wf.Name != workflowName {
-		return errors.New("Workflow name given does not match name of instance: " + workflowName + " != " + wf.Name)
+	if wf.Name != workflow.Name {
+		return errors.New("Workflow name given does not match name of instance: " + workflow.Name + " != " + wf.Name)
 	}
 
-	workflow, err := self.EvaluationService.EvaluateWorkflow(wf.Source, wf.Name, wfInstanceId, inputs)
+	workflowDefinition, err := self.EvaluationService.EvaluateWorkflow(wf.Source, workflow.Name, workflow.ID, workflow.Facts)
 	if err != nil {
 		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
 	}
 
-	for actionName, action := range workflow.Actions {
-		if err := self.invokeWorkflowAction(ctx, wf.Name, wfInstanceId, inputs, actionName, action); err != nil {
+	for actionName, action := range workflowDefinition.Actions {
+		if err := self.invokeWorkflowAction(ctx, tx, workflow.ID, workflow.Facts, actionName, action); err != nil {
 			return err
 		}
 	}
@@ -105,8 +125,8 @@ func (self *WorkflowInvokeConsumer) invokeWorkflow(ctx context.Context, workflow
 	return nil
 }
 
-func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, workflowName string, wfInstanceId uint64, inputs domain.Facts, actionName string, action *domain.WorkflowAction) error {
-	self.Limiter.Wait(context.Background(), priority.High)
+func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, tx pgx.Tx, wfInstanceId uint64, inputs domain.Facts, actionName string, action *domain.WorkflowAction) error {
+	self.Limiter.Wait(ctx, priority.High) //TODO: What is the ctx to use in this case?
 	defer self.Limiter.Finish()
 
 	var instance *domain.ActionInstance
@@ -120,51 +140,45 @@ func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, wo
 
 	self.Logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
 
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if action.IsRunnable() {
-			if instance == nil {
-				instance = &domain.ActionInstance{}
-				instance.WorkflowInstanceId = wfInstanceId
-				instance.Name = actionName
-				instance.Facts = inputs
+	if action.IsRunnable() {
+		if instance == nil {
+			instance = &domain.ActionInstance{}
+			instance.WorkflowInstanceId = wfInstanceId
+			instance.Name = actionName
+			instance.Facts = inputs
 
-				err := self.ActionService.Save(tx, instance)
-				if err != nil {
-					return errors.WithMessage(err, "Could not insert action instance")
-				}
-			} else {
-				updatedAt := time.Now().UTC()
-				instance.UpdatedAt = &updatedAt
-				instance.Facts = inputs
-				if err := self.ActionService.Update(tx, *instance); err != nil {
-					return errors.WithMessage(err, "Could not update action instance")
-				}
+			if err := self.ActionService.Save(tx, instance); err != nil {
+				return errors.WithMessage(err, "Could not insert action instance")
 			}
-
-			actionInstanceId := instance.ID.String()
-			action.Job.ID = &actionInstanceId
-
-			if response, _, err := self.NomadClient.JobsRegister(&action.Job, &nomad.WriteOptions{}); err != nil {
-				return errors.WithMessage(err, "Failed to run action")
-			} else if len(response.Warnings) > 0 {
-				self.Logger.Println(response.Warnings)
-			}
-
-		} else if instance != nil {
-			if _, _, err := self.NomadClient.JobsDeregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
-				return errors.WithMessage(err, "Failed to stop action")
-			}
-
-			finished := time.Now().UTC()
-			instance.FinishedAt = &finished
-
+		} else {
+			updatedAt := time.Now().UTC()
+			instance.UpdatedAt = &updatedAt
+			instance.Facts = inputs
 			if err := self.ActionService.Update(tx, *instance); err != nil {
-				return errors.WithMessage(err, "Failed to update action instance")
+				return errors.WithMessage(err, "Could not update action instance")
 			}
 		}
-		return nil
-	}); err != nil {
-		return err
+
+		actionInstanceId := instance.ID.String()
+		action.Job.ID = &actionInstanceId
+
+		if response, _, err := self.NomadClient.JobsRegister(&action.Job, &nomad.WriteOptions{}); err != nil {
+			return errors.WithMessage(err, "Failed to run action")
+		} else if len(response.Warnings) > 0 {
+			self.Logger.Println(response.Warnings)
+		}
+
+	} else if instance != nil {
+		if _, _, err := self.NomadClient.JobsDeregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
+			return errors.WithMessage(err, "Failed to stop action")
+		}
+
+		finished := time.Now().UTC()
+		instance.FinishedAt = &finished
+
+		if err := self.ActionService.Update(tx, *instance); err != nil {
+			return errors.WithMessage(err, "Failed to update action instance")
+		}
 	}
 
 	return nil

@@ -2,6 +2,7 @@ package component
 
 import (
 	"context"
+	"fmt"
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -56,51 +57,54 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 		}
 
 		for _, event := range events.Events {
-			if err := self.handleNomadEvent(&event); err != nil {
-				return errors.WithMessage(err, "Error handling Nomad event")
-			}
-
 			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-				return self.NomadEventService.Save(tx, &event)
+				self.Logger.Println("Processing Nomad Event with index:", event.Index)
+				return self.processNomadEvent(&event, tx)
 			}); err != nil {
-				self.Logger.Println("Could not complete Db transaction")
-				return errors.WithMessage(err, "Error Saving the Nomad event")
+				self.Logger.Println(fmt.Printf("Error processing the event %v with error %s", event, err))
+				return err
 			}
 		}
 
 		index = events.Index
 	}
 }
+func (self *NomadEventConsumer) processNomadEvent(event *nomad.Event, tx pgx.Tx) error {
+	if err := self.handleNomadEvent(event, tx); err != nil {
+		return errors.WithMessage(err, "Error handling Nomad event")
+	}
+	if err := self.NomadEventService.Save(tx, event); err != nil {
+		return errors.WithMessage(err, "Error to save Nomad event")
+	}
+	return nil
+}
 
-func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event) error {
+func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event, tx pgx.Tx) error {
 	if event.Topic == "Allocation" && event.Type == "AllocationUpdated" {
 		allocation, err := event.Allocation()
 		if err != nil {
 			return errors.WithMessage(err, "Error getting Nomad event's allocation")
 		}
-		return self.handleNomadAllocationEvent(allocation)
+		return self.handleNomadAllocationEvent(allocation, tx)
 	}
 	return nil
 }
 
-func (self *NomadEventConsumer) getWorkflowAction(action domain.ActionInstance) (def domain.WorkflowAction, err error) {
+func (self *NomadEventConsumer) getWorkflowAction(action domain.ActionInstance) (*domain.WorkflowAction, error) {
 	wf, err := self.WorkflowService.GetById(action.WorkflowInstanceId)
 	if err != nil {
-		err = errors.WithMessagef(err, "Could not get workflow instance for workflow instance with ID %d", action.WorkflowInstanceId)
-		return
+		return nil, errors.WithMessagef(err, "Could not get workflow instance for workflow instance with ID %d", action.WorkflowInstanceId)
 	}
 
 	wfDef, err := self.EvaluationService.EvaluateWorkflow(wf.Source, wf.Name, wf.ID, wf.Facts)
 	if err != nil {
-		err = errors.WithMessagef(err, "Could not evaluate definition for workflow instance %d", wf.ID)
-		return
+		return nil, errors.WithMessagef(err, "Could not evaluate definition for workflow instance %d", wf.ID)
 	}
 
-	def = *wfDef.Actions[action.Name]
-	return
+	return wfDef.Actions[action.Name], nil
 }
 
-func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation) error {
+func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation, tx pgx.Tx) error {
 	if !allocation.ClientTerminalStatus() {
 		self.Logger.Printf("Ignoring allocation event with non-terminal client status \"%s\"", allocation.ClientStatus)
 		return nil
@@ -151,22 +155,16 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
 	}
 
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.ActionService.Update(tx, action); err != nil {
-			return errors.WithMessage(err, "Could not update action instance")
-		}
+	if err := self.ActionService.Update(tx, action); err != nil {
+		return errors.WithMessage(err, "Could not update action instance")
+	}
 
-		if err := self.MessageQueueService.Publish(
-			domain.FactStreamName.Fmt(wf.Name, wf.ID),
-			domain.FactStreamName,
-			*facts,
-		); err != nil {
-			return errors.WithMessage(err, "Could not publish fact")
-		}
-
-		return nil
-	}); err != nil {
-		return errors.WithMessage(err, "Could not complete Db transaction")
+	if err := self.MessageQueueService.Publish(
+		domain.FactStreamName.Fmt(wf.Name, wf.ID),
+		domain.FactStreamName,
+		*facts,
+	); err != nil {
+		return errors.WithMessage(err, "Could not publish facts")
 	}
 
 	return nil
