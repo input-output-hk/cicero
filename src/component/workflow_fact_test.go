@@ -7,6 +7,7 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"testing"
@@ -15,7 +16,7 @@ import (
 func buildWorkflowFactConsumerMocked(messageQueueService *mocks.MessageQueueService,
 	workflowService *mocks.WorkflowService) *WorkflowFactConsumer {
 	return &WorkflowFactConsumer{
-		//Logger:              log.New(os.Stderr, "WorkflowFactConsumerTest: ", log.LstdFlags),
+		Logger:              log.Logger,
 		MessageQueueService: messageQueueService,
 		WorkflowService:     workflowService,
 	}
@@ -61,7 +62,8 @@ func TestUpdatingFactsFailure(t *testing.T) {
 	err := workflowFactConsumer.processMessage(tx, wMessageDetail, message)
 
 	// then
-	assert.Equal(t, err.Error(), errorMessage)
+	assert.Contains(t, err.Error(), errorMessage)
+	assert.Contains(t, err.Error(), "Error while updating workflow in msg")
 	workflowService.AssertExpectations(t)
 	messageQueueService.AssertExpectations(t)
 }

@@ -6,7 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -41,14 +42,14 @@ func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
 type evaluationService struct {
 	Evaluators []string // Default evaluators. Will be tried in order if none is given for a source.
 	Env        []string // NAME=VALUE or just NAME to inherit from process environment
-	logger     *log.Logger
+	logger     zerolog.Logger
 }
 
 func NewEvaluationService(evaluators, env []string) EvaluationService {
 	return &evaluationService{
 		Evaluators: evaluators,
 		Env:        env,
-		logger:     log.New(os.Stderr, "evaluationService: ", log.LstdFlags),
+		logger:     log.With().Str("component", "EvaluationService").Logger(),
 	}
 }
 
@@ -82,7 +83,7 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 		extraEnv = append(extraEnv, "CICERO_WORKFLOW_SRC="+dst)
 		cmd.Env = append(os.Environ(), extraEnv...)
 
-		e.logger.Printf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
+		e.logger.Info().Msgf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
 
 		if output, err := cmd.Output(); err != nil {
 			message := "Failed to evaluate"
@@ -105,7 +106,7 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 			return output, nil
 		}
 	} else {
-		e.logger.Println("No evaluator given in source, trying all")
+		e.logger.Info().Msg("No evaluator given in source, trying all")
 		messages := ""
 		for _, evaluator := range e.Evaluators {
 			if output, err := tryEval(evaluator); err != nil {
@@ -114,7 +115,7 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 					messages += "\n"
 				}
 				messages += message
-				e.logger.Print(message)
+				e.logger.Info().Msg(message)
 			} else {
 				return output, nil
 			}
@@ -150,8 +151,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 
 	err = json.Unmarshal(output, &freeformDef)
 	if err != nil {
-		e.logger.Println(string(output))
-		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
+		return def, errors.WithMessagef(err, "While unmarshaling evaluator output %s into freeform definition", string(output))
 	}
 
 	def.Name = freeformDef.Name
@@ -221,8 +221,7 @@ func (e *evaluationService) ListWorkflows(src string) ([]string, error) {
 
 	var names []string
 	if err := json.Unmarshal(output, &names); err != nil {
-		e.logger.Println(string(output))
-		return nil, errors.WithMessage(err, "While unmarshaling workflow names")
+		return nil, errors.WithMessagef(err, "While unmarshaling workflow names %s", string(output))
 	}
 
 	return names, nil

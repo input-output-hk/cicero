@@ -8,6 +8,7 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/jackc/pgx/v4"
+	"github.com/rs/zerolog"
 	"strconv"
 	"strings"
 	"time"
@@ -17,50 +18,48 @@ import (
 )
 
 type WorkflowFactConsumer struct {
-	//Logger              *log.Logger
+	Logger              zerolog.Logger
 	MessageQueueService application.MessageQueueService
 	WorkflowService     application.WorkflowService
 	Db                  config.PgxIface
 }
 
 func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
-	//self.Logger.Println("Starting WorkflowFactConsumer")
+	self.Logger.Info().Msg("Starting...")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.FactStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.FactStreamName)
 	}
 
 	<-ctx.Done()
-	//self.Logger.Println("context was cancelled")
+	self.Logger.Info().Msg("context was cancelled")
 	return nil
 }
 
 func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
-		/*if err != nil {
-			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
+		if err != nil {
+			self.Logger.Fatal().Err(err).Msgf("the subscription %s will be terminated", domain.FactStreamName)
 			//TODO: If err is not nil, the subscription will be terminated
 		}
-		self.Logger.Println("Processing message",
-			"stream:", msg.Stream(),
-			"subject:", msg.Subject(),
-			"offset:", msg.Offset(),
-			"value:", string(msg.Value()),
-			"time:", msg.Timestamp(),
-		)*/
+		self.Logger.Debug().Msgf("Processing message - stream: %s - subject: %s - offset: %d - value: %s, time: %s",
+			msg.Stream(), msg.Subject(), msg.Offset(), string(msg.Value()), msg.Timestamp(),
+		)
 		wMessageDetail, err := self.getFactsDetail(msg)
 		if err != nil {
-			//	self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
+			self.Logger.Error().Err(err).Msgf("Invalid Workflow received, ignoring: %s", msg.Subject())
 			return
 		}
-		//self.Logger.Println(fmt.Printf("Received update for workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
+		self.Logger.Info().Msgf("Received update for workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts)
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(tx, wMessageDetail, msg)
 		}); err != nil {
-			//	self.Logger.Println(fmt.Printf("Could not process fact message: %v with error %s", msg, err))
+			self.Logger.Error().Err(err).Msgf("Could not process fact message: %v", msg)
 			return
 		}
+
+		self.Logger.Info().Msgf("Updated workflow with ID %d", wMessageDetail.ID)
 	}
 }
 
@@ -109,8 +108,7 @@ func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, workflow *domain.Wor
 	existing.UpdatedAt = &now
 
 	if err := self.WorkflowService.Update(tx, existing); err != nil {
-		//	self.Logger.Printf("Error while updating workflow: %s", err)
-		return err
+		return errors.WithMessagef(err, "Error while updating workflow in msg %v", msg)
 	}
 
 	// TODO: only invoke when there was a change to the facts?
@@ -119,10 +117,8 @@ func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, workflow *domain.Wor
 		domain.InvokeStreamName,
 		merged,
 	); err != nil {
-		//	self.Logger.Printf("Couldn't publish workflow invoke message: %s", err)
-		return err
+		return errors.WithMessagef(err, "Couldn't publish workflow invoke message: %v", msg)
 	}
 
-	//self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
 	return nil
 }

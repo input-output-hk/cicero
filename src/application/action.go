@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/input-output-hk/cicero/src/config"
-	"log"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -33,21 +33,21 @@ type ActionService interface {
 }
 
 type actionService struct {
-	logger           *log.Logger
+	logger           zerolog.Logger
 	actionRepository repository.ActionRepository
 	prometheus       prometheus.Client
 }
 
 func NewActionService(db config.PgxIface, prometheusAddr string) ActionService {
 	impl := actionService{
-		logger:           log.New(os.Stderr, "ActionService: ", log.LstdFlags),
+		logger:           log.With().Str("component", "ActionService").Logger(),
 		actionRepository: persistence.NewActionRepository(db),
 	}
 
 	if prom, err := prometheus.NewClient(prometheus.Config{
 		Address: prometheusAddr,
 	}); err != nil {
-		impl.logger.Fatal(err.Error())
+		impl.logger.Fatal().Err(err).Msg("Creating new prometheus client")
 	} else {
 		impl.prometheus = prom
 	}
@@ -56,7 +56,7 @@ func NewActionService(db config.PgxIface, prometheusAddr string) ActionService {
 }
 
 func (self *actionService) GetById(id uuid.UUID) (action domain.ActionInstance, err error) {
-	self.logger.Printf("Get Action by id %s", id)
+	self.logger.Info().Msgf("Get Action by id %s", id)
 	action, err = self.actionRepository.GetById(id)
 	if err != nil {
 		err = errors.WithMessagef(err, "Couldn't select existing Action for id: %s", id)
@@ -65,7 +65,7 @@ func (self *actionService) GetById(id uuid.UUID) (action domain.ActionInstance, 
 }
 
 func (self *actionService) GetByNameAndWorkflowId(name string, workflowId uint64) (action domain.ActionInstance, err error) {
-	self.logger.Printf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
+	self.logger.Info().Msgf("Get Action by name %s and workflow_instance_id %d", name, workflowId)
 	action, err = self.actionRepository.GetByNameAndWorkflowId(name, workflowId)
 	if err != nil && !pgxscan.NotFound(err) {
 		err = errors.WithMessagef(err, "Couldn't select existing Action for name %s and workflow_instance_id %d", name, workflowId)
@@ -74,25 +74,25 @@ func (self *actionService) GetByNameAndWorkflowId(name string, workflowId uint64
 }
 
 func (self *actionService) GetAll() ([]*domain.ActionInstance, error) {
-	self.logger.Printf("Get all Actions")
+	self.logger.Info().Msg("Get all Actions")
 	return self.actionRepository.GetAll()
 }
 
 func (self *actionService) Save(tx pgx.Tx, action *domain.ActionInstance) error {
-	self.logger.Printf("Saving new Action named %s", action.Name)
+	self.logger.Info().Msgf("Saving new Action named %s", action.Name)
 	if err := self.actionRepository.Save(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Action")
 	}
-	self.logger.Printf("Created Action %s", action.ID)
+	self.logger.Info().Msgf("Created Action %s", action.ID)
 	return nil
 }
 
 func (self *actionService) Update(tx pgx.Tx, action domain.ActionInstance) error {
-	self.logger.Printf("Update Action %s", action.ID.String())
+	self.logger.Info().Msgf("Update Action %s", action.ID.String())
 	if err := self.actionRepository.Update(tx, action); err != nil {
 		return errors.WithMessagef(err, "Couldn't update Action with id: %s", action.ID)
 	}
-	self.logger.Printf("Updated Action %s", action.ID.String())
+	self.logger.Info().Msgf("Updated Action %s", action.ID.String())
 	return nil
 }
 

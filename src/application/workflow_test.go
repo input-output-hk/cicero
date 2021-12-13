@@ -3,8 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
+	"github.com/rs/zerolog/log"
 	"testing"
 
 	"github.com/input-output-hk/cicero/src/application/mocks"
@@ -36,7 +35,7 @@ func buildWorkflowApplication(workflowRepositoryMocked *repositoryMocks.Workflow
 	return &workflowService{
 		workflowRepository:  workflowRepositoryMocked,
 		messageQueueService: messageQueueServiceMocked,
-		logger:              log.New(os.Stderr, "WorkflowApplicationTest: ", log.LstdFlags),
+		logger:              log.Logger,
 	}
 }
 

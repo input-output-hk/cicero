@@ -23,7 +23,7 @@ type WorkflowStartConsumer struct {
 }
 
 func (self *WorkflowStartConsumer) Start(ctx context.Context) error {
-	self.Logger.Info().Msg("Starting WorkflowStartConsumer")
+	self.Logger.Info().Msg("Starting...")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.StartStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.StartStreamName)
@@ -40,16 +40,12 @@ func (self *WorkflowStartConsumer) invokerSubscriber(ctx context.Context) func(*
 			self.Logger.Fatal().Err(err).Msgf("the subscription %s will be terminated", domain.StartStreamName)
 			//TODO: If err is not nil, the subscription will be terminated
 		}
-		self.Logger.Debug().Msgf("Processing message",
-			"stream:", msg.Stream(),
-			"subject:", msg.Subject(),
-			"offset:", msg.Offset(),
-			"value:", string(msg.Value()),
-			"time:", msg.Timestamp(),
+		self.Logger.Debug().Msgf("Processing message - stream: %s - subject: %s - offset: %d - value: %s, time: %s",
+			msg.Stream(), msg.Subject(), msg.Offset(), string(msg.Value()), msg.Timestamp(),
 		)
 		workflowDetail, err := self.getWorkflowDetailToProcess(msg)
 		if err != nil {
-			self.Logger.Error().Err(err).Msgf("Invalid Workflow ID received, ignoring: %s", msg.Subject())
+			self.Logger.Error().Err(err).Msgf("Invalid Workflow received, ignoring: %s", msg.Subject())
 			return
 		}
 		self.Logger.Info().Msgf("Received start for workflow with NAME: %s, SOURCE: %v, FACTS: %v", workflowDetail.Name, workflowDetail.Source, workflowDetail.Facts)

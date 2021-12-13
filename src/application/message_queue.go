@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/input-output-hk/cicero/src/config"
-	"log"
-	"os"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"time"
 
 	"github.com/input-output-hk/cicero/src/domain"
@@ -24,14 +24,14 @@ type MessageQueueService interface {
 }
 
 type messageQueueService struct {
-	logger                 *log.Logger
+	logger                 zerolog.Logger
 	bridge                 liftbridge.Client
 	messageQueueRepository repository.MessageQueueRepository
 }
 
 func NewMessageQueueService(db config.PgxIface, bridge liftbridge.Client) MessageQueueService {
 	return &messageQueueService{
-		logger:                 log.New(os.Stderr, "MessageQueueService: ", log.LstdFlags),
+		logger:                 log.With().Str("component", "MessageQueueService").Logger(),
 		bridge:                 bridge,
 		messageQueueRepository: persistence.NewMessageQueueRepository(db),
 	}
@@ -53,7 +53,7 @@ func (m *messageQueueService) createStreams(stream []string) error {
 				return errors.WithMessage(err, "Failed to Create NATS Stream")
 			}
 		} else {
-			m.logger.Printf("Created streams %s", streamName)
+			m.logger.Debug().Msgf("Created streams %s", streamName)
 		}
 	}
 	return nil
@@ -85,13 +85,13 @@ func (m *messageQueueService) Publish(stream string, streamName domain.StreamNam
 		return errors.WithMessage(err, "While publishing message")
 	}
 
-	m.logger.Printf("Published message to stream %s", stream)
+	m.logger.Debug().Msgf("Published message to stream %s", stream)
 
 	return nil
 }
 
 func (m *messageQueueService) subscribe(ctx context.Context, streamName string, handler liftbridge.Handler, offset int64, partition int32) error {
-	m.logger.Printf("Subscribing to %s at offset %d", streamName, offset)
+	m.logger.Debug().Msgf("Subscribing to %s at offset %d", streamName, offset)
 	if err := m.bridge.Subscribe(ctx, streamName, handler, liftbridge.StartAtOffset(offset), liftbridge.Partition(partition)); err != nil {
 		return errors.WithMessagef(err, "Couldn't Subscribing to %s at offset %d", streamName, offset)
 	}
@@ -114,7 +114,7 @@ func (m *messageQueueService) Subscribe(ctx context.Context, streamName domain.S
 }
 
 func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error {
-	m.logger.Printf("Saving new Message on stream %s, partition %d, offset %d", message.Stream(), message.Partition(), message.Offset())
+	m.logger.Info().Msgf("Saving new Message on stream %s, partition %d, offset %d", message.Stream(), message.Partition(), message.Offset())
 	headers := message.Headers()
 	delete(headers, "subject")
 	for k, v := range headers {
@@ -125,7 +125,7 @@ func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error
 	if err := m.messageQueueRepository.Save(tx, headers, message); err != nil {
 		return errors.WithMessagef(err, "Couldn't insert Message")
 	}
-	m.logger.Printf("Message created")
+	m.logger.Debug().Msg("Message created")
 	return nil
 }
 
@@ -134,6 +134,6 @@ func (m *messageQueueService) getOffset(streamName string) (offset int64, err er
 	if err != nil {
 		return offset, errors.WithMessagef(err, "Couldn't get the offset for the streamName: %s", streamName)
 	}
-	m.logger.Printf("Get Offset %d for the streamName %s", offset, streamName)
+	m.logger.Info().Msgf("Get Offset %d for the streamName %s", offset, streamName)
 	return
 }

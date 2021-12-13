@@ -5,8 +5,8 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
-	"log"
-	"os"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
@@ -23,56 +23,56 @@ type WorkflowService interface {
 }
 
 type workflowService struct {
-	logger              *log.Logger
+	logger              zerolog.Logger
 	workflowRepository  repository.WorkflowRepository
 	messageQueueService MessageQueueService
 }
 
 func NewWorkflowService(db config.PgxIface, messageQueueService MessageQueueService) WorkflowService {
 	return &workflowService{
-		logger:              log.New(os.Stderr, "WorkflowApplication: ", log.LstdFlags),
+		logger:              log.With().Str("component", "WorkflowService").Logger(),
 		workflowRepository:  persistence.NewWorkflowRepository(db),
 		messageQueueService: messageQueueService,
 	}
 }
 
 func (s *workflowService) GetSummary() (domain.WorkflowSummary, error) {
-	s.logger.Println("Get Summary")
+	s.logger.Info().Msg("Get Summary")
 	return s.workflowRepository.GetSummary()
 }
 
 func (s *workflowService) GetAll() ([]*domain.WorkflowInstance, error) {
-	s.logger.Println("Get all Workflows")
+	s.logger.Info().Msg("Get all Workflows")
 	return s.workflowRepository.GetAll()
 }
 
 func (s *workflowService) GetAllByName(name string) ([]*domain.WorkflowInstance, error) {
-	s.logger.Printf("Get all Workflows by name %s", name)
+	s.logger.Info().Msgf("Get all Workflows by name %s", name)
 	return s.workflowRepository.GetAllByName(name)
 }
 
 func (s *workflowService) GetById(id uint64) (workflow domain.WorkflowInstance, err error) {
-	s.logger.Printf("Get Workflow by id %d", id)
+	s.logger.Info().Msgf("Get Workflow by id %d", id)
 	workflow, err = s.workflowRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing workflow for id %d", id)
 	return
 }
 
 func (s *workflowService) Save(tx pgx.Tx, workflow *domain.WorkflowInstance) error {
-	s.logger.Printf("Saving new Workflow %s", workflow.Name)
+	s.logger.Info().Msgf("Saving new Workflow %s", workflow.Name)
 	if err := s.workflowRepository.Save(tx, workflow); err != nil {
 		return errors.WithMessage(err, "Could not insert workflow")
 	}
-	s.logger.Printf("Created workflow %d", workflow.ID)
+	s.logger.Info().Msgf("Created workflow %d", workflow.ID)
 	return nil
 }
 
 func (s *workflowService) Update(tx pgx.Tx, workflow domain.WorkflowInstance) error {
-	s.logger.Printf("Update workflow %d", workflow.ID)
+	s.logger.Info().Msgf("Update workflow %d", workflow.ID)
 	if err := s.workflowRepository.Update(tx, workflow); err != nil {
 		return errors.WithMessage(err, "Could not update workflow")
 	}
-	s.logger.Printf("Updated workflow %d", workflow.ID)
+	s.logger.Info().Msgf("Updated workflow %d", workflow.ID)
 	return nil
 }
 

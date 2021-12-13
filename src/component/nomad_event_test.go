@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/mock"
 	"testing"
 
@@ -23,7 +24,7 @@ func buildNomadEventConsumerMocked(nomadEventServiceMocked *mocks.NomadEventServ
 	evaluationService *mocks.EvaluationService,
 	messageQueueService *mocks.MessageQueueService) *NomadEventConsumer {
 	return &NomadEventConsumer{
-		//Logger:              log.New(os.Stderr, "NomadEventConsumerTest: ", log.LstdFlags),
+		Logger:              log.Logger,
 		NomadEventService:   nomadEventServiceMocked,
 		NomadClient:         nomadClientMocked,
 		ActionService:       actionService,

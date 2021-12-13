@@ -119,7 +119,6 @@ func (cmd *StartCmd) Run() error {
 
 	if start.workflowStart {
 		child := component.WorkflowStartConsumer{
-			//Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
 			Logger:              log.With().Str("component", "WorkflowStartConsumer").Logger(),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
@@ -140,7 +139,7 @@ func (cmd *StartCmd) Run() error {
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			// Increase priority of waiting goroutines every second.
 			Limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
-			//Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
+			Logger:  log.With().Str("component", "WorkflowInvokeConsumer").Logger(),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err
@@ -149,7 +148,7 @@ func (cmd *StartCmd) Run() error {
 
 	if start.workflowFact {
 		child := component.WorkflowFactConsumer{
-			//Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
+			Logger:              log.With().Str("component", "WorkflowFactConsumer").Logger(),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
@@ -161,7 +160,7 @@ func (cmd *StartCmd) Run() error {
 
 	if start.nomadEvent {
 		child := component.NomadEventConsumer{
-			//Logger:              log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
+			Logger:              log.With().Str("component", "NomadEventConsumer").Logger(),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
 			ActionService:       actionService().(application.ActionService),
@@ -177,7 +176,7 @@ func (cmd *StartCmd) Run() error {
 
 	if start.web {
 		child := web.Web{
-			//Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
+			Logger:              log.With().Str("component", "Web").Logger(),
 			Listen:              cmd.WebListen,
 			WorkflowService:     workflowService().(application.WorkflowService),
 			ActionService:       actionService().(application.ActionService),
@@ -207,9 +206,11 @@ type LoggerCustom struct {
 }
 
 func (l *LoggerCustom) Printf(format string, v ...interface{}) {
-	l.logger.Printf(format, v)
+	l.logger.Printf(format, v[0])
 }
-func (l *LoggerCustom) Println(v ...interface{}) { l.Println(v) }
+func (l *LoggerCustom) Println(v ...interface{}) {
+	l.logger.Print(v[0])
+}
 
 func (cmd *StartCmd) newSupervisor(logger zerolog.Logger) *oversight.Tree {
 	return oversight.New(
