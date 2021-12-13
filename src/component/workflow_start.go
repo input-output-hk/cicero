@@ -7,7 +7,7 @@ import (
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
-	"log"
+	"github.com/rs/zerolog"
 	"strings"
 
 	"github.com/jackc/pgx/v4"
@@ -16,31 +16,31 @@ import (
 )
 
 type WorkflowStartConsumer struct {
-	Logger              *log.Logger
+	Logger              zerolog.Logger
 	MessageQueueService application.MessageQueueService
 	WorkflowService     application.WorkflowService
 	Db                  config.PgxIface
 }
 
 func (self *WorkflowStartConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting WorkflowStartConsumer")
+	self.Logger.Info().Msg("Starting WorkflowStartConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.StartStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.StartStreamName)
 	}
 
 	<-ctx.Done()
-	self.Logger.Println("context was cancelled")
+	self.Logger.Info().Msg("context was cancelled")
 	return nil
 }
 
 func (self *WorkflowStartConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
-			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
+			self.Logger.Fatal().Err(err).Msgf("the subscription %s will be terminated", domain.StartStreamName)
 			//TODO: If err is not nil, the subscription will be terminated
 		}
-		self.Logger.Println("Processing message",
+		self.Logger.Debug().Msgf("Processing message",
 			"stream:", msg.Stream(),
 			"subject:", msg.Subject(),
 			"offset:", msg.Offset(),
@@ -49,17 +49,18 @@ func (self *WorkflowStartConsumer) invokerSubscriber(ctx context.Context) func(*
 		)
 		workflowDetail, err := self.getWorkflowDetailToProcess(msg)
 		if err != nil {
-			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
+			self.Logger.Error().Err(err).Msgf("Invalid Workflow ID received, ignoring: %s", msg.Subject())
 			return
 		}
-		self.Logger.Println(fmt.Printf("Received start for workflow with NAME: %s, SOURCE: %v, FACTS: %v", workflowDetail.Name, workflowDetail.Source, workflowDetail.Facts))
+		self.Logger.Info().Msgf("Received start for workflow with NAME: %s, SOURCE: %v, FACTS: %v", workflowDetail.Name, workflowDetail.Source, workflowDetail.Facts)
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(tx, workflowDetail, msg)
 		}); err != nil {
-			self.Logger.Println(fmt.Printf("Could not process fact message: %v with error %s", msg, err))
+			self.Logger.Error().Err(err).Msgf("Could not process fact message: %v", msg)
 			return
 		}
+		self.Logger.Info().Msgf("Created workflow with ID %d", workflowDetail.ID)
 	}
 }
 
@@ -103,6 +104,5 @@ func (self *WorkflowStartConsumer) processMessage(tx pgx.Tx, workflow *domain.Wo
 	); err != nil {
 		return err
 	}
-	self.Logger.Printf("Created workflow with ID %d", workflow.ID)
 	return nil
 }

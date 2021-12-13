@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -22,7 +21,7 @@ import (
 )
 
 type WorkflowInvokeConsumer struct {
-	Logger              *log.Logger
+	//Logger              *log.Logger
 	Limiter             *priority.PriorityLimiter
 	EvaluationService   application.EvaluationService
 	ActionService       application.ActionService
@@ -33,20 +32,20 @@ type WorkflowInvokeConsumer struct {
 }
 
 func (self *WorkflowInvokeConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting WorkflowInvokeConsumer")
+	//self.Logger.Println("Starting WorkflowInvokeConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.InvokeStreamName)
 	}
 
 	<-ctx.Done()
-	self.Logger.Println("context was cancelled")
+	//self.Logger.Println("context was cancelled")
 	return nil
 }
 
 func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
-		if err != nil {
+		/*if err != nil {
 			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
 			//TODO: If err is not nil, the subscription will be terminated
 		}
@@ -56,19 +55,19 @@ func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(
 			"offset:", msg.Offset(),
 			"value:", string(msg.Value()),
 			"time:", msg.Timestamp(),
-		)
+		)*/
 
 		wMessageDetail, err := self.getWorkflowDetails(msg)
 		if err != nil {
-			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
+			//	self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
 			return
 		}
-		self.Logger.Println(fmt.Printf("Invoked workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
+		//self.Logger.Println(fmt.Printf("Invoked workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(ctx, tx, wMessageDetail, msg)
 		}); err != nil {
-			self.Logger.Println(fmt.Printf("Could not process workflow invoke message: %v with error %s", msg, err))
+			//	self.Logger.Println(fmt.Printf("Could not process workflow invoke message: %v with error %s", msg, err))
 			return
 		}
 	}
@@ -152,7 +151,7 @@ func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, tx
 		instance = &inst
 	}
 
-	self.Logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
+	//self.Logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
 
 	if action.IsRunnable() {
 		if instance == nil {
@@ -179,7 +178,7 @@ func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, tx
 		if response, _, err := self.NomadClient.JobsRegister(action.Job, &nomad.WriteOptions{}); err != nil {
 			return errors.WithMessage(err, "Failed to run action")
 		} else if len(response.Warnings) > 0 {
-			self.Logger.Println(response.Warnings)
+			//	self.Logger.Println(response.Warnings)
 		}
 	} else if instance != nil {
 		if _, _, err := self.NomadClient.JobsDeregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {

@@ -3,8 +3,8 @@ package cicero
 import (
 	"context"
 	"github.com/input-output-hk/cicero/src/config"
-	"log"
-	"os"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"time"
 
 	"cirello.io/oversight"
@@ -29,7 +29,7 @@ type StartCmd struct {
 }
 
 func (cmd *StartCmd) Run() error {
-	logger := log.New(os.Stderr, "start: ", log.LstdFlags)
+	log.Info().Msg("Start...")
 
 	// If none are given then start all,
 	// otherwise start only those that are given.
@@ -53,7 +53,7 @@ func (cmd *StartCmd) Run() error {
 		case "web":
 			start.web = true
 		default:
-			logger.Fatalf("Unknown component: %s", component)
+			log.Fatal().Msgf("Unknown component: %s", component)
 		}
 	}
 	if !(start.workflowStart ||
@@ -75,7 +75,7 @@ func (cmd *StartCmd) Run() error {
 
 	db := once(func() interface{} {
 		if db, err := config.DBConnection(); err != nil {
-			logger.Fatalln(err.Error())
+			log.Fatal().Err(err)
 			return err
 		} else {
 			return db
@@ -84,7 +84,7 @@ func (cmd *StartCmd) Run() error {
 
 	nomadClient := once(func() interface{} {
 		if client, err := config.NewNomadClient(); err != nil {
-			logger.Fatalln(err.Error())
+			log.Fatal().Err(err)
 			return err
 		} else {
 			return client
@@ -99,7 +99,7 @@ func (cmd *StartCmd) Run() error {
 	})
 	messageQueueService := once(func() interface{} {
 		if bridge, err := config.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
-			logger.Fatalln(err.Error())
+			log.Fatal().Err(err)
 			return err
 		} else {
 			return application.NewMessageQueueService(db().(*pgxpool.Pool), bridge)
@@ -115,11 +115,12 @@ func (cmd *StartCmd) Run() error {
 		return application.NewNomadEventService(db().(*pgxpool.Pool), actionService().(application.ActionService))
 	})
 
-	supervisor := cmd.newSupervisor(logger)
+	supervisor := cmd.newSupervisor(log.Logger)
 
 	if start.workflowStart {
 		child := component.WorkflowStartConsumer{
-			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
+			//Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
+			Logger:              log.With().Str("component", "WorkflowStartConsumer").Logger(),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
@@ -139,7 +140,7 @@ func (cmd *StartCmd) Run() error {
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			// Increase priority of waiting goroutines every second.
 			Limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
-			Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
+			//Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err
@@ -148,7 +149,7 @@ func (cmd *StartCmd) Run() error {
 
 	if start.workflowFact {
 		child := component.WorkflowFactConsumer{
-			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
+			//Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
 			Db:                  db().(*pgxpool.Pool),
@@ -160,7 +161,7 @@ func (cmd *StartCmd) Run() error {
 
 	if start.nomadEvent {
 		child := component.NomadEventConsumer{
-			Logger:              log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
+			//Logger:              log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			WorkflowService:     workflowService().(application.WorkflowService),
 			ActionService:       actionService().(application.ActionService),
@@ -176,7 +177,7 @@ func (cmd *StartCmd) Run() error {
 
 	if start.web {
 		child := web.Web{
-			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
+			//Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			Listen:              cmd.WebListen,
 			WorkflowService:     workflowService().(application.WorkflowService),
 			ActionService:       actionService().(application.ActionService),
@@ -200,9 +201,19 @@ func (cmd *StartCmd) Run() error {
 	return nil
 }
 
-func (cmd *StartCmd) newSupervisor(logger *log.Logger) *oversight.Tree {
+//TODO: WIP...
+type LoggerCustom struct {
+	logger zerolog.Logger
+}
+
+func (l *LoggerCustom) Printf(format string, v ...interface{}) {
+	l.logger.Printf(format, v)
+}
+func (l *LoggerCustom) Println(v ...interface{}) { l.Println(v) }
+
+func (cmd *StartCmd) newSupervisor(logger zerolog.Logger) *oversight.Tree {
 	return oversight.New(
-		oversight.WithLogger(logger),
+		oversight.WithLogger(&LoggerCustom{logger: logger}),
 		oversight.WithSpecification(
 			10,                    // number of restarts
 			1*time.Minute,         // within this time period

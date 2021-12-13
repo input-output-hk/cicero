@@ -9,15 +9,13 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"log"
-	"os"
 	"testing"
 )
 
 func buildWorkflowFactConsumerMocked(messageQueueService *mocks.MessageQueueService,
 	workflowService *mocks.WorkflowService) *WorkflowFactConsumer {
 	return &WorkflowFactConsumer{
-		Logger:              log.New(os.Stderr, "WorkflowFactConsumerTest: ", log.LstdFlags),
+		//Logger:              log.New(os.Stderr, "WorkflowFactConsumerTest: ", log.LstdFlags),
 		MessageQueueService: messageQueueService,
 		WorkflowService:     workflowService,
 	}

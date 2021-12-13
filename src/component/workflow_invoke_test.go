@@ -2,8 +2,6 @@ package component
 
 import (
 	"context"
-	"log"
-	"os"
 	"testing"
 
 	"github.com/input-output-hk/cicero/src/application/mocks"
@@ -24,7 +22,7 @@ func buildWorkflowInvokeConsumerMocked(messageQueueService *mocks.MessageQueueSe
 	actionService *mocks.ActionService,
 	nomadClient *mocks.NomadClient) *WorkflowInvokeConsumer {
 	return &WorkflowInvokeConsumer{
-		Logger:              log.New(os.Stderr, "WorkflowInvokeConsumerTest: ", log.LstdFlags),
+		//Logger:              log.New(os.Stderr, "WorkflowInvokeConsumerTest: ", log.LstdFlags),
 		MessageQueueService: messageQueueService,
 		WorkflowService:     workflowService,
 		EvaluationService:   evaluationService,

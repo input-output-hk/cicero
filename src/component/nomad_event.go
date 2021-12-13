@@ -2,7 +2,6 @@ package component
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/input-output-hk/cicero/src/application"
@@ -17,7 +16,7 @@ import (
 )
 
 type NomadEventConsumer struct {
-	Logger              *log.Logger
+	//Logger              *log.Logger
 	MessageQueueService application.MessageQueueService
 	NomadEventService   application.NomadEventService
 	WorkflowService     application.WorkflowService
@@ -28,7 +27,7 @@ type NomadEventConsumer struct {
 }
 
 func (self *NomadEventConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting NomadEventConsumer")
+	//self.Logger.Println("Starting NomadEventConsumer")
 
 	index, err := self.NomadEventService.GetLastNomadEvent()
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -36,7 +35,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	}
 	index += 1
 
-	self.Logger.Println("Listening to Nomad events starting at index", index)
+	//self.Logger.Println("Listening to Nomad events starting at index", index)
 
 	stream, err := self.NomadClient.EventStream(ctx, index)
 	if err != nil {
@@ -58,7 +57,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 
 		for _, event := range events.Events {
 			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-				self.Logger.Println("Processing Nomad Event with index:", event.Index)
+				//self.Logger.Println("Processing Nomad Event with index:", event.Index)
 				return self.processNomadEvent(&event, tx)
 			}); err != nil {
 				return errors.WithMessagef(err, "Error processing Nomad event with index: %d", event.Index)
@@ -105,7 +104,7 @@ func (self *NomadEventConsumer) getWorkflowAction(action domain.ActionInstance) 
 
 func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation, tx pgx.Tx) error {
 	if !allocation.ClientTerminalStatus() {
-		self.Logger.Printf("Ignoring allocation event with non-terminal client status \"%s\"", allocation.ClientStatus)
+		//self.Logger.Printf("Ignoring allocation event with non-terminal client status \"%s\"", allocation.ClientStatus)
 		return nil
 	}
 
@@ -117,7 +116,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 	action, err := self.ActionService.GetById(id)
 	if err != nil {
 		if pgxscan.NotFound(err) {
-			self.Logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)", allocation.JobID)
+			//self.Logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)", allocation.JobID)
 			return nil
 		}
 		return err
@@ -128,7 +127,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		// TODO We don't want to crash here (for example if a workflow source disappeared)
 		// but we don't want to silently ignore it either - should this pop up in the web UI somewhere?
 		// Unfortunately evaluators can currently not indicate the reason why evaluation failed - add that to contract?
-		self.Logger.Printf("Could not get definition for action instance %s: %s", action.ID, err.Error())
+		//self.Logger.Printf("Could not get definition for action instance %s: %s", action.ID, err.Error())
 		return nil
 	}
 

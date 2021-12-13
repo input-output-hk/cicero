@@ -8,7 +8,6 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/jackc/pgx/v4"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -18,27 +17,27 @@ import (
 )
 
 type WorkflowFactConsumer struct {
-	Logger              *log.Logger
+	//Logger              *log.Logger
 	MessageQueueService application.MessageQueueService
 	WorkflowService     application.WorkflowService
 	Db                  config.PgxIface
 }
 
 func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting WorkflowFactConsumer")
+	//self.Logger.Println("Starting WorkflowFactConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.FactStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.FactStreamName)
 	}
 
 	<-ctx.Done()
-	self.Logger.Println("context was cancelled")
+	//self.Logger.Println("context was cancelled")
 	return nil
 }
 
 func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
-		if err != nil {
+		/*if err != nil {
 			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
 			//TODO: If err is not nil, the subscription will be terminated
 		}
@@ -48,18 +47,18 @@ func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*l
 			"offset:", msg.Offset(),
 			"value:", string(msg.Value()),
 			"time:", msg.Timestamp(),
-		)
+		)*/
 		wMessageDetail, err := self.getFactsDetail(msg)
 		if err != nil {
-			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
+			//	self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
 			return
 		}
-		self.Logger.Println(fmt.Printf("Received update for workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
+		//self.Logger.Println(fmt.Printf("Received update for workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(tx, wMessageDetail, msg)
 		}); err != nil {
-			self.Logger.Println(fmt.Printf("Could not process fact message: %v with error %s", msg, err))
+			//	self.Logger.Println(fmt.Printf("Could not process fact message: %v with error %s", msg, err))
 			return
 		}
 	}
@@ -110,7 +109,7 @@ func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, workflow *domain.Wor
 	existing.UpdatedAt = &now
 
 	if err := self.WorkflowService.Update(tx, existing); err != nil {
-		self.Logger.Printf("Error while updating workflow: %s", err)
+		//	self.Logger.Printf("Error while updating workflow: %s", err)
 		return err
 	}
 
@@ -120,10 +119,10 @@ func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, workflow *domain.Wor
 		domain.InvokeStreamName,
 		merged,
 	); err != nil {
-		self.Logger.Printf("Couldn't publish workflow invoke message: %s", err)
+		//	self.Logger.Printf("Couldn't publish workflow invoke message: %s", err)
 		return err
 	}
 
-	self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
+	//self.Logger.Printf("Updated workflow name: %s id: %d", existing.Name, existing.ID)
 	return nil
 }

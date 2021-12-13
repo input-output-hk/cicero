@@ -7,8 +7,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/stretchr/testify/mock"
-	"log"
-	"os"
 	"testing"
 
 	nomad "github.com/hashicorp/nomad/api"
@@ -25,7 +23,7 @@ func buildNomadEventConsumerMocked(nomadEventServiceMocked *mocks.NomadEventServ
 	evaluationService *mocks.EvaluationService,
 	messageQueueService *mocks.MessageQueueService) *NomadEventConsumer {
 	return &NomadEventConsumer{
-		Logger:              log.New(os.Stderr, "NomadEventConsumerTest: ", log.LstdFlags),
+		//Logger:              log.New(os.Stderr, "NomadEventConsumerTest: ", log.LstdFlags),
 		NomadEventService:   nomadEventServiceMocked,
 		NomadClient:         nomadClientMocked,
 		ActionService:       actionService,
@@ -119,8 +117,8 @@ func TestStartWorkflowProcessNomadEventFailure(t *testing.T) {
 	// when
 	err := nomadEventConsumer.Start(ctx)
 
- 	// then
-	assert.Equal(t, err.Error(), "Error processing Nomad event with index: 0: " + errorMessage)
+	// then
+	assert.Equal(t, err.Error(), "Error processing Nomad event with index: 0: "+errorMessage)
 	nomadEventService.AssertExpectations(t)
 	nomadClient.AssertExpectations(t)
 	db.AssertExpectations(t)
