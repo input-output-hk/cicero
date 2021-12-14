@@ -24,7 +24,7 @@ value = true
 
 [[env]]
 name = "FILE_LOGGING_ENABLED"
-value = true
+value = false
 
 [[env]]
 name = "LOGS_DIRECTORY"
