@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"time"
 )
 
 type SupervisorLogger struct {
@@ -101,7 +102,7 @@ func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
 	var writers []io.Writer
 
 	if config.ConsoleLoggingEnabled {
-		writers = append(writers, zerolog.ConsoleWriter{Out: os.Stderr})
+		writers = append(writers, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 	}
 	if config.FileLoggingEnabled {
 		writers = append(writers, newRollingFile(config))
@@ -109,6 +110,7 @@ func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
 	mw := io.MultiWriter(writers...)
 
 	logger := zerolog.New(mw).With().Timestamp().Logger()
+	zerolog.TimeFieldFormat = time.RFC3339Nano
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	if debugModeEnabled {
@@ -116,8 +118,10 @@ func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
 	}
 
 	logger.Info().
-		Bool("fileLogging", config.FileLoggingEnabled).
+		Bool("consoleLogging", config.ConsoleLoggingEnabled).
+		Bool("debugMode", config.DebugModeEnabled).
 		Bool("jsonLogOutput", config.EncodeLogsAsJson).
+		Bool("fileLogging", config.FileLoggingEnabled).
 		Str("logDirectory", config.Directory).
 		Str("fileName", config.Filename).
 		Int("maxSizeMB", config.MaxSize).

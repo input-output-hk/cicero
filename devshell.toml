@@ -16,15 +16,15 @@ value = "http://127.0.0.1:3100"
 
 [[env]]
 name = "CONSOLE_LOGGING_ENABLED"
-value = true
+value = "true"
 
 [[env]]
 name = "ENCODE_LOGS_AS_JSON"
-value = true
+value = "false"
 
 [[env]]
 name = "FILE_LOGGING_ENABLED"
-value = false
+value = "false"
 
 [[env]]
 name = "LOGS_DIRECTORY"
