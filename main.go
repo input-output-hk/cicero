@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/rs/zerolog"
 	"os"
 
 	"github.com/alexflint/go-arg"
@@ -15,16 +15,12 @@ var buildVersion = "dev"
 var buildCommit = "dirty"
 
 func main() {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	args := &CLI{}
 	parser, err := parseArgs(args)
 	abort(parser, err)
 
 	debug := flag.Bool("debug", args.Debug, "sets log level to debug")
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if *debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	}
+	config.ConfigureLogger(*debug)
 
 	domain.BuildInfo.Version = buildVersion
 	domain.BuildInfo.Commit = buildCommit
