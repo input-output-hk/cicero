@@ -199,21 +199,9 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	return nil
 }
 
-//TODO: WIP...
-type LoggerCustom struct {
-	logger *zerolog.Logger
-}
-
-func (l *LoggerCustom) Printf(format string, v ...interface{}) {
-	l.logger.Printf(format, v[0])
-}
-func (l *LoggerCustom) Println(v ...interface{}) {
-	l.logger.Print(v[0])
-}
-
 func (cmd *StartCmd) newSupervisor(logger *zerolog.Logger) *oversight.Tree {
 	return oversight.New(
-		oversight.WithLogger(&LoggerCustom{logger: logger}),
+		oversight.WithLogger(&config.SupervisorLogger{Logger: logger}),
 		oversight.WithSpecification(
 			10,                    // number of restarts
 			1*time.Minute,         // within this time period

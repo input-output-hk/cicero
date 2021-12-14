@@ -16,15 +16,15 @@ value = "http://127.0.0.1:3100"
 
 [[env]]
 name = "CONSOLE_LOGGING_ENABLED"
-value = "true"
+value = true
 
 [[env]]
 name = "ENCODE_LOGS_AS_JSON"
-value = "true"
+value = true
 
 [[env]]
 name = "FILE_LOGGING_ENABLED"
-value = "true"
+value = true
 
 [[env]]
 name = "LOGS_DIRECTORY"
@@ -32,7 +32,7 @@ value = "logs"
 
 [[env]]
 name = "LOGS_FILE_NAME"
-value = "cicero"
+value = "cicero.log"
 
 [[env]]
 name = "LOGS_MAX_SIZE"

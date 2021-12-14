@@ -9,6 +9,17 @@ import (
 	"path"
 )
 
+type SupervisorLogger struct {
+	Logger *zerolog.Logger
+}
+
+func (l *SupervisorLogger) Printf(format string, v ...interface{}) {
+	l.Logger.Printf(format, v[0])
+}
+func (l *SupervisorLogger) Println(v ...interface{}) {
+	l.Logger.Print(v[0])
+}
+
 type LoggerConfig struct {
 	// Enable console logging
 	ConsoleLoggingEnabled bool
