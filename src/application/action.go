@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"strconv"
 	"time"
@@ -38,9 +37,9 @@ type actionService struct {
 	prometheus       prometheus.Client
 }
 
-func NewActionService(db config.PgxIface, prometheusAddr string) ActionService {
+func NewActionService(db config.PgxIface, prometheusAddr string, logger *zerolog.Logger) ActionService {
 	impl := actionService{
-		logger:           log.With().Str("component", "ActionService").Logger(),
+		logger:           logger.With().Str("component", "ActionService").Logger(),
 		actionRepository: persistence.NewActionRepository(db),
 	}
 

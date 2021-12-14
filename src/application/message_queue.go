@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"time"
 
 	"github.com/input-output-hk/cicero/src/domain"
@@ -29,9 +28,9 @@ type messageQueueService struct {
 	messageQueueRepository repository.MessageQueueRepository
 }
 
-func NewMessageQueueService(db config.PgxIface, bridge liftbridge.Client) MessageQueueService {
+func NewMessageQueueService(db config.PgxIface, bridge liftbridge.Client, logger *zerolog.Logger) MessageQueueService {
 	return &messageQueueService{
-		logger:                 log.With().Str("component", "MessageQueueService").Logger(),
+		logger:                 logger.With().Str("component", "MessageQueueService").Logger(),
 		bridge:                 bridge,
 		messageQueueRepository: persistence.NewMessageQueueRepository(db),
 	}

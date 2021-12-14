@@ -2,16 +2,14 @@ package application
 
 import (
 	"encoding/json"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-
-	nomad "github.com/hashicorp/nomad/api"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 type NomadEventService interface {
@@ -26,9 +24,9 @@ type nomadEventService struct {
 	actionService        ActionService
 }
 
-func NewNomadEventService(db config.PgxIface, actionService ActionService) NomadEventService {
+func NewNomadEventService(db config.PgxIface, actionService ActionService, logger *zerolog.Logger) NomadEventService {
 	return &nomadEventService{
-		logger:               log.With().Str("component", "NomadEventService").Logger(),
+		logger:               logger.With().Str("component", "NomadEventService").Logger(),
 		nomadEventRepository: persistence.NewNomadEventRepository(db),
 		actionService:        actionService,
 	}

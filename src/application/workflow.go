@@ -5,11 +5,9 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 )
 
 type WorkflowService interface {
@@ -28,9 +26,9 @@ type workflowService struct {
 	messageQueueService MessageQueueService
 }
 
-func NewWorkflowService(db config.PgxIface, messageQueueService MessageQueueService) WorkflowService {
+func NewWorkflowService(db config.PgxIface, messageQueueService MessageQueueService, logger *zerolog.Logger) WorkflowService {
 	return &workflowService{
-		logger:              log.With().Str("component", "WorkflowService").Logger(),
+		logger:              logger.With().Str("component", "WorkflowService").Logger(),
 		workflowRepository:  persistence.NewWorkflowRepository(db),
 		messageQueueService: messageQueueService,
 	}

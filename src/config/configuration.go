@@ -2,7 +2,6 @@ package config
 
 import (
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"os"
 	"strconv"
 )
@@ -12,7 +11,6 @@ func getenvStr(key string) (string, error) {
 	if v == "" {
 		return v, errors.Errorf("Environment Variable %s Empty", key)
 	}
-	log.Info().Msgf(">>>>>>>> key %s value: %s", key, v)
 	return v, nil
 }
 

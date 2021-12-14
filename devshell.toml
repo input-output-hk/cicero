@@ -28,7 +28,7 @@ value = "true"
 
 [[env]]
 name = "LOGS_DIRECTORY"
-value = "TODO"
+value = "logs"
 
 [[env]]
 name = "LOGS_FILE_NAME"

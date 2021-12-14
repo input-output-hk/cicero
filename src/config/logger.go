@@ -79,11 +79,10 @@ func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
 		conf.MaxBackups = maxBackups
 		conf.MaxAge = maxAge
 	}
-	log.Info().Msgf(">>>>>>>> %b", fileLoggingEnabled)
 	return &conf, nil
 }
 
-func ConfigureLogger(debugModeEnabled bool) {
+func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
 	config, err := buildLoggerConfig(debugModeEnabled)
 	if err != nil {
 		log.Fatal().Err(err).Msg("can't get logger config")
@@ -115,6 +114,7 @@ func ConfigureLogger(debugModeEnabled bool) {
 		Int("maxAgeInDays", config.MaxAge).
 		Msg("logging configured")
 
+	return &logger
 }
 
 func newRollingFile(config *LoggerConfig) io.Writer {

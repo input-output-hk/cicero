@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -45,11 +44,11 @@ type evaluationService struct {
 	logger     zerolog.Logger
 }
 
-func NewEvaluationService(evaluators, env []string) EvaluationService {
+func NewEvaluationService(evaluators, env []string, logger *zerolog.Logger) EvaluationService {
 	return &evaluationService{
 		Evaluators: evaluators,
 		Env:        env,
-		logger:     log.With().Str("component", "EvaluationService").Logger(),
+		logger:     logger.With().Str("component", "EvaluationService").Logger(),
 	}
 }
 

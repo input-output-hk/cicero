@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/rs/zerolog"
 	"os"
 
 	"github.com/alexflint/go-arg"
@@ -20,12 +21,12 @@ func main() {
 	abort(parser, err)
 
 	debug := flag.Bool("debug", args.Debug, "sets log level to debug")
-	config.ConfigureLogger(*debug)
+	logger := config.ConfigureLogger(*debug)
 
 	domain.BuildInfo.Version = buildVersion
 	domain.BuildInfo.Commit = buildCommit
 
-	abort(parser, Run(parser, args))
+	abort(parser, Run(parser, args, logger))
 }
 
 type CLI struct {
@@ -67,10 +68,10 @@ func parseArgs(args *CLI) (parser *arg.Parser, err error) {
 	return
 }
 
-func Run(parser *arg.Parser, args *CLI) error {
+func Run(parser *arg.Parser, args *CLI, logger *zerolog.Logger) error {
 	switch {
 	case args.Start != nil:
-		return args.Start.Run()
+		return args.Start.Run(logger)
 	default:
 		parser.WriteHelp(os.Stderr)
 	}
