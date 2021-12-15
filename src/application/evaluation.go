@@ -16,6 +16,7 @@ import (
 	"github.com/adrg/xdg"
 	getter "github.com/hashicorp/go-getter/v2"
 	"github.com/hashicorp/nomad/jobspec2"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/pkg/errors"
 )
@@ -58,8 +59,9 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 		return nil, err
 	}
 
-	cacheDir := os.Getenv("CICERO_CACHE_DIR")
-	if cacheDir == "" {
+	cacheDir, err := config.GetenvStr("CICERO_CACHE_DIR")
+	if err != nil {
+		e.logger.Warn().Err(err).Msg("Can't get cache configuration")
 		cacheDir = xdg.CacheHome + "/cicero"
 	}
 	cacheDir += "/sources"

@@ -6,16 +6,16 @@ import (
 	"strconv"
 )
 
-func getenvStr(key string) (string, error) {
+func GetenvStr(key string) (string, error) {
 	v := os.Getenv(key)
 	if v == "" {
-		return v, errors.Errorf("Environment Variable %s Empty", key)
+		return v, errors.Errorf("Environment Variable %s is not set or empty", key)
 	}
 	return v, nil
 }
 
-func getenvInt(key string) (int, error) {
-	s, err := getenvStr(key)
+func GetenvInt(key string) (int, error) {
+	s, err := GetenvStr(key)
 	if err != nil {
 		return 0, err
 	}
@@ -26,8 +26,8 @@ func getenvInt(key string) (int, error) {
 	return v, nil
 }
 
-func getenvBool(key string) (bool, error) {
-	s, err := getenvStr(key)
+func GetenvBool(key string) (bool, error) {
+	s, err := GetenvStr(key)
 	if err != nil {
 		return false, err
 	}
