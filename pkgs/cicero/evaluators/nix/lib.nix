@@ -240,7 +240,7 @@ in rec {
           config.packages = data-merge.append [ "github:fluidattacks/makes" ];
         };
 
-      git.clone = { repo, sha, ... }:
+      git.clone = { repo, sha, sshPath ? "~/.ssh/", ... }:
         action: next:
         data-merge.merge (wrapScript "bash" (next: ''
           export SSL_CERT_FILE=/current-profile/etc/ssl/certs/ca-bundle.crt
@@ -249,7 +249,8 @@ in rec {
           mkdir -p "$HOME"
 
           git config --global advice.detachedHead false
-          git clone --quiet ${lib.escapeShellArg repo.clone_url} src
+          echo "This is the current sshPath: ${sshPath}"
+          git clone --quiet ${lib.escapeShellArg repo.clone_url} src --config core.sshCommand="ssh -i ${sshPath}"
           cd src
           git checkout ${lib.escapeShellArg sha}
 
