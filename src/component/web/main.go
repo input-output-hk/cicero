@@ -3,7 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"github.com/rs/zerolog"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,7 +20,7 @@ import (
 
 type Web struct {
 	Listen              string
-	Logger              *log.Logger
+	Logger              zerolog.Logger
 	WorkflowService     application.WorkflowService
 	ActionService       application.ActionService
 	MessageQueueService application.MessageQueueService
@@ -29,7 +29,7 @@ type Web struct {
 }
 
 func (self *Web) Start(ctx context.Context) error {
-	self.Logger.Println("Starting Web")
+	self.Logger.Info().Msg("Starting Web")
 
 	muxRouter := mux.NewRouter().StrictSlash(true)
 	r, err := swagger.NewRouter(apirouter.NewGorillaMuxRouter(muxRouter), swagger.Options{
@@ -93,7 +93,7 @@ func (self *Web) Start(ctx context.Context) error {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			self.Logger.Printf("Failed to start web server: %s", err.Error())
+			self.Logger.Error().Err(err).Msg("Failed to start web server")
 		}
 	}()
 
@@ -102,7 +102,7 @@ func (self *Web) Start(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		self.Logger.Printf("Failed to stop web server: %s", err.Error())
+		self.Logger.Error().Err(err).Msg("Failed to stop web server")
 	}
 
 	return nil

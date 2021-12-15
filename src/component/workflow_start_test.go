@@ -6,16 +6,15 @@ import (
 	configMocks "github.com/input-output-hk/cicero/src/config/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/liftbridge-io/go-liftbridge/v2"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
-	"log"
-	"os"
 	"testing"
 )
 
 func buildWorkflowStartConsumerMocked(messageQueueService *mocks.MessageQueueService,
 	workflowService *mocks.WorkflowService) *WorkflowStartConsumer {
 	return &WorkflowStartConsumer{
-		Logger:              log.New(os.Stderr, "WorkflowFactConsumerTest: ", log.LstdFlags),
+		Logger:              log.Logger,
 		MessageQueueService: messageQueueService,
 		WorkflowService:     workflowService,
 	}
