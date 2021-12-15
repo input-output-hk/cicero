@@ -110,7 +110,6 @@ func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
 	mw := io.MultiWriter(writers...)
 
 	logger := zerolog.New(mw).With().Timestamp().Logger()
-	zerolog.TimeFieldFormat = time.RFC3339Nano
 
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	if debugModeEnabled {
