@@ -259,9 +259,10 @@
 
       extraOutputs.lib = import ./lib.nix self;
 
-      extraOutputs.ciceroWorkflows =
-        self.outputs.lib.callWorkflowsWithExtraArgs { inherit self; }
-        ./workflows;
+      extraOutputs.ciceroActions = self.lib.callActionsWithExtraArgs {
+        inherit (self.outputs.lib) std;
+        inherit (self.inputs.nixpkgs) lib;
+      } ./actions;
 
       hydraJobs = { cicero }@pkgs: pkgs;
 

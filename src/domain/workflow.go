@@ -1,65 +1,98 @@
 package domain
 
 import (
+	"encoding/json"
 	"time"
 
-	nomad "github.com/hashicorp/nomad/api"
-
+	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/cuecontext"
 	"github.com/google/uuid"
+	nomad "github.com/hashicorp/nomad/api"
 )
 
-type WorkflowDefinitions map[string]*WorkflowDefinition
+type InputsDefinition struct {
+	Latest     map[string]cue.Value
+	LatestNone map[string]cue.Value
+	All        map[string]cue.Value
 
-type WorkflowDefinition struct {
-	Name    string                     `json:"name"`
-	Meta    map[string]interface{}     `json:"meta"`
-	Actions map[string]*WorkflowAction `json:"actions"`
+	// XXX Do we really need to keep this alive?
+	cueContext *cue.Context
 }
 
-type WorkflowAction struct {
-	Failure Facts           `json:"failure"`
-	Success Facts           `json:"success"`
-	Inputs  []string        `json:"inputs"`
-	When    map[string]bool `json:"when"`
-	Job     *nomad.Job      `json:"job"`
+func (self *InputsDefinition) UnmarshalJSON(data []byte) error {
+	def := struct {
+		Latest     map[string]string `json:"latest"`
+		LatestNone map[string]string `json:"latest_none"`
+		All        map[string]string `json:"all"`
+	}{}
+	if err := json.Unmarshal(data, &def); err != nil {
+		return err
+	}
+
+	self.cueContext = cuecontext.New()
+	for k, v := range def.Latest {
+		self.Latest[k] = self.cueContext.CompileString(v)
+	}
+	for k, v := range def.LatestNone {
+		self.LatestNone[k] = self.cueContext.CompileString(v)
+	}
+	for k, v := range def.All {
+		self.All[k] = self.cueContext.CompileString(v)
+	}
+
+	return nil
 }
 
-func (s *WorkflowAction) IsDecision() bool {
+func (self *InputsDefinition) Scan(value interface{}) error {
+	return self.UnmarshalJSON(value.([]byte))
+}
+
+type ActionDefinition struct {
+	Name    string                 `json:"name"`
+	Meta    map[string]interface{} `json:"meta"`
+	Failure []interface{}          `json:"failure"`
+	Success []interface{}          `json:"success"`
+	Inputs  InputsDefinition       `json:"inputs"`
+	Job     *nomad.Job             `json:"job"`
+}
+
+func (s *ActionDefinition) IsDecision() bool {
 	return s.Job == nil
 }
 
-func (s *WorkflowAction) IsRunnable() bool {
-	for _, cond := range s.When {
-		if !cond {
-			return false
-		}
-	}
-	return true
+type Fact struct {
+	ID         uuid.UUID   `json:"id"`
+	RunId      *uuid.UUID  `json:"run_id"`
+	CreatedAt  time.Time   `json:"time"`
+	Value      interface{} `json:"value"`
+	BinaryHash *string     `json:"binary_hash"`
+	// TODO too expensive to pass around, get from DB
+	// TODO hash using https://pkg.go.dev/github.com/direnv/direnv/v2/sri
+	// Binary     *[]byte     `json:"-"`
 }
 
-type WorkflowInstance struct {
-	ID        uint64
+type Action struct {
+	ID        uuid.UUID
+	Meta      map[string]interface{}
 	Name      string
 	Source    string
-	Facts     Facts
-	CreatedAt *time.Time
-	UpdatedAt *time.Time
+	Inputs    InputsDefinition
+	CreatedAt time.Time
 }
 
-type WorkflowSummary []struct {
-	Name         string
-	NumSources   uint64
-	NumInstances uint64
+type Run struct {
+	NomadJobID uuid.UUID
+	ActionId   uuid.UUID
+	Failure    []interface{}
+	Success    []interface{}
+	CreatedAt  time.Time
+	FinishedAt *time.Time
 }
 
-type Facts map[string]interface{}
-
-type ActionInstance struct {
-	ID                 uuid.UUID
-	WorkflowInstanceId uint64
-	Name               string
-	Facts              Facts
-	CreatedAt          *time.Time
-	UpdatedAt          *time.Time
-	FinishedAt         *time.Time
+// TODO make this a map[string]struct{…}
+// TODO move this to web package
+type ActionSummary []struct {
+	Name       string
+	NumSources uint64
+	Num        uint64
 }

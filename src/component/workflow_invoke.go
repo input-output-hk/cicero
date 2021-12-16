@@ -3,40 +3,37 @@ package component
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/input-output-hk/cicero/src/application"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/domain"
-
-	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
+
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/config"
+	"github.com/input-output-hk/cicero/src/domain"
 )
 
-type WorkflowInvokeConsumer struct {
+type InvokeConsumer struct {
 	Logger              *log.Logger
 	Limiter             *priority.PriorityLimiter
 	EvaluationService   application.EvaluationService
 	ActionService       application.ActionService
+	RunService          application.RunService
 	MessageQueueService application.MessageQueueService
-	WorkflowService     application.WorkflowService
 	Db                  config.PgxIface
 	NomadClient         application.NomadClient
 }
 
-func (self *WorkflowInvokeConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting WorkflowInvokeConsumer")
+func (self *InvokeConsumer) Start(ctx context.Context) error {
+	self.Logger.Println("Starting InvokeConsumer")
 
-	if err := self.MessageQueueService.Subscribe(ctx, domain.InvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.InvokeStreamName)
+	if err := self.MessageQueueService.Subscribe(ctx, domain.ActionInvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
+		return errors.WithMessagef(err, "Could not subscribe to stream %s", domain.ActionInvokeStreamName)
 	}
 
 	<-ctx.Done()
@@ -44,13 +41,16 @@ func (self *WorkflowInvokeConsumer) Start(ctx context.Context) error {
 	return nil
 }
 
-func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
+func (self *InvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
-			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
+			self.Logger.Fatalf("error in liftbridge message: %w", err)
 			//TODO: If err is not nil, the subscription will be terminated
+			return
 		}
-		self.Logger.Println("Processing message",
+
+		self.Logger.Println(
+			"Received message",
 			"stream:", msg.Stream(),
 			"subject:", msg.Subject(),
 			"offset:", msg.Offset(),
@@ -58,140 +58,72 @@ func (self *WorkflowInvokeConsumer) invokerSubscriber(ctx context.Context) func(
 			"time:", msg.Timestamp(),
 		)
 
-		wMessageDetail, err := self.getWorkflowDetails(msg)
-		if err != nil {
-			self.Logger.Printf("Invalid Workflow ID received, ignoring: %s with error %s", msg.Subject(), err)
-			return
-		}
-		self.Logger.Println(fmt.Printf("Invoked workflow with ID: %d, NAME: %s, FACTS: %v", wMessageDetail.ID, wMessageDetail.Name, wMessageDetail.Facts))
-
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-			return self.processMessage(ctx, tx, wMessageDetail, msg)
+			return self.processMessage(ctx, tx, msg)
 		}); err != nil {
-			self.Logger.Println(fmt.Printf("Could not process workflow invoke message: %v with error %s", msg, err))
+			self.Logger.Fatalf("Could not process message: %v with error %w", msg, err)
 			return
 		}
 	}
 }
 
-func (self *WorkflowInvokeConsumer) getWorkflowDetails(msg *liftbridge.Message) (*domain.WorkflowInstance, error) {
-	parts := strings.Split(msg.Subject(), ".")
-	if len(parts) < 3 {
-		return nil, fmt.Errorf("Invalid Message received, ignoring: %s", msg.Subject())
-	}
-	workflowName := parts[1]
-	wfInstanceId, err := strconv.ParseUint(parts[2], 10, 64)
-	if err != nil {
-		return nil, errors.WithMessagef(err, "Invalid Workflow ID received, ignoring: %s", msg.Subject())
-	}
-	inputs := domain.Facts{}
-	if err := json.Unmarshal(msg.Value(), &inputs); err != nil {
-		return nil, errors.Errorf("Invalid JSON received, ignoring: %s", err)
-	}
-	return &domain.WorkflowInstance{
-		ID:    wfInstanceId,
-		Name:  workflowName,
-		Facts: inputs,
-	}, nil
+func (self *InvokeConsumer) getActionName(msg *liftbridge.Message) string {
+	return strings.Split(msg.Subject(), ".")[1]
 }
 
-func (self *WorkflowInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx, workflow *domain.WorkflowInstance, msg *liftbridge.Message) error {
+func (self *InvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx, msg *liftbridge.Message) error {
 	if err := self.MessageQueueService.Save(tx, msg); err != nil {
-		return errors.WithMessagef(err, "Could not save message event %v", msg)
+		return errors.WithMessage(err, "Could not save message")
 	}
 
-	wf, err := self.WorkflowService.GetById(workflow.ID)
-	if err != nil {
-		return errors.WithMessagef(err, "Could not find workflow instance with ID %d", workflow.ID)
-	}
+	if action, err := self.ActionService.GetLatestByName(self.getActionName(msg)); err != nil {
+		return err
+	} else if runnable, inputs, err := self.ActionService.IsRunnable(&action); err != nil {
+		return err
+	} else if runnable {
+		self.Limiter.Wait(ctx, priority.High) // TODO: What is the ctx to use in this case?
+		defer self.Limiter.Finish()
 
-	// We don't actually need workflowName because the instance already knows its name.
-	// We would only need it if instance IDs were not globally unique, but only per workflow name.
-	// TODO Decide whether we want instance IDs to be unique per workflow name or globally.
-	if wf.Name != workflow.Name {
-		return fmt.Errorf("Workflow name given does not match name of instance: %q != %q", workflow.Name, wf.Name)
-	}
-
-	workflowDefinition, err := self.EvaluationService.EvaluateWorkflow(wf.Source, workflow.Name, workflow.ID, workflow.Facts)
-	if err != nil {
-		return errors.WithMessage(err, "Invalid Workflow Definition, ignoring")
-	}
-
-	for actionName, action := range workflowDefinition.Actions {
-		if err := self.invokeWorkflowAction(ctx, tx, workflow.Name, workflow.ID, workflow.Facts, actionName, action); err != nil {
+		var facts []interface{}
+		if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID, inputs); err != nil {
 			return err
-		}
-	}
-
-	return nil
-}
-
-func (self *WorkflowInvokeConsumer) invokeWorkflowAction(ctx context.Context, tx pgx.Tx, workflowName string, wfInstanceId uint64, inputs domain.Facts, actionName string, action *domain.WorkflowAction) error {
-	self.Limiter.Wait(ctx, priority.High) //TODO: What is the ctx to use in this case?
-	defer self.Limiter.Finish()
-
-	if action.IsDecision() {
-		if action.IsRunnable() {
-			if err := self.MessageQueueService.Publish(
-				domain.FactStreamName.Fmt(workflowName, wfInstanceId),
-				domain.FactStreamName,
-				action.Success,
-			); err != nil {
-				return errors.WithMessage(err, "Could not publish fact")
-			}
-		}
-		return nil
-	}
-
-	var instance *domain.ActionInstance
-	if inst, err := self.ActionService.GetByNameAndWorkflowId(actionName, wfInstanceId); err != nil {
-		if !pgxscan.NotFound(err) {
-			return errors.WithMessage(err, "While getting last action instance")
-		}
-	} else {
-		instance = &inst
-	}
-
-	self.Logger.Printf("Checking runnability of %s: %v", actionName, action.IsRunnable())
-
-	if action.IsRunnable() {
-		if instance == nil {
-			instance = &domain.ActionInstance{}
-			instance.WorkflowInstanceId = wfInstanceId
-			instance.Name = actionName
-			instance.Facts = inputs
-
-			if err := self.ActionService.Save(tx, instance); err != nil {
-				return errors.WithMessage(err, "Could not insert action instance")
-			}
+		} else if actionDef.IsDecision() {
+			facts = actionDef.Success
 		} else {
-			updatedAt := time.Now().UTC()
-			instance.UpdatedAt = &updatedAt
-			instance.Facts = inputs
-			if err := self.ActionService.Update(tx, *instance); err != nil {
-				return errors.WithMessage(err, "Could not update action instance")
+			run := domain.Run{
+				ActionId:  action.ID,
+				Success:   actionDef.Success,
+				Failure:   actionDef.Failure,
+				CreatedAt: time.Now(),
+			}
+
+			if err := self.RunService.Save(tx, &run); err != nil {
+				return errors.WithMessage(err, "Could not insert Run")
+			}
+
+			runId := run.NomadJobID.String()
+			actionDef.Job.ID = &runId
+
+			if response, _, err := self.NomadClient.JobsRegister(actionDef.Job, &nomad.WriteOptions{}); err != nil {
+				return errors.WithMessage(err, "Failed to run Action")
+			} else if len(response.Warnings) > 0 {
+				self.Logger.Println("Warnings occured registering Nomad job %q in Nomad evaluation %q:", runId, response.EvalID, response.Warnings)
 			}
 		}
 
-		actionInstanceId := instance.ID.String()
-		action.Job.ID = &actionInstanceId
-
-		if response, _, err := self.NomadClient.JobsRegister(action.Job, &nomad.WriteOptions{}); err != nil {
-			return errors.WithMessage(err, "Failed to run action")
-		} else if len(response.Warnings) > 0 {
-			self.Logger.Println(response.Warnings)
+		var errs error
+		for _, fact := range facts {
+			if factJson, err := json.Marshal(fact); err != nil {
+				errs = errors.WithMessagef(err, "Could not marshal fact: %w", errs)
+			} else if err := self.MessageQueueService.Publish(
+				domain.FactCreateStreamName.String(),
+				domain.FactCreateStreamName,
+				factJson,
+			); err != nil {
+				errs = errors.WithMessagef(err, "Could not publish fact: %w", errs)
+			}
 		}
-	} else if instance != nil {
-		if _, _, err := self.NomadClient.JobsDeregister(instance.ID.String(), false, &nomad.WriteOptions{}); err != nil {
-			return errors.WithMessage(err, "Failed to stop action")
-		}
-
-		finished := time.Now().UTC()
-		instance.FinishedAt = &finished
-
-		if err := self.ActionService.Update(tx, *instance); err != nil {
-			return errors.WithMessage(err, "Failed to update action instance")
-		}
+		return errors.WithMessage(errs, "Failed to publish all facts")
 	}
 
 	return nil

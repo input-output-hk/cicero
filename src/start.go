@@ -2,19 +2,20 @@ package cicero
 
 import (
 	"context"
-	"github.com/input-output-hk/cicero/src/config"
 	"log"
 	"os"
 	"time"
 
 	"cirello.io/oversight"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/application"
-	"github.com/input-output-hk/cicero/src/component"
-	"github.com/input-output-hk/cicero/src/component/web"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
+
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/component"
+	"github.com/input-output-hk/cicero/src/config"
+	// "github.com/input-output-hk/cicero/src/component/web"
 )
 
 type StartCmd struct {
@@ -105,23 +106,23 @@ func (cmd *StartCmd) Run() error {
 			return application.NewMessageQueueService(db().(*pgxpool.Pool), bridge)
 		}
 	})
-	workflowService := once(func() interface{} {
-		return application.NewWorkflowService(db().(*pgxpool.Pool), messageQueueService().(application.MessageQueueService))
-	})
 	actionService := once(func() interface{} {
 		return application.NewActionService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
 	})
+	runService := once(func() interface{} {
+		return application.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
+	})
 	nomadEventService := once(func() interface{} {
-		return application.NewNomadEventService(db().(*pgxpool.Pool), actionService().(application.ActionService))
+		return application.NewNomadEventService(db().(*pgxpool.Pool), runService().(application.RunService))
 	})
 
 	supervisor := cmd.newSupervisor(logger)
 
 	if start.workflowStart {
-		child := component.WorkflowStartConsumer{
+		child := component.ActionStartConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			WorkflowService:     workflowService().(application.WorkflowService),
+			ActionService:       actionService().(application.ActionService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
@@ -130,11 +131,11 @@ func (cmd *StartCmd) Run() error {
 	}
 
 	if start.workflowInvoke {
-		child := component.WorkflowInvokeConsumer{
+		child := component.InvokeConsumer{
 			EvaluationService:   evaluationService().(application.EvaluationService),
-			ActionService:       actionService().(application.ActionService),
+			RunService:          runService().(application.RunService),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			WorkflowService:     workflowService().(application.WorkflowService),
+			ActionService:       actionService().(application.ActionService),
 			Db:                  db().(*pgxpool.Pool),
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			// Increase priority of waiting goroutines every second.
@@ -150,7 +151,7 @@ func (cmd *StartCmd) Run() error {
 		child := component.WorkflowFactConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			WorkflowService:     workflowService().(application.WorkflowService),
+			ActionService:       actionService().(application.ActionService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
@@ -162,9 +163,7 @@ func (cmd *StartCmd) Run() error {
 		child := component.NomadEventConsumer{
 			Logger:              log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			WorkflowService:     workflowService().(application.WorkflowService),
-			ActionService:       actionService().(application.ActionService),
-			EvaluationService:   evaluationService().(application.EvaluationService),
+			RunService:          runService().(application.RunService),
 			NomadEventService:   nomadEventService().(application.NomadEventService),
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			Db:                  db().(*pgxpool.Pool),
@@ -174,12 +173,13 @@ func (cmd *StartCmd) Run() error {
 		}
 	}
 
+	/* FIXME fix all of web
 	if start.web {
 		child := web.Web{
 			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			Listen:              cmd.WebListen,
-			WorkflowService:     workflowService().(application.WorkflowService),
-			ActionService:       actionService().(application.ActionService),
+			ActionService:     actionService().(application.ActionService),
+			RunService:       runService().(application.RunService),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			NomadEventService:   nomadEventService().(application.NomadEventService),
 			EvaluationService:   evaluationService().(application.EvaluationService),
@@ -188,6 +188,7 @@ func (cmd *StartCmd) Run() error {
 			return err
 		}
 	}
+	*/
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

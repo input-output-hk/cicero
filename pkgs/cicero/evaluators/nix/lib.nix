@@ -288,20 +288,13 @@ in rec {
           function report {
             jq -nc '{
               state: $state,
-              context: "\($workflow_name):\($action_name)",
+              context: $action_name,
               description: $description,
-              target_url: "\(env.CICERO_WEB_URL)/workflow/\($workflow_id)#\($action_name)",
+              target_url: "\(env.CICERO_WEB_URL)/action/\($action_id)",
             }' \
               --arg state "$1" \
-              --arg description 'Workflow #'${
-                lib.escapeShellArg action.actions.workflow.id
-              } \
-              --arg workflow_id ${
-                lib.escapeShellArg action.actions.workflow.id
-              } \
-              --arg workflow_name ${
-                lib.escapeShellArg action.actions.workflow.name
-              } \
+              --arg description "Run $NOMAD_JOB_ID" \
+              --arg action_id ${lib.escapeShellArg action.id} \
               --arg action_name ${lib.escapeShellArg action.name} \
             | curl ${lib.escapeShellArg statuses_url} \
               > /dev/null --no-progress-meter \

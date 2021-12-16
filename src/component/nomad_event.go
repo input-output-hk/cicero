@@ -2,27 +2,26 @@ package component
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"time"
-
-	"github.com/input-output-hk/cicero/src/application"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/domain"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/config"
+	"github.com/input-output-hk/cicero/src/domain"
 )
 
 type NomadEventConsumer struct {
 	Logger              *log.Logger
 	MessageQueueService application.MessageQueueService
 	NomadEventService   application.NomadEventService
-	WorkflowService     application.WorkflowService
-	ActionService       application.ActionService
-	EvaluationService   application.EvaluationService
+	RunService          application.RunService
 	Db                  config.PgxIface
 	NomadClient         application.NomadClient
 }
@@ -89,23 +88,9 @@ func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event, tx pgx.Tx) 
 	return nil
 }
 
-func (self *NomadEventConsumer) getWorkflowAction(action domain.ActionInstance) (*domain.WorkflowAction, error) {
-	wf, err := self.WorkflowService.GetById(action.WorkflowInstanceId)
-	if err != nil {
-		return nil, errors.WithMessagef(err, "Could not get workflow instance for workflow instance with ID %d", action.WorkflowInstanceId)
-	}
-
-	wfDef, err := self.EvaluationService.EvaluateWorkflow(wf.Source, wf.Name, wf.ID, wf.Facts)
-	if err != nil {
-		return nil, errors.WithMessagef(err, "Could not evaluate definition for workflow instance %d", wf.ID)
-	}
-
-	return wfDef.Actions[action.Name], nil
-}
-
 func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation, tx pgx.Tx) error {
 	if !allocation.ClientTerminalStatus() {
-		self.Logger.Printf("Ignoring allocation event with non-terminal client status \"%s\"", allocation.ClientStatus)
+		self.Logger.Printf("Ignoring allocation event with non-terminal client status %q", allocation.ClientStatus)
 		return nil
 	}
 
@@ -114,30 +99,21 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return nil
 	}
 
-	action, err := self.ActionService.GetById(id)
+	run, err := self.RunService.GetById(id)
 	if err != nil {
 		if pgxscan.NotFound(err) {
-			self.Logger.Printf("Ignoring Nomad event for Job with ID \"%s\" (no such action instance)", allocation.JobID)
+			self.Logger.Printf("Ignoring Nomad event for Job with ID %q (no such Run)", id)
 			return nil
 		}
 		return err
 	}
 
-	def, err := self.getWorkflowAction(action)
-	if err != nil {
-		// TODO We don't want to crash here (for example if a workflow source disappeared)
-		// but we don't want to silently ignore it either - should this pop up in the web UI somewhere?
-		// Unfortunately evaluators can currently not indicate the reason why evaluation failed - add that to contract?
-		self.Logger.Printf("Could not get definition for action instance %s: %s", action.ID, err.Error())
-		return nil
-	}
-
-	var facts *domain.Facts
+	var facts *[]interface{}
 	switch allocation.ClientStatus {
 	case "complete":
-		facts = &def.Success
+		facts = &run.Success
 	case "failed":
-		facts = &def.Failure
+		facts = &run.Failure
 	}
 	if facts == nil {
 		return nil
@@ -147,23 +123,29 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		allocation.ModifyTime/int64(time.Second),
 		allocation.ModifyTime%int64(time.Second),
 	).UTC()
-	action.FinishedAt = &modifyTime
+	run.FinishedAt = &modifyTime
 
-	wf, err := self.WorkflowService.GetById(action.WorkflowInstanceId)
-	if err != nil {
-		return errors.WithMessagef(err, "Could not get workflow instance for action %s", action.ID)
+	if err := self.RunService.Update(tx, &run); err != nil {
+		return errors.WithMessagef(err, "Failed to update Run with ID %q", run.NomadJobID)
 	}
 
-	if err := self.ActionService.Update(tx, action); err != nil {
-		return errors.WithMessage(err, "Could not update action instance")
+	for _, value := range *facts {
+		if message, err := json.Marshal(domain.Fact{
+			RunId: &id,
+			Value: value,
+		}); err != nil {
+			return errors.WithMessage(err, "Failed to marshal Fact")
+		} else if err := self.MessageQueueService.Publish(
+			domain.FactCreateStreamName.String(),
+			domain.FactCreateStreamName,
+			message,
+		); err != nil {
+			return errors.WithMessage(err, "Could not publish Fact")
+		}
 	}
 
-	if err := self.MessageQueueService.Publish(
-		domain.FactStreamName.Fmt(wf.Name, wf.ID),
-		domain.FactStreamName,
-		*facts,
-	); err != nil {
-		return errors.WithMessage(err, "Could not publish facts")
+	if _, _, err := self.NomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
+		return errors.WithMessagef(err, "Failed to deregister Nomad job with ID %q", run.NomadJobID)
 	}
 
 	return nil

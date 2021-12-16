@@ -39,10 +39,10 @@ func TestGettingWorflowDetailFailure(t *testing.T) {
 
 	// given
 	msg := &liftbridge.Message{}
-	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(nil, nil, nil, nil, nil)
+	invokeConsumer := buildWorkflowInvokeConsumerMocked(nil, nil, nil, nil, nil)
 
 	// when
-	_, err := workflowInvokeConsumer.getWorkflowDetails(msg)
+	_, err := invokeConsumer.getWorkflowDetails(msg)
 
 	// then
 	assert.Equal(t, err.Error(), "Invalid Message received, ignoring: ")
@@ -66,7 +66,7 @@ func TestProcessWorkflowWithDifferentNameFailure(t *testing.T) {
 	}
 	messageQueueService := &mocks.MessageQueueService{}
 	workflowService := &mocks.WorkflowService{}
-	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(messageQueueService, workflowService, nil, nil, nil)
+	invokeConsumer := buildWorkflowInvokeConsumerMocked(messageQueueService, workflowService, nil, nil, nil)
 	messageQueueService.
 		On("Save", tx, message).
 		Return(nil)
@@ -75,7 +75,7 @@ func TestProcessWorkflowWithDifferentNameFailure(t *testing.T) {
 		Return(wInstance, nil)
 
 	// when
-	err := workflowInvokeConsumer.processMessage(ctx, tx, wMessageDetail, message)
+	err := invokeConsumer.processMessage(ctx, tx, wMessageDetail, message)
 
 	// then
 	assert.Equal(t, err.Error(), `Workflow name given does not match name of instance: "name" != "anotherName"`)
@@ -105,7 +105,7 @@ func TestProcessWorkflowWithoutActionsSuccess(t *testing.T) {
 	messageQueueService := &mocks.MessageQueueService{}
 	workflowService := &mocks.WorkflowService{}
 	evaluateWorkflow := &mocks.EvaluationService{}
-	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(messageQueueService, workflowService, evaluateWorkflow, nil, nil)
+	invokeConsumer := buildWorkflowInvokeConsumerMocked(messageQueueService, workflowService, evaluateWorkflow, nil, nil)
 	messageQueueService.
 		On("Save", tx, message).
 		Return(nil)
@@ -117,7 +117,7 @@ func TestProcessWorkflowWithoutActionsSuccess(t *testing.T) {
 		Return(workflowDefinition, nil)
 
 	// when
-	err := workflowInvokeConsumer.processMessage(ctx, tx, wMessageDetail, message)
+	err := invokeConsumer.processMessage(ctx, tx, wMessageDetail, message)
 
 	// then
 	assert.Nil(t, err)
@@ -142,7 +142,7 @@ func TestInvokeWorkflowActionSuccess(t *testing.T) {
 	action.Job.ID = &actionInstanceIdString
 	actionService := &mocks.ActionService{}
 	nomadClient := &mocks.NomadClient{}
-	workflowInvokeConsumer := buildWorkflowInvokeConsumerMocked(nil, nil, nil, actionService, nomadClient)
+	invokeConsumer := buildWorkflowInvokeConsumerMocked(nil, nil, nil, actionService, nomadClient)
 	actionService.
 		On("GetByNameAndWorkflowId", actionName, wId).
 		Return(actionInstance, nil)
@@ -154,7 +154,7 @@ func TestInvokeWorkflowActionSuccess(t *testing.T) {
 		Return(nil)
 
 	// when
-	err := workflowInvokeConsumer.invokeWorkflowAction(ctx, tx, wName, wId, wFacts, actionName, action)
+	err := invokeConsumer.invokeWorkflowAction(ctx, tx, wName, wId, wFacts, actionName, action)
 
 	// then
 	assert.Nil(t, err)

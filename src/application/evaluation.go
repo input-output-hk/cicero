@@ -14,15 +14,18 @@ import (
 	"strings"
 
 	"github.com/adrg/xdg"
+	"github.com/google/uuid"
 	getter "github.com/hashicorp/go-getter/v2"
 	"github.com/hashicorp/nomad/jobspec2"
-	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/pkg/errors"
+
+	"github.com/input-output-hk/cicero/src/domain"
 )
 
 type EvaluationService interface {
-	EvaluateWorkflow(src string, name string, id uint64, inputs domain.Facts) (domain.WorkflowDefinition, error)
-	ListWorkflows(src string) ([]string, error)
+	EvaluateAction(src string, name string, id uuid.UUID, inputs map[string][]*domain.Fact) (domain.ActionDefinition, error)
+	ListActions(src string) ([]string, error)
+	// TODO add EvaluateJob() and EvaluateFacts/Outputs() for better performance (less JSON) with lazy languages
 }
 
 func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
@@ -79,7 +82,7 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 
 	tryEval := func(evaluator string) ([]byte, error) {
 		cmd := exec.Command("cicero-evaluator-"+evaluator, command)
-		extraEnv = append(extraEnv, "CICERO_WORKFLOW_SRC="+dst)
+		extraEnv = append(extraEnv, "CICERO_ACTION_SRC="+dst)
 		cmd.Env = append(os.Environ(), extraEnv...)
 
 		e.logger.Printf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
@@ -100,7 +103,7 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 
 	if evaluator != "" {
 		if output, err := tryEval(evaluator); err != nil {
-			return nil, errors.WithMessagef(err, `Evaluator "%s" from workflow source failed`, evaluator)
+			return nil, errors.WithMessagef(err, `Evaluator "%s" specified in source failed`, evaluator)
 		} else {
 			return output, nil
 		}
@@ -123,29 +126,26 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 	}
 }
 
-func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs domain.Facts) (domain.WorkflowDefinition, error) {
-	var def domain.WorkflowDefinition
+func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID, inputs map[string][]*domain.Fact) (domain.ActionDefinition, error) {
+	var def domain.ActionDefinition
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
-		return def, errors.WithMessagef(err, "Could not marshal workflow inputs to json: %s", inputs)
+		return def, errors.WithMessagef(err, "Could not marshal inputs to JSON: %s", inputs)
 	}
 
 	output, err := e.evaluate(src, "eval",
-		"CICERO_WORKFLOW_NAME="+name,
-		"CICERO_WORKFLOW_INSTANCE_ID="+fmt.Sprintf("%d", id),
-		"CICERO_WORKFLOW_INPUTS="+string(inputsJson),
+		"CICERO_ACTION_NAME="+name,
+		fmt.Sprintf("CICERO_ACTION_ID=%s", id),
+		"CICERO_ACTION_INPUTS="+string(inputsJson),
 	)
 	if err != nil {
 		return def, err
 	}
 
 	freeformDef := struct {
-		domain.WorkflowDefinition
-		Actions map[string]*struct {
-			domain.WorkflowAction
-			Job *interface{} `json:"job"`
-		} `json:"actions"`
+		domain.ActionDefinition
+		Job *interface{} `json:"job"`
 	}{}
 
 	err = json.Unmarshal(output, &freeformDef)
@@ -154,22 +154,17 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
 	}
 
+	if def.Name != name {
+		return def, errors.Errorf("Evaluator returned action with name %q unlike specified %q", def.Name, name)
+	}
+
 	def.Name = freeformDef.Name
 	def.Meta = freeformDef.Meta
-	def.Actions = map[string]*domain.WorkflowAction{}
-	for actionName, action := range freeformDef.Actions {
-		def.Actions[actionName] = &domain.WorkflowAction{
-			Failure: action.Failure,
-			Success: action.Success,
-			Inputs:  action.Inputs,
-			When:    action.When,
-		}
-
-		if action.Job == nil {
-			continue
-		}
-
-		if job, err := json.Marshal(*action.Job); err != nil {
+	def.Failure = freeformDef.Failure
+	def.Success = freeformDef.Success
+	def.Inputs = freeformDef.Inputs
+	if freeformDef.Job != nil {
+		if job, err := json.Marshal(*freeformDef.Job); err != nil {
 			return def, err
 		} else {
 			// escape HCL variable interpolation
@@ -182,7 +177,7 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 			}); err != nil {
 				return def, err
 			} else {
-				def.Actions[actionName].Job = job
+				def.Job = job
 			}
 		}
 	}
@@ -192,28 +187,26 @@ func (e *evaluationService) EvaluateWorkflow(src, name string, id uint64, inputs
 	return def, nil
 }
 
-func (e *evaluationService) addEnv(def *domain.WorkflowDefinition) {
-	for _, action := range def.Actions {
-		if action.Job == nil {
-			continue
-		}
-		for _, group := range action.Job.TaskGroups {
-			for _, task := range group.Tasks {
-				for _, envSpec := range e.Env {
-					splits := strings.SplitN(envSpec, "=", 2)
-					name := splits[0]
-					if len(splits) == 2 {
-						task.Env[name] = splits[1]
-					} else if procEnvVar, exists := os.LookupEnv(name); exists {
-						task.Env[name] = procEnvVar
-					}
+func (e *evaluationService) addEnv(def *domain.ActionDefinition) {
+	if def.Job == nil {
+		return
+	}
+	for _, group := range def.Job.TaskGroups {
+		for _, task := range group.Tasks {
+			for _, envSpec := range e.Env {
+				splits := strings.SplitN(envSpec, "=", 2)
+				name := splits[0]
+				if len(splits) == 2 {
+					task.Env[name] = splits[1]
+				} else if procEnvVar, exists := os.LookupEnv(name); exists {
+					task.Env[name] = procEnvVar
 				}
 			}
 		}
 	}
 }
 
-func (e *evaluationService) ListWorkflows(src string) ([]string, error) {
+func (e *evaluationService) ListActions(src string) ([]string, error) {
 	output, err := e.evaluate(src, "list")
 	if err != nil {
 		return nil, err
@@ -222,7 +215,7 @@ func (e *evaluationService) ListWorkflows(src string) ([]string, error) {
 	var names []string
 	if err := json.Unmarshal(output, &names); err != nil {
 		e.logger.Println(string(output))
-		return nil, errors.WithMessage(err, "While unmarshaling workflow names")
+		return nil, errors.WithMessage(err, "While unmarshaling action names")
 	}
 
 	return names, nil

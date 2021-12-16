@@ -8,17 +8,17 @@ writers.writeBashBin "cicero-evaluator-nix" ''
           echo    "Usage: $(basename "$0") <list|eval>"
           echo
           echo    'The following env vars must be set:'
-          echo -e '\t- CICERO_WORKFLOW_SRC'
+          echo -e '\t- CICERO_ACTION_SRC'
           echo
           echo    'For eval, the following env vars must be set:'
-          echo -e '\t- CICERO_WORKFLOW_NAME'
-          echo -e '\t- CICERO_WORKFLOW_INSTANCE_ID'
-          echo -e '\t- CICERO_WORKFLOW_INPUTS'
+          echo -e '\t- CICERO_ACTION_NAME'
+          echo -e '\t- CICERO_ACTION_ID'
+          echo -e '\t- CICERO_ACTION_INPUTS'
       } >&2
   }
 
   function evaluate {
-      nix eval --json "$CICERO_WORKFLOW_SRC"#ciceroWorkflows "$@"
+      nix eval --json "$CICERO_ACTION_SRC"#ciceroActions "$@"
   }
 
   case "''${1:-}" in
@@ -28,7 +28,7 @@ writers.writeBashBin "cicero-evaluator-nix" ''
     eval )
         # XXX get rid of --impure
         evaluate --impure \
-            --apply 'wfs: wfs.''${builtins.getEnv "CICERO_WORKFLOW_NAME"} { id = builtins.getEnv "CICERO_WORKFLOW_INSTANCE_ID"; inputs = builtins.getEnv "CICERO_WORKFLOW_INPUTS"; }'
+            --apply 'wfs: wfs.''${builtins.getEnv "CICERO_ACTION_NAME"} { id = builtins.getEnv "CICERO_ACTION_ID"; inputs = builtins.getEnv "CICERO_ACTION_INPUTS"; }'
        ;;
     ''' )
         >&2 echo 'No command given'

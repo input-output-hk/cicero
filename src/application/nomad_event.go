@@ -2,16 +2,17 @@ package application
 
 import (
 	"encoding/json"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/domain"
 	"log"
 	"os"
 
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/domain/repository"
-	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+
+	"github.com/input-output-hk/cicero/src/config"
+	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
 )
 
 type NomadEventService interface {
@@ -23,14 +24,14 @@ type NomadEventService interface {
 type nomadEventService struct {
 	logger               *log.Logger
 	nomadEventRepository repository.NomadEventRepository
-	actionService        ActionService
+	runService           RunService
 }
 
-func NewNomadEventService(db config.PgxIface, actionService ActionService) NomadEventService {
+func NewNomadEventService(db config.PgxIface, runService RunService) NomadEventService {
 	return &nomadEventService{
 		logger:               log.New(os.Stderr, "NomadEventService: ", log.LstdFlags),
 		nomadEventRepository: persistence.NewNomadEventRepository(db),
-		actionService:        actionService,
+		runService:           runService,
 	}
 }
 
@@ -67,7 +68,7 @@ func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[st
 			return nil, err
 		}
 
-		logs, err := n.actionService.ActionLogs(alloc.ID, alloc.TaskGroup)
+		logs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup)
 		if err != nil {
 			return nil, err
 		}
