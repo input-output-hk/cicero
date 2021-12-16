@@ -46,15 +46,15 @@ type LoggerConfig struct {
 }
 
 func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
-	consoleLoggingEnabled, err := getenvBool("CONSOLE_LOGGING_ENABLED")
+	consoleLoggingEnabled, err := GetenvBool("CONSOLE_LOGGING_ENABLED")
 	if err != nil {
 		return nil, err
 	}
-	encodeLogsAsJson, err := getenvBool("ENCODE_LOGS_AS_JSON")
+	encodeLogsAsJson, err := GetenvBool("ENCODE_LOGS_AS_JSON")
 	if err != nil {
 		return nil, err
 	}
-	fileLoggingEnabled, err := getenvBool("FILE_LOGGING_ENABLED")
+	fileLoggingEnabled, err := GetenvBool("FILE_LOGGING_ENABLED")
 	if err != nil {
 		return nil, err
 	}
@@ -65,23 +65,23 @@ func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
 		FileLoggingEnabled:    fileLoggingEnabled,
 	}
 	if fileLoggingEnabled {
-		directory, err := getenvStr("LOGS_DIRECTORY")
+		directory, err := GetenvStr("LOGS_DIRECTORY")
 		if err != nil {
 			return nil, err
 		}
-		fileName, err := getenvStr("LOGS_FILE_NAME")
+		fileName, err := GetenvStr("LOGS_FILE_NAME")
 		if err != nil {
 			return nil, err
 		}
-		maxSize, err := getenvInt("LOGS_MAX_SIZE")
+		maxSize, err := GetenvInt("LOGS_MAX_SIZE")
 		if err != nil {
 			return nil, err
 		}
-		maxBackups, err := getenvInt("LOGS_MAX_BACKUPS")
+		maxBackups, err := GetenvInt("LOGS_MAX_BACKUPS")
 		if err != nil {
 			return nil, err
 		}
-		maxAge, err := getenvInt("LOGS_MAX_AGE")
+		maxAge, err := GetenvInt("LOGS_MAX_AGE")
 		if err != nil {
 			return nil, err
 		}
