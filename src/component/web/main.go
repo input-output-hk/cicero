@@ -348,7 +348,7 @@ func (self *Web) ApiWorkflowDefinitionSourceGet(w http.ResponseWriter, req *http
 	source := vars["source"]
 
 	if wfs, err := self.EvaluationService.ListWorkflows(source); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to list workflows"))
+		self.NotFound(w, errors.WithMessage(err, "Failed to list workflows"))
 		return
 	} else {
 		self.json(w, wfs, 200)
@@ -359,7 +359,7 @@ func genApiWorkflowDefinitionSourceGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"source": {
-				Content:     swagger.Content{},
+				Schema:      &swagger.Schema{Value: "source"},
 				Description: "source of workflow definition",
 			},
 		},
@@ -370,11 +370,11 @@ func genApiWorkflowDefinitionSourceGetSwagDef() swagger.Definitions {
 				},
 				Description: "OK",
 			},
-			500: {
+			404: {
 				Content: swagger.Content{
 					"application/json": {Value: &errorResponse{}},
 				},
-				Description: "ServerError",
+				Description: "NotFound",
 			},
 		},
 	}
@@ -410,11 +410,11 @@ func genApiWorkflowDefinitionSourceNameGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"source": {
-				Content:     swagger.Content{},
+				Schema:      &swagger.Schema{Value: "source"},
 				Description: "source of workflow definition",
 			},
 			"name": {
-				Content:     swagger.Content{},
+				Schema:      &swagger.Schema{Value: "name"},
 				Description: "name of workflow definition",
 			},
 		},
@@ -468,46 +468,49 @@ func genApiWorkflowInstanceGetSwagDef() swagger.Definitions {
 	}
 }
 
-var workflowParam struct {
+type WorkflowParam struct {
 	Source string
 	Name   *string
 	Inputs domain.Facts
 }
 
 func (self *Web) ApiWorkflowInstancePost(w http.ResponseWriter, req *http.Request) {
-	workflowParam.Inputs = domain.Facts{}
-	if err := json.NewDecoder(req.Body).Decode(&workflowParam); err != nil {
+	workflowParam := &WorkflowParam{
+		Inputs: domain.Facts{},
+	}
+	if err := json.NewDecoder(req.Body).Decode(workflowParam); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal params from request body"))
 		return
 	}
 
 	if workflowParam.Name != nil {
 		if err := self.WorkflowService.Start(workflowParam.Source, *workflowParam.Name, workflowParam.Inputs); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Failed to start workflow"))
+			self.NotFound(w, errors.WithMessage(err, "Failed to start workflow"))
 			return
 		}
 	}
 
 	if wfNames, err := self.EvaluationService.ListWorkflows(workflowParam.Source); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to list workflows"))
+		self.NotFound(w, errors.WithMessage(err, "Failed to list workflows"))
 		return
 	} else {
 		for _, name := range wfNames {
 			if err := self.WorkflowService.Start(workflowParam.Source, name, workflowParam.Inputs); err != nil {
-				self.ServerError(w, errors.WithMessage(err, "Failed to start workflow"))
+				self.NotFound(w, errors.WithMessage(err, "Failed to start workflow"))
 				return
 			}
 		}
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	self.json(w, nil, http.StatusNoContent)
+	//w.WriteHeader(http.StatusNoContent)
 }
 
 func genApiWorkflowInstancePostSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		RequestBody: &swagger.ContentValue{
 			Content: swagger.Content{
-				"application/json": {Value: workflowParam},
+				"application/json": {Value: &WorkflowParam{}},
 			},
 		},
 		Responses: map[int]swagger.ContentValue{
@@ -530,7 +533,7 @@ func genApiWorkflowInstancePostSwagDef() swagger.Definitions {
 	}
 }
 
-func (self *Web) WorkflowInstance(req *http.Request) (*domain.WorkflowInstance, error) {
+func (self *Web) workflowInstance(req *http.Request) (*domain.WorkflowInstance, error) {
 	vars := mux.Vars(req)
 	id, err := self.parseId(vars["id"])
 	if err != nil {
@@ -545,7 +548,7 @@ func (self *Web) WorkflowInstance(req *http.Request) (*domain.WorkflowInstance, 
 }
 
 func (self *Web) ApiWorkflowInstanceIdGet(w http.ResponseWriter, req *http.Request) {
-	instance, err := self.WorkflowInstance(req)
+	instance, err := self.workflowInstance(req)
 	if err != nil {
 		self.NotFound(w, errors.WithMessage(err, "Couldn't find instance"))
 	}
@@ -556,7 +559,7 @@ func genApiWorkflowInstanceIdGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"id": {
-				Content:     swagger.Content{},
+				Schema:      &swagger.Schema{Value: 0},
 				Description: "id of an workflow instance",
 			},
 		},
@@ -577,15 +580,28 @@ func genApiWorkflowInstanceIdGetSwagDef() swagger.Definitions {
 	}
 }
 
-func (self *Web) ApiWorkflowInstanceIdFactPost(w http.ResponseWriter, req *http.Request) {
-	instance, err := self.WorkflowInstance(req)
-	if err != nil {
-		self.ServerError(w, err)
+func (self *Web) getFactFromBody(req *http.Request) (domain.Facts, error) {
+	decoder := json.NewDecoder(req.Body)
+	if decoder == nil {
+		return nil, errors.Errorf("Could not decode facts from request body %v", req.Body)
 	}
-
 	facts := domain.Facts{}
-	if err := json.NewDecoder(req.Body).Decode(&facts); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal facts from request body"))
+	if err := decoder.Decode(&facts); err != nil {
+		return nil, errors.WithMessagef(err, "Could not unmarshal facts from request body %v", req.Body)
+	}
+	return facts, nil
+}
+
+func (self *Web) ApiWorkflowInstanceIdFactPost(w http.ResponseWriter, req *http.Request) {
+	instance, err := self.workflowInstance(req)
+	if err != nil {
+		self.NotFound(w, err)
+		return
+	}
+	facts, err := self.getFactFromBody(req)
+	if err != nil {
+		self.ClientError(w, err)
+		return
 	}
 
 	if err := self.MessageQueueService.Publish(
@@ -595,22 +611,25 @@ func (self *Web) ApiWorkflowInstanceIdFactPost(w http.ResponseWriter, req *http.
 	); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Could not publish fact"))
 		return
+	} else {
+		self.json(w, nil, http.StatusNoContent)
+		return
 	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func genApiWorkflowInstanceIdFactPostSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"id": {
-				Content:     swagger.Content{},
+				Schema:      &swagger.Schema{Value: 0},
 				Description: "id of an workflow instance",
 			},
 		},
 		RequestBody: &swagger.ContentValue{
 			Content: swagger.Content{
-				"application/json": {Value: domain.Facts{}},
+				"application/json": {
+					Value: &domain.Facts{},
+				},
 			},
 		},
 		Responses: map[int]swagger.ContentValue{
@@ -675,7 +694,7 @@ func genApiActionIdGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"id": {
-				Content:     swagger.Content{},
+				Schema:      &swagger.Schema{Value: 0},
 				Description: "id of an action",
 			},
 		},
@@ -717,7 +736,7 @@ func genApiActionIdLogsGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"id": {
-				Content:     swagger.Content{},
+				Schema:      &swagger.Schema{Value: 0},
 				Description: "id of an action",
 			},
 		},
