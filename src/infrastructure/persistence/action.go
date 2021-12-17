@@ -33,7 +33,7 @@ func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err erro
 func (a *actionRepository) GetLatestByName(name string) (action domain.Action, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &action,
-		`SELECT * FROM actions WHERE name = $1 GROUP BY name HAVING created_at = MAX(created_at)`,
+		`SELECT DISTINCT ON (name) * FROM actions WHERE name = $1 ORDER BY name, created_at DESC`,
 		name,
 	)
 	return
