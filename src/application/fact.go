@@ -26,7 +26,7 @@ type factService struct {
 	factRepository repository.FactRepository
 }
 
-func NewFactService(db config.PgxIface, prometheusAddr string) FactService {
+func NewFactService(db config.PgxIface) FactService {
 	return &factService{
 		logger:         log.New(os.Stderr, "FactService: ", log.LstdFlags),
 		factRepository: persistence.NewFactRepository(db),

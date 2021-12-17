@@ -14,8 +14,8 @@ import (
 
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/component"
-	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/component/web"
+	"github.com/input-output-hk/cicero/src/config"
 )
 
 type StartCmd struct {
@@ -106,8 +106,11 @@ func (cmd *StartCmd) Run() error {
 			return application.NewMessageQueueService(db().(*pgxpool.Pool), bridge)
 		}
 	})
+	factService := once(func() interface{} {
+		return application.NewFactService(db().(*pgxpool.Pool))
+	})
 	actionService := once(func() interface{} {
-		return application.NewActionService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
+		return application.NewActionService(db().(*pgxpool.Pool))
 	})
 	runService := once(func() interface{} {
 		return application.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
@@ -123,6 +126,7 @@ func (cmd *StartCmd) Run() error {
 			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			ActionService:       actionService().(application.ActionService),
+			EvaluationService:   evaluationService().(application.EvaluationService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
@@ -151,6 +155,7 @@ func (cmd *StartCmd) Run() error {
 		child := component.WorkflowFactConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
+			FactService:         factService().(application.FactService),
 			ActionService:       actionService().(application.ActionService),
 			Db:                  db().(*pgxpool.Pool),
 		}
@@ -177,8 +182,8 @@ func (cmd *StartCmd) Run() error {
 		child := web.Web{
 			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			Listen:              cmd.WebListen,
-			ActionService:     actionService().(application.ActionService),
-			RunService:       runService().(application.RunService),
+			ActionService:       actionService().(application.ActionService),
+			RunService:          runService().(application.RunService),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			NomadEventService:   nomadEventService().(application.NomadEventService),
 			EvaluationService:   evaluationService().(application.EvaluationService),

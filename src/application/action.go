@@ -30,7 +30,7 @@ type actionService struct {
 	factRepository   repository.FactRepository
 }
 
-func NewActionService(db config.PgxIface, prometheusAddr string) ActionService {
+func NewActionService(db config.PgxIface) ActionService {
 	return &actionService{
 		logger:           log.New(os.Stderr, "ActionService: ", log.LstdFlags),
 		actionRepository: persistence.NewActionRepository(db),
