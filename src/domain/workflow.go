@@ -6,6 +6,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	cueformat "cuelang.org/go/cue/format"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 )
@@ -19,28 +20,61 @@ type InputsDefinition struct {
 	cueContext *cue.Context
 }
 
+type inputsDefinitionStringly struct {
+	Latest     map[string]string `json:"latest"`
+	LatestNone map[string]string `json:"latest_none"`
+	All        map[string]string `json:"all"`
+}
+
 func (self *InputsDefinition) UnmarshalJSON(data []byte) error {
-	def := struct {
-		Latest     map[string]string `json:"latest"`
-		LatestNone map[string]string `json:"latest_none"`
-		All        map[string]string `json:"all"`
-	}{}
+	def := inputsDefinitionStringly{}
 	if err := json.Unmarshal(data, &def); err != nil {
 		return err
 	}
 
 	self.cueContext = cuecontext.New()
-	for k, v := range def.Latest {
-		self.Latest[k] = self.cueContext.CompileString(v)
-	}
-	for k, v := range def.LatestNone {
-		self.LatestNone[k] = self.cueContext.CompileString(v)
-	}
-	for k, v := range def.All {
-		self.All[k] = self.cueContext.CompileString(v)
+
+	convert := func(from *map[string]string) (into map[string]cue.Value) {
+		into = map[string]cue.Value{}
+		for k, v := range *from {
+			into[k] = self.cueContext.CompileString(v)
+		}
+		return
 	}
 
+	self.Latest = convert(&def.Latest)
+	self.LatestNone = convert(&def.LatestNone)
+	self.All = convert(&def.All)
+
 	return nil
+}
+
+func (self InputsDefinition) MarshalJSON() ([]byte, error) {
+	def := inputsDefinitionStringly{
+		Latest:     map[string]string{},
+		LatestNone: map[string]string{},
+		All:        map[string]string{},
+	}
+
+	convert := func(from *map[string]cue.Value, into *map[string]string) error {
+		for k, v := range *from {
+			if syntax, err := cueformat.Node(
+				v.Syntax(),
+				cueformat.Simplify(),
+			); err != nil {
+				return err
+			} else {
+				(*into)[k] = string(syntax)
+			}
+		}
+		return nil
+	}
+
+	convert(&self.Latest, &def.Latest)
+	convert(&self.LatestNone, &def.LatestNone)
+	convert(&self.All, &def.All)
+
+	return json.Marshal(def)
 }
 
 func (self *InputsDefinition) Scan(value interface{}) error {
@@ -48,7 +82,6 @@ func (self *InputsDefinition) Scan(value interface{}) error {
 }
 
 type ActionDefinition struct {
-	Name    string                 `json:"name"`
 	Meta    map[string]interface{} `json:"meta"`
 	Failure []interface{}          `json:"failure"`
 	Success []interface{}          `json:"success"`

@@ -62,7 +62,7 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
-		`SELECT * FROM actions GROUP BY name HAVING created_at = MAX(created_at)`,
+		`SELECT DISTINCT ON (name) * FROM actions ORDER BY name, created_at DESC`,
 	)
 	return
 }

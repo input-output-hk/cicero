@@ -15,7 +15,7 @@ import (
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/component"
 	"github.com/input-output-hk/cicero/src/config"
-	// "github.com/input-output-hk/cicero/src/component/web"
+	"github.com/input-output-hk/cicero/src/component/web"
 )
 
 type StartCmd struct {
@@ -173,7 +173,6 @@ func (cmd *StartCmd) Run() error {
 		}
 	}
 
-	/* FIXME fix all of web
 	if start.web {
 		child := web.Web{
 			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
@@ -188,7 +187,6 @@ func (cmd *StartCmd) Run() error {
 			return err
 		}
 	}
-	*/
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

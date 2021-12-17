@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
@@ -90,14 +91,14 @@ func (self *ActionStartConsumer) processMessage(tx pgx.Tx, actionName, source st
 
 	var actionDef domain.ActionDefinition
 	// TODO look at the func params ..?
-	if def, err := self.EvaluationService.EvaluateAction(actionName, source, [16]byte{}, map[string][]*domain.Fact{}); err != nil {
+	if def, err := self.EvaluationService.EvaluateAction(actionName, source, uuid.UUID{}, map[string][]*domain.Fact{}); err != nil {
 		return err
 	} else {
 		actionDef = def
 	}
 
 	action := domain.Action{
-		Name:   actionDef.Name,
+		Name:   actionName,
 		Source: source,
 		Meta:   actionDef.Meta,
 		Inputs: actionDef.Inputs,

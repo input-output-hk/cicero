@@ -1,5 +1,6 @@
 package web
 
+/* FIXME everything
 import (
 	"errors"
 	"io"
@@ -244,3 +245,4 @@ function resize() {
 resize();
 window.onresize = resize;
 `
+*/

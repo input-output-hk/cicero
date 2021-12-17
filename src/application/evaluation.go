@@ -154,11 +154,6 @@ func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID, input
 		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
 	}
 
-	if def.Name != name {
-		return def, errors.Errorf("Evaluator returned action with name %q unlike specified %q", def.Name, name)
-	}
-
-	def.Name = freeformDef.Name
 	def.Meta = freeformDef.Meta
 	def.Failure = freeformDef.Failure
 	def.Success = freeformDef.Success

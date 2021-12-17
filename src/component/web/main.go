@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
+	"net/url"
 	"time"
 
 	swagger "github.com/davidebianchi/gswagger"
@@ -13,15 +13,17 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/liftbridge-io/go-liftbridge/v2"
+	"github.com/pkg/errors"
+
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/pkg/errors"
 )
 
 type Web struct {
 	Listen              string
 	Logger              *log.Logger
-	WorkflowService     application.WorkflowService
+	RunService          application.RunService
 	ActionService       application.ActionService
 	MessageQueueService application.MessageQueueService
 	NomadEventService   application.NomadEventService
@@ -31,7 +33,7 @@ type Web struct {
 func (self *Web) Start(ctx context.Context) error {
 	self.Logger.Println("Starting Web")
 
-	muxRouter := mux.NewRouter().StrictSlash(true)
+	muxRouter := mux.NewRouter().StrictSlash(true).UseEncodedPath()
 	r, err := swagger.NewRouter(apirouter.NewGorillaMuxRouter(muxRouter), swagger.Options{
 		Context: ctx,
 		Openapi: &openapi3.T{
@@ -46,7 +48,22 @@ func (self *Web) Start(ctx context.Context) error {
 	}
 
 	// sorted alphabetically, please keep it this way
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}/logs", self.ApiActionIdLogsGet, genApiActionIdLogsGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/current/{name}/definition", self.ApiActionCurrentNameDefinitionGet, genApiActionCurrentNameDefinitionGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/current/{name}", self.ApiActionCurrentNameGet, genApiActionCurrentNameGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/current", self.ApiActionCurrentGet, genApiActionCurrentGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/definition/{source}/{name}", self.ApiActionDefinitionSourceNameGet, genApiActionDefinitionSourceNameGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/definition/{source}", self.ApiActionDefinitionSourceGet, genApiActionDefinitionSourceGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}/definition", self.ApiActionIdDefinitionGet, genApiActionIdDefinitionGetSwagDef()); err != nil {
 		return err
 	}
 	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}", self.ApiActionIdGet, genApiActionIdGetSwagDef()); err != nil {
@@ -55,24 +72,22 @@ func (self *Web) Start(ctx context.Context) error {
 	if _, err := r.AddRoute(http.MethodGet, "/api/action", self.ApiActionGet, genApiActionGetSwagDef()); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/definition/{source}/{name}", self.ApiWorkflowDefinitionSourceNameGet, genApiWorkflowDefinitionSourceNameGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodPost, "/api/action", self.ApiActionPost, genApiActionPostSwagDef()); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/definition/{source}", self.ApiWorkflowDefinitionSourceGet, genApiWorkflowDefinitionSourceGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodPost, "/api/run/{id}/fact", self.ApiRunIdFactPost, genApiRunIdFactPostSwagDef()); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost, "/api/workflow/instance/{id}/fact", self.ApiWorkflowInstanceIdFactPost, genApiWorkflowInstanceIdFactPostSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet, "/api/run/{id}/logs", self.ApiRunIdLogsGet, genApiRunIdLogsGetSwagDef()); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/instance/{id}", self.ApiWorkflowInstanceIdGet, genApiWorkflowInstanceIdGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet, "/api/run/{id}", self.ApiRunIdGet, genApiRunIdGetSwagDef()); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/instance", self.ApiWorkflowInstanceGet, genApiWorkflowInstanceGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet, "/api/run", self.ApiRunGet, genApiRunGetSwagDef()); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost, "/api/workflow/instance", self.ApiWorkflowInstancePost, genApiWorkflowInstancePostSwagDef()); err != nil {
-		return err
-	}
+	/* FIXME
 	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/{id:[0-9]+}/graph", self.WorkflowIdGraphGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/{id:[0-9]+}", self.WorkflowIdGet).Methods("GET")
@@ -82,6 +97,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/workflow", self.WorkflowGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow", self.WorkflowPost).Methods("POST")
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
+	*/
 
 	// creates /documentation/json and /documentation/yaml routes
 	err = r.GenerateAndExposeSwagger()
@@ -108,6 +124,7 @@ func (self *Web) Start(ctx context.Context) error {
 	return nil
 }
 
+/* FIXME
 func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, "/workflow", 302)
 }
@@ -116,7 +133,7 @@ func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
 	name := req.URL.Query().Get("name")
 
 	if name == "" {
-		if summary, err := self.WorkflowService.GetSummary(); err != nil {
+		if summary, err := self.RunService.GetSummary(); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Couldn't get summary of workflows"))
 			return
 		} else if err := render("workflow/index.html", w, summary); err != nil {
@@ -124,7 +141,7 @@ func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	} else {
-		if instances, err := self.WorkflowService.GetAllByName(name); err != nil {
+		if instances, err := self.RunService.GetAllByName(name); err != nil {
 			self.ServerError(w, errors.WithMessagef(err, "Couldn't get workflows by name: %q", name))
 			return
 		} else if err := render("workflow/index-name.html", w, map[string]interface{}{
@@ -164,7 +181,7 @@ func (self *Web) WorkflowNewGet(w http.ResponseWriter, req *http.Request) {
 
 	// step 4
 	if inputsJson != "" {
-		if err := self.WorkflowService.Start(source, name, facts); err != nil {
+		if err := self.RunService.Start(source, name, facts); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "While starting workflow"))
 			return
 		}
@@ -202,7 +219,7 @@ func (self *Web) WorkflowPost(w http.ResponseWriter, req *http.Request) {
 	name := req.PostFormValue("name")
 	source := req.PostFormValue("source")
 
-	if err := self.WorkflowService.Start(source, name, domain.Facts{}); err != nil {
+	if err := self.RunService.Start(source, name, domain.Facts{}); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, `Could not start workflow %q from source %q`, name, source))
 	}
 
@@ -216,7 +233,7 @@ func (self *Web) WorkflowIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	instance, err := self.WorkflowService.GetById(id)
+	instance, err := self.RunService.GetById(id)
 	if err != nil {
 		self.NotFound(w, errors.WithMessagef(err, "Failed to find workflow %q", id))
 		return
@@ -244,7 +261,7 @@ func (self *Web) WorkflowIdGraphGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	instance, err := self.WorkflowService.GetById(id)
+	instance, err := self.RunService.GetById(id)
 	if err != nil {
 		self.NotFound(w, errors.WithMessagef(err, "Failed to find workflow %q", id))
 		return
@@ -342,25 +359,30 @@ func (self *Web) WorkflowGraphPlainGet(w http.ResponseWriter, req *http.Request)
 		return
 	}
 }
+*/
 
-func (self *Web) ApiWorkflowDefinitionSourceGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ApiActionDefinitionSourceGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	source := vars["source"]
+	source, err := url.PathUnescape(vars["source"])
+	if err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Invalid escaping of action definition source"))
+		return
+	}
 
-	if wfs, err := self.EvaluationService.ListWorkflows(source); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to list workflows"))
+	if wfs, err := self.EvaluationService.ListActions(source); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to list actions"))
 		return
 	} else {
 		self.json(w, wfs, 200)
 	}
 }
 
-func genApiWorkflowDefinitionSourceGetSwagDef() swagger.Definitions {
+func genApiActionDefinitionSourceGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"source": {
 				Content:     swagger.Content{},
-				Description: "source of workflow definition",
+				Description: "source of one or more action definitions",
 			},
 		},
 		Responses: map[int]swagger.ContentValue{
@@ -380,25 +402,22 @@ func genApiWorkflowDefinitionSourceGetSwagDef() swagger.Definitions {
 	}
 }
 
-func (self *Web) ApiWorkflowDefinitionSourceNameGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ApiActionDefinitionSourceNameGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	id, err := self.parseId(vars["id"])
+
+	source, err := url.PathUnescape(vars["source"])
 	if err != nil {
-		self.ClientError(w, err)
+		self.ClientError(w, errors.WithMessage(err, "Invalid escaping of action definition source"))
 		return
 	}
 
-	facts, err := self.parseFacts([]byte(vars["inputs"]))
+	name, err := url.PathUnescape(vars["name"])
 	if err != nil {
-		self.ClientError(w, err)
+		self.ClientError(w, errors.WithMessage(err, "Invalid escaping of action name"))
 		return
 	}
 
-	query := req.URL.Query()
-	source := query.Get("source")
-	name := query.Get("name")
-
-	if wf, err := self.EvaluationService.EvaluateWorkflow(source, name, id, facts); err != nil {
+	if wf, err := self.EvaluationService.EvaluateAction(source, name, uuid.UUID{}, map[string][]*domain.Fact{}); err != nil {
 		self.ServerError(w, err)
 		return
 	} else {
@@ -406,22 +425,22 @@ func (self *Web) ApiWorkflowDefinitionSourceNameGet(w http.ResponseWriter, req *
 	}
 }
 
-func genApiWorkflowDefinitionSourceNameGetSwagDef() swagger.Definitions {
+func genApiActionDefinitionSourceNameGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"source": {
 				Content:     swagger.Content{},
-				Description: "source of workflow definition",
+				Description: "source of one or more action definitions",
 			},
 			"name": {
 				Content:     swagger.Content{},
-				Description: "name of workflow definition",
+				Description: "name of an action in the source",
 			},
 		},
 		Responses: map[int]swagger.ContentValue{
 			200: {
 				Content: swagger.Content{
-					"text/html": {Value: domain.WorkflowDefinition{}},
+					"text/html": {Value: domain.ActionDefinition{}},
 				},
 				Description: "OK",
 			},
@@ -441,20 +460,20 @@ func genApiWorkflowDefinitionSourceNameGetSwagDef() swagger.Definitions {
 	}
 }
 
-func (self *Web) ApiWorkflowInstanceGet(w http.ResponseWriter, req *http.Request) {
-	if instances, err := self.WorkflowService.GetAll(); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "failed to fetch workflows"))
+func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
+	if instances, err := self.RunService.GetAll(); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
 	} else {
 		self.json(w, instances, 200)
 	}
 }
 
-func genApiWorkflowInstanceGetSwagDef() swagger.Definitions {
+func genApiRunGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		Responses: map[int]swagger.ContentValue{
 			200: {
 				Content: swagger.Content{
-					"text/html": {Value: []domain.WorkflowInstance{}},
+					"text/html": {Value: []domain.Run{}},
 				},
 				Description: "OK",
 			},
@@ -468,34 +487,43 @@ func genApiWorkflowInstanceGetSwagDef() swagger.Definitions {
 	}
 }
 
-var workflowParam struct {
+type apiActionPostBody struct {
 	Source string
 	Name   *string
-	Inputs domain.Facts
 }
 
-func (self *Web) ApiWorkflowInstancePost(w http.ResponseWriter, req *http.Request) {
-	workflowParam.Inputs = domain.Facts{}
-	if err := json.NewDecoder(req.Body).Decode(&workflowParam); err != nil {
+func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
+	params := apiActionPostBody{}
+	if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal params from request body"))
 		return
 	}
 
-	if workflowParam.Name != nil {
-		if err := self.WorkflowService.Start(workflowParam.Source, *workflowParam.Name, workflowParam.Inputs); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Failed to start workflow"))
+	if params.Name != nil {
+		if err := self.MessageQueueService.Publish(
+			domain.ActionCreateStream(*params.Name),
+			domain.ActionCreateStreamName,
+			[]byte{},
+			liftbridge.Header("source", []byte(params.Source)),
+		); err != nil {
+			self.ServerError(w, err)
 			return
 		}
-	}
-
-	if wfNames, err := self.EvaluationService.ListWorkflows(workflowParam.Source); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to list workflows"))
-		return
 	} else {
-		for _, name := range wfNames {
-			if err := self.WorkflowService.Start(workflowParam.Source, name, workflowParam.Inputs); err != nil {
-				self.ServerError(w, errors.WithMessage(err, "Failed to start workflow"))
-				return
+		if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
+			self.ServerError(w, errors.WithMessage(err, "Failed to list actions"))
+			return
+		} else {
+			for _, actionName := range actionNames {
+				if err := self.MessageQueueService.Publish(
+					domain.ActionCreateStream(actionName),
+					domain.ActionCreateStreamName,
+					[]byte{},
+					liftbridge.Header("source", []byte(params.Source)),
+				); err != nil {
+					self.ServerError(w, err)
+					return
+				}
 			}
 		}
 	}
@@ -503,11 +531,11 @@ func (self *Web) ApiWorkflowInstancePost(w http.ResponseWriter, req *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func genApiWorkflowInstancePostSwagDef() swagger.Definitions {
+func genApiActionPostSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		RequestBody: &swagger.ContentValue{
 			Content: swagger.Content{
-				"application/json": {Value: workflowParam},
+				"application/json": {Value: apiActionPostBody{}},
 			},
 		},
 		Responses: map[int]swagger.ContentValue{
@@ -530,40 +558,40 @@ func genApiWorkflowInstancePostSwagDef() swagger.Definitions {
 	}
 }
 
-func (self *Web) WorkflowInstance(req *http.Request) (*domain.WorkflowInstance, error) {
+func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
 	vars := mux.Vars(req)
-	id, err := self.parseId(vars["id"])
+	id, err := uuid.Parse(vars["id"])
 	if err != nil {
 		return nil, err
 	}
 
-	if instance, err := self.WorkflowService.GetById(id); err != nil {
+	if run, err := self.RunService.GetById(id); err != nil {
 		return nil, err
 	} else {
-		return &instance, nil
+		return &run, nil
 	}
 }
 
-func (self *Web) ApiWorkflowInstanceIdGet(w http.ResponseWriter, req *http.Request) {
-	instance, err := self.WorkflowInstance(req)
+func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
+	run, err := self.getRun(req)
 	if err != nil {
-		self.NotFound(w, errors.WithMessage(err, "Couldn't find instance"))
+		self.NotFound(w, errors.WithMessage(err, "Could not find run"))
 	}
-	self.json(w, instance, 200)
+	self.json(w, run, 200)
 }
 
-func genApiWorkflowInstanceIdGetSwagDef() swagger.Definitions {
+func genApiRunIdGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"id": {
 				Content:     swagger.Content{},
-				Description: "id of an workflow instance",
+				Description: "id of an action run",
 			},
 		},
 		Responses: map[int]swagger.ContentValue{
 			200: {
 				Content: swagger.Content{
-					"text/html": {Value: domain.WorkflowInstance{}},
+					"text/html": {Value: domain.Run{}},
 				},
 				Description: "OK",
 			},
@@ -577,21 +605,32 @@ func genApiWorkflowInstanceIdGetSwagDef() swagger.Definitions {
 	}
 }
 
-func (self *Web) ApiWorkflowInstanceIdFactPost(w http.ResponseWriter, req *http.Request) {
-	instance, err := self.WorkflowInstance(req)
+func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
+	run, err := self.getRun(req)
 	if err != nil {
 		self.ServerError(w, err)
+		return
 	}
 
-	facts := domain.Facts{}
-	if err := json.NewDecoder(req.Body).Decode(&facts); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal facts from request body"))
+	var value interface{}
+	if err := json.NewDecoder(req.Body).Decode(&value); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal fact value from request body"))
+		return
+	}
+
+	factJson, err := json.Marshal(domain.Fact{
+		RunId: &run.NomadJobID,
+		Value: value,
+	})
+	if err != nil {
+		self.ServerError(w, err)
+		return
 	}
 
 	if err := self.MessageQueueService.Publish(
-		domain.FactStreamName.Fmt(instance.Name, instance.ID),
-		domain.FactStreamName,
-		facts,
+		domain.FactCreateStreamName.String(),
+		domain.FactCreateStreamName,
+		factJson,
 	); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Could not publish fact"))
 		return
@@ -600,17 +639,18 @@ func (self *Web) ApiWorkflowInstanceIdFactPost(w http.ResponseWriter, req *http.
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func genApiWorkflowInstanceIdFactPostSwagDef() swagger.Definitions {
+func genApiRunIdFactPostSwagDef() swagger.Definitions {
+	var value interface{}
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"id": {
 				Content:     swagger.Content{},
-				Description: "id of an workflow instance",
+				Description: "id of an action",
 			},
 		},
 		RequestBody: &swagger.ContentValue{
 			Content: swagger.Content{
-				"application/json": {Value: domain.Facts{}},
+				"application/json": {Value: value},
 			},
 		},
 		Responses: map[int]swagger.ContentValue{
@@ -646,7 +686,7 @@ func genApiActionGetSwagDef() swagger.Definitions {
 		Responses: map[int]swagger.ContentValue{
 			200: {
 				Content: swagger.Content{
-					"text/html": {Value: []domain.ActionInstance{}},
+					"text/html": {Value: []domain.Action{}},
 				},
 				Description: "OK",
 			},
@@ -658,6 +698,73 @@ func genApiActionGetSwagDef() swagger.Definitions {
 			},
 		},
 	}
+}
+
+// XXX respond with map[string]Action instead of []Action?
+func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
+	if actions, err := self.ActionService.GetCurrent(); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get current actions"))
+	} else {
+		self.json(w, actions, 200)
+	}
+}
+
+func genApiActionCurrentGetSwagDef() swagger.Definitions {
+	return genApiActionGetSwagDef()
+}
+
+func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	name := vars["name"]
+
+	if actions, err := self.ActionService.GetLatestByName(name); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Failed to get current action named %q", name))
+	} else {
+		self.json(w, actions, 200)
+	}
+}
+
+func genApiActionCurrentNameGetSwagDef() swagger.Definitions {
+	return swagger.Definitions{
+		PathParams: swagger.ParameterValue{
+			"name": {
+				Content:     swagger.Content{},
+				Description: "name of an action",
+			},
+		},
+		RequestBody: &swagger.ContentValue{
+			Content: swagger.Content{
+				"application/json": {Value: &domain.Action{}},
+			},
+		},
+		Responses: map[int]swagger.ContentValue{
+			204: {
+				Description: "NoContent",
+			},
+			500: {
+				Content: swagger.Content{
+					"application/json": {Value: &errorResponse{}},
+				},
+				Description: "ServerError",
+			},
+		},
+	}
+}
+
+func (self *Web) ApiActionCurrentNameDefinitionGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	name := vars["name"]
+	if action, err := self.ActionService.GetLatestByName(name); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
+	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID, map[string][]*domain.Fact{}); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
+	} else {
+		self.json(w, actionDef, 200)
+	}
+}
+
+func genApiActionCurrentNameDefinitionGetSwagDef() swagger.Definitions {
+	return genApiActionIdDefinitionGetSwagDef()
 }
 
 func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
@@ -682,7 +789,7 @@ func genApiActionIdGetSwagDef() swagger.Definitions {
 		Responses: map[int]swagger.ContentValue{
 			200: {
 				Content: swagger.Content{
-					"text/html": {Value: domain.ActionInstance{}},
+					"text/html": {Value: domain.Action{}},
 				},
 				Description: "OK",
 			},
@@ -702,18 +809,62 @@ func genApiActionIdGetSwagDef() swagger.Definitions {
 	}
 }
 
-func (self *Web) ApiActionIdLogsGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ApiActionIdDefinitionGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else if logs, err := self.ActionService.JobLogs(id); err != nil {
+	} else if action, err := self.ActionService.GetById(id); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
+	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID, map[string][]*domain.Fact{}); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
+	} else {
+		self.json(w, actionDef, 200)
+	}
+}
+
+func genApiActionIdDefinitionGetSwagDef() swagger.Definitions {
+	return swagger.Definitions{
+		PathParams: swagger.ParameterValue{
+			"id": {
+				Content:     swagger.Content{},
+				Description: "id of an action",
+			},
+		},
+		Responses: map[int]swagger.ContentValue{
+			200: {
+				Content: swagger.Content{
+					"text/html": {Value: domain.ActionDefinition{}},
+				},
+				Description: "OK",
+			},
+			412: {
+				Content: swagger.Content{
+					"application/json": {Value: &errorResponse{}},
+				},
+				Description: "ClientError",
+			},
+			500: {
+				Content: swagger.Content{
+					"application/json": {Value: &errorResponse{}},
+				},
+				Description: "ServerError",
+			},
+		},
+	}
+}
+
+func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	if id, err := uuid.Parse(vars["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+	} else if logs, err := self.RunService.JobLogs(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
 		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, 200)
 	}
 }
 
-func genApiActionIdLogsGetSwagDef() swagger.Definitions {
+func genApiRunIdLogsGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"id": {
@@ -746,23 +897,4 @@ func genApiActionIdLogsGetSwagDef() swagger.Definitions {
 
 type errorResponse struct {
 	Message string `json:"message"`
-}
-
-func (self *Web) parseId(orig string) (uint64, error) {
-	id, err := strconv.ParseUint(orig, 10, 64)
-	if err != nil {
-		return 0, errors.WithMessagef(err, "Failed to parse id: %q", orig)
-	}
-
-	return id, nil
-}
-
-func (self *Web) parseFacts(orig []byte) (domain.Facts, error) {
-	facts := domain.Facts{}
-	err := json.Unmarshal(orig, &facts)
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to parse facts")
-	}
-
-	return facts, nil
 }
