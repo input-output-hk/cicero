@@ -461,10 +461,10 @@ func genApiActionDefinitionSourceNameGetSwagDef() swagger.Definitions {
 }
 
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
-	if instances, err := self.RunService.GetAll(); err != nil {
+	if runs, err := self.RunService.GetAll(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
 	} else {
-		self.json(w, instances, 200)
+		self.json(w, runs, 200)
 	}
 }
 

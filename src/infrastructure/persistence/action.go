@@ -39,9 +39,9 @@ func (a *actionRepository) GetLatestByName(name string) (action domain.Action, e
 	return
 }
 
-func (a *actionRepository) GetAll() (instances []*domain.Action, err error) {
+func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {
 	err = pgxscan.Select(
-		context.Background(), a.DB, &instances,
+		context.Background(), a.DB, &actions,
 		`SELECT * FROM actions ORDER BY created_at DESC`,
 	)
 	return
