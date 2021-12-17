@@ -38,7 +38,7 @@ func NewNomadEventService(db config.PgxIface, runService RunService) NomadEventS
 func (n *nomadEventService) Save(tx pgx.Tx, event *nomad.Event) error {
 	n.logger.Printf("Saving new NomadEvent %d", event.Index)
 	if err := n.nomadEventRepository.Save(tx, event); err != nil {
-		return errors.WithMessagef(err, "Couldn't insert NomadEvent")
+		return errors.WithMessagef(err, "Could not insert NomadEvent")
 	}
 	n.logger.Printf("Created NomadEvent %d", event.Index)
 	return nil

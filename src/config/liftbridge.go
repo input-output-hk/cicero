@@ -7,5 +7,5 @@ import (
 
 func LiftbridgeConnect(addr string) (liftbridge.Client, error) {
 	client, err := liftbridge.Connect([]string{addr})
-	return client, errors.WithMessage(err, "Couldn't connect to NATS")
+	return client, errors.WithMessage(err, "Could not connect to NATS")
 }

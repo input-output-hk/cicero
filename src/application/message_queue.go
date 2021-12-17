@@ -79,7 +79,7 @@ func (m *messageQueueService) Publish(stream string, streamName domain.StreamNam
 func (m *messageQueueService) subscribe(ctx context.Context, streamName domain.StreamName, handler liftbridge.Handler, offset int64, partition int32) error {
 	m.logger.Printf("Subscribing to %s at offset %d", streamName, offset)
 	if err := m.bridge.Subscribe(ctx, streamName.String(), handler, liftbridge.StartAtOffset(offset), liftbridge.Partition(partition)); err != nil {
-		return errors.WithMessagef(err, "Couldn't Subscribing to %s at offset %d", streamName, offset)
+		return errors.WithMessagef(err, "Could not subscribe to %s at offset %d", streamName, offset)
 	}
 	return nil
 }
@@ -106,7 +106,7 @@ func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error
 		}
 	}
 	if err := m.messageQueueRepository.Save(tx, headers, message); err != nil {
-		return errors.WithMessagef(err, "Couldn't insert Message")
+		return errors.WithMessagef(err, "Could not insert Message")
 	}
 	m.logger.Printf("Message created")
 	return nil
@@ -115,7 +115,7 @@ func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error
 func (m *messageQueueService) getOffset(streamName string) (offset int64, err error) {
 	offset, err = m.messageQueueRepository.GetOffset(streamName)
 	if err != nil {
-		return offset, errors.WithMessagef(err, "Couldn't get the offset for the streamName: %s", streamName)
+		return offset, errors.WithMessagef(err, "Could not get the offset for the streamName: %s", streamName)
 	}
 	m.logger.Printf("Get Offset %d for the streamName %s", offset, streamName)
 	return

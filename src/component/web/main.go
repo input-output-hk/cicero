@@ -134,7 +134,7 @@ func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
 
 	if name == "" {
 		if summary, err := self.RunService.GetSummary(); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Couldn't get summary of workflows"))
+			self.ServerError(w, errors.WithMessage(err, "Could not get summary of workflows"))
 			return
 		} else if err := render("workflow/index.html", w, summary); err != nil {
 			self.ServerError(w, err)
@@ -142,7 +142,7 @@ func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
 		}
 	} else {
 		if instances, err := self.RunService.GetAllByName(name); err != nil {
-			self.ServerError(w, errors.WithMessagef(err, "Couldn't get workflows by name: %q", name))
+			self.ServerError(w, errors.WithMessagef(err, "Could not get workflows by name: %q", name))
 			return
 		} else if err := render("workflow/index-name.html", w, map[string]interface{}{
 			"Name":      name,

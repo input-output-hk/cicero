@@ -26,7 +26,7 @@ func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
 	self.Logger.Println("Starting WorkflowFactConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.FactCreateStreamName, self.invokerSubscriber(ctx), 0); err != nil {
-		return errors.WithMessagef(err, "Couldn't subscribe to stream %s", domain.FactCreateStreamName)
+		return errors.WithMessagef(err, "Could not subscribe to stream %s", domain.FactCreateStreamName)
 	}
 
 	<-ctx.Done()
