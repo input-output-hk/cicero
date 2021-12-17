@@ -28,7 +28,7 @@ func TestShouldGetActionById(t *testing.T) {
 	// given
 	mock, err := pgxmock.NewConn()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		t.Fatalf("an error %q was not expected when opening a stub database connection", err.Error())
 	}
 	defer mock.Close(context.Background())
 	rows := mock.NewRows([]string{"id", "workflow_instance_id", "name", "facts",
@@ -69,7 +69,7 @@ func TestShouldUpdateAction(t *testing.T) {
 	// given
 	mock, err := pgxmock.NewConn()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		t.Fatalf("an error %q was not expected when opening a stub database connection", err.Error())
 	}
 	defer mock.Close(context.Background())
 	mock.ExpectBegin()
@@ -80,7 +80,7 @@ func TestShouldUpdateAction(t *testing.T) {
 	ctx := context.Background()
 	tx, err := mock.Begin(ctx)
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when Begin a Tx in database", err)
+		t.Fatalf("an error %q was not expected when Begin a Tx in database", err.Error())
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 

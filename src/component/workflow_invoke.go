@@ -44,7 +44,7 @@ func (self *InvokeConsumer) Start(ctx context.Context) error {
 func (self *InvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
-			self.Logger.Fatalf("error in liftbridge message: %w", err)
+			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
 			//TODO: If err is not nil, the subscription will be terminated
 			return
 		}
@@ -61,7 +61,7 @@ func (self *InvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbri
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(ctx, tx, msg)
 		}); err != nil {
-			self.Logger.Fatalf("Could not process message: %v with error %w", msg, err)
+			self.Logger.Fatalf("Could not process message: %v with error %s", msg, err.Error())
 			return
 		}
 	}
@@ -107,7 +107,7 @@ func (self *InvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx, msg *
 			if response, _, err := self.NomadClient.JobsRegister(actionDef.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run Action")
 			} else if len(response.Warnings) > 0 {
-				self.Logger.Println("Warnings occured registering Nomad job %q in Nomad evaluation %q:", runId, response.EvalID, response.Warnings)
+				self.Logger.Printf("Warnings occured registering Nomad job %q in Nomad evaluation %q: %s", runId, response.EvalID, response.Warnings)
 			}
 		}
 

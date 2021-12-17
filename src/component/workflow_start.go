@@ -39,7 +39,7 @@ func (self *ActionStartConsumer) Start(ctx context.Context) error {
 func (self *ActionStartConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
-			self.Logger.Printf("error received in %s: %w", msg.Stream(), err)
+			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())
 			// TODO: If err is not nil, the subscription will be terminated
 			return
 		}
@@ -62,7 +62,7 @@ func (self *ActionStartConsumer) invokerSubscriber(ctx context.Context) func(*li
 			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 				return self.processMessage(tx, name, source, msg)
 			}); err != nil {
-				self.Logger.Fatalf("Could not process message: %v with error %w", msg, err)
+				self.Logger.Fatalf("Could not process message: %v with error %s", msg, err.Error())
 				return
 			}
 		}

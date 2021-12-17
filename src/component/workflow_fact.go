@@ -37,7 +37,7 @@ func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
 func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
-			self.Logger.Fatalf("Error received in %s: %s", msg.Stream(), err)
+			self.Logger.Fatalf("Error received in %s: %s", msg.Stream(), err.Error())
 			//TODO: If err is not nil, the subscription will be terminated
 			return
 		}
@@ -54,7 +54,7 @@ func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*l
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(tx, msg)
 		}); err != nil {
-			self.Logger.Fatalf("Could not process message: %v with error %s", msg, err)
+			self.Logger.Fatalf("Could not process message: %v with error %s", msg, err.Error())
 			return
 		}
 	}
@@ -87,7 +87,7 @@ func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, msg *liftbridge.Mess
 				domain.ActionInvokeStreamName,
 				[]byte{},
 			); err != nil {
-				self.Logger.Printf("Could not publish invoke message: %s", err)
+				self.Logger.Printf("Could not publish invoke message: %s", err.Error())
 				return err
 			}
 		}
