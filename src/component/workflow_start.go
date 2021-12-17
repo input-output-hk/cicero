@@ -62,7 +62,7 @@ func (self *ActionStartConsumer) invokerSubscriber(ctx context.Context) func(*li
 			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 				return self.processMessage(tx, name, source, msg)
 			}); err != nil {
-				self.Logger.Fatalf("Could not process message: %v with error %s", msg, err.Error())
+				self.Logger.Fatalf("Could not process message: %s with error %s", msg.Value(), err.Error())
 				return
 			}
 		}
@@ -86,7 +86,7 @@ func getActionInfo(msg *liftbridge.Message) (name, source string, err error) {
 
 func (self *ActionStartConsumer) processMessage(tx pgx.Tx, actionName, source string, msg *liftbridge.Message) error {
 	if err := self.MessageQueueService.Save(tx, msg); err != nil {
-		return errors.WithMessagef(err, "Could not save message %v", msg)
+		return errors.WithMessagef(err, "Could not save message %s", msg.Value())
 	}
 
 	var actionDef domain.ActionDefinition

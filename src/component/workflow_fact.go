@@ -54,7 +54,7 @@ func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*l
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(tx, msg)
 		}); err != nil {
-			self.Logger.Fatalf("Could not process message: %v with error %s", msg, err.Error())
+			self.Logger.Fatalf("Could not process message: %s with error %s", msg.Value(), err.Error())
 			return
 		}
 	}

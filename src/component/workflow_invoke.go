@@ -61,7 +61,7 @@ func (self *InvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbri
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(ctx, tx, msg)
 		}); err != nil {
-			self.Logger.Fatalf("Could not process message: %v with error %s", msg, err.Error())
+			self.Logger.Fatalf("Could not process message: %s with error %s", msg.Value(), err.Error())
 			return
 		}
 	}
