@@ -488,8 +488,8 @@ func genApiRunGetSwagDef() swagger.Definitions {
 }
 
 type apiActionPostBody struct {
-	Source string
-	Name   *string
+	Source string  `json:"source"`
+	Name   *string `json:"name"`
 }
 
 func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {

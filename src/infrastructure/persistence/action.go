@@ -31,7 +31,7 @@ func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err erro
 }
 
 func (a *actionRepository) GetLatestByName(name string) (action domain.Action, err error) {
-	err = pgxscan.Select(
+	err = pgxscan.Get(
 		context.Background(), a.DB, &action,
 		`SELECT DISTINCT ON (name) * FROM actions WHERE name = $1 ORDER BY name, created_at DESC`,
 		name,
@@ -53,7 +53,7 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 	} else {
 		return tx.QueryRow(
 			context.Background(),
-			`INSERT INTO actions (name, source, inputs) VALUES ($1, $2) RETURNING id`,
+			`INSERT INTO actions (name, source, inputs) VALUES ($1, $2, $3) RETURNING id`,
 			action.Name, action.Source, inputs,
 		).Scan(&action.ID)
 	}

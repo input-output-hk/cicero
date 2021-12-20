@@ -49,8 +49,8 @@ func (a runRepository) GetAll() (instances []*domain.Run, err error) {
 func (a runRepository) Save(tx pgx.Tx, run *domain.Run) error {
 	return tx.QueryRow(
 		context.Background(),
-		`INSERT INTO runs (nomad_job_id, action_id) VALUES ($1, $2) RETURNING nomad_job_id`,
-		run.NomadJobID, run.ActionId,
+		`INSERT INTO runs (nomad_job_id, action_id, success, failure) VALUES ($1, $2, $3, $4) RETURNING nomad_job_id`,
+		run.NomadJobID, run.ActionId, run.Success, run.Failure,
 	).Scan(&run.NomadJobID)
 }
 

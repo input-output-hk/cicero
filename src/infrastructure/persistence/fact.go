@@ -30,33 +30,48 @@ func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 	return
 }
 
-func (a *factRepository) GetLatestByFields(fields []string) (fact domain.Fact, err error) {
-	// FIXME query selects from MAX(created_at) over ALL facts, not only filtered. select from subquery or use GROUP BY.
+func (a *factRepository) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &fact,
-		`SELECT * FROM facts WHERE ` + buildSQLWhereConditions(fields) + ` GROUP BY created_at HAVING created_at = MAX(created_at)`,
-		fields,
+		// XXX do that without LIMIT clause?
+		`SELECT * FROM facts `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC LIMIT 1`,
+		pathsToQueryArgs(fields)...,
 	)
 	return
 }
 
-func (a *factRepository) GetByFields(fields []string) (facts []*domain.Fact, err error) {
+func (a *factRepository) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &facts,
-		`SELECT * FROM facts WHERE ` + buildSQLWhereConditions(fields),
-		fields,
+		`SELECT * FROM facts `+sqlWhereHasPaths(fields),
+		pathsToQueryArgs(fields)...,
 	)
 	return
 }
 
-func buildSQLWhereConditions(paths []string) (where string) {
-	// FIXME checks only against top-level field. Check PATH instead!
-	for i := range paths {
-		i += 1
-		if i > 1 {
+func sqlWhereHasPaths(paths [][]string) (where string) {
+	if len(paths) == 0 {
+		return
+	}
+
+	where += " WHERE "
+	for i, path := range paths {
+		if i > 0 {
 			where += " AND "
 		}
-		where += `value ?& $` + strconv.Itoa(i)
+		for i := range path {
+			where += `jsonb_extract_path(value, $` + strconv.Itoa(i + 1) + `) IS NOT NULL`
+		}
+	}
+
+	return
+}
+
+func pathsToQueryArgs(paths [][]string) (args []interface{}) {
+	for _, path := range paths {
+		for _, field := range path {
+			args = append(args, field)
+		}
 	}
 	return
 }

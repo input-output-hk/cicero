@@ -16,8 +16,8 @@ import (
 
 type FactService interface {
 	GetById(uuid.UUID) (domain.Fact, error)
-	GetLatestByFields([]string) (domain.Fact, error)
-	GetByFields([]string) ([]*domain.Fact, error)
+	GetLatestByFields([][]string) (domain.Fact, error)
+	GetByFields([][]string) ([]*domain.Fact, error)
 	Save(pgx.Tx, *domain.Fact) error
 }
 
@@ -51,8 +51,8 @@ func (self *factService) Save(tx pgx.Tx, fact *domain.Fact) error {
 	return nil
 }
 
-func (self *factService) GetLatestByFields(fields []string) (fact domain.Fact, err error) {
-	self.logger.Println("Getting latest Facts by fields %q", fields)
+func (self *factService) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
+	self.logger.Printf("Getting latest Facts by fields %q", fields)
 	fact, err = self.factRepository.GetLatestByFields(fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select latest Facts by fields %q", fields)
@@ -60,8 +60,8 @@ func (self *factService) GetLatestByFields(fields []string) (fact domain.Fact, e
 	return
 }
 
-func (self *factService) GetByFields(fields []string) (facts []*domain.Fact, err error) {
-	self.logger.Println("Getting Facts by fields %q", fields)
+func (self *factService) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
+	self.logger.Printf("Getting Facts by fields %q", fields)
 	facts, err = self.GetByFields(fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select Facts by fields %q", fields)

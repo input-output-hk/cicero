@@ -91,7 +91,7 @@ func (self *ActionStartConsumer) processMessage(tx pgx.Tx, actionName, source st
 
 	var actionDef domain.ActionDefinition
 	// TODO look at the func params ..?
-	if def, err := self.EvaluationService.EvaluateAction(actionName, source, uuid.UUID{}, map[string][]*domain.Fact{}); err != nil {
+	if def, err := self.EvaluationService.EvaluateAction(source, actionName, uuid.UUID{}, map[string][]*domain.Fact{}); err != nil {
 		return err
 	} else {
 		actionDef = def

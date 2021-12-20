@@ -99,21 +99,27 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string][
 	}{}
 	for input, v := range action.Inputs.Latest {
 		if fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(v)); err != nil {
-			return false, inputs, err
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return false, inputs, err
+			}
 		} else {
 			facts.Latest[input] = &fact
 		}
 	}
 	for input, v := range action.Inputs.LatestNone {
 		if fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(v)); err != nil {
-			return false, inputs, err
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return false, inputs, err
+			}
 		} else {
 			facts.LatestNone[input] = &fact
 		}
 	}
 	for input, v := range action.Inputs.All {
 		if facts_, err := self.factRepository.GetByFields(collectFieldPaths(v)); err != nil {
-			return false, inputs, err
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return false, inputs, err
+			}
 		} else {
 			facts.All[input] = facts_
 		}
@@ -125,21 +131,27 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string][
 	return true, inputs, nil
 }
 
-func collectFieldPaths(value cue.Value) (paths []string) {
-	// FIXME support nested paths (x.y, atm just x is found) => return [][]string
+func collectFieldPaths(value cue.Value) (paths [][]string) {
 	if strukt, err := value.Struct(); err != nil {
 		return
 	} else {
 		iter := strukt.Fields()
 		for iter.Next() {
-			if iter.IsOptional() || iter.IsDefinition() || iter.IsHidden() {
-				continue
-			}
 			selector := iter.Selector()
-			if !selector.IsString() {
+
+			if iter.IsOptional() || selector.IsDefinition() || selector.PkgPath() != "" {
 				continue
 			}
-			paths = append(paths, selector.String())
+
+			path := []string{selector.String()}
+
+			if _, err := iter.Value().Struct(); err != nil {
+				paths = append(paths, path)
+			} else {
+				for _, fieldPath := range collectFieldPaths(iter.Value()) {
+					paths = append(paths, append(path, fieldPath...))
+				}
+			}
 		}
 	}
 	return
