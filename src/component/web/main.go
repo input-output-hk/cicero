@@ -954,15 +954,14 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	factJson, err := json.Marshal(&fact)
-	if err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Could not marshal Fact"))
-		return
-	}
-
 	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if err := self.FactService.Save(tx, &fact); err != nil {
 			return errors.WithMessage(err, "Failed to save Fact")
+		}
+
+		factJson, err := json.Marshal(&fact)
+		if err != nil {
+			return errors.WithMessage(err, "Could not marshal Fact")
 		}
 
 		if err := self.MessageQueueService.Publish(
