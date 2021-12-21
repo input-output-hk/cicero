@@ -79,6 +79,9 @@
               nixpkgs.overlays = [ self.overlay ];
               networking.hostName = lib.mkDefault "dev";
 
+              # re-enable TTY disabled by minimal profile for `machinectl shell`
+              systemd.services."getty@tty1".enable = lib.mkForce true;
+
               systemd.services.liftbridge = {
                 wantedBy = [ "multi-user.target" ];
                 after = [ "network.target" ];
@@ -173,6 +176,11 @@
                 enable = true;
                 enableTCPIP = true;
                 package = pkgs.postgresql_12;
+
+                settings = {
+                  log_statement = "all";
+                  log_destination = lib.mkForce "syslog";
+                };
 
                 authentication = ''
                   local all all trust
