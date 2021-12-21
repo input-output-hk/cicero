@@ -3,14 +3,13 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"github.com/input-output-hk/cicero/src/component/web/apidoc"
 	"github.com/rs/zerolog"
 	"net/http"
 	"strconv"
 	"time"
 
-	swagger "github.com/davidebianchi/gswagger"
 	"github.com/davidebianchi/gswagger/apirouter"
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/input-output-hk/cicero/src/application"
@@ -30,47 +29,102 @@ type Web struct {
 
 func (self *Web) Start(ctx context.Context) error {
 	self.Logger.Info().Msg("Starting Web")
-
 	muxRouter := mux.NewRouter().StrictSlash(true)
-	r, err := swagger.NewRouter(apirouter.NewGorillaMuxRouter(muxRouter), swagger.Options{
-		Context: ctx,
-		Openapi: &openapi3.T{
-			Info: &openapi3.Info{
-				Title:   "Cicero REST API",
-				Version: "1.0.0",
-			},
-		},
-	})
+	r, err := apidoc.NewRouterDocumented(apirouter.NewGorillaMuxRouter(muxRouter), "Cicero REST API", "1.0.0", ctx)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create swagger router")
 	}
 
 	// sorted alphabetically, please keep it this way
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}/logs", self.ApiActionIdLogsGet, genApiActionIdLogsGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/{id}/logs",
+		self.ApiActionIdLogsGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an action", Value: 0}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]*domain.LokiOutput{"logs": {}}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}", self.ApiActionIdGet, genApiActionIdGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/{id}",
+		self.ApiActionIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an action", Value: 0}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionInstance{}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action", self.ApiActionGet, genApiActionGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action",
+		self.ApiActionGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.ActionInstance{}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/definition/{source}/{name}", self.ApiWorkflowDefinitionSourceNameGet, genApiWorkflowDefinitionSourceNameGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/workflow/definition/{source}/{name}",
+		self.ApiWorkflowDefinitionSourceNameGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "source", Description: "source of workflow definition", Value: "source"},
+				{Name: "name", Description: "name of workflow definition", Value: "name"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.WorkflowDefinition{}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/definition/{source}", self.ApiWorkflowDefinitionSourceGet, genApiWorkflowDefinitionSourceGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/workflow/definition/{source}",
+		self.ApiWorkflowDefinitionSourceGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "source", Description: "source of workflow definition", Value: "source"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []string{}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost, "/api/workflow/instance/{id}/fact", self.ApiWorkflowInstanceIdFactPost, genApiWorkflowInstanceIdFactPostSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/workflow/instance/{id}/fact",
+		self.ApiWorkflowInstanceIdFactPost,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an workflow instance", Value: 0}}),
+			apidoc.BuildBodyRequest(domain.Facts{}),
+			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/instance/{id}", self.ApiWorkflowInstanceIdGet, genApiWorkflowInstanceIdGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/workflow/instance/{id}",
+		self.ApiWorkflowInstanceIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an workflow instance", Value: 0}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.WorkflowInstance{}, "NoContent")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/workflow/instance", self.ApiWorkflowInstanceGet, genApiWorkflowInstanceGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/workflow/instance",
+		self.ApiWorkflowInstanceGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.WorkflowInstance{}, "NoContent")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost, "/api/workflow/instance", self.ApiWorkflowInstancePost, genApiWorkflowInstancePostSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/workflow/instance",
+		self.ApiWorkflowInstancePost,
+		apidoc.BuildSwaggerDef(
+			nil,
+			apidoc.BuildBodyRequest(WorkflowParam{}),
+			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
+	); err != nil {
 		return err
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
@@ -355,31 +409,6 @@ func (self *Web) ApiWorkflowDefinitionSourceGet(w http.ResponseWriter, req *http
 	}
 }
 
-func genApiWorkflowDefinitionSourceGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"source": {
-				Schema:      &swagger.Schema{Value: "source"},
-				Description: "source of workflow definition",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: []string{}},
-				},
-				Description: "OK",
-			},
-			404: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "NotFound",
-			},
-		},
-	}
-}
-
 func (self *Web) ApiWorkflowDefinitionSourceNameGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	id, err := self.parseId(vars["id"])
@@ -406,65 +435,11 @@ func (self *Web) ApiWorkflowDefinitionSourceNameGet(w http.ResponseWriter, req *
 	}
 }
 
-func genApiWorkflowDefinitionSourceNameGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"source": {
-				Schema:      &swagger.Schema{Value: "source"},
-				Description: "source of workflow definition",
-			},
-			"name": {
-				Schema:      &swagger.Schema{Value: "name"},
-				Description: "name of workflow definition",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.WorkflowDefinition{}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
-	}
-}
-
 func (self *Web) ApiWorkflowInstanceGet(w http.ResponseWriter, req *http.Request) {
 	if instances, err := self.WorkflowService.GetAll(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch workflows"))
 	} else {
 		self.json(w, instances, 200)
-	}
-}
-
-func genApiWorkflowInstanceGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: []domain.WorkflowInstance{}},
-				},
-				Description: "OK",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
 	}
 }
 
@@ -503,34 +478,6 @@ func (self *Web) ApiWorkflowInstancePost(w http.ResponseWriter, req *http.Reques
 	}
 
 	self.json(w, nil, http.StatusNoContent)
-	//w.WriteHeader(http.StatusNoContent)
-}
-
-func genApiWorkflowInstancePostSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		RequestBody: &swagger.ContentValue{
-			Content: swagger.Content{
-				"application/json": {Value: &WorkflowParam{}},
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			204: {
-				Description: "NoContent",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
-	}
 }
 
 func (self *Web) workflowInstance(req *http.Request) (*domain.WorkflowInstance, error) {
@@ -553,31 +500,6 @@ func (self *Web) ApiWorkflowInstanceIdGet(w http.ResponseWriter, req *http.Reque
 		self.NotFound(w, errors.WithMessage(err, "Couldn't find instance"))
 	}
 	self.json(w, instance, 200)
-}
-
-func genApiWorkflowInstanceIdGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Schema:      &swagger.Schema{Value: 0},
-				Description: "id of an workflow instance",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.WorkflowInstance{}},
-				},
-				Description: "OK",
-			},
-			404: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "NotFound",
-			},
-		},
-	}
 }
 
 func (self *Web) getFactFromBody(req *http.Request) (domain.Facts, error) {
@@ -617,65 +539,11 @@ func (self *Web) ApiWorkflowInstanceIdFactPost(w http.ResponseWriter, req *http.
 	}
 }
 
-func genApiWorkflowInstanceIdFactPostSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Schema:      &swagger.Schema{Value: 0},
-				Description: "id of an workflow instance",
-			},
-		},
-		RequestBody: &swagger.ContentValue{
-			Content: swagger.Content{
-				"application/json": {
-					Value: &domain.Facts{},
-				},
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			204: {
-				Description: "NoContent",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
-	}
-}
-
 func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 	if actions, err := self.ActionService.GetAll(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get all actions"))
 	} else {
 		self.json(w, actions, 200)
-	}
-}
-
-func genApiActionGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: []domain.ActionInstance{}},
-				},
-				Description: "OK",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
 	}
 }
 
@@ -690,37 +558,6 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func genApiActionIdGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Schema:      &swagger.Schema{Value: 0},
-				Description: "id of an action",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.ActionInstance{}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
-	}
-}
-
 func (self *Web) ApiActionIdLogsGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
@@ -730,41 +567,6 @@ func (self *Web) ApiActionIdLogsGet(w http.ResponseWriter, req *http.Request) {
 	} else {
 		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, 200)
 	}
-}
-
-func genApiActionIdLogsGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Schema:      &swagger.Schema{Value: 0},
-				Description: "id of an action",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: map[string]*domain.LokiOutput{"logs": {}}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
-	}
-}
-
-type errorResponse struct {
-	Message string `json:"message"`
 }
 
 func (self *Web) parseId(orig string) (uint64, error) {
