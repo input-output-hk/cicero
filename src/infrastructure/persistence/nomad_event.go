@@ -2,11 +2,13 @@ package persistence
 
 import (
 	"context"
+
 	"github.com/georgysavva/scany/pgxscan"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/jackc/pgx/v4"
+
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain/repository"
-	"github.com/jackc/pgx/v4"
 )
 
 type nomadEventRepository struct {
@@ -34,23 +36,24 @@ func (n nomadEventRepository) GetLastNomadEvent() (index uint64, err error) {
 	return
 }
 
-func (n nomadEventRepository) GetEventAllocByWorkflowId(id uint64) (results []map[string]interface{}, err error) {
+func (n nomadEventRepository) GetEventAllocByNomadJobId(id uint64) (results []map[string]interface{}, err error) {
 	err = pgxscan.Select(context.Background(), n.DB, &results, `
-            SELECT name, payload->>'Allocation' AS alloc
-            FROM (
-              SELECT id, name
-              FROM action_instances
-              WHERE workflow_instance_id = $1
-            ) action
-            LEFT JOIN LATERAL (
-              SELECT payload, index
-              FROM nomad_events
-              WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
-              AND payload#>>'{Allocation,TaskGroup}' = action.name
-              AND topic = 'Allocation'
-              AND type = 'AllocationUpdated'
-              ORDER BY index DESC LIMIT 1
-            ) payload ON true;
-            `, id)
+		SELECT name, payload->>'Allocation' AS alloc
+		FROM (
+			SELECT id, name
+			FROM runs
+			WHERE nomad_job_id = $1
+		) action
+		LEFT JOIN LATERAL (
+			SELECT payload, index
+			FROM nomad_events
+			WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
+				AND payload#>>'{Allocation,TaskGroup}' = action.name
+				AND topic = 'Allocation'
+				AND type = 'AllocationUpdated'
+			ORDER BY index DESC
+			LIMIT 1
+		) payload ON true;
+	`, id)
 	return
 }

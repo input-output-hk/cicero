@@ -15,7 +15,7 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 )
 
-type WorkflowFactConsumer struct {
+type FactCreateConsumer struct {
 	Logger              *log.Logger
 	MessageQueueService service.MessageQueueService
 	FactService         service.FactService
@@ -23,8 +23,8 @@ type WorkflowFactConsumer struct {
 	Db                  config.PgxIface
 }
 
-func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting WorkflowFactConsumer")
+func (self *FactCreateConsumer) Start(ctx context.Context) error {
+	self.Logger.Println("Starting FactCreateConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.FactCreateStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Could not subscribe to stream %s", domain.FactCreateStreamName)
@@ -35,7 +35,7 @@ func (self *WorkflowFactConsumer) Start(ctx context.Context) error {
 	return nil
 }
 
-func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
+func (self *FactCreateConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
 			self.Logger.Fatalf("Error received in %s: %s", msg.Stream(), err.Error())
@@ -61,7 +61,7 @@ func (self *WorkflowFactConsumer) invokerSubscriber(ctx context.Context) func(*l
 	}
 }
 
-func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, msg *liftbridge.Message) error {
+func (self *FactCreateConsumer) processMessage(tx pgx.Tx, msg *liftbridge.Message) error {
 	if err := self.MessageQueueService.Save(tx, msg); err != nil {
 		return errors.WithMessage(err, "Could not save message")
 	}

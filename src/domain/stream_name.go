@@ -6,7 +6,7 @@ type StreamName string
 
 const (
 	ActionCreateStreamName StreamName = "action.*.create"
-	ActionInvokeStreamName StreamName = "action.*.invoke" // TODO rename to ActionRunStreamName
+	ActionInvokeStreamName StreamName = "action.*.invoke"
 	FactCreateStreamName   StreamName = "fact.create"
 )
 

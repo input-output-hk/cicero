@@ -56,7 +56,7 @@ in rec {
 
      Most "steps/links/parts" are created from a builder function
      that takes some specific arguments which are usually given
-     directly in the workflow definition.
+     directly in the action definition.
 
      This simple contract sometimes allows to use other functions
      that are not primarily meant to be used in a chain, or use

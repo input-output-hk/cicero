@@ -14,7 +14,7 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 )
 
-type ActionStartConsumer struct {
+type ActionCreateConsumer struct {
 	Logger              *log.Logger
 	MessageQueueService service.MessageQueueService
 	ActionService       service.ActionService
@@ -22,8 +22,8 @@ type ActionStartConsumer struct {
 	Db                  config.PgxIface
 }
 
-func (self *ActionStartConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting ActionStartConsumer")
+func (self *ActionCreateConsumer) Start(ctx context.Context) error {
+	self.Logger.Println("Starting ActionCreateConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.ActionCreateStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Could not subscribe to stream %s", domain.ActionCreateStreamName)
@@ -35,7 +35,7 @@ func (self *ActionStartConsumer) Start(ctx context.Context) error {
 }
 
 // TODO build generalized template for these consumer/subscriber thingies to reduce boilerplate
-func (self *ActionStartConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
+func (self *ActionCreateConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
 			self.Logger.Printf("error received in %s: %s", msg.Stream(), err.Error())

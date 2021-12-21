@@ -13,14 +13,14 @@ import (
 	"github.com/vivek-ng/concurrency-limiter/priority"
 
 	"github.com/input-output-hk/cicero/src/application"
-	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/application/component"
 	"github.com/input-output-hk/cicero/src/application/component/web"
+	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 )
 
 type StartCmd struct {
-	Components []string `arg:"positional" help:"any of: start, invoke, fact, nomad, web"`
+	Components []string `arg:"positional" help:"any of: create, invoke, fact, nomad, web"`
 
 	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
 	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
@@ -36,20 +36,20 @@ func (cmd *StartCmd) Run() error {
 	// If none are given then start all,
 	// otherwise start only those that are given.
 	var start struct {
-		workflowStart  bool
-		workflowInvoke bool
-		workflowFact   bool
-		nomadEvent     bool
-		web            bool
+		actionCreate bool
+		actionInvoke bool
+		factCreate   bool
+		nomadEvent   bool
+		web          bool
 	}
 	for _, component := range cmd.Components {
 		switch component {
 		case "start":
-			start.workflowStart = true
-		case "invoke":
-			start.workflowInvoke = true
-		case "fact":
-			start.workflowFact = true
+			start.actionCreate = true
+		case "actionInvoke":
+			start.actionInvoke = true
+		case "factCreate":
+			start.factCreate = true
 		case "nomad":
 			start.nomadEvent = true
 		case "web":
@@ -58,14 +58,14 @@ func (cmd *StartCmd) Run() error {
 			logger.Fatalf("Unknown component: %s", component)
 		}
 	}
-	if !(start.workflowStart ||
-		start.workflowInvoke ||
-		start.workflowFact ||
+	if !(start.actionCreate ||
+		start.actionInvoke ||
+		start.factCreate ||
 		start.nomadEvent ||
 		start.web) {
-		start.workflowStart = true
-		start.workflowInvoke = true
-		start.workflowFact = true
+		start.actionCreate = true
+		start.actionInvoke = true
+		start.factCreate = true
 		start.nomadEvent = true
 		start.web = true
 	}
@@ -122,9 +122,9 @@ func (cmd *StartCmd) Run() error {
 
 	supervisor := cmd.newSupervisor(logger)
 
-	if start.workflowStart {
-		child := component.ActionStartConsumer{
-			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
+	if start.actionCreate {
+		child := component.ActionCreateConsumer{
+			Logger:              log.New(os.Stderr, "ActionCreateConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
 			ActionService:       actionService().(service.ActionService),
 			EvaluationService:   evaluationService().(service.EvaluationService),
@@ -135,8 +135,8 @@ func (cmd *StartCmd) Run() error {
 		}
 	}
 
-	if start.workflowInvoke {
-		child := component.InvokeConsumer{
+	if start.actionInvoke {
+		child := component.ActionInvokeConsumer{
 			EvaluationService:   evaluationService().(service.EvaluationService),
 			RunService:          runService().(service.RunService),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
@@ -152,9 +152,9 @@ func (cmd *StartCmd) Run() error {
 		}
 	}
 
-	if start.workflowFact {
-		child := component.WorkflowFactConsumer{
-			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
+	if start.factCreate {
+		child := component.FactCreateConsumer{
+			Logger:              log.New(os.Stderr, "FactCreateConsumer: ", log.LstdFlags),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
 			FactService:         factService().(service.FactService),
 			ActionService:       actionService().(service.ActionService),

@@ -18,7 +18,7 @@ import (
 type NomadEventService interface {
 	Save(pgx.Tx, *nomad.Event) error
 	GetLastNomadEvent() (uint64, error)
-	GetEventAllocByWorkflowId(uint64) (map[string]domain.AllocWrapper, error)
+	GetEventAllocByNomadJobId(uint64) (map[string]domain.AllocWrapper, error)
 }
 
 type nomadEventService struct {
@@ -49,10 +49,10 @@ func (n *nomadEventService) GetLastNomadEvent() (uint64, error) {
 	return n.nomadEventRepository.GetLastNomadEvent()
 }
 
-func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[string]domain.AllocWrapper, error) {
+func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uint64) (map[string]domain.AllocWrapper, error) {
 	allocs := map[string]domain.AllocWrapper{}
-	n.logger.Printf("Get EventAlloc by WorkflowId: %d", workflowId)
-	results, err := n.nomadEventRepository.GetEventAllocByWorkflowId(workflowId)
+	n.logger.Printf("Getting EventAlloc by Nomad Job ID: %d", nomadJobId)
+	results, err := n.nomadEventRepository.GetEventAllocByNomadJobId(nomadJobId)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +75,6 @@ func (n *nomadEventService) GetEventAllocByWorkflowId(workflowId uint64) (map[st
 
 		allocs[result["name"].(string)] = domain.AllocWrapper{Alloc: alloc, Logs: logs}
 	}
-	n.logger.Printf("Got EventAlloc by WorkflowId: %d", workflowId)
+	n.logger.Printf("Got EventAlloc by Nomad Job ID: %d", nomadJobId)
 	return allocs, nil
 }

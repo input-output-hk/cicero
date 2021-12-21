@@ -19,7 +19,7 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 )
 
-type InvokeConsumer struct {
+type ActionInvokeConsumer struct {
 	Logger              *log.Logger
 	Limiter             *priority.PriorityLimiter
 	EvaluationService   service.EvaluationService
@@ -30,8 +30,8 @@ type InvokeConsumer struct {
 	NomadClient         application.NomadClient
 }
 
-func (self *InvokeConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting InvokeConsumer")
+func (self *ActionInvokeConsumer) Start(ctx context.Context) error {
+	self.Logger.Println("Starting ActionInvokeConsumer")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.ActionInvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Could not subscribe to stream %s", domain.ActionInvokeStreamName)
@@ -42,7 +42,7 @@ func (self *InvokeConsumer) Start(ctx context.Context) error {
 	return nil
 }
 
-func (self *InvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
+func (self *ActionInvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
 			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
@@ -68,11 +68,11 @@ func (self *InvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbri
 	}
 }
 
-func (self *InvokeConsumer) getActionName(msg *liftbridge.Message) string {
+func (self *ActionInvokeConsumer) getActionName(msg *liftbridge.Message) string {
 	return strings.Split(msg.Subject(), ".")[1]
 }
 
-func (self *InvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx, msg *liftbridge.Message) error {
+func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx, msg *liftbridge.Message) error {
 	if err := self.MessageQueueService.Save(tx, msg); err != nil {
 		return errors.WithMessage(err, "Could not save message")
 	}
