@@ -17,7 +17,7 @@ import (
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 
-	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 )
@@ -25,12 +25,12 @@ import (
 type Web struct {
 	Listen              string
 	Logger              *log.Logger
-	RunService          application.RunService
-	ActionService       application.ActionService
-	FactService         application.FactService
-	MessageQueueService application.MessageQueueService
-	NomadEventService   application.NomadEventService
-	EvaluationService   application.EvaluationService
+	RunService          service.RunService
+	ActionService       service.ActionService
+	FactService         service.FactService
+	MessageQueueService service.MessageQueueService
+	NomadEventService   service.NomadEventService
+	EvaluationService   service.EvaluationService
 	Db                  config.PgxIface
 }
 

@@ -13,8 +13,9 @@ import (
 	"github.com/vivek-ng/concurrency-limiter/priority"
 
 	"github.com/input-output-hk/cicero/src/application"
-	"github.com/input-output-hk/cicero/src/component"
-	"github.com/input-output-hk/cicero/src/component/web"
+	"github.com/input-output-hk/cicero/src/application/service"
+	"github.com/input-output-hk/cicero/src/application/component"
+	"github.com/input-output-hk/cicero/src/application/component/web"
 	"github.com/input-output-hk/cicero/src/config"
 )
 
@@ -96,27 +97,27 @@ func (cmd *StartCmd) Run() error {
 	})
 
 	evaluationService := once(func() interface{} {
-		return application.NewEvaluationService(cmd.Evaluators, cmd.Env)
+		return service.NewEvaluationService(cmd.Evaluators, cmd.Env)
 	})
 	messageQueueService := once(func() interface{} {
 		if bridge, err := config.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
 			logger.Fatalln(err.Error())
 			return err
 		} else {
-			return application.NewMessageQueueService(db().(*pgxpool.Pool), bridge)
+			return service.NewMessageQueueService(db().(*pgxpool.Pool), bridge)
 		}
 	})
 	factService := once(func() interface{} {
-		return application.NewFactService(db().(*pgxpool.Pool))
+		return service.NewFactService(db().(*pgxpool.Pool))
 	})
 	actionService := once(func() interface{} {
-		return application.NewActionService(db().(*pgxpool.Pool))
+		return service.NewActionService(db().(*pgxpool.Pool))
 	})
 	runService := once(func() interface{} {
-		return application.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
+		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
 	})
 	nomadEventService := once(func() interface{} {
-		return application.NewNomadEventService(db().(*pgxpool.Pool), runService().(application.RunService))
+		return service.NewNomadEventService(db().(*pgxpool.Pool), runService().(service.RunService))
 	})
 
 	supervisor := cmd.newSupervisor(logger)
@@ -124,9 +125,9 @@ func (cmd *StartCmd) Run() error {
 	if start.workflowStart {
 		child := component.ActionStartConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowStartConsumer: ", log.LstdFlags),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			ActionService:       actionService().(application.ActionService),
-			EvaluationService:   evaluationService().(application.EvaluationService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			ActionService:       actionService().(service.ActionService),
+			EvaluationService:   evaluationService().(service.EvaluationService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
@@ -136,10 +137,10 @@ func (cmd *StartCmd) Run() error {
 
 	if start.workflowInvoke {
 		child := component.InvokeConsumer{
-			EvaluationService:   evaluationService().(application.EvaluationService),
-			RunService:          runService().(application.RunService),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			ActionService:       actionService().(application.ActionService),
+			EvaluationService:   evaluationService().(service.EvaluationService),
+			RunService:          runService().(service.RunService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			ActionService:       actionService().(service.ActionService),
 			Db:                  db().(*pgxpool.Pool),
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			// Increase priority of waiting goroutines every second.
@@ -154,9 +155,9 @@ func (cmd *StartCmd) Run() error {
 	if start.workflowFact {
 		child := component.WorkflowFactConsumer{
 			Logger:              log.New(os.Stderr, "WorkflowFactConsumer: ", log.LstdFlags),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			FactService:         factService().(application.FactService),
-			ActionService:       actionService().(application.ActionService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			FactService:         factService().(service.FactService),
+			ActionService:       actionService().(service.ActionService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
@@ -167,9 +168,9 @@ func (cmd *StartCmd) Run() error {
 	if start.nomadEvent {
 		child := component.NomadEventConsumer{
 			Logger:              log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			RunService:          runService().(application.RunService),
-			NomadEventService:   nomadEventService().(application.NomadEventService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			RunService:          runService().(service.RunService),
+			NomadEventService:   nomadEventService().(service.NomadEventService),
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			Db:                  db().(*pgxpool.Pool),
 		}
@@ -182,12 +183,12 @@ func (cmd *StartCmd) Run() error {
 		child := web.Web{
 			Listen:              cmd.WebListen,
 			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
-			RunService:          runService().(application.RunService),
-			ActionService:       actionService().(application.ActionService),
-			FactService:         factService().(application.FactService),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			NomadEventService:   nomadEventService().(application.NomadEventService),
-			EvaluationService:   evaluationService().(application.EvaluationService),
+			RunService:          runService().(service.RunService),
+			ActionService:       actionService().(service.ActionService),
+			FactService:         factService().(service.FactService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			NomadEventService:   nomadEventService().(service.NomadEventService),
+			EvaluationService:   evaluationService().(service.EvaluationService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {

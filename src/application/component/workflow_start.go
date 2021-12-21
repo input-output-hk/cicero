@@ -9,16 +9,16 @@ import (
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 
-	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 )
 
 type ActionStartConsumer struct {
 	Logger              *log.Logger
-	MessageQueueService application.MessageQueueService
-	ActionService       application.ActionService
-	EvaluationService   application.EvaluationService
+	MessageQueueService service.MessageQueueService
+	ActionService       service.ActionService
+	EvaluationService   service.EvaluationService
 	Db                  config.PgxIface
 }
 

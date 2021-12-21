@@ -10,16 +10,16 @@ import (
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 
-	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 )
 
 type WorkflowFactConsumer struct {
 	Logger              *log.Logger
-	MessageQueueService application.MessageQueueService
-	FactService         application.FactService
-	ActionService       application.ActionService
+	MessageQueueService service.MessageQueueService
+	FactService         service.FactService
+	ActionService       service.ActionService
 	Db                  config.PgxIface
 }
 

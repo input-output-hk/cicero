@@ -14,6 +14,7 @@ import (
 	"github.com/vivek-ng/concurrency-limiter/priority"
 
 	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 )
@@ -21,10 +22,10 @@ import (
 type InvokeConsumer struct {
 	Logger              *log.Logger
 	Limiter             *priority.PriorityLimiter
-	EvaluationService   application.EvaluationService
-	ActionService       application.ActionService
-	RunService          application.RunService
-	MessageQueueService application.MessageQueueService
+	EvaluationService   service.EvaluationService
+	ActionService       service.ActionService
+	RunService          service.RunService
+	MessageQueueService service.MessageQueueService
 	Db                  config.PgxIface
 	NomadClient         application.NomadClient
 }

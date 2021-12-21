@@ -13,15 +13,16 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 )
 
 type NomadEventConsumer struct {
 	Logger              *log.Logger
-	MessageQueueService application.MessageQueueService
-	NomadEventService   application.NomadEventService
-	RunService          application.RunService
+	MessageQueueService service.MessageQueueService
+	NomadEventService   service.NomadEventService
+	RunService          service.RunService
 	Db                  config.PgxIface
 	NomadClient         application.NomadClient
 }
