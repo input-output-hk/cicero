@@ -23,7 +23,7 @@ type ActionService interface {
 	GetAll() ([]*domain.Action, error)
 	GetCurrent() ([]*domain.Action, error)
 	Save(pgx.Tx, *domain.Action) error
-	IsRunnable(*domain.Action) (bool, map[string][]*domain.Fact, error)
+	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
 }
 
 type actionService struct {
@@ -81,11 +81,10 @@ func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
 	return
 }
 
-// TODO return type => map[string]factOrArrayOfFacts? interface{} directly?
-func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string][]*domain.Fact, error) {
+func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]interface{}, error) {
 	self.logger.Printf("Checking whether Action %s is runnable", action.ID)
 
-	inputs := map[string][]*domain.Fact{}
+	inputs := map[string]interface{}{}
 
 	// XXX We only check that the required paths are present.
 	// In the future we could extend this to also check some values.
@@ -102,7 +101,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string][
 			if satisfied, fact, err := self.isInputSatisfiedLatest(&input.Match); err != nil {
 				return false, nil, err
 			} else if satisfied {
-				inputs[name] = []*domain.Fact{fact}
+				inputs[name] = fact
 			} else {
 				return false, nil, nil
 			}
@@ -112,7 +111,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string][
 			} else if satisfied {
 				return false, nil, nil
 			} else {
-				inputs[name] = []*domain.Fact{fact}
+				inputs[name] = fact
 			}
 		case domain.InputDefinitionSelectAll:
 			if satisfied, facts, err := self.isInputSatisfied(&input.Match); err != nil {
