@@ -115,7 +115,20 @@ in rec {
       in lib.setFunctionArgs wrapper actionRawArgs;
   };
 
-  jobs.singleTask = { name, ... }: task: { group.${name}.task.${name} = task; };
+  jobs = {
+    escapeNames = from: to: job: let
+      escape = builtins.replaceStrings
+        (from ++ [ "/" ])
+        (to ++ [ "-" ]);
+    in
+      lib.mapAttrs' (k: v: lib.nameValuePair (escape k) (v // {
+        group = builtins.mapAttrs (k: v: v // {
+          task = lib.mapAttrs' (k: lib.nameValuePair (escape k)) v.task or {};
+        }) v.group or {};
+      })) job;
+
+    singleTask = name: task: { ${name}.group.${name}.task.${name} = task; };
+  };
 
   tasks.script = language: script:
     let
@@ -175,8 +188,14 @@ in rec {
         else
           (a action) b) { } steps;
 
+    jobs = {
+      escapeNames = from: to: actions: jobs.escapeNames from to;
+
+      singleTask = { name, ... }: jobs.singleTask name;
+    };
+
     tasks = {
-      /* Like `script` but the second argument is
+      /* Like `tasks.script` but the second argument is
          a function that takes the command of the
          next script and returns the new script.
 
@@ -329,9 +348,9 @@ in rec {
   };
 
   inherit (workflows) callWorkflow mkWorkflow;
-  inherit (jobs) singleTask;
   inherit (tasks) script;
   inherit (chains) chain;
+  inherit (chains.jobs) escapeNames singleTask;
   inherit (chains.tasks) wrapScript nix makes git github;
   inherit data-merge;
 }

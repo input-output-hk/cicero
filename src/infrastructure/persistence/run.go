@@ -20,10 +20,10 @@ func NewRunRepository(db config.PgxIface) repository.RunRepository {
 	return runRepository{DB: db}
 }
 
-func (a runRepository) GetById(id uuid.UUID) (run domain.Run, err error) {
+func (a runRepository) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &run,
-		`SELECT * FROM runs WHERE id = $1`,
+		`SELECT * FROM runs WHERE nomad_job_id = $1`,
 		id,
 	)
 	return
@@ -49,8 +49,8 @@ func (a runRepository) GetAll() (instances []*domain.Run, err error) {
 func (a runRepository) Save(tx pgx.Tx, run *domain.Run) error {
 	return tx.QueryRow(
 		context.Background(),
-		`INSERT INTO runs (nomad_job_id, action_id, success, failure) VALUES ($1, $2, $3, $4) RETURNING nomad_job_id`,
-		run.NomadJobID, run.ActionId, run.Success, run.Failure,
+		`INSERT INTO runs (action_id, success, failure) VALUES ($1, $2, $3) RETURNING nomad_job_id`,
+		run.ActionId, run.Success, run.Failure,
 	).Scan(&run.NomadJobID)
 }
 

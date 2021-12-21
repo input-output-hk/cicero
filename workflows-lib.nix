@@ -1,12 +1,11 @@
-self:
+{ std, lib, ... }:
 
 let
-  inherit (self.lib.std.data-merge) merge;
-  inherit (self.inputs.nixpkgs.lib) mapAttrs;
-
+  inherit (std.data-merge) merge;
+  inherit (lib) mapAttrs;
 in {
   jobDefaults = actions: job:
-    merge job {
+    merge job (mapAttrs (k: job: {
       datacenters = [ "dc1" "eu-central-1" "us-east-2" ];
       group = mapAttrs (k: group: {
         restart.attempts = 0;
@@ -17,5 +16,5 @@ in {
           };
         }) group.task or { };
       }) job.group or { };
-    };
+    }) job);
 }

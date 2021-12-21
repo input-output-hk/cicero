@@ -60,7 +60,8 @@ func sqlWhereHasPaths(paths [][]string) (where string) {
 			where += " AND "
 		}
 		for i := range path {
-			where += `jsonb_extract_path(value, $` + strconv.Itoa(i + 1) + `) IS NOT NULL`
+			// FIXME jsonb_extract_path is variadic but only one part of the path is being passed in, each checked at root!
+			where += `jsonb_extract_path(value, $` + strconv.Itoa(i+1) + `) IS NOT NULL`
 		}
 	}
 
@@ -77,11 +78,11 @@ func pathsToQueryArgs(paths [][]string) (args []interface{}) {
 }
 
 func (a *factRepository) Save(tx pgx.Tx, fact *domain.Fact) error {
-	return tx.QueryRow(
-		context.Background(),
-		`INSERT INTO facts (run_id, value, binary_hash) VALUES ($1, $2, $3) RETURNING id`,
+	return pgxscan.Get(
+		context.Background(), tx, fact,
+		`INSERT INTO facts (run_id, value, binary_hash) VALUES ($1, $2, $3) RETURNING id, created_at`,
 		fact.RunId, fact.Value, fact.BinaryHash,
-	).Scan(&fact.ID)
+	)
 	// TODO nyi: stream-insert binary using large object API. or do that in a separate function.
 	// TODO nyi: unique key over (value, binary_hash)
 }

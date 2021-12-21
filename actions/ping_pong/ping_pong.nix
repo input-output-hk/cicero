@@ -2,7 +2,7 @@ let
   common = import ./ping.nix;
 in
 
-{ std, lib, ... } @ args:
+{ lib, ... } @ args:
 
 {
   inputs = lib.recursiveUpdate (common.inputs args) {
@@ -16,5 +16,5 @@ in
     };
   };
 
-  job = common.job std args;
+  job = common.job args;
 }

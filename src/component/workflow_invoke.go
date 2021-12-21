@@ -77,7 +77,11 @@ func (self *InvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx, msg *
 	}
 
 	if action, err := self.ActionService.GetLatestByName(self.getActionName(msg)); err != nil {
-		return err
+		if errors.Is(err, pgx.ErrNoRows) {
+			self.Logger.Println("No Action with that name, ignoring invoke message")
+		} else {
+			return err
+		}
 	} else if runnable, inputs, err := self.ActionService.IsRunnable(&action); err != nil {
 		return err
 	} else if runnable {

@@ -96,7 +96,7 @@ in rec {
           inherit inputs success;
         } // lib.optionalAttrs (job != null) {
           inherit failure;
-          job = hydrateNomadJob { ${name} = job parsedInputs; };
+          job = hydrateNomadJob (job parsedInputs);
         };
     in lib.pipe action [
       (action: if isFunction action then action else import action)

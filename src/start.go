@@ -180,13 +180,15 @@ func (cmd *StartCmd) Run() error {
 
 	if start.web {
 		child := web.Web{
-			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			Listen:              cmd.WebListen,
-			ActionService:       actionService().(application.ActionService),
+			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			RunService:          runService().(application.RunService),
+			ActionService:       actionService().(application.ActionService),
+			FactService:         factService().(application.FactService),
 			MessageQueueService: messageQueueService().(application.MessageQueueService),
 			NomadEventService:   nomadEventService().(application.NomadEventService),
 			EvaluationService:   evaluationService().(application.EvaluationService),
+			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err

@@ -1,6 +1,7 @@
 package application
 
 import (
+	"encoding/json"
 	"log"
 	"os"
 
@@ -92,43 +93,56 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string][
 	// except we define a subset of constraints as the only conditions we support
 	// and no longer run the CUE filter over the selected facts afterwards.
 
-	facts := struct {
-		Latest     map[string]*domain.Fact
-		LatestNone map[string]*domain.Fact
-		All        map[string][]*domain.Fact
-	}{}
+	// XXX race condition: DB may change in between `factRepository` calls
+
 	for input, v := range action.Inputs.Latest {
-		if fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(v)); err != nil {
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return false, inputs, err
-			}
+		if satisfied, fact, err := self.isInputSatisfied(v); err != nil {
+			return false, nil, err
+		} else if satisfied {
+			inputs[input] = []*domain.Fact{fact}
 		} else {
-			facts.Latest[input] = &fact
+			return false, nil, nil
 		}
 	}
+	/* TODO nyi: implement once InputsDefinition was changed
 	for input, v := range action.Inputs.LatestNone {
-		if fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(v)); err != nil {
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return false, inputs, err
-			}
+		if satisfied, facts, err := self.isInputSatisfied(v); err != nil {
+			return false, nil, err
+		} else if satisfied {
+			return false, nil, nil
 		} else {
-			facts.LatestNone[input] = &fact
+			inputs[input] = facts
 		}
 	}
 	for input, v := range action.Inputs.All {
-		if facts_, err := self.factRepository.GetByFields(collectFieldPaths(v)); err != nil {
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return false, inputs, err
-			}
+		if satisfied, facts, err := self.isInputSatisfied(v); err != nil {
+			return false, nil, err
+		} else if satisfied {
+			inputs[input] = facts
 		} else {
-			facts.All[input] = facts_
+			return false, nil, nil
 		}
 	}
-
-	// TODO nyi
-	// check facts filter against all facts
+	*/
 
 	return true, inputs, nil
+}
+
+func (self *actionService) isInputSatisfied(value cue.Value) (bool, *domain.Fact, error) {
+	if fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(value)); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil, nil
+		}
+		return false, nil, err
+	} else if factValue, err := json.Marshal(fact.Value); err != nil {
+		return false, &fact, err
+	} else if factCue := value.Context().CompileBytes(factValue); factCue.Err() != nil {
+		return false, &fact, err
+	} else if err := value.Subsume(factCue); err != nil {
+		return false, &fact, err
+	} else {
+		return true, &fact, nil
+	}
 }
 
 func collectFieldPaths(value cue.Value) (paths [][]string) {
@@ -139,11 +153,11 @@ func collectFieldPaths(value cue.Value) (paths [][]string) {
 		for iter.Next() {
 			selector := iter.Selector()
 
-			if iter.IsOptional() || selector.IsDefinition() || selector.PkgPath() != "" {
+			if iter.IsOptional() || selector.IsDefinition() || selector.PkgPath() != "" || !selector.IsString() {
 				continue
 			}
 
-			path := []string{selector.String()}
+			path := []string{iter.Label()}
 
 			if _, err := iter.Value().Struct(); err != nil {
 				paths = append(paths, path)

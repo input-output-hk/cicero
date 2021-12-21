@@ -8,7 +8,7 @@ import (
 )
 
 type RunRepository interface {
-	GetById(uuid.UUID) (domain.Run, error)
+	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetByActionId(uuid.UUID) (domain.Run, error)
 	GetAll() ([]*domain.Run, error)
 	Save(pgx.Tx, *domain.Run) error

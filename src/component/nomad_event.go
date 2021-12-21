@@ -99,7 +99,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return nil
 	}
 
-	run, err := self.RunService.GetById(id)
+	run, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
 		if pgxscan.NotFound(err) {
 			self.Logger.Printf("Ignoring Nomad event for Job with ID %q (no such Run)", id)

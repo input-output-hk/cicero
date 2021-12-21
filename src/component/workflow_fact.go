@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
@@ -70,12 +71,17 @@ func (self *WorkflowFactConsumer) processMessage(tx pgx.Tx, msg *liftbridge.Mess
 		return errors.WithMessage(err, "Invalid JSON received")
 	}
 
-	// FIXME race condition? TX ends after MQ ACK is received
-	// but invoker may have already checked actions against facts by that time,
-	// so this fact may not have been visible to the invoker when it looked.
-	// ⇒ solution: delete this file, make invoker listen to facts directly.
-	if err := self.FactService.Save(tx, &fact); err != nil {
-		return err
+	// We save as new Fact if no ID is given.
+	// XXX We should always save first and then only notify.
+	// Or have two streams: A creates and B notifies. A would call B.
+	if fact.ID == (uuid.UUID{}) {
+		// FIXME race condition? TX ends after MQ ACK is received
+		// but invoker may have already checked actions against facts by that time,
+		// so this fact may not have been visible to the invoker when it looked.
+		// ⇒ solution: delete this file, make invoker listen to facts directly.
+		if err := self.FactService.Save(tx, &fact); err != nil {
+			return err
+		}
 	}
 
 	if actions, err := self.ActionService.GetCurrent(); err != nil {

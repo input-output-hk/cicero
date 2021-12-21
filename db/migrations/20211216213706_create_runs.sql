@@ -3,7 +3,7 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE runs (
-	nomad_job_id uuid PRIMARY KEY,
+	nomad_job_id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
 	action_id uuid NOT NULL,
 	success jsonb NOT NULL,
 	failure jsonb,

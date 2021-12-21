@@ -19,6 +19,8 @@ type FactService interface {
 	GetLatestByFields([][]string) (domain.Fact, error)
 	GetByFields([][]string) ([]*domain.Fact, error)
 	Save(pgx.Tx, *domain.Fact) error
+	// TODO sometimes you need a Tx, sometimes not...
+	// → SaveTx() and Save() etc? another wrapper? Tx() to get one?
 }
 
 type factService struct {

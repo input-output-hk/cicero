@@ -10,16 +10,23 @@ rec {
     '';
   };
 
-  job = std: args:
-    inputs: std.chain args [
-      std.singleTask
-      (std.script "bash" ''
-        echo 'running ${args.name} #${args.id}'
-      '')
-    ];
+  job = { std, name, id, ... }@args: let
+    wfLib = import ../../workflows-lib.nix args;
+  in inputs: std.chain args [
+    wfLib.jobDefaults
 
-  __functor = _: { std, ... } @ args: {
+    # systemd-nspawn does not like underscore
+    (std.escapeNames [ "_" ] [ "-" ])
+
+    std.singleTask
+
+    (std.script "bash" ''
+      echo 'running ${name} #${id}'
+    '')
+  ];
+
+  __functor = _: args: {
     inputs = inputs args;
-    job = job std args;
+    job = job args;
   };
 }

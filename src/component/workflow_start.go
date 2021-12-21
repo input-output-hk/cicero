@@ -53,18 +53,52 @@ func (self *ActionStartConsumer) invokerSubscriber(ctx context.Context) func(*li
 			"time:", msg.Timestamp(),
 		)
 
-		if name, source, err := getActionInfo(msg); err != nil {
+		name, source, err := getActionInfo(msg)
+		if err != nil {
+			self.Logger.Println(err.Error())
+			return
+		}
+
+		self.Logger.Printf("Received start message for Action with name %q in source %q", name, source)
+
+		var actionDef domain.ActionDefinition
+		if def, err := self.EvaluationService.EvaluateAction(source, name, uuid.UUID{}, map[string][]*domain.Fact{}); err != nil {
 			self.Logger.Println(err.Error())
 			return
 		} else {
-			self.Logger.Printf("Received start message for Action with name %q in source %q", name, source)
+			actionDef = def
+		}
 
-			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-				return self.processMessage(tx, name, source, msg)
-			}); err != nil {
-				self.Logger.Fatalf("Could not process message: %s with error %s", msg.Value(), err.Error())
-				return
+		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+			if err := self.MessageQueueService.Save(tx, msg); err != nil {
+				return errors.WithMessagef(err, "Could not save message %s", msg.Value())
 			}
+
+			action := domain.Action{
+				Name:   name,
+				Source: source,
+				Meta:   actionDef.Meta,
+				Inputs: actionDef.Inputs,
+			}
+			if err := self.ActionService.Save(tx, &action); err != nil {
+				return err
+			}
+			self.Logger.Printf("Created Action with ID %q", action.ID)
+
+			return nil
+		}); err != nil {
+			self.Logger.Fatalf("Could not process message: %s with error %s", msg.Value(), err.Error())
+			return
+		}
+
+		self.Logger.Printf("Sending Run message for Action with name %q", name)
+		if err := self.MessageQueueService.Publish(
+			domain.ActionInvokeStream(name),
+			domain.ActionInvokeStreamName,
+			[]byte{},
+		); err != nil {
+			self.Logger.Println(err.Error())
+			return
 		}
 	}
 }
@@ -82,40 +116,4 @@ func getActionInfo(msg *liftbridge.Message) (name, source string, err error) {
 		source = string(sourceFromMsg)
 	}
 	return
-}
-
-func (self *ActionStartConsumer) processMessage(tx pgx.Tx, actionName, source string, msg *liftbridge.Message) error {
-	if err := self.MessageQueueService.Save(tx, msg); err != nil {
-		return errors.WithMessagef(err, "Could not save message %s", msg.Value())
-	}
-
-	var actionDef domain.ActionDefinition
-	// TODO look at the func params ..?
-	if def, err := self.EvaluationService.EvaluateAction(source, actionName, uuid.UUID{}, map[string][]*domain.Fact{}); err != nil {
-		return err
-	} else {
-		actionDef = def
-	}
-
-	action := domain.Action{
-		Name:   actionName,
-		Source: source,
-		Meta:   actionDef.Meta,
-		Inputs: actionDef.Inputs,
-	}
-	if err := self.ActionService.Save(tx, &action); err != nil {
-		return err
-	}
-	self.Logger.Printf("Created Action with ID %q", action.ID)
-
-	self.Logger.Printf("Sending Run message for Action with ID %q", action.ID)
-	if err := self.MessageQueueService.Publish(
-		domain.ActionInvokeStream(actionName),
-		domain.ActionInvokeStreamName,
-		[]byte{},
-	); err != nil {
-		return err
-	}
-
-	return nil
 }

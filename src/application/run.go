@@ -23,7 +23,7 @@ import (
 )
 
 type RunService interface {
-	GetById(uuid.UUID) (domain.Run, error)
+	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetAll() ([]*domain.Run, error)
 	Save(pgx.Tx, *domain.Run) error
 	Update(pgx.Tx, *domain.Run) error
@@ -55,11 +55,11 @@ func NewRunService(db config.PgxIface, prometheusAddr string) RunService {
 	return &impl
 }
 
-func (self *runService) GetById(id uuid.UUID) (run domain.Run, err error) {
-	self.logger.Printf("Getting Run by ID %s", id)
-	run, err = self.runRepository.GetById(id)
+func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
+	self.logger.Printf("Getting Run by Nomad Job ID %s", id)
+	run, err = self.runRepository.GetByNomadJobId(id)
 	if err != nil {
-		err = errors.WithMessagef(err, "Could not select existing Run by ID: %s", id)
+		err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID: %s", id)
 	}
 	return
 }

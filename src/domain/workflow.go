@@ -15,9 +15,6 @@ type InputsDefinition struct {
 	Latest     map[string]cue.Value
 	LatestNone map[string]cue.Value
 	All        map[string]cue.Value
-
-	// XXX Do we really need to keep this alive?
-	cueContext *cue.Context
 }
 
 type inputsDefinitionStringly struct {
@@ -32,12 +29,12 @@ func (self *InputsDefinition) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	self.cueContext = cuecontext.New()
+	ctx := cuecontext.New()
 
 	convert := func(from *map[string]string) (into map[string]cue.Value) {
 		into = map[string]cue.Value{}
 		for k, v := range *from {
-			into[k] = self.cueContext.CompileString(v)
+			into[k] = ctx.CompileString(v)
 		}
 		return
 	}

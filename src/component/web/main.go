@@ -13,10 +13,12 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 
 	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 )
 
@@ -25,9 +27,11 @@ type Web struct {
 	Logger              *log.Logger
 	RunService          application.RunService
 	ActionService       application.ActionService
+	FactService         application.FactService
 	MessageQueueService application.MessageQueueService
 	NomadEventService   application.NomadEventService
 	EvaluationService   application.EvaluationService
+	Db                  config.PgxIface
 }
 
 func (self *Web) Start(ctx context.Context) error {
@@ -85,6 +89,12 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	if _, err := r.AddRoute(http.MethodGet, "/api/run", self.ApiRunGet, genApiRunGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet, "/api/fact/{id}", self.ApiFactIdGet, genApiFactIdGetSwagDef()); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodPost, "/api/fact", self.ApiFactPost, genApiFactPostSwagDef()); err != nil {
 		return err
 	}
 	/* FIXME
@@ -233,7 +243,7 @@ func (self *Web) WorkflowIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	instance, err := self.RunService.GetById(id)
+	instance, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
 		self.NotFound(w, errors.WithMessagef(err, "Failed to find workflow %q", id))
 		return
@@ -261,7 +271,7 @@ func (self *Web) WorkflowIdGraphGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	instance, err := self.RunService.GetById(id)
+	instance, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
 		self.NotFound(w, errors.WithMessagef(err, "Failed to find workflow %q", id))
 		return
@@ -565,7 +575,7 @@ func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
 		return nil, err
 	}
 
-	if run, err := self.RunService.GetById(id); err != nil {
+	if run, err := self.RunService.GetByNomadJobId(id); err != nil {
 		return nil, err
 	} else {
 		return &run, nil
@@ -876,6 +886,107 @@ func genApiRunIdLogsGetSwagDef() swagger.Definitions {
 			200: {
 				Content: swagger.Content{
 					"text/html": {Value: map[string]*domain.LokiOutput{"logs": {}}},
+				},
+				Description: "OK",
+			},
+			412: {
+				Content: swagger.Content{
+					"application/json": {Value: &errorResponse{}},
+				},
+				Description: "ClientError",
+			},
+			500: {
+				Content: swagger.Content{
+					"application/json": {Value: &errorResponse{}},
+				},
+				Description: "ServerError",
+			},
+		},
+	}
+}
+
+func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	if id, err := uuid.Parse(vars["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+	} else if fact, err := self.FactService.GetById(id); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
+	} else {
+		self.json(w, fact, 200)
+	}
+}
+
+func genApiFactIdGetSwagDef() swagger.Definitions {
+	return swagger.Definitions{
+		PathParams: swagger.ParameterValue{
+			"id": {
+				Content:     swagger.Content{},
+				Description: "id of a fact",
+			},
+		},
+		Responses: map[int]swagger.ContentValue{
+			200: {
+				Content: swagger.Content{
+					"text/html": {Value: domain.Fact{}},
+				},
+				Description: "OK",
+			},
+			412: {
+				Content: swagger.Content{
+					"application/json": {Value: &errorResponse{}},
+				},
+				Description: "ClientError",
+			},
+			500: {
+				Content: swagger.Content{
+					"application/json": {Value: &errorResponse{}},
+				},
+				Description: "ServerError",
+			},
+		},
+	}
+}
+
+func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
+	fact := domain.Fact{}
+	if err := json.NewDecoder(req.Body).Decode(&fact.Value); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
+		return
+	}
+
+	factJson, err := json.Marshal(&fact)
+	if err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Could not marshal Fact"))
+		return
+	}
+
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if err := self.FactService.Save(tx, &fact); err != nil {
+			return errors.WithMessage(err, "Failed to save Fact")
+		}
+
+		if err := self.MessageQueueService.Publish(
+			domain.FactCreateStreamName.String(),
+			domain.FactCreateStreamName,
+			factJson,
+		); err != nil {
+			return err
+		}
+
+		self.json(w, fact, 200)
+		return nil
+	}); err != nil {
+		self.ServerError(w, err)
+		return
+	}
+}
+
+func genApiFactPostSwagDef() swagger.Definitions {
+	return swagger.Definitions{
+		Responses: map[int]swagger.ContentValue{
+			200: {
+				Content: swagger.Content{
+					"text/html": {Value: domain.Fact{}},
 				},
 				Description: "OK",
 			},
