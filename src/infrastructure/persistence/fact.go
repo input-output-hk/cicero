@@ -54,15 +54,18 @@ func sqlWhereHasPaths(paths [][]string) (where string) {
 		return
 	}
 
-	where += " WHERE "
+	where += ` WHERE `
+	n := 1
 	for i, path := range paths {
 		if i > 0 {
-			where += " AND "
+			where += ` AND `
 		}
-		for i := range path {
-			// FIXME jsonb_extract_path is variadic but only one part of the path is being passed in, each checked at root!
-			where += `jsonb_extract_path(value, $` + strconv.Itoa(i+1) + `) IS NOT NULL`
+		where += ` jsonb_extract_path(value `
+		for range path {
+			where += ` , $` + strconv.Itoa(n)
+			n += 1
 		}
+		where += ` ) IS NOT NULL `
 	}
 
 	return
