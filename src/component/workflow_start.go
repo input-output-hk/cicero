@@ -5,7 +5,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
@@ -62,7 +61,7 @@ func (self *ActionStartConsumer) invokerSubscriber(ctx context.Context) func(*li
 		self.Logger.Printf("Received start message for Action with name %q in source %q", name, source)
 
 		var actionDef domain.ActionDefinition
-		if def, err := self.EvaluationService.EvaluateAction(source, name, uuid.UUID{}, map[string][]*domain.Fact{}); err != nil {
+		if def, err := self.EvaluationService.EvaluateActionDefinition(source, name); err != nil {
 			self.Logger.Println(err.Error())
 			return
 		} else {

@@ -23,8 +23,13 @@ import (
 )
 
 type EvaluationService interface {
-	EvaluateAction(src string, name string, id uuid.UUID, inputs map[string][]*domain.Fact) (domain.ActionDefinition, error)
 	ListActions(src string) ([]string, error)
+
+	// Convenience wrapper around `EvaluateAction`.
+	EvaluateActionDefinition(src, name string) (domain.ActionDefinition, error)
+
+	EvaluateAction(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.ActionDefinition, error)
+
 	// TODO add EvaluateJob() and EvaluateFacts/Outputs() for better performance (less JSON) with lazy languages
 }
 
@@ -126,7 +131,11 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 	}
 }
 
-func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID, inputs map[string][]*domain.Fact) (domain.ActionDefinition, error) {
+func (e *evaluationService) EvaluateActionDefinition(src, name string) (domain.ActionDefinition, error) {
+	return e.EvaluateAction(src, name, uuid.UUID{}, map[string]interface{}{})
+}
+
+func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.ActionDefinition, error) {
 	var def domain.ActionDefinition
 
 	inputsJson, err := json.Marshal(inputs)
