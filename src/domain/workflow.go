@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"cuelang.org/go/cue"
@@ -11,79 +12,106 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 )
 
-type InputsDefinition struct {
-	Latest     map[string]cue.Value
-	LatestNone map[string]cue.Value
-	All        map[string]cue.Value
+type InputDefinitionSelect uint
+
+const (
+	InputDefinitionSelectLatest InputDefinitionSelect = iota
+	InputDefinitionSelectLatestNone
+	InputDefinitionSelectAll
+)
+
+func (self *InputDefinitionSelect) String() (string, error) {
+	switch *self {
+	case InputDefinitionSelectLatest:
+		return "latest", nil
+	case InputDefinitionSelectLatestNone:
+		return "latest_none", nil
+	case InputDefinitionSelectAll:
+		return "all", nil
+	default:
+		return "", fmt.Errorf("Unknown value %d", *self)
+	}
 }
 
-type inputsDefinitionStringly struct {
-	Latest     map[string]string `json:"latest"`
-	LatestNone map[string]string `json:"latest_none"`
-	All        map[string]string `json:"all"`
+func (self *InputDefinitionSelect) FromString(str string) error {
+	switch str {
+	case "latest":
+		*self = InputDefinitionSelectLatest
+	case "latest_none":
+		*self = InputDefinitionSelectLatestNone
+	case "all":
+		*self = InputDefinitionSelectAll
+	default:
+		return fmt.Errorf("Unknown value %q", str)
+	}
+	return nil
 }
 
-func (self *InputsDefinition) UnmarshalJSON(data []byte) error {
-	def := inputsDefinitionStringly{}
+func (self *InputDefinitionSelect) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	return self.FromString(str)
+}
+
+func (self InputDefinitionSelect) MarshalJSON() ([]byte, error) {
+	if str, err := self.String(); err != nil {
+		return nil, err
+	} else {
+		return json.Marshal(str)
+	}
+}
+
+type InputDefinition struct {
+	Select InputDefinitionSelect
+	Match  cue.Value
+}
+
+type inputDefinitionJson struct {
+	Select InputDefinitionSelect `json:"select"`
+	Match  string                `json:"match"`
+}
+
+func (self *InputDefinition) UnmarshalJSON(data []byte) error {
+	def := inputDefinitionJson{}
 	if err := json.Unmarshal(data, &def); err != nil {
 		return err
 	}
 
-	ctx := cuecontext.New()
-
-	convert := func(from *map[string]string) (into map[string]cue.Value) {
-		into = map[string]cue.Value{}
-		for k, v := range *from {
-			into[k] = ctx.CompileString(v)
-		}
-		return
-	}
-
-	self.Latest = convert(&def.Latest)
-	self.LatestNone = convert(&def.LatestNone)
-	self.All = convert(&def.All)
+	self.Select = def.Select
+	self.Match = cuecontext.New().CompileString(def.Match)
 
 	return nil
 }
 
-func (self InputsDefinition) MarshalJSON() ([]byte, error) {
-	def := inputsDefinitionStringly{
-		Latest:     map[string]string{},
-		LatestNone: map[string]string{},
-		All:        map[string]string{},
-	}
+func (self InputDefinition) MarshalJSON() ([]byte, error) {
+	def := inputDefinitionJson{}
 
-	convert := func(from *map[string]cue.Value, into *map[string]string) error {
-		for k, v := range *from {
-			if syntax, err := cueformat.Node(
-				v.Syntax(),
-				cueformat.Simplify(),
-			); err != nil {
-				return err
-			} else {
-				(*into)[k] = string(syntax)
-			}
-		}
-		return nil
-	}
+	def.Select = self.Select
 
-	convert(&self.Latest, &def.Latest)
-	convert(&self.LatestNone, &def.LatestNone)
-	convert(&self.All, &def.All)
+	if syntax, err := cueformat.Node(
+		self.Match.Syntax(),
+		cueformat.Simplify(),
+	); err != nil {
+		return nil, err
+	} else {
+		def.Match = string(syntax)
+	}
 
 	return json.Marshal(def)
 }
 
-func (self *InputsDefinition) Scan(value interface{}) error {
+func (self *InputDefinition) Scan(value interface{}) error {
 	return self.UnmarshalJSON(value.([]byte))
 }
 
 type ActionDefinition struct {
-	Meta    map[string]interface{} `json:"meta"`
-	Failure []interface{}          `json:"failure"`
-	Success []interface{}          `json:"success"`
-	Inputs  InputsDefinition       `json:"inputs"`
-	Job     *nomad.Job             `json:"job"`
+	Meta    map[string]interface{}     `json:"meta"`
+	Failure []interface{}              `json:"failure"`
+	Success []interface{}              `json:"success"`
+	Inputs  map[string]InputDefinition `json:"inputs"`
+	Job     *nomad.Job                 `json:"job"`
 }
 
 func (s *ActionDefinition) IsDecision() bool {
@@ -106,7 +134,7 @@ type Action struct {
 	Meta      map[string]interface{}
 	Name      string
 	Source    string
-	Inputs    InputsDefinition
+	Inputs    map[string]InputDefinition
 	CreatedAt time.Time
 }
 

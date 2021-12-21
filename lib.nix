@@ -6,20 +6,19 @@ self:
    { name, id }: {
      inputs = {
        # require last fact with `count` of at least 1
-       last.tick = "count: >0";
+       tick = "count: >0";
 
        # stop at 10 (no `over_nine` input will be created)
-       last_none.over_nine = "count: >9";
+       over_nine = {
+         select = "latest_none";
+         match = "count: >9";
+       };
 
        # get all ticks
-       all.ticks = "count: int";
-
-       # TODO change input def to this:
-       # tick = {
-       #   select = "latest";
-       #   cue = "count: int";
-       # };
-       # tick = "count: int"; # defaults to select=latest
+       ticks = {
+         select = "all";
+         match = "count: int";
+       };
      };
 
      job = { tick, ticks }:
@@ -39,7 +38,7 @@ in rec {
     { id, inputs ? { } }:
     let
       inherit (builtins)
-        isFunction typeOf fromJSON attrValues attrNames functionArgs all any;
+        isFunction typeOf fromJSON attrValues attrNames functionArgs any;
 
       parsedInputs = {
         "set" = inputs;
@@ -47,34 +46,22 @@ in rec {
       }.${typeOf inputs};
 
       validateAction = { inputs, job, ... }@action:
-        if !(typeOf inputs == "set") then
+        if typeOf inputs != "set" then
           abort "`inputs` must be an attribute set"
-        else if !(typeOf (inputs.latest or { }) == "set") then
-          abort "`inputs.latest` must be an attribute set"
-        else if !(typeOf (inputs.latest_none or { }) == "set") then
-          abort "`inputs.latest_none` must be an attribute set"
-        else if !(typeOf (inputs.all or { }) == "set") then
-          abort "`inputs.all` must be an attribute set"
-        else if !(all (var: typeOf var == "string")
-          (attrValues (inputs.latest or { }))) then
-          abort "`inputs.latest` must only contain strings"
-        else if !(all (var: typeOf var == "string")
-          (attrValues (inputs.latest_none or { }))) then
-          abort "`inputs.latest_none` must only contain strings"
-        else if !(all (var: typeOf var == "string")
-          (attrValues (inputs.all or { }))) then
-          abort "`inputs.all` must only contain strings"
-        else if !(all
-          (var: (inputs.latest or { }) ? ${var} || (inputs.all or { }) ? ${var})
-          (attrNames (functionArgs job))) then
-          abort
-          "`job` can only take arguments declared in `inputs.{latest,latest_none,all}`"
-        else if any (var: (inputs.latest or { }) ? ${var})
-        (attrNames (inputs.all or { }))
-        || any (var: (inputs.all or { }) ? ${var})
-        (attrNames (inputs.latest or { })) then
-          abort
-          "There must be no duplicate input declarations in `inputs.{latest,all}`"
+        else if any
+        (input: let t = typeOf input; in t != "string" && t != "set")
+        (attrValues inputs) then
+          abort ''
+            values in `inputs` must be string or an attribute set like `{ select = "…"; match = "…"; }`''
+        else if any (input: typeOf input.select or "" != "string")
+        (attrValues inputs) then
+          abort "`inputs.<name>.select` must be a string"
+        else if any (input: typeOf input.match or "" != "string")
+        (attrValues inputs) then
+          abort "`inputs.<name>.match` must be a string"
+        else if any (var: !(inputs ? ${var}))
+        (attrNames (functionArgs job)) then
+          abort "`job` can only take arguments declared in `inputs`"
         else
           action;
 
@@ -90,10 +77,18 @@ in rec {
             })) job.group;
         }));
 
-      mkActionState = { inputs, success ? [{ ${name} = true; }]
+      expandActionInputs = mapAttrs (k: v:
+        if typeOf v == "string" then {
+          select = "latest";
+          match = v;
+        } else
+          v);
+
+      expandAction = { inputs, success ? [{ ${name} = true; }]
         , failure ? [{ ${name} = false; }], job ? null, }:
         {
-          inherit inputs success;
+          inherit success;
+          inputs = expandActionInputs inputs;
         } // lib.optionalAttrs (job != null) {
           inherit failure;
           job = hydrateNomadJob (job parsedInputs);
@@ -102,7 +97,7 @@ in rec {
       (action: if isFunction action then action else import action)
       (action: action { inherit name id; })
       validateAction
-      mkActionState
+      expandAction
     ];
 
   # Recurses through a directory, considering every file an action.

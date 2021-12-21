@@ -2,12 +2,16 @@ rec {
   workflow = "ping_pong";
 
   inputs = args: {
-    latest.start = ''
+    start = ''
       "${workflow}/start": true
     '';
-    latest_none."has run" = ''
-      "${args.name}": bool
-    '';
+
+    "has run" = {
+      select = "latest_none";
+      match = ''
+        "${args.name}": bool
+      '';
+    };
   };
 
   job = { std, name, id, ... }@args: let
