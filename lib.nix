@@ -38,7 +38,7 @@ in rec {
     { id, inputs ? { } }:
     let
       inherit (builtins)
-        isFunction typeOf fromJSON attrValues attrNames functionArgs any;
+        isFunction typeOf fromJSON attrValues attrNames functionArgs deepSeq;
 
       parsedInputs = {
         "set" = inputs;
@@ -46,24 +46,63 @@ in rec {
       }.${typeOf inputs};
 
       validateAction = { inputs, job, ... }@action:
-        if typeOf inputs != "set" then
-          abort "`inputs` must be an attribute set"
-        else if any
-        (input: let t = typeOf input; in t != "string" && t != "set")
-        (attrValues inputs) then
-          abort ''
-            values in `inputs` must be string or an attribute set like `{ select = "…"; match = "…"; }`''
-        else if any (input: typeOf input.select or "" != "string")
-        (attrValues inputs) then
-          abort "`inputs.<name>.select` must be a string"
-        else if any (input: typeOf input.match or "" != "string")
-        (attrValues inputs) then
-          abort "`inputs.<name>.match` must be a string"
-        else if any (var: !(inputs ? ${var}))
-        (attrNames (functionArgs job)) then
-          abort "`job` can only take arguments declared in `inputs`"
-        else
-          action;
+        lib.pipe action (map deepSeq [
+          (let t = typeOf inputs;
+          in if t != "set" then
+            abort "`inputs` must be set but is ${t}"
+          else
+            null)
+
+          (mapAttrs (k: v:
+            let t = typeOf v;
+            in if t != "string" && t != "set" then
+              abort ''
+                `inputs."${k}"` must be string or set with keys `select` (optional), `not` (optional), and `match` but is ${t}''
+            else
+              null) inputs)
+
+          (mapAttrs (k: v:
+            if typeOf v == "string" then
+              null
+            else
+              let
+                select = v.select or "latest";
+                t = typeOf select;
+              in if t != "string" then
+                abort ''`inputs."${k}".select` must be string but is ${t}''
+              else if select != "latest" && select != "all" then
+                abort ''
+                  `inputs."${k}".select` must be either "latest" or "all" but is "${select}"''
+              else
+                null) inputs)
+
+          (mapAttrs (k: v:
+            if typeOf v == "string" then
+              null
+            else
+              let t = typeOf v.not or false;
+              in if t != "bool" then
+                abort ''`inputs."${k}".not` must be bool but is ${t}''
+              else
+                null) inputs)
+
+          (mapAttrs (k: v:
+            if typeOf v == "string" then
+              null
+            else
+              let t = typeOf v.match;
+              in if t != "string" then
+                abort ''`inputs."${k}".match` must be string but is ${t}''
+              else
+                null) inputs)
+
+          (map (input:
+            if !(inputs ? ${input}) then
+              abort ''
+                `job` can only take arguments declared in `inputs` which "${input}" is not''
+            else
+              null) (attrNames (functionArgs job)))
+        ]);
 
       hydrateNomadJob = mapAttrs (k: job:
         assert !(job ? ID); # author must not set an ID
