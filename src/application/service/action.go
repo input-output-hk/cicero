@@ -165,8 +165,8 @@ func matchFact(value *cue.Value, fact *domain.Fact) (bool, error) {
 		return false, err
 	} else if factCue := value.Context().CompileBytes(factValue); factCue.Err() != nil {
 		return false, err
-	} else if err := value.Subsume(factCue); err != nil {
-		return false, err
+	} else if value.Subsume(factCue) != nil {
+		return false, nil
 	} else {
 		return true, nil
 	}
