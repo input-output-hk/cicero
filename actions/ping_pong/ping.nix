@@ -7,7 +7,7 @@ rec {
     '';
 
     "has run" = {
-      select = "latest_none";
+      not = true;
       match = ''
         "${args.name}": bool
       '';

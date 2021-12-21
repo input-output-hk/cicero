@@ -10,7 +10,7 @@ self:
 
        # stop at 10 (no `over_nine` input will be created)
        over_nine = {
-         select = "latest_none";
+         not = true;
          match = "count: >9";
        };
 
@@ -117,11 +117,11 @@ in rec {
         }));
 
       expandActionInputs = mapAttrs (k: v:
-        if typeOf v == "string" then {
+        {
           select = "latest";
           match = v;
-        } else
-          v);
+          not = false;
+        } // lib.optionalAttrs (typeOf v != "string") v);
 
       expandAction = { inputs, success ? [{ ${name} = true; }]
         , failure ? [{ ${name} = false; }], job ? null, }:

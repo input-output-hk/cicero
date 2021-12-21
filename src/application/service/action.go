@@ -100,24 +100,20 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		case domain.InputDefinitionSelectLatest:
 			if satisfied, fact, err := self.isInputSatisfiedLatest(&input.Match); err != nil {
 				return false, nil, err
-			} else if satisfied {
-				inputs[name] = fact
+			} else if satisfied != input.Not {
+				if !input.Not {
+					inputs[name] = fact
+				}
 			} else {
 				return false, nil, nil
-			}
-		case domain.InputDefinitionSelectLatestNone:
-			if satisfied, fact, err := self.isInputSatisfiedLatest(&input.Match); err != nil {
-				return false, nil, err
-			} else if satisfied {
-				return false, nil, nil
-			} else {
-				inputs[name] = fact
 			}
 		case domain.InputDefinitionSelectAll:
 			if satisfied, facts, err := self.isInputSatisfied(&input.Match); err != nil {
 				return false, nil, err
-			} else if satisfied {
-				inputs[name] = facts
+			} else if satisfied != input.Not {
+				if !input.Not {
+					inputs[name] = facts
+				}
 			} else {
 				return false, nil, nil
 			}

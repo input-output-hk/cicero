@@ -16,7 +16,6 @@ type InputDefinitionSelect uint
 
 const (
 	InputDefinitionSelectLatest InputDefinitionSelect = iota
-	InputDefinitionSelectLatestNone
 	InputDefinitionSelectAll
 )
 
@@ -24,8 +23,6 @@ func (self *InputDefinitionSelect) String() (string, error) {
 	switch *self {
 	case InputDefinitionSelectLatest:
 		return "latest", nil
-	case InputDefinitionSelectLatestNone:
-		return "latest_none", nil
 	case InputDefinitionSelectAll:
 		return "all", nil
 	default:
@@ -37,8 +34,6 @@ func (self *InputDefinitionSelect) FromString(str string) error {
 	switch str {
 	case "latest":
 		*self = InputDefinitionSelectLatest
-	case "latest_none":
-		*self = InputDefinitionSelectLatestNone
 	case "all":
 		*self = InputDefinitionSelectAll
 	default:
@@ -65,11 +60,13 @@ func (self InputDefinitionSelect) MarshalJSON() ([]byte, error) {
 
 type InputDefinition struct {
 	Select InputDefinitionSelect
+	Not    bool
 	Match  cue.Value
 }
 
 type inputDefinitionJson struct {
 	Select InputDefinitionSelect `json:"select"`
+	Not    bool                  `json:"not"`
 	Match  string                `json:"match"`
 }
 
@@ -80,6 +77,7 @@ func (self *InputDefinition) UnmarshalJSON(data []byte) error {
 	}
 
 	self.Select = def.Select
+	self.Not = def.Not
 	self.Match = cuecontext.New().CompileString(def.Match)
 
 	return nil
@@ -89,6 +87,7 @@ func (self InputDefinition) MarshalJSON() ([]byte, error) {
 	def := inputDefinitionJson{}
 
 	def.Select = self.Select
+	def.Not = self.Not
 
 	if syntax, err := cueformat.Node(
 		self.Match.Syntax(),
