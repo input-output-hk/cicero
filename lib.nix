@@ -1,6 +1,6 @@
 self:
 
-/* A "spec action" is a function of the form:
+/* An action is a function of the form:
 
    ```nix
    { name, id }: {

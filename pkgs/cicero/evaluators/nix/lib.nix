@@ -4,117 +4,6 @@ let
   inherit (self.inputs.nixpkgs) lib;
   inherit (self.inputs) data-merge;
 in rec {
-  workflows = rec {
-    /* Convenience for defining and wrapping a workflow.
-
-       Takes an attribute set of "spec workflow" arguments
-       as its first argument but drops any unknown keys.
-
-       The second argument is a "std workflow".
-
-       This allows access to any possible extra args before
-       calling `mkWorkflow` with the "spec workflow" args.
-
-       Useful if you get std itself passed as an extra arg,
-       as you need to access std to call `mkWorkflow`.
-    */
-    callWorkflow = { name, id, ... }@args:
-      lib.flip mkWorkflow { inherit name id; };
-
-    /* Takes a "std workflow" and returns a "spec workflow".
-
-       The "spec workflow" is a function that takes a set
-       `{ name, id }` as its only argument and returns
-       the final JSON that the cicero evaluator parses.
-
-       The "std workflow" is the set or function
-       which layout is specific to `mkWorkflow`.
-       It is similar to a "spec workflow".
-       I'll try to briefly visualize it here:
-
-       ```nix
-       [workflow:] {
-         actions = [actions:] {
-           <name> = [action:] { factFoo ? null }: {
-             when.conditionFoo = factFoo != null;
-             job = …;
-           };
-         };
-       }
-
-       `job` is the JSON representation a Nomad job's HCL or
-       a list that is passed to the `chain` function (see its docs).
-       It may be null or absent entirely.
-
-       The arguments in brackets are optional,
-       meaning that either a function with a single argument
-       or an attribute set is allowed in their place.
-
-       If the function form is used, that first argument
-       is the result of the function itself for recursive access
-       with specific extra keys added:
-       - workflow: { name, id, <self keys…> }
-       - actions: { workflow, <self keys…> }
-       - action: { actions, <self keys…> }
-
-       This allows access to the parent structure
-       from any place in the hierarchy.
-       ```
-    */
-    mkWorkflow = wf:
-      { name, id }@wfInfo:
-      let
-        wfFn = if builtins.typeOf wf == "set" then (_: wf) else wf;
-        initWf = wfFn (wfFn wfInfo // wfInfo);
-      in initWf // {
-        actions = let
-          actionsFn = if builtins.typeOf initWf.actions == "set" then
-            (_: initWf.actions)
-          else
-            initWf.actions;
-          actionsInfo = { workflow = initWf // wfInfo; };
-          initActions = actionsFn (actionsFn actionsInfo // actionsInfo);
-        in mkActions initActions actionsInfo;
-      };
-
-    mkActions = actions: actionsInfo:
-      builtins.mapAttrs (mkAction (actions // actionsInfo)) actions;
-
-    mkAction = actions: name: action:
-      let
-        # actionRaw = { fact ? null }: { when = …; job = …; }
-        actionRaw = if builtins.typeOf (action { }) == "set" then
-          action
-        else
-          (action { });
-        actionRawArgs = builtins.functionArgs actionRaw;
-
-        # actionFn = self: { fact ? null }: { when = …; job = …; }
-        actionFn =
-          if builtins.typeOf (action { }) == "set" then (_: action) else action;
-
-        info = { inherit name actions; };
-
-        actionFnArg = actionFn info { } // info;
-        initAction = actionFn actionFnArg;
-
-        wrapper = facts:
-          let result = initAction facts;
-          in result // {
-            job = if result ? job then
-              if builtins.typeOf result.job == "list" then
-                chain actionFnArg result.job
-              else
-                result.job
-            else
-              null;
-          };
-        # We need to `setFunctionArgs` because that information is lost
-        # as the `wrapper` just takes `facts:`, leading to no facts
-        # being passed to this action as it appears like it takes none.
-      in lib.setFunctionArgs wrapper actionRawArgs;
-  };
-
   jobs = {
     escapeNames = from: to: job: let
       escape = builtins.replaceStrings
@@ -347,7 +236,6 @@ in rec {
     };
   };
 
-  inherit (workflows) callWorkflow mkWorkflow;
   inherit (tasks) script;
   inherit (chains) chain;
   inherit (chains.jobs) escapeNames singleTask;
