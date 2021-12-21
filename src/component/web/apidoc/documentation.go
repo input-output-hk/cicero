@@ -2,6 +2,7 @@ package apidoc
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	swagger "github.com/davidebianchi/gswagger"
@@ -9,7 +10,10 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-func NewRouterDocumented(router apirouter.Router, title string, version string, ctx context.Context) (*swagger.Router, error) {
+const jsonType = "application/json"
+const htmlType = "text/html"
+
+func NewRouterDocumented(router apirouter.Router, title string, version string, docName string, ctx context.Context) (*swagger.Router, error) {
 	return swagger.NewRouter(router, swagger.Options{
 		Context: ctx,
 		Openapi: &openapi3.T{
@@ -18,6 +22,8 @@ func NewRouterDocumented(router apirouter.Router, title string, version string, 
 				Version: version,
 			},
 		},
+		YAMLDocumentationPath: fmt.Sprintf(`/documentation/%s.yaml`, docName),
+		JSONDocumentationPath: fmt.Sprintf(`/documentation/%s.json`, docName),
 	})
 }
 
@@ -47,6 +53,8 @@ type Response struct {
 	body       swagger.ContentValue
 }
 
+//issue: additionalProperties breaks map[string]interface{}
+//https://github.com/go-swagger/go-swagger/issues/1402
 func BuildResponseSuccessfully(statusCode int, context interface{}, description string) Response {
 	return Response{
 		statusCode: statusCode,
@@ -62,7 +70,7 @@ func BuildResponseSuccessfully(statusCode int, context interface{}, description 
 func BuildBodyRequest(body interface{}) *swagger.ContentValue {
 	return &swagger.ContentValue{
 		Content: swagger.Content{
-			"application/json": {
+			jsonType: {
 				Value: &body,
 			},
 		},
@@ -77,13 +85,13 @@ func BuildSwaggerDef(parameters swagger.ParameterValue, bodyRequest *swagger.Con
 			response.statusCode: response.body,
 			http.StatusPreconditionFailed: {
 				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
+					jsonType: {Value: &errorResponse{}},
 				},
 				Description: "ClientError",
 			},
 			http.StatusInternalServerError: {
 				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
+					jsonType: {Value: &errorResponse{}},
 				},
 				Description: "ServerError",
 			},

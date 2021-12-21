@@ -30,7 +30,7 @@ type Web struct {
 func (self *Web) Start(ctx context.Context) error {
 	self.Logger.Info().Msg("Starting Web")
 	muxRouter := mux.NewRouter().StrictSlash(true)
-	r, err := apidoc.NewRouterDocumented(apirouter.NewGorillaMuxRouter(muxRouter), "Cicero REST API", "1.0.0", ctx)
+	r, err := apidoc.NewRouterDocumented(apirouter.NewGorillaMuxRouter(muxRouter), "Cicero REST API", "1.0.0", "cicero", ctx)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create swagger router")
 	}
@@ -137,7 +137,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/workflow", self.WorkflowPost).Methods("POST")
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
-	// creates /documentation/json and /documentation/yaml routes
+	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
 	err = r.GenerateAndExposeSwagger()
 	if err != nil {
 		return errors.WithMessage(err, "Failed to generate and expose swagger: %s")
@@ -163,7 +163,7 @@ func (self *Web) Start(ctx context.Context) error {
 }
 
 func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
-	http.Redirect(w, req, "/workflow", 302)
+	http.Redirect(w, req, "/workflow", http.StatusFound)
 }
 
 func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
@@ -223,7 +223,7 @@ func (self *Web) WorkflowNewGet(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		http.Redirect(w, req, "/workflow", 302)
+		http.Redirect(w, req, "/workflow", http.StatusFound)
 		return
 	}
 
@@ -260,7 +260,7 @@ func (self *Web) WorkflowPost(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessagef(err, `Could not start workflow %q from source %q`, name, source))
 	}
 
-	http.Redirect(w, req, "/workflow", 302)
+	http.Redirect(w, req, "/workflow", http.StatusFound)
 }
 
 func (self *Web) WorkflowIdGet(w http.ResponseWriter, req *http.Request) {
@@ -405,7 +405,7 @@ func (self *Web) ApiWorkflowDefinitionSourceGet(w http.ResponseWriter, req *http
 		self.NotFound(w, errors.WithMessage(err, "Failed to list workflows"))
 		return
 	} else {
-		self.json(w, wfs, 200)
+		self.json(w, wfs, http.StatusOK)
 	}
 }
 
@@ -431,7 +431,7 @@ func (self *Web) ApiWorkflowDefinitionSourceNameGet(w http.ResponseWriter, req *
 		self.ServerError(w, err)
 		return
 	} else {
-		self.json(w, wf, 200)
+		self.json(w, wf, http.StatusOK)
 	}
 }
 
@@ -439,7 +439,7 @@ func (self *Web) ApiWorkflowInstanceGet(w http.ResponseWriter, req *http.Request
 	if instances, err := self.WorkflowService.GetAll(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch workflows"))
 	} else {
-		self.json(w, instances, 200)
+		self.json(w, instances, http.StatusOK)
 	}
 }
 
@@ -499,7 +499,7 @@ func (self *Web) ApiWorkflowInstanceIdGet(w http.ResponseWriter, req *http.Reque
 	if err != nil {
 		self.NotFound(w, errors.WithMessage(err, "Couldn't find instance"))
 	}
-	self.json(w, instance, 200)
+	self.json(w, instance, http.StatusOK)
 }
 
 func (self *Web) getFactFromBody(req *http.Request) (domain.Facts, error) {
@@ -543,7 +543,7 @@ func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 	if actions, err := self.ActionService.GetAll(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get all actions"))
 	} else {
-		self.json(w, actions, 200)
+		self.json(w, actions, http.StatusOK)
 	}
 }
 
@@ -554,7 +554,7 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
 	} else {
-		self.json(w, action, 200)
+		self.json(w, action, http.StatusOK)
 	}
 }
 
@@ -565,7 +565,7 @@ func (self *Web) ApiActionIdLogsGet(w http.ResponseWriter, req *http.Request) {
 	} else if logs, err := self.ActionService.JobLogs(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
-		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, 200)
+		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, http.StatusOK)
 	}
 }
 
