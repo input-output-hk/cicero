@@ -53,8 +53,6 @@ type Response struct {
 	body       swagger.ContentValue
 }
 
-//issue: additionalProperties breaks map[string]interface{}
-//https://github.com/go-swagger/go-swagger/issues/1402
 func BuildResponseSuccessfully(statusCode int, context interface{}, description string) Response {
 	return Response{
 		statusCode: statusCode,
