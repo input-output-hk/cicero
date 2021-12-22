@@ -13,7 +13,7 @@ import (
 const jsonType = "application/json"
 const htmlType = "text/html"
 
-func NewRouterDocumented(router apirouter.Router, title string, version string, docName string, ctx context.Context) (*swagger.Router, error) {
+func NewRouterDocumented(router apirouter.Router, title, version, docName string, ctx context.Context) (*swagger.Router, error) {
 	return swagger.NewRouter(router, swagger.Options{
 		Context: ctx,
 		Openapi: &openapi3.T{
@@ -53,12 +53,12 @@ type Response struct {
 	body       swagger.ContentValue
 }
 
-func BuildResponseSuccessfully(statusCode int, context interface{}, description string) Response {
+func BuildResponseSuccessfully(statusCode int, content interface{}, description string) Response {
 	return Response{
 		statusCode: statusCode,
 		body: swagger.ContentValue{
 			Content: swagger.Content{
-				htmlType: {Value: context},
+				htmlType: {Value: content},
 			},
 			Description: description,
 		},
