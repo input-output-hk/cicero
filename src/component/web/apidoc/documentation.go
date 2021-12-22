@@ -58,7 +58,7 @@ func BuildResponseSuccessfully(statusCode int, context interface{}, description 
 		statusCode: statusCode,
 		body: swagger.ContentValue{
 			Content: swagger.Content{
-				"text/html": {Value: context},
+				htmlType: {Value: context},
 			},
 			Description: description,
 		},
