@@ -22,8 +22,8 @@ func NewRouterDocumented(router apirouter.Router, title, version, docName string
 				Version: version,
 			},
 		},
-		YAMLDocumentationPath: fmt.Sprintf(`/documentation/%s.yaml`, docName),
-		JSONDocumentationPath: fmt.Sprintf(`/documentation/%s.json`, docName),
+		YAMLDocumentationPath: fmt.Sprintf(`/api/documentation/%s.yaml`, docName),
+		JSONDocumentationPath: fmt.Sprintf(`/api/documentation/%s.json`, docName),
 	})
 }
 
