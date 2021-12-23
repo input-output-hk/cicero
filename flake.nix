@@ -31,6 +31,7 @@
           go = prev.go_1_17;
           gouml = prev.callPackage ./pkgs/gouml.nix { };
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
+          schemathesis = prev.callPackage ./pkgs/schemathesis.nix { };
           webhook-trigger = prev.callPackage ./pkgs/trigger { };
           nomad-follower = follower.defaultPackage."${prev.system}";
 
@@ -57,7 +58,7 @@
 
       packages = { cicero, cicero-std, cicero-evaluator-nix, cicero-entrypoint
         , liftbridge, liftbridge-cli, gocritic, go, webhook-trigger, nomad-dev
-        , nomad-follower, run-bash, run-python, run-perl, run-js }@pkgs:
+        , nomad-follower, run-bash, run-python, schemathesis, run-perl, run-js }@pkgs:
         pkgs // {
           inherit (nixpkgs) lib;
           defaultPackage = cicero;
