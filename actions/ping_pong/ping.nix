@@ -3,16 +3,21 @@ rec {
 
   inputs = args: {
     start = ''
-      "${workflow}/start": true
+      "${workflow}/start": number
     '';
 
-    "has run" = {
+    "has not run yet" = {
       not = true;
       match = ''
-        "${args.name}": bool
+        "${args.name}": _inputs.start.value."${workflow}/start"
       '';
     };
   };
+
+  success = args: inputs: [
+    # TODO make it possible to drop `or null` by only evaluating `success` when inputs are given
+    { ${args.name} = inputs.start.value."${workflow}/start" or null; }
+  ];
 
   job = { std, name, id, ... }@args: let
     wfLib = import ../../workflows-lib.nix args;
@@ -31,6 +36,7 @@ rec {
 
   __functor = _: args: {
     inputs = inputs args;
+    success = success args;
     job = job args;
   };
 }

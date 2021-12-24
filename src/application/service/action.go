@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -43,18 +42,14 @@ func NewActionService(db config.PgxIface) ActionService {
 func (self *actionService) GetById(id uuid.UUID) (action domain.Action, err error) {
 	self.logger.Printf("Getting Action by ID %s", id)
 	action, err = self.actionRepository.GetById(id)
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select existing Action for ID %q", id)
-	}
+	err = errors.WithMessagef(err, "Could not select existing Action for ID %q", id)
 	return
 }
 
 func (self *actionService) GetLatestByName(name string) (action domain.Action, err error) {
 	self.logger.Printf("Getting latest Action by name %s", name)
 	action, err = self.actionRepository.GetLatestByName(name)
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select latest Action for name %q", name)
-	}
+	err = errors.WithMessagef(err, "Could not select latest Action for name %q", name)
 	return
 }
 
@@ -75,14 +70,15 @@ func (self *actionService) Save(tx pgx.Tx, action *domain.Action) error {
 func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
 	self.logger.Println("Getting current Actions")
 	actions, err = self.actionRepository.GetCurrent()
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select current Actions")
-	}
+	err = errors.WithMessagef(err, "Could not select current Actions")
 	return
 }
 
 func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]interface{}, error) {
 	self.logger.Printf("Checking whether Action %s is runnable", action.ID)
+
+	inputFact := map[string]*domain.Fact{}
+	inputFacts := map[string][]*domain.Fact{}
 
 	inputs := map[string]interface{}{}
 
@@ -94,81 +90,90 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 	// and no longer run the CUE filter over the selected facts afterwards.
 
 	// FIXME race condition: facts may change in between checking whether each input is satisfied
-
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
-			if satisfied, fact, err := self.isInputSatisfiedLatest(&input.Match); err != nil {
+			if fact, err := self.getInputFactLatest(input.Match.WithoutInputs()); err != nil {
 				return false, nil, err
-			} else if satisfied != input.Not {
+			} else if fact != nil {
+				inputFact[name] = fact
 				if !input.Not {
 					inputs[name] = fact
 				}
-			} else {
-				return false, nil, nil
 			}
 		case domain.InputDefinitionSelectAll:
-			if satisfied, facts, err := self.isInputSatisfied(&input.Match); err != nil {
+			if facts, err := self.getInputFacts(input.Match.WithoutInputs()); err != nil {
 				return false, nil, err
-			} else if satisfied != input.Not {
+			} else if len(facts) > 0 {
+				inputFacts[name] = facts
 				if !input.Not {
 					inputs[name] = facts
 				}
-			} else {
-				return false, nil, nil
 			}
 		default:
 			return false, nil, fmt.Errorf("InputDefinitionSelect with unknown value %d", input.Select)
 		}
 	}
 
+	for name, input := range action.Inputs {
+		matchWithInputs := input.Match.WithInputs(inputs)
+		switch input.Select {
+		case domain.InputDefinitionSelectLatest:
+			if inputFactEntry, exists := inputFact[name]; exists {
+				if match, err := matchFact(matchWithInputs, inputFactEntry); err != nil {
+					return false, inputs, err
+				} else if match == input.Not {
+					return false, inputs, nil
+				}
+			} else if !input.Not {
+				return false, inputs, nil
+			}
+		case domain.InputDefinitionSelectAll:
+			if inputFactsEntry, exists := inputFacts[name]; exists {
+				for _, fact := range inputFactsEntry {
+					if match, err := matchFact(matchWithInputs, fact); err != nil {
+						return false, inputs, err
+					} else if match == input.Not {
+						return false, inputs, nil
+					}
+				}
+			} else if !input.Not {
+				return false, inputs, nil
+			}
+		default:
+			panic("This should have already been caught by the loop above!")
+		}
+	}
+
 	return true, inputs, nil
 }
 
-func (self *actionService) isInputSatisfiedLatest(value *cue.Value) (bool, *domain.Fact, error) {
-	if fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(value)); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil, nil
-		}
-		return false, nil, err
-	} else if match, err := matchFact(value, &fact); err != nil {
-		return false, &fact, err
-	} else {
-		return match, &fact, nil
+func (self *actionService) getInputFactLatest(value cue.Value) (*domain.Fact, error) {
+	fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(value))
+	if err != nil && errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
 	}
+	return &fact, err
 }
 
-func (self *actionService) isInputSatisfied(value *cue.Value) (bool, []*domain.Fact, error) {
-	if facts, err := self.factRepository.GetByFields(collectFieldPaths(value)); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil, nil
-		}
-		return false, nil, err
-	} else {
-		for _, fact := range facts {
-			if match, err := matchFact(value, fact); err != nil {
-				return false, facts, err
-			} else if !match {
-				return false, facts, nil
-			}
-		}
-		return true, facts, nil
+func (self *actionService) getInputFacts(value cue.Value) ([]*domain.Fact, error) {
+	facts, err := self.factRepository.GetByFields(collectFieldPaths(value))
+	if err != nil && errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
 	}
+	return facts, err
 }
 
-func matchFact(value *cue.Value, fact *domain.Fact) (bool, error) {
-	if factValue, err := json.Marshal(fact.Value); err != nil {
+func matchFact(match cue.Value, fact *domain.Fact) (bool, error) {
+	factCue := match.Context().Encode(fact.Value)
+	if err := factCue.Err(); err != nil {
 		return false, err
-	} else if factCue := value.Context().CompileBytes(factValue); factCue.Err() != nil {
-		return false, err
-	} else if value.Subsume(factCue) != nil {
-		return false, nil
-	} else {
-		return true, nil
 	}
+
+	return match.Subsume(factCue, cue.Final()) == nil, nil
 }
 
-func collectFieldPaths(value *cue.Value) (paths [][]string) {
+func collectFieldPaths(value cue.Value) (paths [][]string) {
 	if strukt, err := value.Struct(); err != nil {
 		return
 	} else {
@@ -186,7 +191,7 @@ func collectFieldPaths(value *cue.Value) (paths [][]string) {
 				paths = append(paths, path)
 			} else {
 				value := iter.Value()
-				for _, fieldPath := range collectFieldPaths(&value) {
+				for _, fieldPath := range collectFieldPaths(value) {
 					paths = append(paths, append(path, fieldPath...))
 				}
 			}

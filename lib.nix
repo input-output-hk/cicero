@@ -123,20 +123,20 @@ in rec {
           not = false;
         } // lib.optionalAttrs (typeOf v != "string") v);
 
-      expandAction = { inputs, success ? [{ ${name} = true; }]
-        , failure ? [{ ${name} = false; }], job ? null, }:
+      mkActionState = { inputs, success ? _: [{ ${name} = true; }]
+        , failure ? _: [{ ${name} = false; }], job ? null, }:
         {
-          inherit success;
+          success = success parsedInputs;
           inputs = expandActionInputs inputs;
         } // lib.optionalAttrs (job != null) {
-          inherit failure;
+          failure = failure parsedInputs;
           job = hydrateNomadJob (job parsedInputs);
         };
     in lib.pipe action [
       (action: if isFunction action then action else import action)
       (action: action { inherit name id; })
       validateAction
-      expandAction
+      mkActionState
     ];
 
   # Recurses through a directory, considering every file an action.

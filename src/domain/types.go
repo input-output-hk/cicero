@@ -58,51 +58,66 @@ func (self InputDefinitionSelect) MarshalJSON() ([]byte, error) {
 	}
 }
 
-type InputDefinition struct {
-	Select InputDefinitionSelect
-	Not    bool
-	Match  cue.Value
+type InputDefinitionMatch string
+
+func (self *InputDefinitionMatch) WithInputs(inputs map[string]interface{}) cue.Value {
+	ctx := cuecontext.New()
+	return ctx.CompileString(
+		string(*self),
+		cue.Scope(ctx.Encode(struct{}{}).
+			// XXX check which inputs are actually used and pass in only those
+			FillPath(cue.MakePath(cue.Hid("_inputs", "_")), inputs),
+		),
+	)
 }
 
-type inputDefinitionJson struct {
-	Select InputDefinitionSelect `json:"select"`
-	Not    bool                  `json:"not"`
-	Match  string                `json:"match"`
+func (self *InputDefinitionMatch) WithoutInputs() cue.Value {
+	return self.WithInputs(map[string]interface{}{})
 }
 
-func (self *InputDefinition) UnmarshalJSON(data []byte) error {
-	def := inputDefinitionJson{}
-	if err := json.Unmarshal(data, &def); err != nil {
+func (self *InputDefinitionMatch) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
 		return err
 	}
 
-	self.Select = def.Select
-	self.Not = def.Not
-	self.Match = cuecontext.New().CompileString(def.Match)
+	match := InputDefinitionMatch(str)
+	if err := match.WithoutInputs().Err(); err != nil {
+		return err
+	}
 
+	*self = match
 	return nil
 }
 
-func (self InputDefinition) MarshalJSON() ([]byte, error) {
-	def := inputDefinitionJson{}
-
-	def.Select = self.Select
-	def.Not = self.Not
-
-	if syntax, err := cueformat.Node(
-		self.Match.Syntax(),
+// Makes sure to be valid CUE that does not evaluate to an error
+// by marshaling the parsed syntax instead of the raw string.
+func (self InputDefinitionMatch) MarshalJSON() ([]byte, error) {
+	match := self.WithoutInputs()
+	if err := match.Err(); err != nil {
+		return nil, err
+	} else if syntax, err := cueformat.Node(
+		match.Syntax(
+			cue.Hidden(true),
+			cue.Optional(true),
+			cue.ResolveReferences(false),
+		),
 		cueformat.Simplify(),
 	); err != nil {
 		return nil, err
 	} else {
-		def.Match = string(syntax)
+		return json.Marshal(string(syntax))
 	}
-
-	return json.Marshal(def)
 }
 
-func (self *InputDefinition) Scan(value interface{}) error {
+func (self *InputDefinitionMatch) Scan(value interface{}) error {
 	return self.UnmarshalJSON(value.([]byte))
+}
+
+type InputDefinition struct {
+	Select InputDefinitionSelect `json:"select"`
+	Not    bool                  `json:"not"`
+	Match  InputDefinitionMatch  `json:"match"`
 }
 
 type ActionDefinition struct {
@@ -119,10 +134,10 @@ func (s *ActionDefinition) IsDecision() bool {
 
 type Fact struct {
 	ID         uuid.UUID   `json:"id"`
-	RunId      *uuid.UUID  `json:"run_id"`
-	CreatedAt  time.Time   `json:"time"`
+	RunId      *uuid.UUID  `json:"run_id,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
 	Value      interface{} `json:"value"`
-	BinaryHash *string     `json:"binary_hash"`
+	BinaryHash *string     `json:"binary_hash,omitempty"`
 	// TODO too expensive to pass around, get from DB
 	// TODO hash using https://pkg.go.dev/github.com/direnv/direnv/v2/sri
 	// Binary     *[]byte     `json:"-"`

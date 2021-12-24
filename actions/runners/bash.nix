@@ -1,12 +1,31 @@
 { name, std, ... } @ args:
 
 {
-  inputs.last_none.has_run = ''
-    "${name}": bool
-  '';
+  inputs = {
+    start = ''
+      "${name}/start": number
+    '';
 
-  job = inputs: std.chain args [
+    "has not run yet" = {
+      not = true;
+      match = ''
+        "${name}": _inputs.start.value."${name}/start"
+      '';
+    };
+  };
+
+  success = { start ? {} }: [ { ${name} = start.value."${name}/start" or null; } ];
+
+  job = let
+    wfLib = import ../../workflows-lib.nix args;
+  in inputs: std.chain args [
+    wfLib.jobDefaults
+
+    # systemd-nspawn does not like underscore
+    (std.escapeNames [ "_" ] [ "-" ])
+
     std.singleTask
+
     (std.script "bash" ''
       echo 'Hello Bash'
     '')

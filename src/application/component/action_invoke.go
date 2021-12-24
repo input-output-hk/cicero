@@ -89,11 +89,26 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 		self.Limiter.Wait(ctx, priority.High) // TODO: What is the ctx to use in this case?
 		defer self.Limiter.Finish()
 
-		var facts []interface{}
+		self.Logger.Printf(">>>>>>>>>>>>>>>>>>> Action %q is runnable with inputs: %v (err:) %s", action.ID, inputs, err)
+
 		if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID, inputs); err != nil {
 			return err
 		} else if actionDef.IsDecision() {
-			facts = actionDef.Success
+			var errs error
+			for _, value := range actionDef.Success {
+				if factJson, err := json.Marshal(
+					domain.Fact{Value: value},
+				); err != nil {
+					errs = errors.WithMessagef(err, "Could not marshal fact: %w", errs)
+				} else if err := self.MessageQueueService.Publish(
+					domain.FactCreateStreamName.String(),
+					domain.FactCreateStreamName,
+					factJson,
+				); err != nil {
+					errs = errors.WithMessagef(err, "Could not publish fact: %w", errs)
+				}
+			}
+			return errors.WithMessage(errs, "Failed to publish all facts")
 		} else {
 			run := domain.Run{
 				ActionId:  action.ID,
@@ -115,20 +130,6 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 				self.Logger.Printf("Warnings occured registering Nomad job %q in Nomad evaluation %q: %s", runId, response.EvalID, response.Warnings)
 			}
 		}
-
-		var errs error
-		for _, fact := range facts {
-			if factJson, err := json.Marshal(fact); err != nil {
-				errs = errors.WithMessagef(err, "Could not marshal fact: %w", errs)
-			} else if err := self.MessageQueueService.Publish(
-				domain.FactCreateStreamName.String(),
-				domain.FactCreateStreamName,
-				factJson,
-			); err != nil {
-				errs = errors.WithMessagef(err, "Could not publish fact: %w", errs)
-			}
-		}
-		return errors.WithMessage(errs, "Failed to publish all facts")
 	}
 
 	return nil
