@@ -61,7 +61,7 @@ func (self *ActionCreateConsumer) invokerSubscriber(ctx context.Context) func(*l
 		self.Logger.Printf("Received start message for Action with name %q in source %q", name, source)
 
 		var actionDef domain.ActionDefinition
-		if def, err := self.EvaluationService.EvaluateActionDefinition(source, name); err != nil {
+		if def, err := self.EvaluationService.EvaluateAction(source, name); err != nil {
 			self.Logger.Println(err.Error())
 			return
 		} else {
@@ -76,8 +76,10 @@ func (self *ActionCreateConsumer) invokerSubscriber(ctx context.Context) func(*l
 			action := domain.Action{
 				Name:   name,
 				Source: source,
-				Meta:   actionDef.Meta,
-				Inputs: actionDef.Inputs,
+				ActionDefinition: domain.ActionDefinition{
+					Meta:   actionDef.Meta,
+					Inputs: actionDef.Inputs,
+				},
 			}
 			if err := self.ActionService.Save(tx, &action); err != nil {
 				return err

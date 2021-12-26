@@ -89,13 +89,11 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 		self.Limiter.Wait(ctx, priority.High) // TODO: What is the ctx to use in this case?
 		defer self.Limiter.Finish()
 
-		self.Logger.Printf(">>>>>>>>>>>>>>>>>>> Action %q is runnable with inputs: %v (err:) %s", action.ID, inputs, err)
-
-		if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID, inputs); err != nil {
+		if runDef, err := self.EvaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); err != nil {
 			return err
-		} else if actionDef.IsDecision() {
+		} else if runDef.IsDecision() {
 			var errs error
-			for _, value := range actionDef.Success {
+			for _, value := range runDef.Success {
 				if factJson, err := json.Marshal(
 					domain.Fact{Value: value},
 				); err != nil {
@@ -112,8 +110,8 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 		} else {
 			run := domain.Run{
 				ActionId:  action.ID,
-				Success:   actionDef.Success,
-				Failure:   actionDef.Failure,
+				Success:   runDef.Success,
+				Failure:   runDef.Failure,
 				CreatedAt: time.Now(),
 			}
 
@@ -122,9 +120,9 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 			}
 
 			runId := run.NomadJobID.String()
-			actionDef.Job.ID = &runId
+			runDef.Job.ID = &runId
 
-			if response, _, err := self.NomadClient.JobsRegister(actionDef.Job, &nomad.WriteOptions{}); err != nil {
+			if response, _, err := self.NomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run Action")
 			} else if len(response.Warnings) > 0 {
 				self.Logger.Printf("Warnings occured registering Nomad job %q in Nomad evaluation %q: %s", runId, response.EvalID, response.Warnings)

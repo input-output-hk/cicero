@@ -5,7 +5,7 @@ writers.writeBashBin "cicero-evaluator-nix" ''
 
   function usage {
       {
-          echo    "Usage: $(basename "$0") <list|eval>"
+          echo    "Usage: $(basename "$0") [list] [eval <attrs...>]"
           echo
           echo    'The following env vars must be set:'
           echo -e '\t- CICERO_ACTION_SRC'
@@ -27,9 +27,34 @@ writers.writeBashBin "cicero-evaluator-nix" ''
         ;;
     eval )
         # XXX get rid of --impure
-        evaluate --impure \
-            --apply 'wfs: wfs.''${builtins.getEnv "CICERO_ACTION_NAME"} { id = builtins.getEnv "CICERO_ACTION_ID"; inputs = builtins.getEnv "CICERO_ACTION_INPUTS"; }'
-       ;;
+        shift
+        attrs="$@" \
+        evaluate --impure --apply '
+          actions:
+
+          let
+            inherit (builtins) getEnv filter isString split attrNames elem;
+
+            action = actions.''${getEnv "CICERO_ACTION_NAME"} {
+              id = getEnv "CICERO_ACTION_ID"; # TODO "" => null?
+              inputs = getEnv "CICERO_ACTION_INPUTS"; # TODO fromJSON() here
+            };
+
+            attrs = filter isString (split "[[:space:]]+" (getEnv "attrs"));
+          in
+
+          builtins.listToAttrs (map
+            (name: {
+              inherit name;
+              value = action.''${name};
+            })
+            (filter
+              (name: elem name attrs)
+              (attrNames action)
+            )
+          )
+        '
+        ;;
     ''' )
         >&2 echo 'No command given'
         >&2 echo

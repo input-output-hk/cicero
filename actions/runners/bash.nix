@@ -1,6 +1,10 @@
 { name, std, ... } @ args:
 
 {
+  # TODO do not pass `id` in top-level `args` so it cannot be interpolated into `inputs`?
+  # Or maybe don't pass `id` to the evaluation at all?! Is it needed?
+  # If we want to keep passing `id`, add it as arg to `EvaluationService.EvaluateAction(id)`
+
   inputs = {
     start = ''
       "${name}/start": number
@@ -14,7 +18,7 @@
     };
   };
 
-  success = { start ? {} }: [ { ${name} = start.value."${name}/start" or null; } ];
+  success = { start }: [ { ${name} = start.value."${name}/start"; } ];
 
   job = let
     wfLib = import ../../workflows-lib.nix args;

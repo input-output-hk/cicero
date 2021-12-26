@@ -24,13 +24,8 @@ import (
 
 type EvaluationService interface {
 	ListActions(src string) ([]string, error)
-
-	// Convenience wrapper around `EvaluateAction`.
-	EvaluateActionDefinition(src, name string) (domain.ActionDefinition, error)
-
-	EvaluateAction(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.ActionDefinition, error)
-
-	// TODO add EvaluateJob() and EvaluateFacts/Outputs() for better performance (less JSON) with lazy languages
+	EvaluateAction(src, name string) (domain.ActionDefinition, error)
+	EvaluateRun(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.RunDefinition, error)
 }
 
 func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
@@ -60,7 +55,12 @@ func NewEvaluationService(evaluators, env []string) EvaluationService {
 	}
 }
 
-func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([]byte, error) {
+type command struct {
+	Command  []string
+	ExtraEnv []string
+}
+
+func (e *evaluationService) evaluate(src string, command command) ([]byte, error) {
 	fetchUrl, evaluator, err := parseSource(src)
 	if err != nil {
 		return nil, err
@@ -86,8 +86,8 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 	}
 
 	tryEval := func(evaluator string) ([]byte, error) {
-		cmd := exec.Command("cicero-evaluator-"+evaluator, command)
-		extraEnv = append(extraEnv, "CICERO_ACTION_SRC="+dst)
+		cmd := exec.Command("cicero-evaluator-"+evaluator, command.Command...)
+		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst)
 		cmd.Env = append(os.Environ(), extraEnv...)
 
 		e.logger.Printf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
@@ -131,45 +131,58 @@ func (e *evaluationService) evaluate(src, command string, extraEnv ...string) ([
 	}
 }
 
-func (e *evaluationService) EvaluateActionDefinition(src, name string) (domain.ActionDefinition, error) {
-	return e.EvaluateAction(src, name, uuid.UUID{}, map[string]interface{}{})
+func (e *evaluationService) EvaluateAction(src, name string) (domain.ActionDefinition, error) {
+	var def domain.ActionDefinition
+
+	if output, err := e.evaluate(src, command{
+		Command:  []string{"eval", "meta", "inputs"},
+		ExtraEnv: []string{"CICERO_ACTION_NAME=" + name},
+	}); err != nil {
+		return def, err
+	} else if err := json.Unmarshal(output, &def); err != nil {
+		e.logger.Println(string(output))
+		return def, errors.WithMessage(err, "While unmarshaling evaluator output")
+	}
+
+	return def, nil
 }
 
-func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.ActionDefinition, error) {
-	var def domain.ActionDefinition
+func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.RunDefinition, error) {
+	var instance domain.RunDefinition
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
-		return def, errors.WithMessagef(err, "Could not marshal inputs to JSON: %s", inputs)
+		return instance, errors.WithMessagef(err, "Could not marshal inputs to JSON: %s", inputs)
 	}
 
-	output, err := e.evaluate(src, "eval",
-		"CICERO_ACTION_NAME="+name,
-		fmt.Sprintf("CICERO_ACTION_ID=%s", id),
-		"CICERO_ACTION_INPUTS="+string(inputsJson),
-	)
+	output, err := e.evaluate(src, command{
+		Command: []string{"eval", "success", "failure", "job"},
+		ExtraEnv: []string{
+			"CICERO_ACTION_NAME=" + name,
+			fmt.Sprintf("CICERO_ACTION_ID=%s", id),
+			"CICERO_ACTION_INPUTS=" + string(inputsJson),
+		},
+	})
 	if err != nil {
-		return def, err
+		return instance, err
 	}
 
-	freeformDef := struct {
-		domain.ActionDefinition
+	freeformInstance := struct {
+		domain.RunDefinition
 		Job *interface{} `json:"job"`
 	}{}
 
-	err = json.Unmarshal(output, &freeformDef)
+	err = json.Unmarshal(output, &freeformInstance)
 	if err != nil {
 		e.logger.Println(string(output))
-		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
+		return instance, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
 	}
 
-	def.Meta = freeformDef.Meta
-	def.Failure = freeformDef.Failure
-	def.Success = freeformDef.Success
-	def.Inputs = freeformDef.Inputs
-	if freeformDef.Job != nil {
-		if job, err := json.Marshal(*freeformDef.Job); err != nil {
-			return def, err
+	instance.Failure = freeformInstance.Failure
+	instance.Success = freeformInstance.Success
+	if freeformInstance.Job != nil {
+		if job, err := json.Marshal(*freeformInstance.Job); err != nil {
+			return instance, err
 		} else {
 			// escape HCL variable interpolation
 			job = bytes.ReplaceAll(job, []byte("${"), []byte("$${"))
@@ -179,23 +192,23 @@ func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID, input
 				AllowFS: false,
 				Strict:  true,
 			}); err != nil {
-				return def, err
+				return instance, err
 			} else {
-				def.Job = job
+				instance.Job = job
 			}
 		}
 	}
 
-	e.addEnv(&def)
+	e.addEnv(&instance)
 
-	return def, nil
+	return instance, nil
 }
 
-func (e *evaluationService) addEnv(def *domain.ActionDefinition) {
-	if def.Job == nil {
+func (e *evaluationService) addEnv(instance *domain.RunDefinition) {
+	if instance.Job == nil {
 		return
 	}
-	for _, group := range def.Job.TaskGroups {
+	for _, group := range instance.Job.TaskGroups {
 		for _, task := range group.Tasks {
 			for _, envSpec := range e.Env {
 				splits := strings.SplitN(envSpec, "=", 2)
@@ -211,7 +224,7 @@ func (e *evaluationService) addEnv(def *domain.ActionDefinition) {
 }
 
 func (e *evaluationService) ListActions(src string) ([]string, error) {
-	output, err := e.evaluate(src, "list")
+	output, err := e.evaluate(src, command{Command: []string{"list"}})
 	if err != nil {
 		return nil, err
 	}

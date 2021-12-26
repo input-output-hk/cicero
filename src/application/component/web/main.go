@@ -427,11 +427,11 @@ func (self *Web) ApiActionDefinitionSourceNameGet(w http.ResponseWriter, req *ht
 		return
 	}
 
-	if wf, err := self.EvaluationService.EvaluateActionDefinition(source, name); err != nil {
+	if def, err := self.EvaluationService.EvaluateAction(source, name); err != nil {
 		self.ServerError(w, err)
 		return
 	} else {
-		self.json(w, wf, 200)
+		self.json(w, def, 200)
 	}
 }
 
@@ -766,7 +766,7 @@ func (self *Web) ApiActionCurrentNameDefinitionGet(w http.ResponseWriter, req *h
 	name := vars["name"]
 	if action, err := self.ActionService.GetLatestByName(name); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
-	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID, map[string]interface{}{}); err != nil {
+	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
 	} else {
 		self.json(w, actionDef, 200)
@@ -825,7 +825,7 @@ func (self *Web) ApiActionIdDefinitionGet(w http.ResponseWriter, req *http.Reque
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
-	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID, map[string]interface{}{}); err != nil {
+	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
 	} else {
 		self.json(w, actionDef, 200)

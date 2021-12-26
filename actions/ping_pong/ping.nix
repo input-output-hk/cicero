@@ -15,8 +15,7 @@ rec {
   };
 
   success = args: inputs: [
-    # TODO make it possible to drop `or null` by only evaluating `success` when inputs are given
-    { ${args.name} = inputs.start.value."${workflow}/start" or null; }
+    { ${args.name} = inputs.start.value."${workflow}/start"; }
   ];
 
   job = { std, name, id, ... }@args: let

@@ -121,14 +121,19 @@ type InputDefinition struct {
 }
 
 type ActionDefinition struct {
-	Meta    map[string]interface{}     `json:"meta"`
-	Failure []interface{}              `json:"failure"`
-	Success []interface{}              `json:"success"`
-	Inputs  map[string]InputDefinition `json:"inputs"`
-	Job     *nomad.Job                 `json:"job"`
+	Meta   map[string]interface{}     `json:"meta"`
+	Inputs map[string]InputDefinition `json:"inputs"`
 }
 
-func (s *ActionDefinition) IsDecision() bool {
+type RunDefinition struct {
+	// TODO group under `outputs` key (`outputs.{failure,success}` in source)
+	Failure []interface{} `json:"failure"`
+	Success []interface{} `json:"success"`
+
+	Job *nomad.Job `json:"job"`
+}
+
+func (s *RunDefinition) IsDecision() bool {
 	return s.Job == nil
 }
 
@@ -145,11 +150,10 @@ type Fact struct {
 
 type Action struct {
 	ID        uuid.UUID
-	Meta      map[string]interface{}
 	Name      string
 	Source    string
-	Inputs    map[string]InputDefinition
 	CreatedAt time.Time
+	ActionDefinition
 }
 
 type Run struct {
