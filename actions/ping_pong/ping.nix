@@ -14,9 +14,11 @@ rec {
     };
   };
 
-  success = args: inputs: [
-    { ${args.name} = inputs.start.value."${workflow}/start"; }
-  ];
+  outputs = args: inputs: {
+    success = [
+      { ${args.name} = inputs.start.value."${workflow}/start"; }
+    ];
+  };
 
   job = { std, name, id, ... }@args: let
     wfLib = import ../../workflows-lib.nix args;
@@ -35,7 +37,7 @@ rec {
 
   __functor = _: args: {
     inputs = inputs args;
-    success = success args;
+    outputs = outputs args;
     job = job args;
   };
 }

@@ -93,7 +93,7 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 			return err
 		} else if runDef.IsDecision() {
 			var errs error
-			for _, value := range runDef.Success {
+			for _, value := range runDef.Outputs.Success {
 				if factJson, err := json.Marshal(
 					domain.Fact{Value: value},
 				); err != nil {
@@ -110,8 +110,8 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 		} else {
 			run := domain.Run{
 				ActionId:  action.ID,
-				Success:   runDef.Success,
-				Failure:   runDef.Failure,
+				Success:   runDef.Outputs.Success,
+				Failure:   runDef.Outputs.Failure,
 				CreatedAt: time.Now(),
 			}
 

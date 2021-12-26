@@ -126,10 +126,10 @@ type ActionDefinition struct {
 }
 
 type RunDefinition struct {
-	// TODO group under `outputs` key (`outputs.{failure,success}` in source)
-	Failure []interface{} `json:"failure"`
-	Success []interface{} `json:"success"`
-
+	Outputs struct {
+		Failure []interface{} `json:"failure"`
+		Success []interface{} `json:"success"`
+	} `json:"outputs"`
 	Job *nomad.Job `json:"job"`
 }
 

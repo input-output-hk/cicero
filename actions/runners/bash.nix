@@ -18,7 +18,9 @@
     };
   };
 
-  success = { start }: [ { ${name} = start.value."${name}/start"; } ];
+  outputs = { start }: {
+    success = [ { ${name} = start.value."${name}/start"; } ];
+  };
 
   job = let
     wfLib = import ../../workflows-lib.nix args;

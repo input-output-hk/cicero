@@ -123,13 +123,18 @@ in rec {
           not = false;
         } // lib.optionalAttrs (typeOf v != "string") v);
 
-      mkActionState = { inputs, success ? _: [{ ${name} = true; }]
-        , failure ? _: [{ ${name} = false; }], job ? null, }:
+      expandActionOutputs = outputs:
         {
-          success = success parsedInputs;
+          success = [{ ${name} = true; }];
+          failure = [{ ${name} = false; }];
+        } // outputs parsedInputs;
+
+      mkActionState = { inputs, outputs ? _: { }, job ? null }:
+        {
           inputs = expandActionInputs inputs;
+          outputs = { inherit (expandActionOutputs outputs) success; };
         } // lib.optionalAttrs (job != null) {
-          failure = failure parsedInputs;
+          outputs = { inherit (expandActionOutputs outputs) success failure; };
           job = hydrateNomadJob (job parsedInputs);
         };
     in lib.pipe action [

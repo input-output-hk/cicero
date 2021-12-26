@@ -148,15 +148,15 @@ func (e *evaluationService) EvaluateAction(src, name string) (domain.ActionDefin
 }
 
 func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.RunDefinition, error) {
-	var instance domain.RunDefinition
+	var def domain.RunDefinition
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
-		return instance, errors.WithMessagef(err, "Could not marshal inputs to JSON: %s", inputs)
+		return def, errors.WithMessagef(err, "Could not marshal inputs to JSON: %s", inputs)
 	}
 
 	output, err := e.evaluate(src, command{
-		Command: []string{"eval", "success", "failure", "job"},
+		Command: []string{"eval", "outputs", "job"},
 		ExtraEnv: []string{
 			"CICERO_ACTION_NAME=" + name,
 			fmt.Sprintf("CICERO_ACTION_ID=%s", id),
@@ -164,25 +164,24 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 		},
 	})
 	if err != nil {
-		return instance, err
+		return def, err
 	}
 
-	freeformInstance := struct {
+	freeformDef := struct {
 		domain.RunDefinition
 		Job *interface{} `json:"job"`
 	}{}
 
-	err = json.Unmarshal(output, &freeformInstance)
+	err = json.Unmarshal(output, &freeformDef)
 	if err != nil {
 		e.logger.Println(string(output))
-		return instance, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
+		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
 	}
 
-	instance.Failure = freeformInstance.Failure
-	instance.Success = freeformInstance.Success
-	if freeformInstance.Job != nil {
-		if job, err := json.Marshal(*freeformInstance.Job); err != nil {
-			return instance, err
+	def.Outputs = freeformDef.Outputs
+	if freeformDef.Job != nil {
+		if job, err := json.Marshal(*freeformDef.Job); err != nil {
+			return def, err
 		} else {
 			// escape HCL variable interpolation
 			job = bytes.ReplaceAll(job, []byte("${"), []byte("$${"))
@@ -192,23 +191,23 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 				AllowFS: false,
 				Strict:  true,
 			}); err != nil {
-				return instance, err
+				return def, err
 			} else {
-				instance.Job = job
+				def.Job = job
 			}
 		}
 	}
 
-	e.addEnv(&instance)
+	e.addEnv(&def)
 
-	return instance, nil
+	return def, nil
 }
 
-func (e *evaluationService) addEnv(instance *domain.RunDefinition) {
-	if instance.Job == nil {
+func (e *evaluationService) addEnv(def *domain.RunDefinition) {
+	if def.Job == nil {
 		return
 	}
-	for _, group := range instance.Job.TaskGroups {
+	for _, group := range def.Job.TaskGroups {
 		for _, task := range group.Tasks {
 			for _, envSpec := range e.Env {
 				splits := strings.SplitN(envSpec, "=", 2)
