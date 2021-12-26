@@ -24,7 +24,7 @@ import (
 
 type EvaluationService interface {
 	ListActions(src string) ([]string, error)
-	EvaluateAction(src, name string) (domain.ActionDefinition, error)
+	EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error)
 	EvaluateRun(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.RunDefinition, error)
 }
 
@@ -131,12 +131,15 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 	}
 }
 
-func (e *evaluationService) EvaluateAction(src, name string) (domain.ActionDefinition, error) {
+func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
 	var def domain.ActionDefinition
 
 	if output, err := e.evaluate(src, command{
-		Command:  []string{"eval", "meta", "inputs"},
-		ExtraEnv: []string{"CICERO_ACTION_NAME=" + name},
+		Command: []string{"eval", "meta", "inputs"},
+		ExtraEnv: []string{
+			"CICERO_ACTION_NAME=" + name,
+			"CICERO_ACTION_ID=" + id.String(),
+		},
 	}); err != nil {
 		return def, err
 	} else if err := json.Unmarshal(output, &def); err != nil {
@@ -159,7 +162,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 		Command: []string{"eval", "outputs", "job"},
 		ExtraEnv: []string{
 			"CICERO_ACTION_NAME=" + name,
-			fmt.Sprintf("CICERO_ACTION_ID=%s", id),
+			"CICERO_ACTION_ID=" + id.String(),
 			"CICERO_ACTION_INPUTS=" + string(inputsJson),
 		},
 	})

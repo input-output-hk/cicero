@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
@@ -60,8 +61,14 @@ func (self *ActionCreateConsumer) invokerSubscriber(ctx context.Context) func(*l
 
 		self.Logger.Printf("Received start message for Action with name %q in source %q", name, source)
 
+		action := domain.Action{
+			ID:     uuid.New(),
+			Name:   name,
+			Source: source,
+		}
+
 		var actionDef domain.ActionDefinition
-		if def, err := self.EvaluationService.EvaluateAction(source, name); err != nil {
+		if def, err := self.EvaluationService.EvaluateAction(source, name, action.ID); err != nil {
 			self.Logger.Println(err.Error())
 			return
 		} else {
@@ -73,14 +80,8 @@ func (self *ActionCreateConsumer) invokerSubscriber(ctx context.Context) func(*l
 				return errors.WithMessagef(err, "Could not save message %s", msg.Value())
 			}
 
-			action := domain.Action{
-				Name:   name,
-				Source: source,
-				ActionDefinition: domain.ActionDefinition{
-					Meta:   actionDef.Meta,
-					Inputs: actionDef.Inputs,
-				},
-			}
+			action.Meta = actionDef.Meta
+			action.Inputs = actionDef.Inputs
 			if err := self.ActionService.Save(tx, &action); err != nil {
 				return err
 			}

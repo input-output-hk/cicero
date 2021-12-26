@@ -35,15 +35,10 @@ let
 in rec {
   # Calls an action or a file containing one.
   callAction = name: action:
-    { id, inputs ? { } }:
+    { id, inputs ? abort "no inputs given" }:
     let
       inherit (builtins)
-        isFunction typeOf fromJSON attrValues attrNames functionArgs deepSeq;
-
-      parsedInputs = {
-        "set" = inputs;
-        "string" = fromJSON inputs;
-      }.${typeOf inputs};
+        isFunction typeOf attrValues attrNames functionArgs deepSeq;
 
       validateAction = { inputs, job, ... }@action:
         lib.pipe action (map deepSeq [
@@ -127,15 +122,17 @@ in rec {
         {
           success = [{ ${name} = true; }];
           failure = [{ ${name} = false; }];
-        } // outputs parsedInputs;
+        } // outputs inputs;
 
-      mkActionState = { inputs, outputs ? _: { }, job ? null }:
+      mkActionState = let
+        evalInputs = inputs; # alias needed because name is shadowed
+      in { inputs, outputs ? _: { }, job ? null }:
         {
           inputs = expandActionInputs inputs;
           outputs = { inherit (expandActionOutputs outputs) success; };
         } // lib.optionalAttrs (job != null) {
           outputs = { inherit (expandActionOutputs outputs) success failure; };
-          job = hydrateNomadJob (job parsedInputs);
+          job = hydrateNomadJob (job evalInputs);
         };
     in lib.pipe action [
       (action: if isFunction action then action else import action)

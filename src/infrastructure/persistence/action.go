@@ -51,10 +51,16 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 	if inputs, err := json.Marshal(action.Inputs); err != nil {
 		return err
 	} else {
+		var sql string
+		if action.ID == (uuid.UUID{}) {
+			sql = `INSERT INTO actions (    name, source, inputs) VALUES (    $2, $3, $4) RETURNING id`
+		} else {
+			sql = `INSERT INTO actions (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id`
+		}
 		return tx.QueryRow(
 			context.Background(),
-			`INSERT INTO actions (name, source, inputs) VALUES ($1, $2, $3) RETURNING id`,
-			action.Name, action.Source, inputs,
+			sql,
+			action.ID, action.Name, action.Source, inputs,
 		).Scan(&action.ID)
 	}
 }

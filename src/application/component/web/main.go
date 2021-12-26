@@ -61,7 +61,7 @@ func (self *Web) Start(ctx context.Context) error {
 	if _, err := r.AddRoute(http.MethodGet, "/api/action/current", self.ApiActionCurrentGet, genApiActionCurrentGetSwagDef()); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/definition/{source}/{name}", self.ApiActionDefinitionSourceNameGet, genApiActionDefinitionSourceNameGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet, "/api/action/definition/{source}/{name}/{id}", self.ApiActionDefinitionSourceNameIdGet, genApiActionDefinitionSourceNameIdGetSwagDef()); err != nil {
 		return err
 	}
 	if _, err := r.AddRoute(http.MethodGet, "/api/action/definition/{source}", self.ApiActionDefinitionSourceGet, genApiActionDefinitionSourceGetSwagDef()); err != nil {
@@ -412,30 +412,24 @@ func genApiActionDefinitionSourceGetSwagDef() swagger.Definitions {
 	}
 }
 
-func (self *Web) ApiActionDefinitionSourceNameGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-
-	source, err := url.PathUnescape(vars["source"])
-	if err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Invalid escaping of action definition source"))
-		return
-	}
-
-	name, err := url.PathUnescape(vars["name"])
-	if err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Invalid escaping of action name"))
-		return
-	}
-
-	if def, err := self.EvaluationService.EvaluateAction(source, name); err != nil {
+	if source, err := url.PathUnescape(vars["source"]); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action definition source: %q", vars["source"]))
+	} else if name, err := url.PathUnescape(vars["name"]); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
+	} else if idStr, err := url.PathUnescape(vars["id"]); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action ID: %q", vars["id"]))
+	} else if id, err := uuid.Parse(idStr); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid UUID given as action ID: %q", idStr))
+	} else if def, err := self.EvaluationService.EvaluateAction(source, name, id); err != nil {
 		self.ServerError(w, err)
-		return
 	} else {
 		self.json(w, def, 200)
 	}
 }
 
-func genApiActionDefinitionSourceNameGetSwagDef() swagger.Definitions {
+func genApiActionDefinitionSourceNameIdGetSwagDef() swagger.Definitions {
 	return swagger.Definitions{
 		PathParams: swagger.ParameterValue{
 			"source": {
@@ -445,6 +439,10 @@ func genApiActionDefinitionSourceNameGetSwagDef() swagger.Definitions {
 			"name": {
 				Content:     swagger.Content{},
 				Description: "name of an action in the source",
+			},
+			"id": {
+				Content:     swagger.Content{},
+				Description: "id to evaluate the action's source with",
 			},
 		},
 		Responses: map[int]swagger.ContentValue{
@@ -766,7 +764,7 @@ func (self *Web) ApiActionCurrentNameDefinitionGet(w http.ResponseWriter, req *h
 	name := vars["name"]
 	if action, err := self.ActionService.GetLatestByName(name); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
-	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name); err != nil {
+	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
 	} else {
 		self.json(w, actionDef, 200)
@@ -825,7 +823,7 @@ func (self *Web) ApiActionIdDefinitionGet(w http.ResponseWriter, req *http.Reque
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
-	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name); err != nil {
+	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
 	} else {
 		self.json(w, actionDef, 200)

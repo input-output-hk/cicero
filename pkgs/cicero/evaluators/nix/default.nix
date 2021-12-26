@@ -33,11 +33,16 @@ writers.writeBashBin "cicero-evaluator-nix" ''
           actions:
 
           let
-            inherit (builtins) getEnv filter isString split attrNames elem;
+            inherit (builtins)
+              getEnv fromJSON filter isString split attrNames elem;
 
-            action = actions.''${getEnv "CICERO_ACTION_NAME"} {
-              id = getEnv "CICERO_ACTION_ID"; # TODO "" => null?
-              inputs = getEnv "CICERO_ACTION_INPUTS"; # TODO fromJSON() here
+            action = let
+              ifEmptyThenNullElse = str: v: if str == "" then null else v;
+              id = getEnv "CICERO_ACTION_ID";
+              inputs = getEnv "CICERO_ACTION_INPUTS";
+            in actions.''${getEnv "CICERO_ACTION_NAME"} {
+              ''${ifEmptyThenNullElse id "id"} = id;
+              ''${ifEmptyThenNullElse inputs "inputs"} = fromJSON inputs;
             };
 
             attrs = filter isString (split "[[:space:]]+" (getEnv "attrs"));
