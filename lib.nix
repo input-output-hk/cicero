@@ -19,11 +19,24 @@ self:
          select = "all";
          match = "count: int";
        };
+
+       # has no influence on runnability
+       double = {
+         optional = true;
+         match = "double: true";
+       };
      };
 
-     job = { tick, ticks }:
+     # these are the defaults
+     outputs = inputs: {
+       success = [ { ${name} = true;  } ];
+       failure = [ { ${name} = false; } ];
+     };
+
+     job = { tick, ticks, double ? false }:
        # `tick` is the latest fact that matches
        # `ticks` is a list of all facts that match
+       # `double` is provided if found
        …; # nomad HCL job spec in JSON format
    }
    ```
@@ -52,7 +65,7 @@ in rec {
             let t = typeOf v;
             in if t != "string" && t != "set" then
               abort ''
-                `inputs."${k}"` must be string or set with keys `select` (optional), `not` (optional), and `match` but is ${t}''
+                `inputs."${k}"` must be string or set with keys `select` (optional), `not` (optional), `optional` (optional), and `match` but is ${t}''
             else
               null) inputs)
 
@@ -116,6 +129,7 @@ in rec {
           select = "latest";
           match = v;
           not = false;
+          optional = false;
         } // lib.optionalAttrs (typeOf v != "string") v);
 
       expandActionOutputs = outputs:

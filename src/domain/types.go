@@ -115,9 +115,10 @@ func (self *InputDefinitionMatch) Scan(value interface{}) error {
 }
 
 type InputDefinition struct {
-	Select InputDefinitionSelect `json:"select"`
-	Not    bool                  `json:"not"`
-	Match  InputDefinitionMatch  `json:"match"`
+	Select   InputDefinitionSelect `json:"select"`
+	Not      bool                  `json:"not"`
+	Optional bool                  `json:"optional"`
+	Match    InputDefinitionMatch  `json:"match"`
 }
 
 type ActionDefinition struct {

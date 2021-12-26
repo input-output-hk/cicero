@@ -116,28 +116,27 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 	}
 
 	for name, input := range action.Inputs {
-		matchWithInputs := input.Match.WithInputs(inputs)
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
 			if inputFactEntry, exists := inputFact[name]; exists {
-				if match, err := matchFact(matchWithInputs, inputFactEntry); err != nil {
+				if match, err := matchFact(input.Match.WithInputs(inputs), inputFactEntry); err != nil {
 					return false, inputs, err
 				} else if match == input.Not {
 					return false, inputs, nil
 				}
-			} else if !input.Not {
+			} else if !input.Not && !input.Optional {
 				return false, inputs, nil
 			}
 		case domain.InputDefinitionSelectAll:
 			if inputFactsEntry, exists := inputFacts[name]; exists {
 				for _, fact := range inputFactsEntry {
-					if match, err := matchFact(matchWithInputs, fact); err != nil {
+					if match, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
 						return false, inputs, err
 					} else if match == input.Not {
 						return false, inputs, nil
 					}
 				}
-			} else if !input.Not {
+			} else if !input.Not && !input.Optional {
 				return false, inputs, nil
 			}
 		default:
