@@ -95,7 +95,11 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		case domain.InputDefinitionSelectLatest:
 			if fact, err := self.getInputFactLatest(input.Match.WithoutInputs()); err != nil {
 				return false, nil, err
-			} else if fact != nil {
+			} else if fact == nil {
+				if !input.Not && !input.Optional {
+					return false, nil, nil
+				}
+			} else {
 				inputFact[name] = fact
 				if !input.Not {
 					inputs[name] = fact
@@ -104,7 +108,11 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		case domain.InputDefinitionSelectAll:
 			if facts, err := self.getInputFacts(input.Match.WithoutInputs()); err != nil {
 				return false, nil, err
-			} else if len(facts) > 0 {
+			} else if len(facts) == 0 {
+				if !input.Not && !input.Optional {
+					return false, nil, nil
+				}
+			} else {
 				inputFacts[name] = facts
 				if !input.Not {
 					inputs[name] = facts
@@ -122,22 +130,46 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 				if match, err := matchFact(input.Match.WithInputs(inputs), inputFactEntry); err != nil {
 					return false, inputs, err
 				} else if match == input.Not {
-					return false, inputs, nil
+					if !input.Optional || input.Not {
+						return false, inputs, nil
+					}
+					delete(inputs, name)
 				}
-			} else if !input.Not && !input.Optional {
-				return false, inputs, nil
 			}
 		case domain.InputDefinitionSelectAll:
 			if inputFactsEntry, exists := inputFacts[name]; exists {
-				for _, fact := range inputFactsEntry {
+				for i, fact := range inputFactsEntry {
 					if match, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
 						return false, inputs, err
 					} else if match == input.Not {
-						return false, inputs, nil
+						if !input.Optional || input.Not {
+							return false, inputs, nil
+						}
+						if facts, exists := inputs[name]; exists {
+							// We will filter `nil`s out later as doing that here would be costly.
+							facts.([]*domain.Fact)[i] = nil
+						}
 					}
 				}
-			} else if !input.Not && !input.Optional {
-				return false, inputs, nil
+
+				if facts, exists := inputs[name]; exists {
+					// Filter out `nil` entries from non-matching facts.
+					newFacts := []*domain.Fact{}
+					for _, fact := range facts.([]*domain.Fact) {
+						if fact == nil {
+							continue
+						}
+						newFacts = append(newFacts, fact)
+					}
+					inputs[name] = newFacts
+
+					if len(newFacts) == 0 {
+						if !input.Optional {
+							return false, inputs, nil
+						}
+						delete(inputs, name)
+					}
+				}
 			}
 		default:
 			panic("This should have already been caught by the loop above!")
