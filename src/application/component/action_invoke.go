@@ -90,7 +90,12 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 		defer self.Limiter.Finish()
 
 		if runDef, err := self.EvaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); err != nil {
-			return err
+			var evalErr service.EvaluationError
+			if errors.As(err, &evalErr) {
+				self.Logger.Printf("Could not evaluate action %q in %q: %s", action.Name, action.Source, evalErr.Error())
+			} else {
+				return err
+			}
 		} else if runDef.IsDecision() {
 			var errs error
 			for _, value := range runDef.Outputs.Success {

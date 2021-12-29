@@ -55,6 +55,19 @@ func NewEvaluationService(evaluators, env []string) EvaluationService {
 	}
 }
 
+// Evaluation failed due to a faulty action definition.
+type EvaluationError struct {
+	err error
+}
+
+func (e EvaluationError) Error() string {
+	return e.err.Error()
+}
+
+func (e EvaluationError) Unwrap() error {
+	return e.err
+}
+
 type command struct {
 	Command  []string
 	ExtraEnv []string
@@ -98,9 +111,10 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
 				message += fmt.Sprintf("\nStdout: %s\nStderr: %s", output, errExit.Stderr)
+				err = EvaluationError{err: errors.WithMessage(err, message)}
 			}
 
-			return nil, errors.WithMessage(err, message)
+			return nil, err
 		} else {
 			return output, err
 		}
@@ -108,26 +122,26 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 
 	if evaluator != "" {
 		if output, err := tryEval(evaluator); err != nil {
-			return nil, errors.WithMessagef(err, `Evaluator "%s" specified in source failed`, evaluator)
+			return nil, errors.WithMessagef(err, "Evaluator %q specified in source failed", evaluator)
 		} else {
 			return output, nil
 		}
 	} else {
 		e.logger.Println("No evaluator given in source, trying all")
-		messages := ""
+		var evalErr error
 		for _, evaluator := range e.Evaluators {
 			if output, err := tryEval(evaluator); err != nil {
-				message := fmt.Sprintf(`Evaluator %q failed: %s`, evaluator, err.Error())
-				if messages != "" {
-					messages += "\n"
+				format := ""
+				if evalErr != nil {
+					format = "\n" + format
 				}
-				messages += message
-				e.logger.Print(message)
+				format += "Evaluator %q failed: %w"
+				evalErr = fmt.Errorf(format, evaluator, err)
 			} else {
 				return output, nil
 			}
 		}
-		return nil, errors.New("No evaluator succeeded.\n" + messages)
+		return nil, errors.WithMessage(evalErr, "No evaluator succeeded.")
 	}
 }
 
