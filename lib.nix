@@ -28,6 +28,7 @@ self:
      };
 
      # these are the defaults
+     # TODO make it possible to publish no facts at all
      outputs = inputs: {
        success.${name} = true;
        failure.${name} = false;
