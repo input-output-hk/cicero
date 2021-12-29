@@ -1,10 +1,10 @@
-{ std, lib, ... }:
+{ std, lib }:
 
 let
   inherit (std.data-merge) merge;
   inherit (lib) mapAttrs;
-in {
-  jobDefaults = actions: job:
+in rec {
+  jobDefaults = args: job:
     merge job (mapAttrs (k: job: {
       datacenters = [ "dc1" "eu-central-1" "us-east-2" ];
       group = mapAttrs (k: group: {
@@ -17,4 +17,16 @@ in {
         }) group.task or { };
       }) job.group or { };
     }) job);
+
+  simpleJob = action: job:
+    std.chain action [
+      jobDefaults
+
+      # systemd-nspawn does not like underscore
+      (std.escapeNames [ "_" ] [ "-" ])
+
+      std.singleTask
+
+      job
+    ];
 }

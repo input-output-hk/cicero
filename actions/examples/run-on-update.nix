@@ -1,4 +1,7 @@
-{ name, id, std, lib } @ args:
+{ name, id, std, lib, actionLib } @ args:
+
+# TODO provide std functions for patterns like this
+# (a function that creates the entire attrset with `inputs` and `outputs`)
 
 {
   inputs = {
@@ -21,29 +24,21 @@
     success = [ { ${name} = id; } ];
   };
 
-  job = let
-    wfLib = import ../../workflows-lib.nix args;
-  in { old ? null }: std.chain args [
-    wfLib.jobDefaults
-
-    # systemd-nspawn does not like underscore
-    (std.escapeNames [ "_" ] [ "-" ])
-
-    std.singleTask
-
-    (std.script "bash" (''
+  job = { old ? null }:
+    actionLib.simpleJob args (std.script "bash" (''
       echo 'Hi, I am the Action named "'${lib.escapeShellArg name}'".'
+      echo
     '' + (
       if old == null then ''
         echo 'I run because I was created for the first time'.
       '' else ''
         echo 'I run because I was updated (recreated with the same name).'
-        echo 'My old version was: '${lib.escapeShellArg old.id}
-        echo 'It ran in Nomad job '${lib.escapeShellArg old.run_id}' at '${lib.escapeShellArg old.created_at}'.'
+        echo 'My old ID was: '${lib.escapeShellArg old.value.${name}}
+        echo 'It ran in Nomad job '${lib.escapeShellArg old.run_id}' and finished at '${lib.escapeShellArg old.created_at}'.'
       ''
     ) + ''
-      echo 'My new version is: '${lib.escapeShellArg id}
+      echo
+      echo 'My new ID is: '${lib.escapeShellArg id}
       echo 'See you on my next update!'
-    ''))
-  ];
+    ''));
 }

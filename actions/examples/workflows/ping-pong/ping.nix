@@ -1,5 +1,6 @@
 rec {
-  workflow = "ping_pong";
+  # Used as prefix common to all actions of this workflow.
+  workflow = "ping-pong";
 
   inputs = args: {
     start = ''
@@ -20,20 +21,10 @@ rec {
     ];
   };
 
-  job = { std, name, id, ... }@args: let
-    wfLib = import ../../workflows-lib.nix args;
-  in inputs: std.chain args [
-    wfLib.jobDefaults
-
-    # systemd-nspawn does not like underscore
-    (std.escapeNames [ "_" ] [ "-" ])
-
-    std.singleTask
-
-    (std.script "bash" ''
-      echo 'running ${name} #${id}'
-    '')
-  ];
+  job = { std, name, lib, actionLib, ... }@args: _:
+    actionLib.simpleJob args (std.script "bash" ''
+      echo 'running '${lib.escapeShellArg name}
+    '');
 
   __functor = _: args: {
     inputs = inputs args;
