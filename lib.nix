@@ -125,6 +125,13 @@ in rec {
           (map (input:
             if !(inputs ? ${input}) then
               throw ''
+                `outputs` can only take arguments declared in `inputs` which "${input}" is not''
+            else
+              null) (attrNames (functionArgs action.outputs)))
+
+          (map (input:
+            if !(inputs ? ${input}) then
+              throw ''
                 `job` can only take arguments declared in `inputs` which "${input}" is not''
             else
               null) (lib.optionals (action ? job) (attrNames (functionArgs action.job))))
