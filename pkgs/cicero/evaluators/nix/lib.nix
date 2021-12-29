@@ -20,16 +20,32 @@ in rec {
     behavior = {
       onUpdate = action: behavior.once action.id action;
 
+      # Same as `stopOnSuccess` and `stopOnFailure` combined
+      # but more efficient (just one input so only one DB query).
       once = key: _: actions.apply {
         inputs."behavior: run only once for \"${key}\"" = {
           not = true;
           match = ''
-            "_behavior": once: "${key}"
+            "_behavior": once: "${key}": _
           '';
         };
 
         outputs = _: rec {
-          success._behavior.once = key;
+          success._behavior.once.${key} = null;
+          failure = success;
+        };
+      };
+
+      stopOnSuccess = key: _: actions.apply {
+        inputs."behavior: stop on success for \"${key}\"" = {
+          not = true;
+          match = ''
+            "_behavior": stopOnSuccess: "${key}": _
+          '';
+        };
+
+        outputs = _: {
+          success._behavior.stopOnSuccess.${key} = null;
         };
       };
 
@@ -37,12 +53,12 @@ in rec {
         inputs."behavior: stop on failure for \"${key}\"" = {
           not = true;
           match = ''
-            "_behavior": stopOnFailure: "${key}": false
+            "_behavior": stopOnFailure: "${key}": _
           '';
         };
 
         outputs = _: {
-          failure._behavior.stopOnFailure.${key} = false;
+          failure._behavior.stopOnFailure.${key} = null;
         };
       };
 
