@@ -138,7 +138,7 @@ in rec {
         ]);
 
       hydrateNomadJob = mapAttrs (k: job:
-        assert !(job ? ID); # author must not set an ID
+        assert !job ? ID; # author must not set an ID
         lib.recursiveUpdate job ({
           type = "batch";
         } // lib.optionalAttrs (job ? group) {
