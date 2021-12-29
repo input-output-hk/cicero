@@ -48,23 +48,37 @@ let
 in rec {
   # Calls an action or a file containing one.
   callAction = name: action:
-    { id, inputs ? abort "no inputs given" }:
+    { id, inputs ? throw "no inputs given" }:
     let
       inherit (builtins)
         isFunction typeOf attrValues attrNames functionArgs deepSeq;
 
-      validateAction = { inputs, job, ... }@action:
+      expandAction = {inputs ? {}, outputs ? _: {}, ...}@action: action // {
+        inputs = mapAttrs (k: v: {
+          select = "latest";
+          match = v;
+          not = false;
+          optional = false;
+        } // lib.optionalAttrs (typeOf v != "string") v) inputs;
+
+        outputs = inputs: {
+          success.${name} = true;
+          failure.${name} = false;
+        } // outputs inputs;
+      };
+
+      validateAction = { inputs, ... }@action:
         lib.pipe action (map deepSeq [
           (let t = typeOf inputs;
           in if t != "set" then
-            abort "`inputs` must be set but is ${t}"
+            throw "`inputs` must be set but is ${t}"
           else
             null)
 
           (mapAttrs (k: v:
             let t = typeOf v;
             in if t != "string" && t != "set" then
-              abort ''
+              throw ''
                 `inputs."${k}"` must be string or set with keys `select` (optional), `not` (optional), `optional` (optional), and `match` but is ${t}''
             else
               null) inputs)
@@ -77,9 +91,9 @@ in rec {
                 select = v.select or "latest";
                 t = typeOf select;
               in if t != "string" then
-                abort ''`inputs."${k}".select` must be string but is ${t}''
+                throw ''`inputs."${k}".select` must be string but is ${t}''
               else if select != "latest" && select != "all" then
-                abort ''
+                throw ''
                   `inputs."${k}".select` must be either "latest" or "all" but is "${select}"''
               else
                 null) inputs)
@@ -90,7 +104,7 @@ in rec {
             else
               let t = typeOf v.not or false;
               in if t != "bool" then
-                abort ''`inputs."${k}".not` must be bool but is ${t}''
+                throw ''`inputs."${k}".not` must be bool but is ${t}''
               else
                 null) inputs)
 
@@ -100,16 +114,23 @@ in rec {
             else
               let t = typeOf v.match;
               in if t != "string" then
-                abort ''`inputs."${k}".match` must be string but is ${t}''
+                throw ''`inputs."${k}".match` must be string but is ${t}''
               else
                 null) inputs)
 
+          (mapAttrs (k: v:
+            if v.not && v.optional then
+              throw ''
+                `inputs."${k}"`.{Not,Optional} are mutually exclusive as both would not make sense''
+            else
+              null) inputs)
+
           (map (input:
             if !(inputs ? ${input}) then
-              abort ''
+              throw ''
                 `job` can only take arguments declared in `inputs` which "${input}" is not''
             else
-              null) (attrNames (functionArgs job)))
+              null) (lib.optionals (action ? job) (attrNames (functionArgs action.job))))
         ]);
 
       hydrateNomadJob = mapAttrs (k: job:
@@ -124,33 +145,17 @@ in rec {
             })) job.group;
         }));
 
-      expandActionInputs = mapAttrs (k: v:
-        {
-          select = "latest";
-          match = v;
-          not = false;
-          optional = false;
-        } // lib.optionalAttrs (typeOf v != "string") v);
-
-      expandActionOutputs = outputs:
-        {
-          success.${name} = true;
-          failure.${name} = false;
-        } // outputs inputs;
-
-      mkActionState = let
-        evalInputs = inputs; # alias needed because name is shadowed
-      in { inputs, outputs ? _: { }, job ? null }:
-        {
-          inputs = expandActionInputs inputs;
-          outputs = { inherit (expandActionOutputs outputs) success; };
-        } // lib.optionalAttrs (job != null) {
-          outputs = { inherit (expandActionOutputs outputs) success failure; };
-          job = hydrateNomadJob (job evalInputs);
+      mkActionState = action: action // {
+          inherit (action) inputs;
+          outputs = { inherit (action.outputs inputs) success; };
+        } // lib.optionalAttrs (action ? job) {
+          outputs = { inherit (action.outputs inputs) success failure; };
+          job = hydrateNomadJob (action.job inputs);
         };
     in lib.pipe action [
       (action: if isFunction action then action else import action)
       (action: action { inherit name id; })
+      expandAction
       validateAction
       mkActionState
     ];
