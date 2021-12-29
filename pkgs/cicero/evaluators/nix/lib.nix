@@ -4,6 +4,65 @@ let
   inherit (self.inputs.nixpkgs) lib;
   inherit (self.inputs) data-merge;
 in rec {
+  actions = {
+    apply = part: base:
+      base // part // {
+        inputs =
+          base.inputs or {} //
+          part.inputs or {};
+
+        outputs = inputs:
+          lib.recursiveUpdate
+            (base.outputs or (_: {}) inputs)
+            (part.outputs or (_: {}) inputs);
+      };
+
+    behavior = {
+      onUpdate = action: behavior.once action.id action;
+
+      once = key: _: actions.apply {
+        inputs."behavior: run only once for \"${key}\"" = {
+          not = true;
+          match = ''
+            "_behavior": once: "${key}"
+          '';
+        };
+
+        outputs = _: rec {
+          success._behavior.once = key;
+        };
+      };
+
+      stopOnFailure = key: _: actions.apply {
+        inputs."behavior: stop on failure for \"${key}\"" = {
+          not = true;
+          match = ''
+            "_behavior": stopOnFailure: "${key}": false
+          '';
+        };
+
+        outputs = _: {
+          failure._behavior.stopOnFailure.${key} = false;
+        };
+      };
+
+      onInputChange = input: _: actions.apply {
+        inputs = {
+          "behavior: input \"${input}\" changed" = {
+            not = true;
+            match = ''
+              "_behavior": onInputChange: _inputs."${input}".value
+            '';
+          };
+        };
+
+        outputs = inputs: {
+          success._behavior.onInputChange = inputs.${input}.value;
+        };
+      };
+    };
+  };
+
   jobs = {
     escapeNames = from: to: job: let
       escape = builtins.replaceStrings
@@ -236,6 +295,7 @@ in rec {
     };
   };
 
+  inherit (actions) behavior;
   inherit (tasks) script;
   inherit (chains) chain;
   inherit (chains.jobs) escapeNames singleTask;

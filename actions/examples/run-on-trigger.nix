@@ -1,29 +1,13 @@
 { name, std, lib, actionLib, ... } @ args:
 
-# TODO provide std functions for patterns like this
-# (a function that creates the entire attrset with `inputs` and `outputs`)
+std.behavior.onInputChange "run" args {
+  inputs.run = ''
+    // arbitrary value that identifies this run
+    "${name}/run": _
+  '';
 
-{
-  inputs = {
-    start = ''
-      // arbitrary number to identify this run
-      "${name}/start": number
-    '';
-
-    "has not run yet" = {
-      not = true;
-      match = ''
-        "${name}": _inputs.start.value."${name}/start"
-      '';
-    };
-  };
-
-  outputs = { start }: {
-    success.${name} = start.value."${name}/start";
-  };
-
-  job = { start }:
+  job = { run }:
     actionLib.simpleJob args (std.script "bash" ''
-      echo 'Running once because I have not run with '${lib.escapeShellArg start.value."${name}/start"}' yet.'
+      echo 'Running once because I have not run with "'${lib.escapeShellArg run.value."${name}/run"}'" yet.'
     '');
 }
