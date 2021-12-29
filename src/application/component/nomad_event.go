@@ -109,12 +109,12 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return err
 	}
 
-	var fact *interface{}
+	var fact interface{}
 	switch allocation.ClientStatus {
 	case "complete":
-		fact = &run.Success
+		fact = run.Success
 	case "failed":
-		fact = &run.Failure
+		fact = run.Failure
 	}
 	if fact == nil {
 		return nil
@@ -132,7 +132,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 
 	if message, err := json.Marshal(domain.Fact{
 		RunId: &id,
-		Value: *fact,
+		Value: fact,
 	}); err != nil {
 		return errors.WithMessage(err, "Failed to marshal Fact")
 	} else if err := self.MessageQueueService.Publish(

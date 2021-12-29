@@ -28,7 +28,6 @@ self:
      };
 
      # these are the defaults
-     # TODO make it possible to publish no facts at all
      outputs = inputs: {
        success.${name} = true;
        failure.${name} = false;
@@ -62,10 +61,7 @@ in rec {
           optional = false;
         } // lib.optionalAttrs (typeOf v != "string") v) inputs;
 
-        outputs = inputs: {
-          success.${name} = true;
-          failure.${name} = false;
-        } // outputs inputs;
+        inherit outputs;
       };
 
       validateAction = { inputs, ... }@action:
@@ -147,12 +143,18 @@ in rec {
         }));
 
       mkActionState = action: action // {
-          inherit (action) inputs;
-          outputs = { inherit (action.outputs inputs) success; };
-        } // lib.optionalAttrs (action ? job) {
-          outputs = { inherit (action.outputs inputs) success failure; };
-          job = hydrateNomadJob (action.job inputs);
-        };
+        inherit (action) inputs;
+        outputs = let
+          outputs = action.outputs inputs;
+        in
+          # Impossible to check in `validateAction` because calling `outputs` with `{}` as dummy inputs
+          # would break if `outputs` decides which attributes to return based on the inputs.
+          lib.warnIf (!action ? job && !outputs ? success) "This decision Action does not declare a success output! It will not do anything." (
+            lib.warnIf (!action ? job && outputs ? failure) "This decision Action declares a failure output! It will never be published." outputs
+          );
+      } // lib.optionalAttrs (action ? job) {
+        job = hydrateNomadJob (action.job inputs);
+      };
     in lib.pipe action [
       (action: if isFunction action then action else import action)
       (action: action { inherit name id; })

@@ -126,12 +126,14 @@ type ActionDefinition struct {
 	Inputs map[string]InputDefinition `json:"inputs"`
 }
 
+type RunOutputs struct {
+	Failure *interface{} `json:"failure"`
+	Success *interface{} `json:"success"`
+}
+
 type RunDefinition struct {
-	Outputs struct {
-		Failure interface{} `json:"failure"`
-		Success interface{} `json:"success"`
-	} `json:"outputs"`
-	Job *nomad.Job `json:"job"`
+	Outputs RunOutputs `json:"outputs"`
+	Job     *nomad.Job `json:"job"`
 }
 
 func (s *RunDefinition) IsDecision() bool {
@@ -160,10 +162,9 @@ type Action struct {
 type Run struct {
 	NomadJobID uuid.UUID
 	ActionId   uuid.UUID
-	Failure    interface{}
-	Success    interface{}
 	CreatedAt  time.Time
 	FinishedAt *time.Time
+	RunOutputs
 }
 
 // TODO make this a map[string]struct{…}

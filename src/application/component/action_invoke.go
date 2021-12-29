@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
-	"time"
 
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
@@ -97,23 +96,23 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 				return err
 			}
 		} else if runDef.IsDecision() {
-			if factJson, err := json.Marshal(
-				domain.Fact{Value: runDef.Outputs.Success},
-			); err != nil {
-				return errors.WithMessagef(err, "Could not marshal fact")
-			} else if err := self.MessageQueueService.Publish(
-				domain.FactCreateStreamName.String(),
-				domain.FactCreateStreamName,
-				factJson,
-			); err != nil {
-				return errors.WithMessage(err, "Could not publish fact")
+			if runDef.Outputs.Success != nil {
+				if factJson, err := json.Marshal(
+					domain.Fact{Value: runDef.Outputs.Success},
+				); err != nil {
+					return errors.WithMessagef(err, "Could not marshal fact")
+				} else if err := self.MessageQueueService.Publish(
+					domain.FactCreateStreamName.String(),
+					domain.FactCreateStreamName,
+					factJson,
+				); err != nil {
+					return errors.WithMessage(err, "Could not publish fact")
+				}
 			}
 		} else {
 			run := domain.Run{
-				ActionId:  action.ID,
-				Success:   runDef.Outputs.Success,
-				Failure:   runDef.Outputs.Failure,
-				CreatedAt: time.Now(),
+				ActionId:   action.ID,
+				RunOutputs: runDef.Outputs,
 			}
 
 			if err := self.RunService.Save(tx, &run); err != nil {
