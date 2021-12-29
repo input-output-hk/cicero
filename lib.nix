@@ -29,8 +29,8 @@ self:
 
      # these are the defaults
      outputs = inputs: {
-       success = [ { ${name} = true;  } ];
-       failure = [ { ${name} = false; } ];
+       success.${name} = true;
+       failure.${name} = false;
      };
 
      job = { tick, ticks, double ? false }:
@@ -134,8 +134,8 @@ in rec {
 
       expandActionOutputs = outputs:
         {
-          success = [{ ${name} = true; }];
-          failure = [{ ${name} = false; }];
+          success.${name} = true;
+          failure.${name} = false;
         } // outputs inputs;
 
       mkActionState = let

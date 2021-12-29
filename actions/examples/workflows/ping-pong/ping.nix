@@ -16,9 +16,7 @@ rec {
   };
 
   outputs = args: inputs: {
-    success = [
-      { ${args.name} = inputs.start.value."${workflow}/start"; }
-    ];
+    success.${args.name} = inputs.start.value."${workflow}/start";
   };
 
   job = { std, name, lib, actionLib, ... }@args: _:

@@ -21,7 +21,7 @@
   };
 
   outputs = _: {
-    success = [ { ${name} = id; } ];
+    success.${name} = id;
   };
 
   job = { old ? null }:

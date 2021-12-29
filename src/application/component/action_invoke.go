@@ -97,21 +97,17 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 				return err
 			}
 		} else if runDef.IsDecision() {
-			var errs error
-			for _, value := range runDef.Outputs.Success {
-				if factJson, err := json.Marshal(
-					domain.Fact{Value: value},
-				); err != nil {
-					errs = errors.WithMessagef(err, "Could not marshal fact: %w", errs)
-				} else if err := self.MessageQueueService.Publish(
-					domain.FactCreateStreamName.String(),
-					domain.FactCreateStreamName,
-					factJson,
-				); err != nil {
-					errs = errors.WithMessagef(err, "Could not publish fact: %w", errs)
-				}
+			if factJson, err := json.Marshal(
+				domain.Fact{Value: runDef.Outputs.Success},
+			); err != nil {
+				return errors.WithMessagef(err, "Could not marshal fact")
+			} else if err := self.MessageQueueService.Publish(
+				domain.FactCreateStreamName.String(),
+				domain.FactCreateStreamName,
+				factJson,
+			); err != nil {
+				return errors.WithMessage(err, "Could not publish fact")
 			}
-			return errors.WithMessage(errs, "Failed to publish all facts")
 		} else {
 			run := domain.Run{
 				ActionId:  action.ID,

@@ -19,7 +19,7 @@
   };
 
   outputs = { start }: {
-    success = [ { ${name} = start.value."${name}/start"; } ];
+    success.${name} = start.value."${name}/start";
   };
 
   job = { start }:

@@ -109,14 +109,14 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return err
 	}
 
-	var facts *[]interface{}
+	var fact *interface{}
 	switch allocation.ClientStatus {
 	case "complete":
-		facts = &run.Success
+		fact = &run.Success
 	case "failed":
-		facts = &run.Failure
+		fact = &run.Failure
 	}
-	if facts == nil {
+	if fact == nil {
 		return nil
 	}
 
@@ -130,19 +130,17 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return errors.WithMessagef(err, "Failed to update Run with ID %q", run.NomadJobID)
 	}
 
-	for _, value := range *facts {
-		if message, err := json.Marshal(domain.Fact{
-			RunId: &id,
-			Value: value,
-		}); err != nil {
-			return errors.WithMessage(err, "Failed to marshal Fact")
-		} else if err := self.MessageQueueService.Publish(
-			domain.FactCreateStreamName.String(),
-			domain.FactCreateStreamName,
-			message,
-		); err != nil {
-			return errors.WithMessage(err, "Could not publish Fact")
-		}
+	if message, err := json.Marshal(domain.Fact{
+		RunId: &id,
+		Value: *fact,
+	}); err != nil {
+		return errors.WithMessage(err, "Failed to marshal Fact")
+	} else if err := self.MessageQueueService.Publish(
+		domain.FactCreateStreamName.String(),
+		domain.FactCreateStreamName,
+		message,
+	); err != nil {
+		return errors.WithMessage(err, "Could not publish Fact")
 	}
 
 	if _, _, err := self.NomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {

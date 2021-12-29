@@ -128,8 +128,8 @@ type ActionDefinition struct {
 
 type RunDefinition struct {
 	Outputs struct {
-		Failure []interface{} `json:"failure"`
-		Success []interface{} `json:"success"`
+		Failure interface{} `json:"failure"`
+		Success interface{} `json:"success"`
 	} `json:"outputs"`
 	Job *nomad.Job `json:"job"`
 }
@@ -160,8 +160,8 @@ type Action struct {
 type Run struct {
 	NomadJobID uuid.UUID
 	ActionId   uuid.UUID
-	Failure    []interface{}
-	Success    []interface{}
+	Failure    interface{}
+	Success    interface{}
 	CreatedAt  time.Time
 	FinishedAt *time.Time
 }
