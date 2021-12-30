@@ -88,6 +88,9 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 	// which sounds non-trivial and it would only help improve performance,
 	// except we define a subset of constraints as the only conditions we support
 	// and no longer run the CUE filter over the selected facts afterwards.
+	// But heads up! This would mean that inputs' `select: "latest"` behavior
+	// would be changed, as what is latest currently means "latest with these paths"
+	// but would then mean "latest with these paths AND matching values", so beware!
 
 	// FIXME race condition: facts may change in between checking whether each input is satisfied
 	for name, input := range action.Inputs {
