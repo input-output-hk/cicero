@@ -179,7 +179,46 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		}
 	}
 
+	for name, input := range action.Inputs {
+		switch input.Select {
+		case domain.InputDefinitionSelectLatest:
+			if entry, exists := inputs[name]; exists {
+				filterFields(&entry.(*domain.Fact).Value, input.Match.WithoutInputs())
+			}
+		case domain.InputDefinitionSelectAll:
+			if entry, exists := inputs[name]; exists {
+				match := input.Match.WithoutInputs()
+				for _, fact := range entry.([]*domain.Fact) {
+					filterFields(&fact.Value, match)
+				}
+			}
+		default:
+			panic("This should have already been caught by the loop above!")
+		}
+	}
+
 	return true, inputs, nil
+}
+
+func filterFields(factValue *interface{}, filter cue.Value) {
+	if strukt, err := filter.Struct(); err != nil {
+		if _, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
+			// fact is not allowed to be map because filter is not a struct
+			factValue = nil
+		}
+	} else if value, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
+		for k, v := range value {
+			if field, err := strukt.FieldByName(k, false); err != nil {
+				delete(value, k)
+			} else {
+				filterFields(&v, field.Value)
+				value[k] = v
+			}
+		}
+	} else {
+		// fact must be a map because filter is struct
+		*factValue = map[string]interface{}{}
+	}
 }
 
 func (self *actionService) getInputFactLatest(value cue.Value) (*domain.Fact, error) {
