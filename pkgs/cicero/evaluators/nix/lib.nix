@@ -75,8 +75,9 @@ in rec {
           '';
         };
 
-        outputs = inputs: {
+        outputs = inputs: rec {
           success._behavior.onInputChange.${key} = builtins.toJSON inputs.${input}.value;
+          failure = success;
         };
       };
     };
