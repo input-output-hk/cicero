@@ -62,18 +62,21 @@ in rec {
         };
       };
 
-      onInputChange = input: _: actions.apply {
-        inputs = {
-          "behavior: input \"${input}\" changed" = {
-            not = true;
-            match = ''
-              "_behavior": onInputChange: _inputs."${input}".value
-            '';
-          };
+      onInputChange = input: key: _: actions.apply {
+        inputs."behavior: input \"${input}\" changed for \"${key}\"" = {
+          not = true;
+          match = ''
+            import "encoding/json"
+            "_behavior": onInputChange: "${key}":
+              // We cannot just use the plain `_inputs."${input}".value`
+              // because that could be an object which paths break `select: "latest"`.
+              // XXX save hash instead of whole value
+              json.Marshal(_inputs."${input}".value)
+          '';
         };
 
         outputs = inputs: {
-          success._behavior.onInputChange = inputs.${input}.value;
+          success._behavior.onInputChange.${key} = builtins.toJSON inputs.${input}.value;
         };
       };
     };

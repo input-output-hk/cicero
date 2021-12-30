@@ -1,6 +1,6 @@
 { name, std, lib, actionLib, ... } @ args:
 
-std.behavior.onInputChange "run" args {
+std.behavior.onInputChange "run" name args {
   inputs.run = ''
     // arbitrary value that identifies this run
     "${name}/run": _

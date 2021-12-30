@@ -1,21 +1,21 @@
 {
-  # Used as prefix common to all actions of this workflow.
   workflow = "ping-pong";
 
   __functor = { workflow, ... }:
-    { std, actionLib, ... }@args:
-    std.behavior.onInputChange "state" args {
+    { std, lib, actionLib, ... }@args:
+    std.behavior.onInputChange "state" workflow args {
       inputs.state = ''
         // set to whatever else to trigger
         "${workflow}": !="ping" & !="pong" & !="ping-pong"
       '';
 
       outputs = _: {
-        ${workflow} = "ping";
+        success.${workflow} = "ping";
       };
 
-      job = _:
+      job = { state }:
         actionLib.simpleJob args (std.script "bash" ''
+          echo 'Triggered by: '${lib.escapeShellArg state.value.${workflow}}
           echo 'Ping!'
         '');
     };

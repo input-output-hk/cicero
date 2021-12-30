@@ -4,18 +4,18 @@ in
 
 { std, lib, actionLib, ... }@args:
 
-std.behavior.onInputChange "state" args {
+std.behavior.onInputChange "state" workflow args {
   inputs.state = ''
     "${workflow}": "pong"
   '';
 
   outputs = _: {
-    ${workflow} = "ping-pong";
+    success.${workflow} = "ping-pong";
   };
 
   job = { state }:
     actionLib.simpleJob args (std.script "bash" ''
-      echo 'Received: '${lib.escapeShellArg state}
+      echo 'Received: '${lib.escapeShellArg state.value.${workflow}}
       echo 'Ping Pong!'
     '');
 }
