@@ -723,9 +723,9 @@ func genApiActionCurrentGetSwagDef() swagger.Definitions {
 
 func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	name := vars["name"]
-
-	if actions, err := self.ActionService.GetLatestByName(name); err != nil {
+	if name, err := url.PathUnescape(vars["name"]); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
+	} else if actions, err := self.ActionService.GetLatestByName(name); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Failed to get current action named %q", name))
 	} else {
 		self.json(w, actions, 200)
@@ -761,8 +761,9 @@ func genApiActionCurrentNameGetSwagDef() swagger.Definitions {
 
 func (self *Web) ApiActionCurrentNameDefinitionGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	name := vars["name"]
-	if action, err := self.ActionService.GetLatestByName(name); err != nil {
+	if name, err := url.PathUnescape(vars["name"]); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
+	} else if action, err := self.ActionService.GetLatestByName(name); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
 	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
