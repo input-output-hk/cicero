@@ -152,18 +152,18 @@ type Fact struct {
 }
 
 type Action struct {
-	ID        uuid.UUID
-	Name      string
-	Source    string
-	CreatedAt time.Time
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Source    string    `json:"source"`
+	CreatedAt time.Time `json:"created_at"`
 	ActionDefinition
 }
 
 type Run struct {
-	NomadJobID uuid.UUID
-	ActionId   uuid.UUID
-	CreatedAt  time.Time
-	FinishedAt *time.Time
+	NomadJobID uuid.UUID  `json:"nomad_job_id"`
+	ActionId   uuid.UUID  `json:"action_id"`
+	CreatedAt  time.Time  `json:"created_at"`
+	FinishedAt *time.Time `json:"finished_at"`
 	RunOutputs
 }
 
