@@ -1,18 +1,21 @@
 let
-  common = import ./ping.nix;
+  inherit (import ./ping.nix) workflow;
 in
 
-args:
+{ std, lib, actionLib, ... }@args:
 
-{
-  inputs = common.inputs args // {
-    ping = ''
-      "${common.workflow}/ping": true
-    '';
-    pong = ''
-      "${common.workflow}/pong": true
-    '';
+std.behavior.onInputChange "state" args {
+  inputs.state = ''
+    "${workflow}": "pong"
+  '';
+
+  outputs = _: {
+    ${workflow} = "ping-pong";
   };
 
-  job = common.job args;
+  job = { state }:
+    actionLib.simpleJob args (std.script "bash" ''
+      echo 'Received: '${lib.escapeShellArg state}
+      echo 'Ping Pong!'
+    '');
 }
