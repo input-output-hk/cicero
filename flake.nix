@@ -271,6 +271,7 @@
         inherit (self.outputs.lib) std;
         inherit (self.inputs.nixpkgs) lib;
         actionLib = import ./action-lib.nix { inherit std lib; };
+        nixpkgsRev = self.inputs.nixpkgs.rev;
       } ./actions;
 
       hydraJobs = { cicero }@pkgs: pkgs;
