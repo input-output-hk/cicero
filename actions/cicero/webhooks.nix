@@ -8,21 +8,21 @@ std.behavior.onInputChange "start" name args
 
 {
   inputs.start = ''
-    "${name}": start: {
+    "${name}": {
       sha: string
       clone_url?: string
       environment?: string
     }
   '';
 
-  job = inputs: let
-    inherit (inputs.start.value.${name}) start;
+  job = { start }: let
+    cfg = start.value.${name};
   in std.chain args [
     actionLib.simpleJob
 
     (std.git.clone {
-      inherit (start) sha;
-      clone_url = start.clone_url or "https://github.com/input-output-hk/cicero";
+      inherit (cfg) sha;
+      clone_url = cfg.clone_url or "https://github.com/input-output-hk/cicero";
     })
 
     {
@@ -33,10 +33,10 @@ std.behavior.onInputChange "start" name args
     (std.script "bash" ''
       cue export ./jobs -e jobs.webhooks \
         ${
-          lib.optionalString (start ? environment)
-          "-t env=${lib.escapeShellArg start.environment}"
+          lib.optionalString (cfg ? environment)
+          "-t env=${lib.escapeShellArg cfg.environment}"
         } \
-        -t sha=${lib.escapeShellArg start.sha} \
+        -t sha=${lib.escapeShellArg cfg.sha} \
         > job.json
 
       nomad run job.json
