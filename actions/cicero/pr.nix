@@ -23,11 +23,13 @@ std.behavior.onInputChange "github-event" namespace args
     }
   '';
 
-  outputs = { github-event }: {
+  outputs = { github-event }: let
+    event = github-event.value.github-event;
+  in {
     success.${namespace}.start = {
-      inherit (github-event.pull_request.head.repo) clone_url;
-      inherit (github-event.pull_request.head) sha;
-      statuses_url = github-event.pull_request._links.statuses.href;
+      inherit (event.pull_request.head.repo) clone_url;
+      inherit (event.pull_request.head) sha;
+      statuses_url = event.pull_request._links.statuses.href;
     };
   };
 }
