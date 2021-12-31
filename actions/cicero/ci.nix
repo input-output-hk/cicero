@@ -13,15 +13,15 @@ std.behavior.onInputChange "start" namespace args
     }
   '';
 
-  job = inputs: let
-    inherit (inputs.start.value.${namespace}) start;
+  job = { start }: let
+    cfg = start.value.${namespace}.start;
   in std.chain args [
     actionLib.simpleJob
 
-    (lib.optionalAttrs (start ? statuses_url)
-      (std.github.reportStatus start.statuses_url))
+    (lib.optionalAttrs (cfg ? statuses_url)
+      (std.github.reportStatus cfg.statuses_url))
 
-    (std.git.clone start)
+    (std.git.clone cfg)
 
     {
       resources = {
