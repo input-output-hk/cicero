@@ -1,12 +1,10 @@
-{ std, lib, actionLib, ... } @ args:
+{ name, std, lib, actionLib, ... } @ args:
 
-let namespace = "cicero"; in
-
-std.behavior.onInputChange "start" namespace args
+std.behavior.onInputChange "start" name args
 
 {
   inputs.start = ''
-    "${namespace}": start: {
+    "${name}": start: {
       clone_url: string
       sha: string
       statuses_url?: string
@@ -14,7 +12,7 @@ std.behavior.onInputChange "start" namespace args
   '';
 
   job = { start }: let
-    cfg = start.value.${namespace}.start;
+    cfg = start.value.${name}.start;
   in std.chain args [
     actionLib.simpleJob
 

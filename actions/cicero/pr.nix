@@ -1,8 +1,6 @@
-{ std, ... } @ args:
+{ name, std, ... } @ args:
 
-let namespace = "cicero"; in
-
-std.behavior.onInputChange "github-event" namespace args
+std.behavior.onInputChange "github-event" name args
 
 {
   inputs.github-event = ''
@@ -26,7 +24,7 @@ std.behavior.onInputChange "github-event" namespace args
   outputs = { github-event }: let
     event = github-event.value.github-event;
   in {
-    success.${namespace}.start = {
+    success."cicero/ci".start = {
       inherit (event.pull_request.head.repo) clone_url;
       inherit (event.pull_request.head) sha;
       statuses_url = event.pull_request._links.statuses.href;
