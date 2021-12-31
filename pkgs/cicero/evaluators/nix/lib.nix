@@ -22,7 +22,7 @@ in rec {
 
       # Same as `stopOnSuccess` and `stopOnFailure` combined
       # but more efficient (just one input so only one DB query).
-      once = key: _: actions.apply {
+      once = key: _: next: actions.apply {
         inputs."behavior: run only once for \"${key}\"" = {
           not = true;
           match = ''
@@ -30,11 +30,14 @@ in rec {
           '';
         };
 
-        outputs = _: rec {
-          success._behavior.once.${key} = null;
-          failure = success;
+        outputs = _: let
+          fact = { _behavior.once.${key} = null; };
+        in {
+          success = fact;
+        } // lib.optionalAttrs (next ? job) {
+          failure = fact;
         };
-      };
+      } next;
 
       stopOnSuccess = key: _: actions.apply {
         inputs."behavior: stop on success for \"${key}\"" = {
@@ -62,7 +65,7 @@ in rec {
         };
       };
 
-      onInputChange = input: key: _: actions.apply {
+      onInputChange = input: key: _: next: actions.apply {
         inputs."behavior: input \"${input}\" changed for \"${key}\"" = {
           not = true;
           match = ''
@@ -70,11 +73,14 @@ in rec {
           '';
         };
 
-        outputs = inputs: rec {
-          success._behavior.onInputChange.${key} = inputs.${input}.id;
-          failure = success;
+        outputs = inputs: let
+          fact = { _behavior.onInputChange.${key} = inputs.${input}.id; };
+        in {
+          success = fact;
+        } // lib.optionalAttrs (next ? job) {
+          failure = fact;
         };
-      };
+      } next;
     };
   };
 
