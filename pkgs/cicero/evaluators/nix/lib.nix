@@ -31,7 +31,7 @@ in rec {
         };
 
         outputs = _: let
-          fact = { _behavior.once.${key} = null; };
+          fact._behavior.once.${key} = null;
         in {
           success = fact;
         } // lib.optionalAttrs (next ? job) {
@@ -74,7 +74,7 @@ in rec {
         };
 
         outputs = inputs: let
-          fact = { _behavior.onInputChange.${key} = inputs.${input}.id; };
+          fact._behavior.onInputChange.${key} = inputs.${input}.id;
         in {
           success = fact;
         } // lib.optionalAttrs (next ? job) {
