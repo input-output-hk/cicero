@@ -99,9 +99,10 @@ func (self *Web) Start(ctx context.Context) error {
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods("GET")
+	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods("GET")
+	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
 	/* FIXME
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods("GET")
-	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
 
 	muxRouter.HandleFunc("/workflow/{id:[0-9]+}/graph", self.WorkflowIdGraphGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/graph", self.WorkflowGraphGet).Methods("GET")
@@ -140,32 +141,35 @@ func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, "/action/current", 302)
 }
 
-/* FIXME
-func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
-	name := req.URL.Query().Get("name")
-
-	if name == "" {
-		if summary, err := self.RunService.GetSummary(); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Could not get summary of workflows"))
-			return
-		} else if err := render("workflow/index.html", w, summary); err != nil {
-			self.ServerError(w, err)
-			return
-		}
-	} else {
-		if instances, err := self.RunService.GetAllByName(name); err != nil {
-			self.ServerError(w, errors.WithMessagef(err, "Could not get workflows by name: %q", name))
-			return
-		} else if err := render("workflow/index-name.html", w, map[string]interface{}{
-			"Name":      name,
-			"Instances": instances,
-		}); err != nil {
-			self.ServerError(w, err)
-			return
-		}
+func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
+	if summary, err := self.ActionService.GetCurrent(); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Could not get current Actions"))
+		return
+	} else if err := render("action/current.html", w, summary); err != nil {
+		self.ServerError(w, err)
+		return
 	}
 }
 
+func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+	} else if action, err := self.ActionService.GetById(id); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
+		return
+	} else if runs, err := self.RunService.GetByActionId(id); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get Runs by Action ID: %q", id))
+		return
+	} else if err := render("action/[id].html", w, map[string]interface{}{
+		"Action": action,
+		"Runs":   runs,
+	}); err != nil {
+		self.ServerError(w, err)
+		return
+	}
+}
+
+/* FIXME
 func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	const templateName = "workflow/new.html"
 

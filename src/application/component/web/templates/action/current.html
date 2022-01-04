@@ -4,31 +4,29 @@
 	<table class="table">
 		<tr>
 			<th>Name</th>
-			<th># Instances</th>
-			<th># Sources</th>
+			<th>Created At</th>
 		</tr>
 		<tr>
 			<td
-				colspan="3"
+				colspan="2"
 				style="
 					text-align: center;
 					font-style: italic;
 				"
 			>
-				<a href="/workflow/new">
-					Start New Workflow
+				<a href="/action/new">
+					Create New Action
 				</a>
 			</td>
 		</tr>
 		{{range .}}
 			<tr>
 				<td>
-					<a href="?name={{.Name}}">
+					<a href="/action/{{.ID}}">
 						{{.Name}}
 					</a>
 				</td>
-				<td>{{.NumInstances}}</td>
-				<td>{{.NumSources}}</td>
+				<td>{{.CreatedAt}}</td>
 			</tr>
 		{{end}}
 	</table>

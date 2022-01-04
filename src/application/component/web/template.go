@@ -111,4 +111,7 @@ var templateFuncs = template.FuncMap{
 			ns%int64(time.Second),
 		)
 	},
+	"InputDefinitionSelectString": func(inputDefinitionSelect domain.InputDefinitionSelect) (string, error) {
+		return inputDefinitionSelect.String()
+	},
 }

@@ -18,8 +18,24 @@ table.table td {
 	border: 3px solid var(--border);
 	padding: .5em;
 }
-table.table tr:nth-child(even) {
+table.table > thead > tr:nth-child(odd) {
 	background: var(--border);
+}
+table.table > tbody > tr:nth-child(even) {
+	background: var(--border);
+}
+
+table.table.vertical > tbody > tr > th {
+	text-align: start;
+}
+
+.tables {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+}
+.tables > table {
+	margin: 1em;
 }
 
 button.link {

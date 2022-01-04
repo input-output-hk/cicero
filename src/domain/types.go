@@ -166,11 +166,3 @@ type Run struct {
 	FinishedAt *time.Time `json:"finished_at"`
 	RunOutputs
 }
-
-// TODO make this a map[string]struct{…}
-// TODO move this to web package
-type ActionSummary []struct {
-	Name       string
-	NumSources uint64
-	Num        uint64
-}

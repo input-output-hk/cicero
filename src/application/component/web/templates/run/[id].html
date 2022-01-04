@@ -2,142 +2,223 @@
 
 {{define "main"}}
 	{{$scope := "d2dc0bac8e4747b39b78a49cf274328a"}}
+
 	<div id="{{$scope}}">
+		<div class="tables">
+			{{with .Run}}
+				<table class="table vertical">
+					<thead>
+						<tr>
+							<th colspan="2">
+								General Information
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<th>Nomad Job ID</th>
+							<td>{{.NomadJobID}}</td>
+						</tr>
+						<tr>
+							<th>Action ID</th>
+							<td>
+								<a href="/action/{{.ActionId}}">
+									{{.ActionId}}
+								</a>
+							</td>
+						</tr>
+						<tr>
+							<th>Created at</th>
+							<td>{{.CreatedAt}}</td>
+						</tr>
+						<tr>
+							<th>Finished at</th>
+							<td>{{.FinishedAt}}</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<table class="table vertical">
+					<thead>
+						<tr>
+							<th colspan="2">
+								Outputs
+							</th>
+						</tr>
+						<tr>
+							<th>Success</th>
+							<th>Failure</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>
+								<textarea
+									readonly
+									rows="10"
+									cols="50"
+								>{{toJson .Success true}}</textarea>
+							</td>
+							<td>
+								<textarea
+									readonly
+									rows="10"
+									cols="50"
+								>{{toJson .Failure true}}</textarea>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			{{end}}
+		</div>
+
 		<h2>Allocation</h2>
 		{{range $wrapper := .allocs}}
 			{{with $wrapper}}
 				{{with .Alloc}}
-					<div class="nomad-tables">
-						<table class="table">
-							<tr>
-								<th colspan="2">
-									Allocation
-								</th>
-							</tr>
-							<tr>
-								<th>Status:</th>
-								<td>{{.ClientStatus}}</td>
-							</tr>
-							<tr>
-								<th>Task Group:</th>
-								<td>{{.TaskGroup}}</td>
-							</tr>
-							<tr>
-								<th>Created:</th>
-								<td>{{timeUnixNano .CreateTime}}</td>
-							</tr>
-							<tr>
-								<th>Job:</th>
-								<td>{{.JobID}}</td>
-							</tr>
-							<tr>
-								<th>Node:</th>
-								<td>{{.NodeName}}</td>
-							</tr>
-						</table>
-						{{with .Resources}}
-							<table class="table">
+					<div class="tables">
+						<table class="table vertical">
+							<thead>
 								<tr>
 									<th colspan="2">
-										Allocated Resources
+										General Information
 									</th>
 								</tr>
+							</thead>
+							<tbody>
 								<tr>
-									<th>Cores:</th>
-									<td>{{.Cores}}</td>
+									<th>Status</th>
+									<td>{{.ClientStatus}}</td>
 								</tr>
 								<tr>
-									<th>CPU:</th>
-									<td>{{.CPU}} Mhz</td>
+									<th>Task Group</th>
+									<td>{{.TaskGroup}}</td>
 								</tr>
 								<tr>
-									<th>Disk:</th>
-									<td>{{.DiskMB}} MB</td>
+									<th>Created</th>
+									<td>{{timeUnixNano .CreateTime}}</td>
 								</tr>
 								<tr>
-									<th>IOPS:</th>
-									<td>{{.IOPS}}</td>
+									<th>Job</th>
+									<td>{{.JobID}}</td>
 								</tr>
 								<tr>
-									<th>Memory Max:</th>
-									<td>{{.MemoryMaxMB}} MB</td>
+									<th>Node</th>
+									<td>{{.NodeName}}</td>
 								</tr>
-								<tr>
-									<th>Memory:</th>
-									<td>{{.MemoryMB}} MB</td>
-								</tr>
+							</tbody>
+						</table>
+						{{with .Resources}}
+							<table class="table vertical">
+								<thead>
+									<tr>
+										<th colspan="2">
+											Resources
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr>
+										<th>Cores</th>
+										<td>{{.Cores}}</td>
+									</tr>
+									<tr>
+										<th>CPU</th>
+										<td>{{.CPU}} Mhz</td>
+									</tr>
+									<tr>
+										<th>Disk</th>
+										<td>{{.DiskMB}} MB</td>
+									</tr>
+									<tr>
+										<th>IOPS</th>
+										<td>{{.IOPS}}</td>
+									</tr>
+									<tr>
+										<th>Memory Max</th>
+										<td>{{.MemoryMaxMB}} MB</td>
+									</tr>
+									<tr>
+										<th>Memory</th>
+										<td>{{.MemoryMB}} MB</td>
+									</tr>
+								</tbody>
 							</table>
 						{{end}}
 					</div>
 
 					<h2>Tasks</h2>
-					<div class="tabs" style="--num-tabs: {{print (len .TaskStates)}}">
+					<div class="tabs" style="--num-tabs: {{len .TaskStates}}">
 						{{range $taskName, $task := .TaskStates}}
 							<input id="tab-{{$taskName}}" type="radio" name="tab" checked/>
 							<label for="tab-{{$taskName}}"><h3>{{$taskName}}</h3></label>
 							<div style="padding: 1em">
 								{{with $task}}
-									<table class="table">
-										<tr>
-											<th colspan="2">
-												Task
-											</th>
-										</tr>
-										<tr>
-											<th>Failed:</th>
-											<td>{{.Failed}}</td>
-										</tr>
-										<tr>
-											<th>State:</th>
-											<td>{{.State}}</td>
-										</tr>
-										<tr>
-											<th>Started:</th>
-											<td>{{.StartedAt}}</td>
-										</tr>
-										{{if and .FinishedAt .StartedAt}}
+									<table class="table vertical">
+										<thead>
 											<tr>
-												<th>Finished:</th>
-												<td>{{.FinishedAt}}</td>
+												<th colspan="2">
+													General Information
+												</th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr>
+												<th>Failed</th>
+												<td>{{.Failed}}</td>
 											</tr>
 											<tr>
-												<th>Duration:</th>
-												<td>{{.FinishedAt.Sub .StartedAt}}</td>
-											</tr>
-										{{end}}
-										{{if gt .Restarts 0}}
-											<tr>
-												<th>Restarts:</th>
-												<td>{{.Restarts}}</td>
+												<th>State</th>
+												<td>{{.State}}</td>
 											</tr>
 											<tr>
-												<th>Last Restart:</th>
-												<td>{{.LastRestart}}</td>
+												<th>Started</th>
+												<td>{{.StartedAt}}</td>
 											</tr>
-										{{end}}
-										{{with index $wrapper.Alloc.AllocatedResources.Tasks $taskName}}
-											<tr>
-												<th>CPU Shares:</th>
-												<td>{{.Cpu.CpuShares}} Mhz</td>
-											</tr>
-											<tr>
-												<th>Memory:</th>
-												<td>{{.Memory.MemoryMB}} MB</td>
-											</tr>
-											{{if gt .Memory.MemoryMaxMB 0}}
+											{{if and .FinishedAt .StartedAt}}
 												<tr>
-													<th>Memory Max:</th>
-													<td>{{.Memory.MemoryMaxMB}} MB</td>
+													<th>Finished</th>
+													<td>{{.FinishedAt}}</td>
+												</tr>
+												<tr>
+													<th>Duration</th>
+													<td>{{.FinishedAt.Sub .StartedAt}}</td>
 												</tr>
 											{{end}}
-										{{end}}
+											{{if gt .Restarts 0}}
+												<tr>
+													<th>Restarts</th>
+													<td>{{.Restarts}}</td>
+												</tr>
+												<tr>
+													<th>Last Restart</th>
+													<td>{{.LastRestart}}</td>
+												</tr>
+											{{end}}
+											{{with index $wrapper.Alloc.AllocatedResources.Tasks $taskName}}
+												<tr>
+													<th>CPU Shares</th>
+													<td>{{.Cpu.CpuShares}} Mhz</td>
+												</tr>
+												<tr>
+													<th>Memory</th>
+													<td>{{.Memory.MemoryMB}} MB</td>
+												</tr>
+												{{if gt .Memory.MemoryMaxMB 0}}
+													<tr>
+														<th>Memory Max</th>
+														<td>{{.Memory.MemoryMaxMB}} MB</td>
+													</tr>
+												{{end}}
+											{{end}}
+										</tbody>
 									</table>
 
-									<h4>Event Logs</h4>
+									<h3>Event Logs</h3>
 									<table class="panel log">
 										{{range $task.Events}}
 											<tr>
-												<th class="time">{{(timeUnixNano .Time).Format "2006-01-02 15:04:05"}}</th>
+												<td class="time">{{(timeUnixNano .Time).Format "2006-01-02 15:04:05"}}</td>
 												{{if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting"}}
 													<td class="line">{{.DisplayMessage}}</td>
 												{{else if eq .Type "Not Restarting"}}
@@ -213,12 +294,12 @@
 										{{end}}
 									</table>
 
-									<h4>Task Logs</h4>
+									<h3>Task Logs</h3>
 									{{if $wrapper.Logs.Stdout}}
 										<table class="panel log">
 											{{range $wrapper.Logs.Stdout}}
 												<tr>
-													<th class="time">{{.Time.Format "2006-01-02 15:04:05"}}</th>
+													<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
 													<td class="line">{{.Text}}</td>
 												</tr>
 											{{end}}
@@ -228,7 +309,7 @@
 										<table class="panel log">
 											{{range $wrapper.Logs.Stderr}}
 												<tr class="stderr">
-													<th class="time">{{.Time.Format "2006-01-02 15:04:05"}}</th>
+													<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
 													<td class="line">{{.Text}}</td>
 												</tr>
 											{{end}}
@@ -244,15 +325,6 @@
 	</div>
 
 	<style>
-	#{{$scope}} .nomad-tables {
-		display: flex;
-		flex-wrap: wrap;
-	}
-
-	#{{$scope}} .nomad-tables > table {
-		margin: 1em;
-	}
-
 	#{{$scope}} table.log > tbody > tr > td:first-child {
 		border-right: 2px solid var(--border);
 		padding-right: .5em;
