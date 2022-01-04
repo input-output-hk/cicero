@@ -2,32 +2,36 @@
 
 {{define "main"}}
 	<table class="table">
-		<tr>
-			<th>Name</th>
-			<th>Created At</th>
-		</tr>
-		<tr>
-			<td
-				colspan="2"
-				style="
-					text-align: center;
-					font-style: italic;
-				"
-			>
-				<a href="/action/new">
-					Create New Action
-				</a>
-			</td>
-		</tr>
-		{{range .}}
+		<thead>
 			<tr>
-				<td>
-					<a href="/action/{{.ID}}">
-						{{.Name}}
+				<th>Name</th>
+				<th>Created At</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td
+					colspan="2"
+					style="
+						text-align: center;
+						font-style: italic;
+					"
+				>
+					<a href="/action/new">
+						Create New Action
 					</a>
 				</td>
-				<td>{{.CreatedAt}}</td>
 			</tr>
-		{{end}}
+			{{range .}}
+				<tr>
+					<td>
+						<a href="/action/{{.ID}}">
+							{{.Name}}
+						</a>
+					</td>
+					<td>{{.CreatedAt}}</td>
+				</tr>
+			{{end}}
+		</tbody>
 	</table>
 {{end}}
