@@ -100,9 +100,9 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods("GET")
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods("GET")
+	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods("GET")
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
 	/* FIXME
-	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods("GET")
 
 	muxRouter.HandleFunc("/workflow/{id:[0-9]+}/graph", self.WorkflowIdGraphGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/graph", self.WorkflowGraphGet).Methods("GET")
@@ -169,68 +169,46 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-/* FIXME
 func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
-	const templateName = "workflow/new.html"
+	const templateName = "action/new.html"
 
 	query := req.URL.Query()
 	source := query.Get("source")
 	name := query.Get("name")
-	inputsJson := query.Get("inputs")
-
-	facts := domain.Facts{}
-	if inputsJson != "" {
-		if f, err := self.parseFacts([]byte(inputsJson)); err != nil {
-			self.ClientError(w, err)
-			return
-		} else {
-			facts = f
-		}
-	}
 
 	// step 1
 	if source == "" {
-		if render(templateName, w, nil) != nil {
-			return
-		}
-	}
-
-	// step 4
-	if inputsJson != "" {
-		if err := self.RunService.Start(source, name, facts); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "While starting workflow"))
-			return
-		}
-
-		http.Redirect(w, req, "/workflow", 302)
-		return
-	}
-
-	// step 3
-	if name != "" {
-		if err := render(templateName, w, map[string]interface{}{
-			"Source": source,
-			"Name":   name,
-			"Inputs": facts,
-		}); err != nil {
+		if err := render(templateName, w, nil); err != nil {
 			self.ServerError(w, err)
-			return
 		}
 		return
 	}
 
 	// step 2
-	if source != "" {
-		if names, err := self.EvaluationService.ListWorkflows(source); err != nil {
-			self.ServerError(w, errors.WithMessagef(err, "While listing workflows for %q", source))
-			return
+	if name == "" {
+		if names, err := self.EvaluationService.ListActions(source); err != nil {
+			self.ServerError(w, errors.WithMessagef(err, "While listing Actions in %q", source))
 		} else if err := render(templateName, w, map[string]interface{}{"Source": source, "Names": names}); err != nil {
 			self.ServerError(w, err)
-			return
 		}
+		return
+	}
+
+	if err := self.MessageQueueService.Publish(
+		domain.ActionCreateStream(name),
+		domain.ActionCreateStreamName,
+		[]byte{},
+		liftbridge.Header("source", []byte(source)),
+	); err != nil {
+		self.ServerError(w, err)
+		return
+	} else {
+		http.Redirect(w, req, "/action/current", 302)
+		return
 	}
 }
 
+/* FIXME
 func (self *Web) WorkflowPost(w http.ResponseWriter, req *http.Request) {
 	name := req.PostFormValue("name")
 	source := req.PostFormValue("source")
