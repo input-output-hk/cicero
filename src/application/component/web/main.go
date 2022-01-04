@@ -99,6 +99,7 @@ func (self *Web) Start(ctx context.Context) error {
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods("GET")
+	muxRouter.HandleFunc("/run", self.RunGet).Methods("GET")
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods("GET")
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods("GET")
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
@@ -230,6 +231,14 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}); err != nil {
 		self.ServerError(w, err)
 		return
+	}
+}
+
+func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
+	if runs, err := self.RunService.GetAll(); err != nil {
+		self.ServerError(w, err)
+	} else if err := render("run/index.html", w, runs); err != nil {
+		self.ServerError(w, err)
 	}
 }
 
