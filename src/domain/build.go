@@ -1,6 +1,8 @@
 package domain
 
-var BuildInfo struct {
+type BuildInfo struct {
 	Version string
 	Commit  string
-}
+} 
+
+var Build BuildInfo

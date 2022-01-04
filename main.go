@@ -23,8 +23,8 @@ func main() {
 		logger.SetOutput(os.Stderr)
 	}
 
-	domain.BuildInfo.Version = buildVersion
-	domain.BuildInfo.Commit = buildCommit
+	domain.Build.Version = buildVersion
+	domain.Build.Commit = buildCommit
 
 	abort(parser, Run(parser, args))
 }

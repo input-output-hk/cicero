@@ -89,11 +89,8 @@ func render(route string, w http.ResponseWriter, data interface{}) error {
 }
 
 var templateFuncs = template.FuncMap{
-	"buildInfo": func() struct {
-		Version string
-		Commit  string
-	} {
-		return domain.BuildInfo
+	"buildInfo": func() domain.BuildInfo {
+		return domain.Build
 	},
 	"toJson": func(o interface{}, pretty bool) string {
 		var enc []byte
