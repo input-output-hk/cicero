@@ -103,12 +103,9 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods("GET")
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
 	/* FIXME
-
 	muxRouter.HandleFunc("/workflow/{id:[0-9]+}/graph", self.WorkflowIdGraphGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/graph", self.WorkflowGraphGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/graph/plain", self.WorkflowGraphPlainGet).Methods("GET")
-	muxRouter.HandleFunc("/workflow", self.WorkflowGet).Methods("GET")
-	muxRouter.HandleFunc("/workflow", self.WorkflowPost).Methods("POST")
 	*/
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
@@ -207,19 +204,6 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 }
-
-/* FIXME
-func (self *Web) WorkflowPost(w http.ResponseWriter, req *http.Request) {
-	name := req.PostFormValue("name")
-	source := req.PostFormValue("source")
-
-	if err := self.RunService.Start(source, name, domain.Facts{}); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, `Could not start workflow %q from source %q`, name, source))
-	}
-
-	http.Redirect(w, req, "/workflow", 302)
-}
-*/
 
 func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	id, err := uuid.Parse(mux.Vars(req)["id"])
