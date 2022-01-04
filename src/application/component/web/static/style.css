@@ -18,10 +18,10 @@ table.table td {
 	border: 3px solid var(--border);
 	padding: .5em;
 }
-table.table > thead > tr:nth-child(odd) {
+table.table > thead > tr:nth-child(even) {
 	background: var(--border);
 }
-table.table > tbody > tr:nth-child(even) {
+table.table > tbody > tr:nth-child(odd) {
 	background: var(--border);
 }
 
