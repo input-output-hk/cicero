@@ -2,7 +2,7 @@
 
 std.behavior.onInputChange "run" name args {
   inputs.run = ''
-    // arbitrary value that identifies this run
+    // arbitrary value that triggers this run
     "${name}": _
   '';
 
