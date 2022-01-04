@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 )
@@ -8,5 +9,5 @@ import (
 type NomadEventRepository interface {
 	Save(pgx.Tx, *nomad.Event) error
 	GetLastNomadEvent() (uint64, error)
-	GetEventAllocByNomadJobId(uint64) ([]map[string]interface{}, error)
+	GetEventAllocByNomadJobId(uuid.UUID) ([]map[string]interface{}, error)
 }

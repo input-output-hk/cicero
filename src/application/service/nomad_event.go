@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
@@ -18,7 +19,7 @@ import (
 type NomadEventService interface {
 	Save(pgx.Tx, *nomad.Event) error
 	GetLastNomadEvent() (uint64, error)
-	GetEventAllocByNomadJobId(uint64) (map[string]domain.AllocWrapper, error)
+	GetEventAllocByNomadJobId(uuid.UUID) (map[string]domain.AllocWrapper, error)
 }
 
 type nomadEventService struct {
@@ -49,9 +50,9 @@ func (n *nomadEventService) GetLastNomadEvent() (uint64, error) {
 	return n.nomadEventRepository.GetLastNomadEvent()
 }
 
-func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uint64) (map[string]domain.AllocWrapper, error) {
+func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]domain.AllocWrapper, error) {
 	allocs := map[string]domain.AllocWrapper{}
-	n.logger.Printf("Getting EventAlloc by Nomad Job ID: %d", nomadJobId)
+	n.logger.Printf("Getting EventAlloc by Nomad Job ID: %q", nomadJobId)
 	results, err := n.nomadEventRepository.GetEventAllocByNomadJobId(nomadJobId)
 	if err != nil {
 		return nil, err
@@ -73,8 +74,8 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uint64) (map[st
 			return nil, err
 		}
 
-		allocs[result["name"].(string)] = domain.AllocWrapper{Alloc: alloc, Logs: logs}
+		allocs[alloc.Name] = domain.AllocWrapper{Alloc: alloc, Logs: logs}
 	}
-	n.logger.Printf("Got EventAlloc by Nomad Job ID: %d", nomadJobId)
+	n.logger.Printf("Got EventAlloc by Nomad Job ID: %q", nomadJobId)
 	return allocs, nil
 }

@@ -97,17 +97,19 @@ func (self *Web) Start(ctx context.Context) error {
 	if _, err := r.AddRoute(http.MethodPost, "/api/fact", self.ApiFactPost, genApiFactPostSwagDef()); err != nil {
 		return err
 	}
-	/* FIXME
 	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
+	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods("GET")
+	/* FIXME
+	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods("GET")
+	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
+
 	muxRouter.HandleFunc("/workflow/{id:[0-9]+}/graph", self.WorkflowIdGraphGet).Methods("GET")
-	muxRouter.HandleFunc("/workflow/{id:[0-9]+}", self.WorkflowIdGet).Methods("GET")
-	muxRouter.HandleFunc("/workflow/new", self.WorkflowNewGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/graph", self.WorkflowGraphGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow/graph/plain", self.WorkflowGraphPlainGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow", self.WorkflowGet).Methods("GET")
 	muxRouter.HandleFunc("/workflow", self.WorkflowPost).Methods("POST")
-	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 	*/
+	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/json and /documentation/yaml routes
 	err = r.GenerateAndExposeSwagger()
@@ -134,11 +136,11 @@ func (self *Web) Start(ctx context.Context) error {
 	return nil
 }
 
-/* FIXME
 func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
-	http.Redirect(w, req, "/workflow", 302)
+	http.Redirect(w, req, "/action/current", 302)
 }
 
+/* FIXME
 func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
 	name := req.URL.Query().Get("name")
 
@@ -164,7 +166,7 @@ func (self *Web) WorkflowGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) WorkflowNewGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	const templateName = "workflow/new.html"
 
 	query := req.URL.Query()
@@ -235,35 +237,37 @@ func (self *Web) WorkflowPost(w http.ResponseWriter, req *http.Request) {
 
 	http.Redirect(w, req, "/workflow", 302)
 }
+*/
 
-func (self *Web) WorkflowIdGet(w http.ResponseWriter, req *http.Request) {
-	id, err := self.parseId(mux.Vars(req)["id"])
+func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
+	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
 		return
 	}
 
-	instance, err := self.RunService.GetByNomadJobId(id)
+	run, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
-		self.NotFound(w, errors.WithMessagef(err, "Failed to find workflow %q", id))
+		self.NotFound(w, errors.WithMessagef(err, "Failed to find Run %q", id))
 		return
 	}
 
-	allocs, err := self.NomadEventService.GetEventAllocByWorkflowId(id)
+	allocs, err := self.NomadEventService.GetEventAllocByNomadJobId(id)
 	if err != nil {
-		self.NotFound(w, errors.WithMessagef(err, "Failed to find allocs for workflow id: %q", id))
+		self.NotFound(w, errors.WithMessagef(err, "Failed to find allocs for Nomad job %q", id))
 		return
 	}
 
-	if err := render("workflow/[id].html", w, map[string]interface{}{
-		"Instance": instance,
-		"allocs":   allocs,
+	if err := render("run/[id].html", w, map[string]interface{}{
+		"Run":    run,
+		"allocs": allocs,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
 	}
 }
 
+/* FIXME
 func (self *Web) WorkflowIdGraphGet(w http.ResponseWriter, req *http.Request) {
 	id, err := self.parseId(mux.Vars(req)["id"])
 	if err != nil {

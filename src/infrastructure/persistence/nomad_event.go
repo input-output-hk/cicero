@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/georgysavva/scany/pgxscan"
+	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 
@@ -36,24 +37,14 @@ func (n nomadEventRepository) GetLastNomadEvent() (index uint64, err error) {
 	return
 }
 
-func (n nomadEventRepository) GetEventAllocByNomadJobId(id uint64) (results []map[string]interface{}, err error) {
+func (n nomadEventRepository) GetEventAllocByNomadJobId(id uuid.UUID) (results []map[string]interface{}, err error) {
 	err = pgxscan.Select(context.Background(), n.DB, &results, `
-		SELECT name, payload->>'Allocation' AS alloc
-		FROM (
-			SELECT id, name
-			FROM runs
-			WHERE nomad_job_id = $1
-		) action
-		LEFT JOIN LATERAL (
-			SELECT payload, index
-			FROM nomad_events
-			WHERE (payload#>>'{Allocation,JobID}')::uuid = action.id
-				AND payload#>>'{Allocation,TaskGroup}' = action.name
-				AND topic = 'Allocation'
-				AND type = 'AllocationUpdated'
-			ORDER BY index DESC
-			LIMIT 1
-		) payload ON true;
+		SELECT index, payload->>'Allocation' AS alloc
+		FROM nomad_events
+		WHERE payload#>>'{Allocation,JobID}' = $1
+			AND topic = 'Allocation'
+			AND type = 'AllocationUpdated'
+		ORDER BY index DESC
 	`, id)
 	return
 }
