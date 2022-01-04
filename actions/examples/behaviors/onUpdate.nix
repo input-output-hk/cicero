@@ -1,4 +1,4 @@
-{ name, id, std, lib, actionLib } @ args:
+{ name, id, std, lib, actionLib, ... } @ args:
 
 std.behavior.onUpdate args {
   inputs.old = {
