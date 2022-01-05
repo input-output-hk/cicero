@@ -7,10 +7,6 @@ name = "DATABASE_URL"
 value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 
 [[env]]
-name = "CICERO_WORKFLOW_SRC"
-value = "."
-
-[[env]]
 name = "LOKI_ADDR"
 value = "http://127.0.0.1:3100"
 
