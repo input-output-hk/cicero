@@ -106,6 +106,5 @@ packages = [
   "nixfmt",
   "nomad-follower",
   "postgresql_12",
-  "sqliteInteractive",
   "vector",
 ]
