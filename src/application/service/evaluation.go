@@ -105,7 +105,10 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst)
 		cmd.Env = append(os.Environ(), extraEnv...)
 
-		e.logger.Info().Msgf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
+		e.logger.Info().
+			Strs("command", cmd.Args).
+			Strs("environment", extraEnv).
+			Msg("Running evaluator")
 
 		if output, err := cmd.Output(); err != nil {
 			message := "Failed to evaluate"
