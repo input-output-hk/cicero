@@ -62,7 +62,7 @@ func (self *factService) GetLatestByFields(fields [][]string) (fact domain.Fact,
 
 func (self *factService) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
 	self.logger.Debug().Interface("fields", fields).Msg("Getting Facts by fields")
-	facts, err = self.GetByFields(fields)
+	facts, err = self.factRepository.GetByFields(fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select Facts by fields %q", fields)
 	}
