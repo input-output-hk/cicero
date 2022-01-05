@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -568,13 +569,14 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	fact := domain.Fact{}
-	if err := json.NewDecoder(req.Body).Decode(&fact.Value); err != nil {
+	factDecoder := json.NewDecoder(req.Body)
+	if err := factDecoder.Decode(&fact.Value); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
 		return
 	}
 
 	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.FactService.Save(tx, &fact); err != nil {
+		if err := self.FactService.Save(tx, &fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
 			return errors.WithMessage(err, "Failed to save Fact")
 		}
 
