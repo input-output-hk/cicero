@@ -70,7 +70,7 @@ func (m *messageQueueService) Publish(stream string, streamName domain.StreamNam
 		return errors.WithMessage(err, "While publishing message")
 	}
 
-	m.logger.Debug().Msgf("Published message to stream %s", stream)
+	m.logger.Debug().Str("stream", stream).Msg("Published message")
 
 	return nil
 }
@@ -96,7 +96,11 @@ func (m *messageQueueService) Subscribe(ctx context.Context, streamName domain.S
 }
 
 func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error {
-	m.logger.Info().Msgf("Saving new Message on stream %s, partition %d, offset %d", message.Stream(), message.Partition(), message.Offset())
+	m.logger.Debug().
+		Str("stream", message.Stream()).
+		Int32("partition", message.Partition()).
+		Int64("offset", message.Offset()).
+		Msg("Saving new Message")
 	headers := message.Headers()
 	delete(headers, "subject")
 	for k, v := range headers {
@@ -112,10 +116,11 @@ func (m *messageQueueService) Save(tx pgx.Tx, message *liftbridge.Message) error
 }
 
 func (m *messageQueueService) getOffset(streamName string) (offset int64, err error) {
+	m.logger.Debug().Str("stream", streamName).Msg("Getting offset")
 	offset, err = m.messageQueueRepository.GetOffset(streamName)
 	if err != nil {
 		return offset, errors.WithMessagef(err, "Could not get the offset for the streamName: %s", streamName)
 	}
-	m.logger.Info().Msgf("Get Offset %d for the streamName %s", offset, streamName)
+	m.logger.Debug().Str("stream", streamName).Int64("offset", offset).Msg("Got offset")
 	return
 }

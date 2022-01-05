@@ -30,7 +30,7 @@ type StartCmd struct {
 }
 
 func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
-	logger.Info().Msg("Start...")
+	logger.Info().Msg("Starting components")
 
 	// If none are given then start all,
 	// otherwise start only those that are given.

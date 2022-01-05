@@ -36,22 +36,22 @@ func NewNomadEventService(db config.PgxIface, runService RunService, logger *zer
 }
 
 func (n *nomadEventService) Save(tx pgx.Tx, event *nomad.Event) error {
-	n.logger.Info().Msgf("Saving new NomadEvent %d", event.Index)
+	n.logger.Debug().Msgf("Saving new NomadEvent %d", event.Index)
 	if err := n.nomadEventRepository.Save(tx, event); err != nil {
 		return errors.WithMessagef(err, "Could not insert NomadEvent")
 	}
-	n.logger.Info().Msgf("Created NomadEvent %d", event.Index)
+	n.logger.Debug().Msgf("Created NomadEvent %d", event.Index)
 	return nil
 }
 
 func (n *nomadEventService) GetLastNomadEvent() (uint64, error) {
-	n.logger.Info().Msg("Get last Nomad Event")
+	n.logger.Debug().Msg("Get last Nomad Event")
 	return n.nomadEventRepository.GetLastNomadEvent()
 }
 
 func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]domain.AllocWrapper, error) {
 	allocs := map[string]domain.AllocWrapper{}
-	n.logger.Info().Msgf("Getting EventAlloc by Nomad Job ID: %d", nomadJobId)
+	n.logger.Debug().Msgf("Getting EventAlloc by Nomad Job ID: %d", nomadJobId)
 	results, err := n.nomadEventRepository.GetEventAllocByNomadJobId(nomadJobId)
 	if err != nil {
 		return nil, err
@@ -75,6 +75,6 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 
 		allocs[alloc.Name] = domain.AllocWrapper{Alloc: alloc, Logs: logs}
 	}
-	n.logger.Info().Msgf("Got EventAlloc by Nomad Job ID: %d", nomadJobId)
+	n.logger.Debug().Msgf("Got EventAlloc by Nomad Job ID: %d", nomadJobId)
 	return allocs, nil
 }

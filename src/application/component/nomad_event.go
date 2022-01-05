@@ -28,7 +28,7 @@ type NomadEventConsumer struct {
 }
 
 func (self *NomadEventConsumer) Start(ctx context.Context) error {
-	self.Logger.Info().Msg("Starting...")
+	self.Logger.Info().Msg("Starting")
 
 	index, err := self.NomadEventService.GetLastNomadEvent()
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
