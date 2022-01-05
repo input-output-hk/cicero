@@ -164,5 +164,5 @@ type Run struct {
 	ActionId   uuid.UUID  `json:"action_id"`
 	CreatedAt  time.Time  `json:"created_at"`
 	FinishedAt *time.Time `json:"finished_at"`
-	RunOutputs // XXX do not save this forever (duplicated in `facts` table after run finished) → save in `pending_facts` table and delete row after saving to `facts` when run finished?
+	RunOutputs            // XXX do not save this forever (duplicated in `facts` table after run finished) → save in `pending_facts` table and delete row after saving to `facts` when run finished?
 }

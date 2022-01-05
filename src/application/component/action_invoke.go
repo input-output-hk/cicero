@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
-	"github.com/vivek-ng/concurrency-limiter/priority"
 	"github.com/rs/zerolog"
+	"github.com/vivek-ng/concurrency-limiter/priority"
 
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/application/service"
