@@ -15,31 +15,31 @@ std.behavior.onInputChange "start" name args
     }
   '';
 
-  job = { start }: let
-    cfg = start.value.${name};
-  in std.chain args [
-    actionLib.simpleJob
+  job = { start }:
+    let cfg = start.value.${name}; in
+    std.chain args [
+      actionLib.simpleJob
 
-    (std.git.clone {
-      inherit (cfg) sha;
-      clone_url = cfg.clone_url or "https://github.com/input-output-hk/cicero";
-    })
+      (std.git.clone {
+        inherit (cfg) sha;
+        clone_url = cfg.clone_url or "https://github.com/input-output-hk/cicero";
+      })
 
-    {
-      resources.memory = 1024;
-      config.packages = std.data-merge.append (map pkg [ "cue" "nomad" ]);
-    }
+      {
+        resources.memory = 1024;
+        config.packages = std.data-merge.append (map pkg [ "cue" "nomad" ]);
+      }
 
-    (std.script "bash" ''
-      cue export ./jobs -e jobs.webhooks \
-        ${
-          lib.optionalString (cfg ? environment)
-          "-t env=${lib.escapeShellArg cfg.environment}"
-        } \
-        -t sha=${lib.escapeShellArg cfg.sha} \
-        > job.json
+      (std.script "bash" ''
+        cue export ./jobs -e jobs.webhooks \
+          ${
+            lib.optionalString (cfg ? environment)
+            "-t env=${lib.escapeShellArg cfg.environment}"
+          } \
+          -t sha=${lib.escapeShellArg cfg.sha} \
+          > job.json
 
-      nomad run job.json
-    '')
-  ];
+        nomad run job.json
+      '')
+    ];
 }

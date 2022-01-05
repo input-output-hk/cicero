@@ -11,29 +11,29 @@ std.behavior.onInputChange "start" name args
     }
   '';
 
-  job = { start }: let
-    cfg = start.value.${name}.start;
-  in std.chain args [
-    actionLib.simpleJob
+  job = { start }:
+    let cfg = start.value.${name}.start; in
+    std.chain args [
+      actionLib.simpleJob
 
-    (lib.optionalAttrs (cfg ? statuses_url)
-      (std.github.reportStatus cfg.statuses_url))
+      (lib.optionalAttrs (cfg ? statuses_url)
+        (std.github.reportStatus cfg.statuses_url))
 
-    (std.git.clone cfg)
+      (std.git.clone cfg)
 
-    {
-      resources = {
-        memory = 4 * 1024;
-        cpu = 16000;
-      };
-    }
+      {
+        resources = {
+          memory = 4 * 1024;
+          cpu = 16000;
+        };
+      }
 
-    std.nix.develop
-    (std.wrapScript "bash" (next: ''
-      lint
-      ${lib.escapeShellArg next}
-    ''))
+      std.nix.develop
+      (std.wrapScript "bash" (next: ''
+        lint
+        ${lib.escapeShellArg next}
+      ''))
 
-    std.nix.build
-  ];
+      std.nix.build
+    ];
 }

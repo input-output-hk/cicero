@@ -9,7 +9,9 @@ let
       export CICERO_SCRIPT=$(< "$1")
       exec ${drv}
     '';
-in {
+in
+
+{
   run-bash = runner (prev.writers.writeBash "${commonName}-bash" ''
     set -euo pipefail
 
