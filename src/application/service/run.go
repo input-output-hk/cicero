@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -15,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/api"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -33,21 +32,21 @@ type RunService interface {
 }
 
 type runService struct {
-	logger        *log.Logger
+	logger        zerolog.Logger
 	runRepository repository.RunRepository
 	prometheus    prometheus.Client
 }
 
-func NewRunService(db config.PgxIface, prometheusAddr string) RunService {
+func NewRunService(db config.PgxIface, prometheusAddr string, logger *zerolog.Logger) RunService {
 	impl := runService{
-		logger:        log.New(os.Stderr, "RunService: ", log.LstdFlags),
+		logger:        logger.With().Str("component", "RunService").Logger(),
 		runRepository: persistence.NewRunRepository(db),
 	}
 
 	if prom, err := prometheus.NewClient(prometheus.Config{
 		Address: prometheusAddr,
 	}); err != nil {
-		impl.logger.Fatal(err.Error())
+		impl.logger.Fatal().Err(err).Msg("Failed to create new prometheus client")
 		return nil
 	} else {
 		impl.prometheus = prom
@@ -57,7 +56,7 @@ func NewRunService(db config.PgxIface, prometheusAddr string) RunService {
 }
 
 func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
-	self.logger.Printf("Getting Run by Nomad Job ID %q", id)
+	self.logger.Debug().Str("action-id", id.String()).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
@@ -66,7 +65,7 @@ func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error
 }
 
 func (self *runService) GetByActionId(id uuid.UUID) (runs []*domain.Run, err error) {
-	self.logger.Printf("Getting Run by Action ID %q", id)
+	self.logger.Debug().Str("action-id", id.String()).Msg("Getting Run by Action ID")
 	runs, err = self.runRepository.GetByActionId(id)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select existing Run by Action ID %q", id)
@@ -75,25 +74,25 @@ func (self *runService) GetByActionId(id uuid.UUID) (runs []*domain.Run, err err
 }
 
 func (self *runService) GetAll() ([]*domain.Run, error) {
-	self.logger.Printf("Getting all Runs")
+	self.logger.Debug().Msg("Getting all Runs")
 	return self.runRepository.GetAll()
 }
 
 func (self *runService) Save(tx pgx.Tx, run *domain.Run) error {
-	self.logger.Println("Saving new Run")
+	self.logger.Debug().Msg("Saving new Run")
 	if err := self.runRepository.Save(tx, run); err != nil {
 		return errors.WithMessagef(err, "Could not insert Run")
 	}
-	self.logger.Printf("Created Run %s", run.NomadJobID)
+	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Created Run")
 	return nil
 }
 
 func (self *runService) Update(tx pgx.Tx, run *domain.Run) error {
-	self.logger.Printf("Update Run ID %s", run.NomadJobID)
+	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Updating Run")
 	if err := self.runRepository.Update(tx, run); err != nil {
 		return errors.WithMessagef(err, "Could not update Run ID: %s", run.NomadJobID)
 	}
-	self.logger.Printf("Updated Run ID %s", run.NomadJobID)
+	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Updated Run")
 	return nil
 }
 

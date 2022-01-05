@@ -2,13 +2,13 @@ package config
 
 import (
 	"fmt"
+	"github.com/rs/zerolog"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/liftbridge-io/liftbridge/server"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,7 +37,7 @@ func getTestConfig(id string, bootstrap bool, port int) *server.Config {
 	config.Clustering.RaftSnapshots = 1
 	config.LogRaft = true
 	config.Clustering.ServerID = id
-	config.LogLevel = uint32(log.DebugLevel)
+	config.LogLevel = uint32(zerolog.DebugLevel)
 	config.EmbeddedNATS = bootstrap
 	config.LogSilent = true
 	config.Port = port

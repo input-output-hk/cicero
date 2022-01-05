@@ -32,7 +32,7 @@ func (self *Web) NotFound(w http.ResponseWriter, err error) {
 }
 
 func (self *Web) Error(w http.ResponseWriter, err error, status int) {
-	self.Logger.Println(err.Error())
+	self.Logger.Err(err)
 	http.Error(w, err.Error(), status)
 }
 

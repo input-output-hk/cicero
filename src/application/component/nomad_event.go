@@ -3,7 +3,6 @@ package component
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"time"
 
 	"github.com/georgysavva/scany/pgxscan"
@@ -11,6 +10,7 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/application/service"
@@ -19,7 +19,7 @@ import (
 )
 
 type NomadEventConsumer struct {
-	Logger              *log.Logger
+	Logger              zerolog.Logger
 	MessageQueueService service.MessageQueueService
 	NomadEventService   service.NomadEventService
 	RunService          service.RunService
@@ -28,7 +28,7 @@ type NomadEventConsumer struct {
 }
 
 func (self *NomadEventConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting NomadEventConsumer")
+	self.Logger.Info().Msg("Starting...")
 
 	index, err := self.NomadEventService.GetLastNomadEvent()
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -36,7 +36,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	}
 	index += 1
 
-	self.Logger.Println("Listening to Nomad events starting at index", index)
+	self.Logger.Debug().Uint64("index", index).Msg("Listening to Nomad events")
 
 	stream, err := self.NomadClient.EventStream(ctx, index)
 	if err != nil {
@@ -58,7 +58,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 
 		for _, event := range events.Events {
 			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-				self.Logger.Println("Processing Nomad Event with index:", event.Index)
+				self.Logger.Debug().Uint64("index", event.Index).Msg("Processing Nomad Event")
 				return self.processNomadEvent(&event, tx)
 			}); err != nil {
 				return errors.WithMessagef(err, "Error processing Nomad event with index: %d", event.Index)
@@ -91,7 +91,7 @@ func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event, tx pgx.Tx) 
 
 func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation, tx pgx.Tx) error {
 	if !allocation.ClientTerminalStatus() {
-		self.Logger.Printf("Ignoring allocation event with non-terminal client status %q", allocation.ClientStatus)
+		self.Logger.Debug().Str("ClientStatus", allocation.ClientStatus).Msg("Ignoring allocation event with non-terminal client status")
 		return nil
 	}
 
@@ -103,7 +103,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 	run, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
 		if pgxscan.NotFound(err) {
-			self.Logger.Printf("Ignoring Nomad event for Job with ID %q (no such Run)", id)
+			self.Logger.Debug().Str("nomad-job-id", allocation.JobID).Msg("Ignoring Nomad event for Job (no such Run)")
 			return nil
 		}
 		return err

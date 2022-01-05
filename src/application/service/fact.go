@@ -1,12 +1,10 @@
 package service
 
 import (
-	"log"
-	"os"
-
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -24,19 +22,19 @@ type FactService interface {
 }
 
 type factService struct {
-	logger         *log.Logger
+	logger         zerolog.Logger
 	factRepository repository.FactRepository
 }
 
-func NewFactService(db config.PgxIface) FactService {
+func NewFactService(db config.PgxIface, logger *zerolog.Logger) FactService {
 	return &factService{
-		logger:         log.New(os.Stderr, "FactService: ", log.LstdFlags),
+		logger:         logger.With().Str("component", "FactService").Logger(),
 		factRepository: persistence.NewFactRepository(db),
 	}
 }
 
 func (self *factService) GetById(id uuid.UUID) (fact domain.Fact, err error) {
-	self.logger.Printf("Getting Fact by ID %s", id)
+	self.logger.Debug().Str("id", id.String()).Msg("Getting Fact by ID")
 	fact, err = self.factRepository.GetById(id)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select existing Fact for ID: %s", id)
@@ -45,16 +43,16 @@ func (self *factService) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 }
 
 func (self *factService) Save(tx pgx.Tx, fact *domain.Fact) error {
-	self.logger.Println("Saving new Fact")
+	self.logger.Debug().Msg("Saving new Fact")
 	if err := self.factRepository.Save(tx, fact); err != nil {
 		return errors.WithMessagef(err, "Could not insert Fact")
 	}
-	self.logger.Printf("Created Fact %s", fact.ID)
+	self.logger.Debug().Str("id", fact.ID.String()).Msg("Created Fact")
 	return nil
 }
 
 func (self *factService) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
-	self.logger.Printf("Getting latest Facts by fields %q", fields)
+	self.logger.Debug().Interface("fields", fields).Msg("Getting latest Facts by fields")
 	fact, err = self.factRepository.GetLatestByFields(fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select latest Facts by fields %q", fields)
@@ -63,7 +61,7 @@ func (self *factService) GetLatestByFields(fields [][]string) (fact domain.Fact,
 }
 
 func (self *factService) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
-	self.logger.Printf("Getting Facts by fields %q", fields)
+	self.logger.Debug().Interface("fields", fields).Msg("Getting Facts by fields")
 	facts, err = self.GetByFields(fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select Facts by fields %q", fields)

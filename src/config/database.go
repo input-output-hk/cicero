@@ -2,13 +2,10 @@ package config
 
 import (
 	"context"
-	"os"
-
 	"github.com/jackc/pgtype"
 	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/pkg/errors"
 )
 
 type PgxIface interface {
@@ -17,9 +14,9 @@ type PgxIface interface {
 }
 
 func DBConnection() (*pgxpool.Pool, error) {
-	url := os.Getenv("DATABASE_URL")
-	if url == "" {
-		return nil, errors.New("The DATABASE_URL environment variable is not set or empty")
+	url, err := GetenvStr("DATABASE_URL")
+	if err != nil {
+		return nil, err
 	}
 
 	dbconfig, err := pgxpool.ParseConfig(url)

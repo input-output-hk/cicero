@@ -23,9 +23,10 @@ require (
 	github.com/pashagolub/pgxmock v1.4.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
-	github.com/sirupsen/logrus v1.7.0
+	github.com/rs/zerolog v1.18.0
 	github.com/stretchr/testify v1.7.0
 	github.com/vivek-ng/concurrency-limiter v0.8.2
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
 require (
@@ -128,9 +129,9 @@ require (
 	github.com/prometheus/node_exporter v1.0.0-rc.0.0.20200428091818-01054558c289 // indirect
 	github.com/prometheus/procfs v0.1.3 // indirect
 	github.com/prometheus/prometheus v1.8.2-0.20200727090838-6f296594a852 // indirect
-	github.com/rs/zerolog v1.18.0 // indirect
 	github.com/sercand/kuberesolver v2.4.0+incompatible // indirect
 	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b // indirect
+	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/spf13/afero v1.3.1 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/spf13/cobra v1.0.0 // indirect

@@ -3,7 +3,6 @@ package component
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"strings"
 
 	nomad "github.com/hashicorp/nomad/api"
@@ -11,6 +10,7 @@ import (
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 	"github.com/vivek-ng/concurrency-limiter/priority"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/application/service"
@@ -19,7 +19,7 @@ import (
 )
 
 type ActionInvokeConsumer struct {
-	Logger              *log.Logger
+	Logger              zerolog.Logger
 	Limiter             *priority.PriorityLimiter
 	EvaluationService   service.EvaluationService
 	ActionService       service.ActionService
@@ -30,38 +30,37 @@ type ActionInvokeConsumer struct {
 }
 
 func (self *ActionInvokeConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting ActionInvokeConsumer")
+	self.Logger.Info().Msg("Starting")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.ActionInvokeStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Could not subscribe to stream %s", domain.ActionInvokeStreamName)
 	}
 
 	<-ctx.Done()
-	self.Logger.Println("context was cancelled")
+	self.Logger.Debug().Msg("context was cancelled")
 	return nil
 }
 
 func (self *ActionInvokeConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
-			self.Logger.Fatalf("error in liftbridge message: %s", err.Error())
+			self.Logger.Fatal().Err(err).Msg("error in liftbridge message")
 			//TODO: If err is not nil, the subscription will be terminated
 			return
 		}
 
-		self.Logger.Println(
-			"Received message",
-			"stream:", msg.Stream(),
-			"subject:", msg.Subject(),
-			"offset:", msg.Offset(),
-			"value:", string(msg.Value()),
-			"time:", msg.Timestamp(),
-		)
+		self.Logger.Debug().
+			Str("stream", msg.Stream()).
+			Str("subject", msg.Subject()).
+			Int64("offset", msg.Offset()).
+			Str("value", string(msg.Value())).
+			Time("time", msg.Timestamp()).
+			Msg("Received message")
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(ctx, tx, msg)
 		}); err != nil {
-			self.Logger.Fatalf("Could not process message: %s with error %s", msg.Value(), err.Error())
+			self.Logger.Fatal().Err(err).Bytes("message", msg.Value()).Msg("Could not process message")
 			return
 		}
 	}
@@ -78,7 +77,7 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 
 	if action, err := self.ActionService.GetLatestByName(self.getActionName(msg)); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			self.Logger.Println("No Action with that name, ignoring invoke message")
+			self.Logger.Info().Msg("No Action with that name, ignoring invoke message")
 		} else {
 			return err
 		}
@@ -91,7 +90,7 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 		if runDef, err := self.EvaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); err != nil {
 			var evalErr service.EvaluationError
 			if errors.As(err, &evalErr) {
-				self.Logger.Printf("Could not evaluate action %q in %q: %s", action.Name, action.Source, evalErr.Error())
+				self.Logger.Err(evalErr).Str("source", action.Source).Str("name", action.Name).Msg("Could not evaluate action")
 			} else {
 				return err
 			}
@@ -125,7 +124,11 @@ func (self *ActionInvokeConsumer) processMessage(ctx context.Context, tx pgx.Tx,
 			if response, _, err := self.NomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run Action")
 			} else if len(response.Warnings) > 0 {
-				self.Logger.Printf("Warnings occured registering Nomad job %q in Nomad evaluation %q: %s", runId, response.EvalID, response.Warnings)
+				self.Logger.Warn().
+					Str("nomad-job", runId).
+					Str("nomad-evaluation", response.EvalID).
+					Str("warnings", response.Warnings).
+					Msg("Warnings occured registering Nomad job")
 			}
 		}
 	}

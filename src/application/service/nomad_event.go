@@ -2,13 +2,12 @@ package service
 
 import (
 	"encoding/json"
-	"log"
-	"os"
 
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -23,36 +22,36 @@ type NomadEventService interface {
 }
 
 type nomadEventService struct {
-	logger               *log.Logger
+	logger               zerolog.Logger
 	nomadEventRepository repository.NomadEventRepository
 	runService           RunService
 }
 
-func NewNomadEventService(db config.PgxIface, runService RunService) NomadEventService {
+func NewNomadEventService(db config.PgxIface, runService RunService, logger *zerolog.Logger) NomadEventService {
 	return &nomadEventService{
-		logger:               log.New(os.Stderr, "NomadEventService: ", log.LstdFlags),
+		logger:               logger.With().Str("component", "NomadEventService").Logger(),
 		nomadEventRepository: persistence.NewNomadEventRepository(db),
 		runService:           runService,
 	}
 }
 
 func (n *nomadEventService) Save(tx pgx.Tx, event *nomad.Event) error {
-	n.logger.Printf("Saving new NomadEvent %d", event.Index)
+	n.logger.Info().Msgf("Saving new NomadEvent %d", event.Index)
 	if err := n.nomadEventRepository.Save(tx, event); err != nil {
 		return errors.WithMessagef(err, "Could not insert NomadEvent")
 	}
-	n.logger.Printf("Created NomadEvent %d", event.Index)
+	n.logger.Info().Msgf("Created NomadEvent %d", event.Index)
 	return nil
 }
 
 func (n *nomadEventService) GetLastNomadEvent() (uint64, error) {
-	n.logger.Printf("Get last Nomad Event")
+	n.logger.Info().Msg("Get last Nomad Event")
 	return n.nomadEventRepository.GetLastNomadEvent()
 }
 
 func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]domain.AllocWrapper, error) {
 	allocs := map[string]domain.AllocWrapper{}
-	n.logger.Printf("Getting EventAlloc by Nomad Job ID: %q", nomadJobId)
+	n.logger.Info().Msgf("Getting EventAlloc by Nomad Job ID: %d", nomadJobId)
 	results, err := n.nomadEventRepository.GetEventAllocByNomadJobId(nomadJobId)
 	if err != nil {
 		return nil, err
@@ -76,6 +75,6 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 
 		allocs[alloc.Name] = domain.AllocWrapper{Alloc: alloc, Logs: logs}
 	}
-	n.logger.Printf("Got EventAlloc by Nomad Job ID: %q", nomadJobId)
+	n.logger.Info().Msgf("Got EventAlloc by Nomad Job ID: %d", nomadJobId)
 	return allocs, nil
 }

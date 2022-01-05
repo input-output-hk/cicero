@@ -3,12 +3,12 @@ package component
 import (
 	"context"
 	"encoding/json"
-	"log"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
@@ -16,7 +16,7 @@ import (
 )
 
 type FactCreateConsumer struct {
-	Logger              *log.Logger
+	Logger              zerolog.Logger
 	MessageQueueService service.MessageQueueService
 	FactService         service.FactService
 	ActionService       service.ActionService
@@ -24,38 +24,37 @@ type FactCreateConsumer struct {
 }
 
 func (self *FactCreateConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting FactCreateConsumer")
+	self.Logger.Info().Msg("Starting")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.FactCreateStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Could not subscribe to stream %s", domain.FactCreateStreamName)
 	}
 
 	<-ctx.Done()
-	self.Logger.Println("context was cancelled")
+	self.Logger.Debug().Msg("context was cancelled")
 	return nil
 }
 
 func (self *FactCreateConsumer) invokerSubscriber(ctx context.Context) func(*liftbridge.Message, error) {
 	return func(msg *liftbridge.Message, err error) {
 		if err != nil {
-			self.Logger.Fatalf("Error received in %s: %s", msg.Stream(), err.Error())
+			self.Logger.Err(err).Str("stream", msg.Stream()).Msg("Error received")
 			//TODO: If err is not nil, the subscription will be terminated
 			return
 		}
 
-		self.Logger.Println(
-			"Received message",
-			"stream:", msg.Stream(),
-			"subject:", msg.Subject(),
-			"offset:", msg.Offset(),
-			"value:", string(msg.Value()),
-			"time:", msg.Timestamp(),
-		)
+		self.Logger.Debug().
+			Str("stream", msg.Stream()).
+			Str("subject", msg.Subject()).
+			Int64("offset", msg.Offset()).
+			Str("value", string(msg.Value())).
+			Time("time", msg.Timestamp()).
+			Msg("Received message")
 
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			return self.processMessage(tx, msg)
 		}); err != nil {
-			self.Logger.Fatalf("Could not process message: %s with error %s", msg.Value(), err.Error())
+			self.Logger.Fatal().Err(err).Bytes("message", msg.Value()).Msg("Could not process message")
 			return
 		}
 	}
@@ -93,13 +92,13 @@ func (self *FactCreateConsumer) processMessage(tx pgx.Tx, msg *liftbridge.Messag
 				domain.ActionInvokeStreamName,
 				[]byte{},
 			); err != nil {
-				self.Logger.Printf("Could not publish invoke message: %s", err.Error())
+				self.Logger.Err(err).Msg("Could not publish invoke message")
 				return err
 			}
 		}
 	}
 
-	self.Logger.Println("Published invoke messages")
+	self.Logger.Debug().Msg("Published invoke messages")
 
 	return nil
 }

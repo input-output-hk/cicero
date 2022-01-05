@@ -2,13 +2,13 @@ package component
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
@@ -16,7 +16,7 @@ import (
 )
 
 type ActionCreateConsumer struct {
-	Logger              *log.Logger
+	Logger              zerolog.Logger
 	MessageQueueService service.MessageQueueService
 	ActionService       service.ActionService
 	EvaluationService   service.EvaluationService
@@ -24,14 +24,14 @@ type ActionCreateConsumer struct {
 }
 
 func (self *ActionCreateConsumer) Start(ctx context.Context) error {
-	self.Logger.Println("Starting ActionCreateConsumer")
+	self.Logger.Info().Msg("Starting")
 
 	if err := self.MessageQueueService.Subscribe(ctx, domain.ActionCreateStreamName, self.invokerSubscriber(ctx), 0); err != nil {
 		return errors.WithMessagef(err, "Could not subscribe to stream %s", domain.ActionCreateStreamName)
 	}
 
 	<-ctx.Done()
-	self.Logger.Println("context was cancelled")
+	self.Logger.Debug().Msg("context was cancelled")
 	return nil
 }
 
@@ -44,18 +44,17 @@ func (self *ActionCreateConsumer) invokerSubscriber(ctx context.Context) func(*l
 			return
 		}
 
-		self.Logger.Println(
-			"Received message",
-			"stream:", msg.Stream(),
-			"subject:", msg.Subject(),
-			"offset:", msg.Offset(),
-			"value:", string(msg.Value()),
-			"time:", msg.Timestamp(),
-		)
+		self.Logger.Debug().
+			Str("stream", msg.Stream()).
+			Str("subject", msg.Subject()).
+			Int64("offset", msg.Offset()).
+			Str("value:", string(msg.Value())).
+			Time("time:", msg.Timestamp()).
+			Msg("Received message")
 
 		name, source, err := getActionInfo(msg)
 		if err != nil {
-			self.Logger.Println(err.Error())
+			self.Logger.Err(err).Send()
 			return
 		}
 
@@ -69,7 +68,7 @@ func (self *ActionCreateConsumer) invokerSubscriber(ctx context.Context) func(*l
 
 		var actionDef domain.ActionDefinition
 		if def, err := self.EvaluationService.EvaluateAction(source, name, action.ID); err != nil {
-			self.Logger.Println(err.Error())
+			self.Logger.Err(err).Send()
 			return
 		} else {
 			actionDef = def
@@ -85,21 +84,20 @@ func (self *ActionCreateConsumer) invokerSubscriber(ctx context.Context) func(*l
 			if err := self.ActionService.Save(tx, &action); err != nil {
 				return err
 			}
-			self.Logger.Printf("Created Action with ID %q", action.ID)
 
 			return nil
 		}); err != nil {
-			self.Logger.Fatalf("Could not process message: %s with error %s", msg.Value(), err.Error())
+			self.Logger.Fatal().Err(err).Bytes("message", msg.Value()).Msg("Could not process message")
 			return
 		}
 
-		self.Logger.Printf("Sending Run message for Action with name %q", name)
+		self.Logger.Info().Str("name", name).Msg("Sending Run message for Action")
 		if err := self.MessageQueueService.Publish(
 			domain.ActionInvokeStream(name),
 			domain.ActionInvokeStreamName,
 			[]byte{},
 		); err != nil {
-			self.Logger.Println(err.Error())
+			self.Logger.Err(err).Send()
 			return
 		}
 	}

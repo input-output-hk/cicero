@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
@@ -24,7 +24,7 @@ import (
 
 type Web struct {
 	Listen              string
-	Logger              *log.Logger
+	Logger              zerolog.Logger
 	RunService          service.RunService
 	ActionService       service.ActionService
 	FactService         service.FactService
@@ -35,7 +35,7 @@ type Web struct {
 }
 
 func (self *Web) Start(ctx context.Context) error {
-	self.Logger.Println("Starting Web")
+	self.Logger.Info().Msg("Starting")
 
 	muxRouter := mux.NewRouter().StrictSlash(true).UseEncodedPath()
 	r, err := swagger.NewRouter(apirouter.NewGorillaMuxRouter(muxRouter), swagger.Options{
@@ -120,7 +120,7 @@ func (self *Web) Start(ctx context.Context) error {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			self.Logger.Printf("Failed to start web server: %s", err.Error())
+			self.Logger.Err(err).Msg("Failed to start web server")
 		}
 	}()
 
@@ -129,7 +129,7 @@ func (self *Web) Start(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		self.Logger.Printf("Failed to stop web server: %s", err.Error())
+		self.Logger.Err(err).Msg("Failed to stop web server")
 	}
 
 	return nil

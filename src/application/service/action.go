@@ -2,13 +2,12 @@ package service
 
 import (
 	"fmt"
-	"log"
-	"os"
 
 	"cuelang.org/go/cue"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -26,56 +25,56 @@ type ActionService interface {
 }
 
 type actionService struct {
-	logger           *log.Logger
+	logger           zerolog.Logger
 	actionRepository repository.ActionRepository
 	factRepository   repository.FactRepository
 }
 
-func NewActionService(db config.PgxIface) ActionService {
+func NewActionService(db config.PgxIface, logger *zerolog.Logger) ActionService {
 	return &actionService{
-		logger:           log.New(os.Stderr, "ActionService: ", log.LstdFlags),
+		logger:           logger.With().Str("component", "ActionService").Logger(),
 		actionRepository: persistence.NewActionRepository(db),
 		factRepository:   persistence.NewFactRepository(db),
 	}
 }
 
 func (self *actionService) GetById(id uuid.UUID) (action domain.Action, err error) {
-	self.logger.Printf("Getting Action by ID %s", id)
+	self.logger.Debug().Str("id", id.String()).Msg("Getting Action by ID")
 	action, err = self.actionRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for ID %q", id)
 	return
 }
 
 func (self *actionService) GetLatestByName(name string) (action domain.Action, err error) {
-	self.logger.Printf("Getting latest Action by name %s", name)
+	self.logger.Debug().Str("name", name).Msg("Getting latest Action by name")
 	action, err = self.actionRepository.GetLatestByName(name)
 	err = errors.WithMessagef(err, "Could not select latest Action for name %q", name)
 	return
 }
 
 func (self *actionService) GetAll() ([]*domain.Action, error) {
-	self.logger.Printf("Getting all Actions")
+	self.logger.Debug().Msg("Getting all Actions")
 	return self.actionRepository.GetAll()
 }
 
 func (self *actionService) Save(tx pgx.Tx, action *domain.Action) error {
-	self.logger.Printf("Saving new Action named %s", action.Name)
+	self.logger.Debug().Str("name", action.Name).Msg("Saving new Action")
 	if err := self.actionRepository.Save(tx, action); err != nil {
 		return errors.WithMessagef(err, "Could not insert Action")
 	}
-	self.logger.Printf("Created Action %s", action.ID)
+	self.logger.Debug().Str("id", action.ID.String()).Msg("Created Action")
 	return nil
 }
 
 func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
-	self.logger.Println("Getting current Actions")
+	self.logger.Debug().Msg("Getting current Actions")
 	actions, err = self.actionRepository.GetCurrent()
 	err = errors.WithMessagef(err, "Could not select current Actions")
 	return
 }
 
 func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]interface{}, error) {
-	self.logger.Printf("Checking whether Action %s is runnable", action.ID)
+	self.logger.Debug().Str("id", action.ID.String()).Msg("Checking whether Action %s is runnable")
 
 	inputFact := map[string]*domain.Fact{}
 	inputFacts := map[string][]*domain.Fact{}

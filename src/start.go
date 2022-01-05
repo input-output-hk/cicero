@@ -2,14 +2,13 @@ package cicero
 
 import (
 	"context"
-	"log"
-	"os"
 	"time"
 
 	"cirello.io/oversight"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/vivek-ng/concurrency-limiter/priority"
 
 	"github.com/input-output-hk/cicero/src/application"
@@ -30,8 +29,8 @@ type StartCmd struct {
 	WebListen string `arg:"--web-listen" default:":8080"`
 }
 
-func (cmd *StartCmd) Run() error {
-	logger := log.New(os.Stderr, "start: ", log.LstdFlags)
+func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
+	logger.Info().Msg("Start...")
 
 	// If none are given then start all,
 	// otherwise start only those that are given.
@@ -55,7 +54,7 @@ func (cmd *StartCmd) Run() error {
 		case "web":
 			start.web = true
 		default:
-			logger.Fatalf("Unknown component: %s", component)
+			logger.Fatal().Msgf("Unknown component: %s", component)
 		}
 	}
 	if !(start.actionCreate ||
@@ -77,7 +76,7 @@ func (cmd *StartCmd) Run() error {
 
 	db := once(func() interface{} {
 		if db, err := config.DBConnection(); err != nil {
-			logger.Fatalln(err.Error())
+			logger.Fatal().Err(err)
 			return err
 		} else {
 			return db
@@ -86,7 +85,7 @@ func (cmd *StartCmd) Run() error {
 
 	nomadClient := once(func() interface{} {
 		if client, err := config.NewNomadClient(); err != nil {
-			logger.Fatalln(err.Error())
+			logger.Fatal().Err(err)
 			return err
 		} else {
 			return client
@@ -97,34 +96,34 @@ func (cmd *StartCmd) Run() error {
 	})
 
 	evaluationService := once(func() interface{} {
-		return service.NewEvaluationService(cmd.Evaluators, cmd.Env)
+		return service.NewEvaluationService(cmd.Evaluators, cmd.Env, logger)
 	})
 	messageQueueService := once(func() interface{} {
 		if bridge, err := config.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
-			logger.Fatalln(err.Error())
+			logger.Fatal().Err(err)
 			return err
 		} else {
-			return service.NewMessageQueueService(db().(*pgxpool.Pool), bridge)
+			return service.NewMessageQueueService(db().(*pgxpool.Pool), bridge, logger)
 		}
 	})
 	factService := once(func() interface{} {
-		return service.NewFactService(db().(*pgxpool.Pool))
+		return service.NewFactService(db().(*pgxpool.Pool), logger)
 	})
 	actionService := once(func() interface{} {
-		return service.NewActionService(db().(*pgxpool.Pool))
+		return service.NewActionService(db().(*pgxpool.Pool), logger)
 	})
 	runService := once(func() interface{} {
-		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr)
+		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr, logger)
 	})
 	nomadEventService := once(func() interface{} {
-		return service.NewNomadEventService(db().(*pgxpool.Pool), runService().(service.RunService))
+		return service.NewNomadEventService(db().(*pgxpool.Pool), runService().(service.RunService), logger)
 	})
 
 	supervisor := cmd.newSupervisor(logger)
 
 	if start.actionCreate {
 		child := component.ActionCreateConsumer{
-			Logger:              log.New(os.Stderr, "ActionCreateConsumer: ", log.LstdFlags),
+			Logger:              logger.With().Str("component", "ActionCreateConsumer").Logger(),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
 			ActionService:       actionService().(service.ActionService),
 			EvaluationService:   evaluationService().(service.EvaluationService),
@@ -145,7 +144,7 @@ func (cmd *StartCmd) Run() error {
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			// Increase priority of waiting goroutines every second.
 			Limiter: priority.NewLimiter(1, priority.WithDynamicPriority(1000)),
-			Logger:  log.New(os.Stderr, "invoker: ", log.LstdFlags),
+			Logger:  logger.With().Str("component", "WorkflowInvokeConsumer").Logger(),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err
@@ -154,7 +153,7 @@ func (cmd *StartCmd) Run() error {
 
 	if start.factCreate {
 		child := component.FactCreateConsumer{
-			Logger:              log.New(os.Stderr, "FactCreateConsumer: ", log.LstdFlags),
+			Logger:              logger.With().Str("component", "FactCreateConsumer").Logger(),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
 			FactService:         factService().(service.FactService),
 			ActionService:       actionService().(service.ActionService),
@@ -167,7 +166,7 @@ func (cmd *StartCmd) Run() error {
 
 	if start.nomadEvent {
 		child := component.NomadEventConsumer{
-			Logger:              log.New(os.Stderr, "NomadEventConsumer: ", log.LstdFlags),
+			Logger:              logger.With().Str("component", "NomadEventConsumer").Logger(),
 			MessageQueueService: messageQueueService().(service.MessageQueueService),
 			RunService:          runService().(service.RunService),
 			NomadEventService:   nomadEventService().(service.NomadEventService),
@@ -181,8 +180,8 @@ func (cmd *StartCmd) Run() error {
 
 	if start.web {
 		child := web.Web{
+			Logger:              logger.With().Str("component", "Web").Logger(),
 			Listen:              cmd.WebListen,
-			Logger:              log.New(os.Stderr, "Web: ", log.LstdFlags),
 			RunService:          runService().(service.RunService),
 			ActionService:       actionService().(service.ActionService),
 			FactService:         factService().(service.FactService),
@@ -207,9 +206,9 @@ func (cmd *StartCmd) Run() error {
 	return nil
 }
 
-func (cmd *StartCmd) newSupervisor(logger *log.Logger) *oversight.Tree {
+func (cmd *StartCmd) newSupervisor(logger *zerolog.Logger) *oversight.Tree {
 	return oversight.New(
-		oversight.WithLogger(logger),
+		oversight.WithLogger(&config.SupervisorLogger{Logger: logger}),
 		oversight.WithSpecification(
 			10,                    // number of restarts
 			1*time.Minute,         // within this time period

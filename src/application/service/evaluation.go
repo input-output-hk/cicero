@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/rs/zerolog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/pkg/errors"
 
+	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 )
 
@@ -44,14 +45,14 @@ func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
 type evaluationService struct {
 	Evaluators []string // Default evaluators. Will be tried in order if none is given for a source.
 	Env        []string // NAME=VALUE or just NAME to inherit from process environment
-	logger     *log.Logger
+	logger     zerolog.Logger
 }
 
-func NewEvaluationService(evaluators, env []string) EvaluationService {
+func NewEvaluationService(evaluators, env []string, logger *zerolog.Logger) EvaluationService {
 	return &evaluationService{
 		Evaluators: evaluators,
 		Env:        env,
-		logger:     log.New(os.Stderr, "evaluationService: ", log.LstdFlags),
+		logger:     logger.With().Str("component", "EvaluationService").Logger(),
 	}
 }
 
@@ -79,8 +80,9 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 		return nil, err
 	}
 
-	cacheDir := os.Getenv("CICERO_CACHE_DIR")
-	if cacheDir == "" {
+	cacheDir, err := config.GetenvStr("CICERO_CACHE_DIR")
+	if err != nil {
+		e.logger.Debug().Err(err).Msg("Falling back to XDG cache directory")
 		cacheDir = xdg.CacheHome + "/cicero"
 	}
 	cacheDir += "/sources"
@@ -103,7 +105,7 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst)
 		cmd.Env = append(os.Environ(), extraEnv...)
 
-		e.logger.Printf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
+		e.logger.Info().Msgf("Running %s with env %v", strings.Join(cmd.Args, " "), extraEnv)
 
 		if output, err := cmd.Output(); err != nil {
 			message := "Failed to evaluate"
@@ -127,7 +129,7 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 			return output, nil
 		}
 	} else {
-		e.logger.Println("No evaluator given in source, trying all")
+		e.logger.Info().Msg("No evaluator given in source, trying all")
 		var evalErr error
 		for _, evaluator := range e.Evaluators {
 			if output, err := tryEval(evaluator); err != nil {
@@ -141,6 +143,7 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 				return output, nil
 			}
 		}
+		e.logger.Err(evalErr).Msg("No evaluator succeeded.")
 		return nil, errors.WithMessage(evalErr, "No evaluator succeeded.")
 	}
 }
@@ -157,7 +160,7 @@ func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID) (doma
 	}); err != nil {
 		return def, err
 	} else if err := json.Unmarshal(output, &def); err != nil {
-		e.logger.Println(string(output))
+		e.logger.Err(err).Str("output", string(output))
 		return def, errors.WithMessage(err, "While unmarshaling evaluator output")
 	}
 
@@ -191,8 +194,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 
 	err = json.Unmarshal(output, &freeformDef)
 	if err != nil {
-		e.logger.Println(string(output))
-		return def, errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
+		return def, errors.WithMessagef(err, "While unmarshaling evaluator output %s into freeform definition", string(output))
 	}
 
 	def.Outputs = freeformDef.Outputs
@@ -247,8 +249,8 @@ func (e *evaluationService) ListActions(src string) ([]string, error) {
 
 	var names []string
 	if err := json.Unmarshal(output, &names); err != nil {
-		e.logger.Println(string(output))
-		return nil, errors.WithMessage(err, "While unmarshaling action names")
+		e.logger.Err(err).Str("output", string(output)).Msg("Could not unmarshal action names")
+		return nil, errors.WithMessagef(err, "While unmarshaling action names:\n%s", string(output))
 	}
 
 	return names, nil
