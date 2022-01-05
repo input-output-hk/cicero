@@ -33,8 +33,7 @@ func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 func (a *factRepository) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &fact,
-		// XXX do that without LIMIT clause?
-		`SELECT * FROM facts `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC LIMIT 1`,
+		`SELECT * FROM facts `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
 		pathsToQueryArgs(fields)...,
 	)
 	return
