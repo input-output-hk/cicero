@@ -12,4 +12,5 @@ type FactRepository interface {
 	GetLatestByFields([][]string) (domain.Fact, error)
 	GetByFields([][]string) ([]*domain.Fact, error)
 	Save(pgx.Tx, *domain.Fact) error
+	GetLatestOutputByActionId(uuid.UUID) (domain.Fact, error)
 }

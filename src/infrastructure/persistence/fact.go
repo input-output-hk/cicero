@@ -88,3 +88,18 @@ func (a *factRepository) Save(tx pgx.Tx, fact *domain.Fact) error {
 	// TODO nyi: stream-insert binary using large object API. or do that in a separate function.
 	// TODO nyi: unique key over (value, binary_hash)
 }
+
+func (a *factRepository) GetLatestByActionId(id uuid.UUID) (fact domain.Fact, err error) {
+	err = pgxscan.Get(context.Background(), a.DB, &fact, `
+		SELECT * FROM facts
+		WHERE EXISTS (
+		  SELECT NULL
+		  FROM runs
+		  WHERE runs.id = facts.run_id
+		    AND runs.action_id = $1
+		)
+		ORDER BY created_at DESC
+		FETCH FIRST ROW ONLY
+	`, id)
+	return
+}

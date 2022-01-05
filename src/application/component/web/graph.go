@@ -1,70 +1,61 @@
 package web
 
-/* FIXME everything
 import (
 	"errors"
 	"io"
 	"math"
-	"strings"
-
-	"github.com/input-output-hk/cicero/src/domain"
 
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
 	"github.com/go-echarts/go-echarts/v2/opts"
+
+	"github.com/input-output-hk/cicero/src/application/service"
+	"github.com/input-output-hk/cicero/src/domain"
 )
 
-type WorkflowGraphType uint
+type GraphType uint
 
 const (
-	WorkflowGraphTypeFlow WorkflowGraphType = iota
-	WorkflowGraphTypeInputs
+	GraphTypeLastRuns GraphType = iota
+	GraphTypeAllRuns
 )
 
-func WorkflowGraphTypeStrings() []string {
-	return []string{"flow", "inputs"}
+func GraphTypeStrings() []string {
+	return []string{"last"}
 }
 
-func (t WorkflowGraphType) String() string {
-	return WorkflowGraphTypeStrings()[t]
+func (t GraphType) String() string {
+	return GraphTypeStrings()[t]
 }
 
-func WorkflowGraphTypeFromString(s string) (WorkflowGraphType, error) {
-	for i, s2 := range WorkflowGraphTypeStrings() {
+func GraphTypeFromString(s string) (GraphType, error) {
+	for i, s2 := range GraphTypeStrings() {
 		if s2 == s {
-			return WorkflowGraphType(i), nil
+			return GraphType(i), nil
 		}
 	}
-	return 0, errors.New("no such WorkflowGraphType: " + s)
+	return 0, errors.New("no such GraphType: " + s)
 }
 
 const symbolSize = 50
 
-func RenderWorkflowGraphFlow(wf domain.WorkflowDefinition, w io.Writer) error {
+func RenderGraphDependencies(w io.Writer, actions []*domain.Action, factService service.FactService) error {
 	nodes := make([]opts.GraphNode, 0)
 	links := make([]opts.GraphLink, 0)
 
-	for name, action := range wf.Actions {
+	for _, action := range actions {
 		node := opts.GraphNode{
-			Name:       name,
+			Name:       action.Name,
 			Symbol:     "circle",
 			SymbolSize: symbolSize,
 		}
-		if action.IsDecision() {
-			if action.IsRunnable() {
-				node.Symbol = "arrow"
-				node.Category = 3
-			} else {
-				node.Symbol = "triangle"
-				node.Category = 2
-			}
-		} else if action.IsRunnable() {
-			node.Symbol = "diamond"
-			node.Category = 1
-			node.Y = 0
-			node.X = 0
-			node.SymbolSize = symbolSize * 1.5
+
+		/* TODO
+		if action.run.IsDecision() {
+			node.Symbol = "triangle"
+			node.Category = 2
 		}
+		*/
 
 		nodes = append(nodes, node)
 	}
@@ -79,6 +70,10 @@ func RenderWorkflowGraphFlow(wf domain.WorkflowDefinition, w io.Writer) error {
 					if input != success {
 						continue
 					}
+
+					// TODO continue here
+					fact, err := factService.GetLatestOutputByActionId(action.ID)
+
 					links = append(links, opts.GraphLink{
 						Source: name2,
 						Target: name,
@@ -92,14 +87,12 @@ func RenderWorkflowGraphFlow(wf domain.WorkflowDefinition, w io.Writer) error {
 		}
 	}
 
-	return renderWorkflowGraph(nodes, links, []charts.SeriesOpts{
+	return renderGraph(nodes, links, []charts.SeriesOpts{
 		charts.WithGraphChartOpts(opts.GraphChart{
 			EdgeSymbol: []string{"none", "arrow"},
 			Categories: []*opts.GraphCategory{
 				{Name: "Action"},
-				{Name: "Action (runnable)"},
 				{Name: "Decision"},
-				{Name: "Decision (runnable)"},
 			},
 		}),
 	}, w)
@@ -115,7 +108,8 @@ func containsString(s []string, v string) bool {
 	return false
 }
 
-func RenderWorkflowGraphInputs(wf domain.WorkflowDefinition, state domain.Facts, w io.Writer) error {
+/*
+func RenderWorkflowGraphInputs(wf domain.ActionDefinition, state domain.Facts, w io.Writer) error {
 	nodes := make([]opts.GraphNode, 0)
 	links := make([]opts.GraphLink, 0)
 
@@ -194,8 +188,9 @@ func RenderWorkflowGraphInputs(wf domain.WorkflowDefinition, state domain.Facts,
 		}),
 	}, w)
 }
+*/
 
-func renderWorkflowGraph(nodes []opts.GraphNode, links []opts.GraphLink, seriesOpts []charts.SeriesOpts, w io.Writer) error {
+func renderGraph(nodes []opts.GraphNode, links []opts.GraphLink, seriesOpts []charts.SeriesOpts, w io.Writer) error {
 	const fontSize = 14
 
 	graph := charts.NewGraph()
@@ -209,7 +204,7 @@ func renderWorkflowGraph(nodes []opts.GraphNode, links []opts.GraphLink, seriesO
 	)
 	graph.AddJSFuncs(GraphResponsiveJs)
 
-	graph.AddSeries("workflow", nodes, links, append(seriesOpts,
+	graph.AddSeries("actions", nodes, links, append(seriesOpts,
 		charts.WithLabelOpts(
 			opts.Label{
 				Show:     true,
@@ -245,4 +240,3 @@ function resize() {
 resize();
 window.onresize = resize;
 `
-*/

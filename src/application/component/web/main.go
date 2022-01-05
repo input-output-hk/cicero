@@ -102,12 +102,9 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/run", self.RunGet).Methods("GET")
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods("GET")
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods("GET")
+	muxRouter.HandleFunc("/action/graph", self.ActionGraphGet).Methods("GET")
+	muxRouter.HandleFunc("/action/graph/plain", self.ActionGraphPlainGet).Methods("GET")
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
-	/* FIXME
-	muxRouter.HandleFunc("/workflow/{id:[0-9]+}/graph", self.WorkflowIdGraphGet).Methods("GET")
-	muxRouter.HandleFunc("/workflow/graph", self.WorkflowGraphGet).Methods("GET")
-	muxRouter.HandleFunc("/workflow/graph/plain", self.WorkflowGraphPlainGet).Methods("GET")
-	*/
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/json and /documentation/yaml routes
@@ -242,90 +239,29 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-/* FIXME
-func (self *Web) WorkflowIdGraphGet(w http.ResponseWriter, req *http.Request) {
-	id, err := self.parseId(mux.Vars(req)["id"])
-	if err != nil {
-		self.ClientError(w, err)
-		return
-	}
-
-	instance, err := self.RunService.GetByNomadJobId(id)
-	if err != nil {
-		self.NotFound(w, errors.WithMessagef(err, "Failed to find workflow %q", id))
-		return
-	}
-
-	state, err := json.Marshal(instance.Facts)
-	if err != nil {
-		self.ServerError(w, err)
-		return
-	}
-
-	self.renderWorkflowGraphDecorated(
+func (self *Web) ActionGraphGet(w http.ResponseWriter, req *http.Request) {
+	self.renderActionGraphDecorated(
 		w,
-		instance.Source,
-		instance.Name,
-		string(state),
-		strconv.FormatUint(instance.ID, 10),
 		req.URL.Query().Get("type"),
 	)
 }
 
-func (self *Web) WorkflowGraphGet(w http.ResponseWriter, req *http.Request) {
-	self.renderWorkflowGraphDecorated(
-		w,
-		req.URL.Query().Get("source"),
-		req.URL.Query().Get("name"),
-		req.URL.Query().Get("inputs"),
-		req.URL.Query().Get("id"),
-		req.URL.Query().Get("type"),
-	)
-}
-
-func (self *Web) renderWorkflowGraphDecorated(w http.ResponseWriter, source, name, inputs, id, graphType string) {
-	if err := render("workflow/graph.html", w, map[string]interface{}{
-		"Source":     source,
-		"Name":       name,
-		"Inputs":     inputs,
-		"Id":         id,
+func (self *Web) renderActionGraphDecorated(w http.ResponseWriter, graphType string) {
+	if err := render("action/graph.html", w, map[string]interface{}{
 		"type":       graphType,
-		"graphTypes": WorkflowGraphTypeStrings(),
+		"graphTypes": ActionGraphTypeStrings(),
 	}); err != nil {
 		self.ServerError(w, err)
 		return
 	}
 }
 
-func (self *Web) WorkflowGraphPlainGet(w http.ResponseWriter, req *http.Request) {
-	id, err := strconv.ParseInt(req.URL.Query().Get("id"), 10, 64)
-	if err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not parse ID"))
-		return
-	}
-
-	state, err := self.parseFacts([]byte(req.URL.Query().Get("inputs")))
-	if err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not parse state"))
-		return
-	}
-
-	def, err := self.EvaluationService.EvaluateWorkflow(
-		req.URL.Query().Get("source"),
-		req.URL.Query().Get("name"),
-		uint64(id),
-		state,
-	)
-	if err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Failed to evaluate workflow"))
-		return
-	}
-
-	var graphType WorkflowGraphType
+func (self *Web) ActionGraphPlainGet(w http.ResponseWriter, req *http.Request) {
+	var graphType ActionGraphType
 	graphTypeStr := req.URL.Query().Get("type")
 	if len(graphTypeStr) > 0 {
-		if gt, err := WorkflowGraphTypeFromString(graphTypeStr); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Failed to find graph type"))
+		if gt, err := ActionGraphTypeFromString(graphTypeStr); err != nil {
+			self.ClientError(w, err)
 			return
 		} else {
 			graphType = gt
@@ -333,14 +269,9 @@ func (self *Web) WorkflowGraphPlainGet(w http.ResponseWriter, req *http.Request)
 	}
 
 	switch graphType {
-	case WorkflowGraphTypeFlow:
-		if err := RenderWorkflowGraphFlow(def, w); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Failed to render flow graph"))
-			return
-		}
-	case WorkflowGraphTypeInputs:
-		if err := RenderWorkflowGraphInputs(def, state, w); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Failed to render input graph"))
+	case ActionGraphTypeDependencies:
+		if err := RenderActionGraphDependencies(w); err != nil {
+			self.ServerError(w, errors.WithMessage(err, "Failed to render dependency graph"))
 			return
 		}
 	default:
@@ -348,7 +279,6 @@ func (self *Web) WorkflowGraphPlainGet(w http.ResponseWriter, req *http.Request)
 		return
 	}
 }
-*/
 
 func (self *Web) ApiActionDefinitionSourceGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)

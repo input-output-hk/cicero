@@ -19,6 +19,7 @@ type FactService interface {
 	GetLatestByFields([][]string) (domain.Fact, error)
 	GetByFields([][]string) ([]*domain.Fact, error)
 	Save(pgx.Tx, *domain.Fact) error
+	GetLatestOutputByActionId(uuid.UUID) (domain.Fact, error)
 	// TODO sometimes you need a Tx, sometimes not...
 	// → SaveTx() and Save() etc? another wrapper? Tx() to get one?
 }
@@ -67,6 +68,15 @@ func (self *factService) GetByFields(fields [][]string) (facts []*domain.Fact, e
 	facts, err = self.GetByFields(fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select Facts by fields %q", fields)
+	}
+	return
+}
+
+func (self *factService) GetLatestOutputByActionId(id uuid.UUID) (fact domain.Fact, err error) {
+	self.logger.Printf("Getting latest Facts by Action ID %q", id)
+	fact, err = self.factRepository.GetLatestOutputByActionId(id)
+	if err != nil {
+		err = errors.WithMessagef(err, "Could not select latest output Fact by Action ID %q", id)
 	}
 	return
 }

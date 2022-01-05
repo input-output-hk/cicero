@@ -28,14 +28,14 @@
 					{{if or (eq . $.type) (and (eq $.type "") (eq . "flow"))}}
 						{{.}}
 					{{else}}
-						<a href="?type={{.}}&source={{$.Source}}&name={{$.Name}}&inputs={{$.Inputs}}&id={{$.Id}}">{{.}}</a>
+						<a href="?type={{.}}">{{.}}</a>
 					{{end}}
 				</li>
 			{{end}}
 		</ul>
 
 		<iframe
-			src="/workflow/graph/plain?type={{.type}}&source={{.Source}}&name={{.Name}}&inputs={{.Inputs}}&id={{.Id}}"
+			src="/action/graph/plain?type={{.type}}"
 			class="panel"
 		></iframe>
 	</body>
