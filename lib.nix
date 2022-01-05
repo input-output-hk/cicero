@@ -1,107 +1,215 @@
 self:
 
-/* A "spec workflow" is a function of the form:
+/* An action is a function of the form:
 
-   ```nix
-   { name, id }: {
-     actions.tick = { tick ? null }: {
-       when."hasn't run yet" = tick != null;
-       job = …; # nomad HCL job spec in JSON format
-     };
-   }
-   ```
+  ```nix
+  { name, id }: {
+  inputs = {
+  # require last fact with `count` of at least 1
+  tick = "count: >0";
+
+  # stop at 10 (no `over_nine` input will be created)
+  over_nine = {
+  not = true;
+  match = "count: >9";
+  };
+
+  # get all ticks
+  ticks = {
+  select = "all";
+  match = "count: int";
+  };
+
+  # has no influence on runnability
+  double = {
+  optional = true;
+  match = "double: true";
+  };
+  };
+
+  # these are the defaults
+  outputs = inputs: {
+  success.${name} = true;
+  failure.${name} = false;
+  };
+
+  job = { tick, ticks, double ? false }:
+  # `tick` is the latest fact that matches
+  # `ticks` is a list of all facts that match
+  # `double` is provided if found
+  …; # nomad HCL job spec in JSON format
+  }
+  ```
 */
 
-let inherit (self.inputs.nixpkgs) lib;
+let
+  inherit (self.inputs.nixpkgs) lib;
+  inherit (builtins) mapAttrs;
+in
 
-in rec {
-  # Calls a workflow or file containing a workflow.
-  callWorkflow = name: workflow:
-    { id ? null, inputs ? { } }:
+rec {
+  # Calls an action or a file containing one.
+  callAction = name: action:
+    { id, inputs ? throw "no inputs given" }:
     let
-      inherit (builtins) all attrNames attrValues fromJSON typeOf mapAttrs;
+      inherit (builtins)
+        isFunction typeOf attrValues attrNames functionArgs deepSeq;
 
-      parsedInputs = {
-        "set" = inputs;
-        "string" = fromJSON inputs;
-      }.${typeOf inputs};
+      expandAction = { inputs ? { }, outputs ? _: { }, ... }@action: action // {
+        inputs = mapAttrs
+          (k: v: {
+            select = "latest";
+            match = v;
+            not = false;
+            optional = false;
+          } // lib.optionalAttrs (typeOf v != "string") v)
+          inputs;
 
-      importedWorkflow =
-        if builtins.isFunction workflow then workflow else import workflow;
+        inherit outputs;
+      };
+
+      validateAction = { inputs, ... }@action:
+        lib.pipe action (map deepSeq [
+          (
+            let t = typeOf inputs; in
+            if t != "set"
+            then throw "`inputs` must be set but is ${t}"
+            else null
+          )
+
+          (mapAttrs
+            (k: v:
+              let t = typeOf v; in
+              if t != "string" && t != "set"
+              then throw ''`inputs."${k}"` must be string or set with keys `select` (optional), `not` (optional), `optional` (optional), and `match` but is ${t}''
+              else null
+            )
+            inputs)
+
+          (mapAttrs
+            (k: v:
+              if typeOf v == "string" then null else
+              let
+                select = v.select or "latest";
+                t = typeOf select;
+              in
+              if t != "string"
+              then throw ''`inputs."${k}".select` must be string but is ${t}''
+              else if select != "latest" && select != "all"
+              then throw ''`inputs."${k}".select` must be either "latest" or "all" but is "${select}"''
+              else null
+            )
+            inputs)
+
+          (mapAttrs
+            (k: v:
+              if typeOf v == "string" then null else
+              let t = typeOf v.not or false; in
+              if t != "bool"
+              then throw ''`inputs."${k}".not` must be bool but is ${t}''
+              else null
+            )
+            inputs)
+
+          (mapAttrs
+            (k: v:
+              if typeOf v == "string" then null else
+              let t = typeOf v.match; in
+              if t != "string"
+              then throw ''`inputs."${k}".match` must be string but is ${t}''
+              else null
+            )
+            inputs)
+
+          (mapAttrs
+            (k: v:
+              if v.not && v.optional
+              then throw ''`inputs."${k}"`.{Not,Optional} are mutually exclusive as both would not make sense''
+              else null
+            )
+            inputs)
+
+          (map
+            (input:
+              if !(inputs ? ${input})
+              then throw ''`outputs` can only take arguments declared in `inputs` which "${input}" is not''
+              else null
+            )
+            (attrNames (functionArgs action.outputs)))
+
+          (map
+            (input:
+              if !(inputs ? ${input})
+              then throw ''`job` can only take arguments declared in `inputs` which "${input}" is not''
+              else null
+            )
+            (lib.optionals (action ? job) (attrNames (functionArgs action.job))))
+        ]);
 
       hydrateNomadJob = mapAttrs (k: job:
-        assert !(job ? ID); # workflow authors must not set an ID
+        assert !job ? ID; # author must not set an ID
         lib.recursiveUpdate job ({
           type = "batch";
         } // lib.optionalAttrs (job ? group) {
-          group = mapAttrs (k: group:
-            lib.recursiveUpdate group (lib.optionalAttrs (group ? task) {
-              task =
-                mapAttrs (k: task: lib.recursiveUpdate { driver = "nix"; } task)
-                group.task;
-            })) job.group;
+          group = mapAttrs
+            (k: group:
+              lib.recursiveUpdate group (lib.optionalAttrs (group ? task) {
+                task = mapAttrs (k: lib.recursiveUpdate { driver = "nix"; })
+                  group.task;
+              }))
+            job.group;
         }));
 
-      mkActionState = { actionName, job, inputs, when ? { }
-        , success ? { ${actionName} = true; }
-        , failure ? { ${actionName} = false; } }:
-        {
-          inherit when inputs success;
-        } // lib.optionalAttrs (job != null) {
-          inherit failure;
-          job = hydrateNomadJob {
-            "${name}/${actionName}" =
-              lib.optionalAttrs (all (x: x == true) (attrValues when)) job;
-          };
-        };
-
-      mkWorkflowState = { actions ? { }, meta ? { } }: {
-        inherit meta;
-        actions = mapAttrs (actionName: action:
-          let
-            inputNames = attrNames (lib.functionArgs action);
-
-            intersection =
-              lib.intersectLists inputNames (attrNames parsedInputs);
-
-            filteredInputs = lib.listToAttrs (map (inputName:
-              lib.nameValuePair inputName (parsedInputs.${inputName} or null))
-              intersection);
-          in mkActionState ({
-            inherit actionName;
-            inputs = inputNames;
-          } // action filteredInputs)) actions;
+      mkActionState = action: action // {
+        inherit (action) inputs;
+        outputs =
+          let outputs = action.outputs inputs; in
+          # Impossible to check in `validateAction` because calling `outputs` with `{}` as dummy inputs
+            # would break if `outputs` decides which attributes to return based on the inputs.
+          lib.warnIf (!action ? job && !outputs ? success) "This decision Action does not declare a success output! It will not do anything." (
+            lib.warnIf (!action ? job && outputs ? failure) "This decision Action declares a failure output! It will never be published." outputs
+          );
+      } // lib.optionalAttrs (action ? job) {
+        job = hydrateNomadJob (action.job inputs);
       };
-    in mkWorkflowState (importedWorkflow { inherit name id; });
+    in
+    lib.pipe action [
+      (action: if isFunction action then action else import action)
+      (action: action { inherit name id; })
+      expandAction
+      validateAction
+      mkActionState
+    ];
 
-  # Recurses through a directory, considering every file a workflow.
+  # Recurses through a directory, considering every file an action.
   # The path of the file from the starting directory is used as name.
-  listWorkflows = dir:
-    lib.listToAttrs (map (file:
-      lib.nameValuePair (lib.pipe file [
-        toString
-        (lib.removePrefix "${toString dir}/")
-        (lib.removeSuffix ".nix")
-      ]) file) (lib.filesystem.listFilesRecursive dir));
+  listActions = dir:
+    lib.listToAttrs (map
+      (file:
+        lib.nameValuePair
+          (lib.pipe file [
+            toString
+            (lib.removePrefix "${toString dir}/")
+            (lib.removeSuffix ".nix")
+          ])
+          file)
+      (lib.filesystem.listFilesRecursive dir));
 
-  # Like `listWorkflows` but calls every workflow.
-  callWorkflows = dir: builtins.mapAttrs callWorkflow (listWorkflows dir);
+  # Like `listActions` but calls every action.
+  callActions = dir:
+    mapAttrs callAction (listActions dir);
 
-  callWorkflowsWithDefaults = defaults: dir:
-    builtins.mapAttrs (k: workflowWithDefaults defaults) (callWorkflows dir);
+  callActionsWithDefaults = defaults: dir:
+    mapAttrs (k: actionWithDefaults defaults) (callActions dir);
 
-  callWorkflowsWithExtraArgs = extras: dir:
-    builtins.mapAttrs
-    (k: v: callWorkflow k (workflowWithExtraArgs extras (import v)))
-    (listWorkflows dir);
+  callActionsWithExtraArgs = extras: dir:
+    mapAttrs (k: v: callAction k (actionWithExtraArgs extras (import v))) (listActions dir);
 
-  workflowWithDefaults = defaults: innerWorkflow: args:
-    defaults
-    // builtins.mapAttrs (k: v: if v == null then defaults.${k} or null else v)
-    (innerWorkflow args);
+  actionWithDefaults = defaults: innerAction: args:
+    defaults // mapAttrs (k: v: if v == null then defaults.${k} or null else v) (innerAction args);
 
-  workflowWithExtraArgs = extras: innerWorkflow: args:
-    innerWorkflow (args // extras);
+  actionWithExtraArgs = extras: innerAction:
+    args: innerAction (args // extras);
 
   std = import ./pkgs/cicero/evaluators/nix/lib.nix self;
 }

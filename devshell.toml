@@ -7,10 +7,6 @@ name = "DATABASE_URL"
 value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 
 [[env]]
-name = "CICERO_WORKFLOW_SRC"
-value = "."
-
-[[env]]
 name = "LOKI_ADDR"
 value = "http://127.0.0.1:3100"
 
@@ -72,7 +68,7 @@ package = "damon"
 
 [[commands]]
 name = "lint"
-command = "golangci-lint run && gocritic check -enableAll ./... && fd -e nix -X nixfmt -c"
+command = "golangci-lint run && gocritic check -enableAll -disable=ifElseChain,ptrToRefParam,unnamedResult,appendAssign ./... && nixpkgs-fmt --check ."
 help = "Run code linters"
 
 [[commands]]
@@ -95,7 +91,6 @@ packages = [
   "cicero-evaluator-nix",
   "cue",
   "diffutils",
-  "fd",
   "gcc",
   "go",
   "gocode",
@@ -103,9 +98,8 @@ packages = [
   "goimports",
   "gopls",
   "grafana-loki",
-  "nixfmt",
+  "nixpkgs-fmt",
   "nomad-follower",
   "postgresql_12",
-  "sqliteInteractive",
   "vector",
 ]

@@ -23,8 +23,8 @@ func main() {
 	debug := flag.Bool("debug", args.Debug, "sets log level to debug")
 	logger := config.ConfigureLogger(*debug)
 
-	domain.BuildInfo.Version = buildVersion
-	domain.BuildInfo.Commit = buildCommit
+	domain.Build.Version = buildVersion
+	domain.Build.Commit = buildCommit
 
 	abort(parser, Run(parser, args, logger))
 }

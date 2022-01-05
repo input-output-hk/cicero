@@ -2,11 +2,13 @@ package persistence
 
 import (
 	"context"
+
 	"github.com/georgysavva/scany/pgxscan"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
 	"github.com/liftbridge-io/go-liftbridge/v2"
+
+	"github.com/input-output-hk/cicero/src/config"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 )
 
 type messageQueueRepository struct {

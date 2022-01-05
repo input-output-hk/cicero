@@ -2,22 +2,24 @@ package cicero
 
 import (
 	"context"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/rs/zerolog"
 	"time"
 
 	"cirello.io/oversight"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/input-output-hk/cicero/src/application"
-	"github.com/input-output-hk/cicero/src/component"
-	"github.com/input-output-hk/cicero/src/component/web"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/vivek-ng/concurrency-limiter/priority"
+
+	"github.com/input-output-hk/cicero/src/application"
+	"github.com/input-output-hk/cicero/src/application/component"
+	"github.com/input-output-hk/cicero/src/application/component/web"
+	"github.com/input-output-hk/cicero/src/application/service"
+	"github.com/input-output-hk/cicero/src/config"
 )
 
 type StartCmd struct {
-	Components []string `arg:"positional" help:"any of: start, invoke, fact, nomad, web"`
+	Components []string `arg:"positional" help:"any of: create, invoke, fact, nomad, web"`
 
 	LiftbridgeAddr string   `arg:"--liftbridge-addr" default:"127.0.0.1:9292"`
 	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
@@ -28,25 +30,25 @@ type StartCmd struct {
 }
 
 func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
-	logger.Info().Msg("Start...")
+	logger.Info().Msg("Starting components")
 
 	// If none are given then start all,
 	// otherwise start only those that are given.
 	var start struct {
-		workflowStart  bool
-		workflowInvoke bool
-		workflowFact   bool
-		nomadEvent     bool
-		web            bool
+		actionCreate bool
+		actionInvoke bool
+		factCreate   bool
+		nomadEvent   bool
+		web          bool
 	}
 	for _, component := range cmd.Components {
 		switch component {
 		case "start":
-			start.workflowStart = true
-		case "invoke":
-			start.workflowInvoke = true
-		case "fact":
-			start.workflowFact = true
+			start.actionCreate = true
+		case "actionInvoke":
+			start.actionInvoke = true
+		case "factCreate":
+			start.factCreate = true
 		case "nomad":
 			start.nomadEvent = true
 		case "web":
@@ -55,14 +57,14 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 			logger.Fatal().Msgf("Unknown component: %s", component)
 		}
 	}
-	if !(start.workflowStart ||
-		start.workflowInvoke ||
-		start.workflowFact ||
+	if !(start.actionCreate ||
+		start.actionInvoke ||
+		start.factCreate ||
 		start.nomadEvent ||
 		start.web) {
-		start.workflowStart = true
-		start.workflowInvoke = true
-		start.workflowFact = true
+		start.actionCreate = true
+		start.actionInvoke = true
+		start.factCreate = true
 		start.nomadEvent = true
 		start.web = true
 	}
@@ -94,33 +96,37 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	})
 
 	evaluationService := once(func() interface{} {
-		return application.NewEvaluationService(cmd.Evaluators, cmd.Env, logger)
+		return service.NewEvaluationService(cmd.Evaluators, cmd.Env, logger)
 	})
 	messageQueueService := once(func() interface{} {
 		if bridge, err := config.LiftbridgeConnect(cmd.LiftbridgeAddr); err != nil {
 			logger.Fatal().Err(err)
 			return err
 		} else {
-			return application.NewMessageQueueService(db().(*pgxpool.Pool), bridge, logger)
+			return service.NewMessageQueueService(db().(*pgxpool.Pool), bridge, logger)
 		}
 	})
-	workflowService := once(func() interface{} {
-		return application.NewWorkflowService(db().(*pgxpool.Pool), messageQueueService().(application.MessageQueueService), logger)
+	factService := once(func() interface{} {
+		return service.NewFactService(db().(*pgxpool.Pool), logger)
 	})
 	actionService := once(func() interface{} {
-		return application.NewActionService(db().(*pgxpool.Pool), cmd.PrometheusAddr, logger)
+		return service.NewActionService(db().(*pgxpool.Pool), logger)
+	})
+	runService := once(func() interface{} {
+		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr, logger)
 	})
 	nomadEventService := once(func() interface{} {
-		return application.NewNomadEventService(db().(*pgxpool.Pool), actionService().(application.ActionService), logger)
+		return service.NewNomadEventService(db().(*pgxpool.Pool), runService().(service.RunService), logger)
 	})
 
 	supervisor := cmd.newSupervisor(logger)
 
-	if start.workflowStart {
-		child := component.WorkflowStartConsumer{
-			Logger:              logger.With().Str("component", "WorkflowStartConsumer").Logger(),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			WorkflowService:     workflowService().(application.WorkflowService),
+	if start.actionCreate {
+		child := component.ActionCreateConsumer{
+			Logger:              logger.With().Str("component", "ActionCreateConsumer").Logger(),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			ActionService:       actionService().(service.ActionService),
+			EvaluationService:   evaluationService().(service.EvaluationService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
@@ -128,12 +134,12 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		}
 	}
 
-	if start.workflowInvoke {
-		child := component.WorkflowInvokeConsumer{
-			EvaluationService:   evaluationService().(application.EvaluationService),
-			ActionService:       actionService().(application.ActionService),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			WorkflowService:     workflowService().(application.WorkflowService),
+	if start.actionInvoke {
+		child := component.ActionInvokeConsumer{
+			EvaluationService:   evaluationService().(service.EvaluationService),
+			RunService:          runService().(service.RunService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			ActionService:       actionService().(service.ActionService),
 			Db:                  db().(*pgxpool.Pool),
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			// Increase priority of waiting goroutines every second.
@@ -145,11 +151,12 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		}
 	}
 
-	if start.workflowFact {
-		child := component.WorkflowFactConsumer{
-			Logger:              logger.With().Str("component", "WorkflowFactConsumer").Logger(),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			WorkflowService:     workflowService().(application.WorkflowService),
+	if start.factCreate {
+		child := component.FactCreateConsumer{
+			Logger:              logger.With().Str("component", "FactCreateConsumer").Logger(),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			FactService:         factService().(service.FactService),
+			ActionService:       actionService().(service.ActionService),
 			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
@@ -160,11 +167,9 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	if start.nomadEvent {
 		child := component.NomadEventConsumer{
 			Logger:              logger.With().Str("component", "NomadEventConsumer").Logger(),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			WorkflowService:     workflowService().(application.WorkflowService),
-			ActionService:       actionService().(application.ActionService),
-			EvaluationService:   evaluationService().(application.EvaluationService),
-			NomadEventService:   nomadEventService().(application.NomadEventService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			RunService:          runService().(service.RunService),
+			NomadEventService:   nomadEventService().(service.NomadEventService),
 			NomadClient:         nomadClientWrapper().(application.NomadClient),
 			Db:                  db().(*pgxpool.Pool),
 		}
@@ -177,11 +182,13 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		child := web.Web{
 			Logger:              logger.With().Str("component", "Web").Logger(),
 			Listen:              cmd.WebListen,
-			WorkflowService:     workflowService().(application.WorkflowService),
-			ActionService:       actionService().(application.ActionService),
-			MessageQueueService: messageQueueService().(application.MessageQueueService),
-			NomadEventService:   nomadEventService().(application.NomadEventService),
-			EvaluationService:   evaluationService().(application.EvaluationService),
+			RunService:          runService().(service.RunService),
+			ActionService:       actionService().(service.ActionService),
+			FactService:         factService().(service.FactService),
+			MessageQueueService: messageQueueService().(service.MessageQueueService),
+			NomadEventService:   nomadEventService().(service.NomadEventService),
+			EvaluationService:   evaluationService().(service.EvaluationService),
+			Db:                  db().(*pgxpool.Pool),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err

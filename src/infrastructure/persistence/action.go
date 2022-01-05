@@ -2,13 +2,15 @@ package persistence
 
 import (
 	"context"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/input-output-hk/cicero/src/domain/repository"
+	"encoding/json"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
+
+	"github.com/input-output-hk/cicero/src/config"
+	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 )
 
 type actionRepository struct {
@@ -16,49 +18,57 @@ type actionRepository struct {
 }
 
 func NewActionRepository(db config.PgxIface) repository.ActionRepository {
-	return actionRepository{DB: db}
+	return &actionRepository{DB: db}
 }
 
-func (a actionRepository) GetById(id uuid.UUID) (action domain.ActionInstance, err error) {
+func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &action,
-		`SELECT * FROM action_instances WHERE id = $1`,
+		`SELECT * FROM actions WHERE id = $1`,
 		id,
 	)
 	return
 }
 
-// FIXME the name is not unique in the action_instances table for a workflow_instance_id
-func (a actionRepository) GetByNameAndWorkflowId(name string, workflowId uint64) (action domain.ActionInstance, err error) {
+func (a *actionRepository) GetLatestByName(name string) (action domain.Action, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &action,
-		`SELECT * FROM action_instances WHERE name = $1 AND workflow_instance_id = $2`,
-		name, workflowId,
+		`SELECT DISTINCT ON (name) * FROM actions WHERE name = $1 ORDER BY name, created_at DESC`,
+		name,
 	)
 	return
 }
 
-func (a actionRepository) GetAll() (instances []*domain.ActionInstance, err error) {
+func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {
 	err = pgxscan.Select(
-		context.Background(), a.DB, &instances,
-		`SELECT * FROM action_instances ORDER BY created_at DESC`,
+		context.Background(), a.DB, &actions,
+		`SELECT * FROM actions ORDER BY created_at DESC`,
 	)
 	return
 }
 
-func (a actionRepository) Save(tx pgx.Tx, action *domain.ActionInstance) error {
-	return tx.QueryRow(
-		context.Background(),
-		`INSERT INTO action_instances (workflow_instance_id, name, facts) VALUES ($1, $2, $3) RETURNING id`,
-		action.WorkflowInstanceId, action.Name, action.Facts,
-	).Scan(&action.ID)
+func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
+	if inputs, err := json.Marshal(action.Inputs); err != nil {
+		return err
+	} else {
+		var sql string
+		if action.ID == (uuid.UUID{}) {
+			sql = `INSERT INTO actions (    name, source, inputs) VALUES (    $2, $3, $4) RETURNING id`
+		} else {
+			sql = `INSERT INTO actions (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id`
+		}
+		return tx.QueryRow(
+			context.Background(),
+			sql,
+			action.ID, action.Name, action.Source, inputs,
+		).Scan(&action.ID)
+	}
 }
 
-func (a actionRepository) Update(tx pgx.Tx, action domain.ActionInstance) (err error) {
-	_, err = tx.Exec(
-		context.Background(),
-		`UPDATE action_instances SET finished_at = $2, updated_at = $3, facts = $4 WHERE id = $1`,
-		action.ID, action.FinishedAt, action.UpdatedAt, action.Facts,
+func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
+	err = pgxscan.Select(
+		context.Background(), a.DB, &actions,
+		`SELECT DISTINCT ON (name) * FROM actions ORDER BY name, created_at DESC`,
 	)
 	return
 }

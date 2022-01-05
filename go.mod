@@ -10,7 +10,7 @@ require (
 	github.com/georgysavva/scany v0.2.9
 	github.com/getkin/kin-openapi v0.83.0
 	github.com/go-echarts/go-echarts/v2 v2.2.5-0.20211026072344-dc05f25cd7c2
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/grafana/loki v1.6.1
 	github.com/hashicorp/go-getter/v2 v2.0.0
@@ -30,6 +30,7 @@ require (
 )
 
 require (
+	cuelang.org/go v0.4.0 // indirect
 	github.com/Workiva/go-datastructures v1.0.52 // indirect
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/alecthomas/jsonschema v0.0.0-20211022214203-8b29eab41725 // indirect
@@ -43,6 +44,7 @@ require (
 	github.com/bmatcuk/doublestar v1.2.2 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
+	github.com/cockroachdb/apd/v2 v2.0.1 // indirect
 	github.com/cortexproject/cortex v1.2.1-0.20200803161316-7014ff11ed70 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
@@ -108,6 +110,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/mpvl/unique v0.0.0-20150818121801-cbe035fff7de // indirect
 	github.com/natefinch/atomic v1.0.1 // indirect
 	github.com/nats-io/jwt/v2 v2.1.0 // indirect
 	github.com/nats-io/nats-server/v2 v2.6.4 // indirect

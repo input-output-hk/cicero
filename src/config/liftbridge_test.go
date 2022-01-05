@@ -17,10 +17,10 @@ var storagePath string
 func init() {
 	tmpDir, err := ioutil.TempDir("", "liftbridge_test_")
 	if err != nil {
-		panic(fmt.Errorf("Error creating temp dir: %v", err))
+		panic(fmt.Errorf("Error creating temp dir: %w", err))
 	}
 	if err := os.Remove(tmpDir); err != nil {
-		panic(fmt.Errorf("Error removing temp dir: %v", err))
+		panic(fmt.Errorf("Error removing temp dir: %w", err))
 	}
 	storagePath = tmpDir
 }

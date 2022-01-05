@@ -1,0 +1,38 @@
+{{template "layout.html" .}}
+
+{{define "main"}}
+	<h1>Create Action</h1>
+
+	{{if not .Source}}
+		<!-- step 1 -->
+		<div style="margin: 1em 0">
+			<h3>Enter source:</h3>
+			<form>
+				<input
+					name="source"
+					placeholder="github.com/input-output-hk/cicero"
+					value="{{.Source}}"
+					style="width: 50%"
+				/>
+				<button>→ List Actions</button>
+			</form>
+		</div>
+	{{else if not .Name}}
+		<!-- step 2 -->
+		<h3>
+			Actions available in
+			<code>{{.Source}}</code>:
+		</h3>
+		<ul>
+			{{range .Names}}
+				<li>
+					<form>
+						<input type="hidden" name="source" value="{{$.Source}}"/>
+						<input type="hidden" name="name" value="{{.}}"/>
+						<button class="link">{{.}}</button>
+					</form>
+				</li>
+			{{end}}
+		</ul>
+	{{end}}
+{{end}}

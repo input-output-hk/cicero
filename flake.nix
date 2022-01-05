@@ -24,8 +24,7 @@
         {
           cicero = prev.callPackage ./pkgs/cicero { flake = self; };
           cicero-std = prev.callPackage ./pkgs/cicero/std { };
-          cicero-evaluator-nix =
-            prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
+          cicero-evaluator-nix = prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
           liftbridge = prev.callPackage ./pkgs/liftbridge.nix { };
           liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
           go = prev.go_1_17;
@@ -36,28 +35,43 @@
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
 
-          cicero-entrypoint =
-            final.callPackage ./pkgs/cicero/entrypoint.nix { };
+          cicero-entrypoint = final.callPackage ./pkgs/cicero/entrypoint.nix { };
 
-          nomad-dev = let
-            cfg = builtins.toFile "nomad.hcl" ''
-              log_level = "TRACE"
-              plugin "nix_driver" {}
+          nomad-dev =
+            let
+              cfg = builtins.toFile "nomad.hcl" ''
+                log_level = "TRACE"
+                plugin "nix_driver" {}
+              '';
+            in
+            prev.writeShellScriptBin "nomad-dev" ''
+              set -exuo pipefail
+
+              sudo ${prev.nomad}/bin/nomad \
+                agent \
+                -dev \
+                -config ${cfg} \
+                -plugin-dir "${final.nomad-driver-nix}/bin"
             '';
-          in prev.writeShellScriptBin "nomad-dev" ''
-            set -exuo pipefail
-
-            sudo ${prev.nomad}/bin/nomad \
-              agent \
-              -dev \
-              -config ${cfg} \
-              -plugin-dir "${final.nomad-driver-nix}/bin"
-          '';
         } // (import ./runners.nix final prev);
 
-      packages = { cicero, cicero-std, cicero-evaluator-nix, cicero-entrypoint
-        , liftbridge, liftbridge-cli, gocritic, go, webhook-trigger, nomad-dev
-        , nomad-follower, run-bash, run-python, run-perl, run-js }@pkgs:
+      packages =
+        { cicero
+        , cicero-std
+        , cicero-evaluator-nix
+        , cicero-entrypoint
+        , liftbridge
+        , liftbridge-cli
+        , gocritic
+        , go
+        , webhook-trigger
+        , nomad-dev
+        , nomad-follower
+        , run-bash
+        , run-python
+        , run-perl
+        , run-js
+        }@pkgs:
         pkgs // {
           inherit (nixpkgs) lib;
           defaultPackage = cicero;
@@ -79,46 +93,50 @@
               nixpkgs.overlays = [ self.overlay ];
               networking.hostName = lib.mkDefault "dev";
 
+              # re-enable TTY disabled by minimal profile for `machinectl shell`
+              systemd.services."getty@tty1".enable = lib.mkForce true;
+
               systemd.services.liftbridge = {
                 wantedBy = [ "multi-user.target" ];
                 after = [ "network.target" ];
 
-                serviceConfig = let
-                  cfg = builtins.toFile "liftbridge.yaml" (builtins.toJSON {
-                    listen = "0.0.0.0:9292";
-                    host = "127.0.0.1";
-                    port = "9292";
-                    data.dir = "/local/server";
-                    activity.stream.enabled = true;
-                    logging = {
-                      level = "debug";
-                      raft = true;
-                      nats = true;
-                      recovery = true;
-                    };
-                    nats = {
-                      embedded = true;
-                      servers = [ ];
-                    };
-                    streams = {
-                      retention.max = {
-                        age = "24h";
-                        messages = 1000;
+                serviceConfig =
+                  let
+                    cfg = builtins.toFile "liftbridge.yaml" (builtins.toJSON {
+                      listen = "0.0.0.0:9292";
+                      host = "127.0.0.1";
+                      port = "9292";
+                      data.dir = "/local/server";
+                      activity.stream.enabled = true;
+                      logging = {
+                        level = "debug";
+                        raft = true;
+                        nats = true;
+                        recovery = true;
                       };
-                      compact.enabled = true;
-                    };
-                    clustering = {
-                      server.id = "voter";
-                      raft.bootstrap.seed = true;
-                      replica.max.lag.time = "20s";
-                    };
-                  });
-                in {
-                  ExecStart =
-                    "${pkgs.liftbridge}/bin/liftbridge --config ${cfg}";
-                  Restart = "on-failure";
-                  RestartSec = "5s";
-                };
+                      nats = {
+                        embedded = true;
+                        servers = [ ];
+                      };
+                      streams = {
+                        retention.max = {
+                          age = "24h";
+                          messages = 1000;
+                        };
+                        compact.enabled = true;
+                      };
+                      clustering = {
+                        server.id = "voter";
+                        raft.bootstrap.seed = true;
+                        replica.max.lag.time = "20s";
+                      };
+                    });
+                  in
+                  {
+                    ExecStart = "${pkgs.liftbridge}/bin/liftbridge --config ${cfg}";
+                    Restart = "on-failure";
+                    RestartSec = "5s";
+                  };
               };
 
               services.loki = {
@@ -133,7 +151,7 @@
                       address = "127.0.0.1";
                       final_sleep = "0s";
                       ring = {
-                        kvstore = { store = "inmemory"; };
+                        kvstore.store = "inmemory";
                         replication_factor = 1;
                       };
                     };
@@ -160,11 +178,11 @@
                     }];
                   };
 
-                  server = { http_listen_port = 3100; };
+                  server.http_listen_port = 3100;
 
                   storage_config = {
-                    boltdb = { directory = "/var/lib/loki/index"; };
-                    filesystem = { directory = "/var/lib/loki/chunks"; };
+                    boltdb.directory = "/var/lib/loki/index";
+                    filesystem.directory = "/var/lib/loki/chunks";
                   };
                 };
               };
@@ -173,6 +191,11 @@
                 enable = true;
                 enableTCPIP = true;
                 package = pkgs.postgresql_12;
+
+                settings = {
+                  log_statement = "all";
+                  log_destination = lib.mkForce "syslog";
+                };
 
                 authentication = ''
                   local all all trust
@@ -259,9 +282,13 @@
 
       extraOutputs.lib = import ./lib.nix self;
 
-      extraOutputs.ciceroWorkflows =
-        self.outputs.lib.callWorkflowsWithExtraArgs { inherit self; }
-        ./workflows;
+      extraOutputs.ciceroActions = self.lib.callActionsWithExtraArgs
+        rec {
+          inherit (self.outputs.lib) std;
+          inherit (self.inputs.nixpkgs) lib;
+          actionLib = import ./action-lib.nix { inherit std lib; };
+          nixpkgsRev = self.inputs.nixpkgs.rev;
+        } ./actions;
 
       hydraJobs = { cicero }@pkgs: pkgs;
 

@@ -1,0 +1,32 @@
+{{template "layout.html" .}}
+
+{{define "main"}}
+	<table class="table">
+		<thead>
+			<tr>
+				<th>Nomad Job ID</th>
+				<th>Action ID</th>
+				<th>Created At</th>
+				<th>Finished At</th>
+			</tr>
+		</thead>
+		<tbody>
+			{{range .}}
+				<tr>
+					<td>
+						<a href="/run/{{.NomadJobID}}">
+							{{.NomadJobID}}
+						</a>
+					</td>
+					<td>
+						<a href="/action/{{.ActionId}}">
+							{{.ActionId}}
+						</a>
+					</td>
+					<td>{{.CreatedAt}}</td>
+					<td>{{.FinishedAt}}</td>
+				</tr>
+			{{end}}
+		</tbody>
+	</table>
+{{end}}

@@ -76,32 +76,15 @@ job: webhooks: group: webhooks: {
 					capture_output: false
 					secret:         "TODO get from vault"
 				}
-				events: {
-					common: """
-						set -exuo pipefail
-						function prop {
-						    <<< '{payload}' jq -r "$1"
-						}
-						"""
-					pull_request: """
-						case $(prop .action) in
-						    opened | reopened | synchronize ) ;;
-						    * ) exit 0 ;;
-						esac
+				events: all: #"""
+					set -exuo pipefail
 
-						if [[ $(prop .pull_request.base.ref) != $(prop .repository.default_branch) ]]; then
-						    >&2 echo 'Ignoring event: PR base is not the default branch. This could allow arbitrary code execution.'
-						    exit
-						fi
+					echo "nameserver \#(#nameserver)" >> /etc/resolv.conf
 
-						echo "nameserver \(#nameserver)" > /etc/resolv.conf
-
-						<<< '{payload}' jq -r '{
-						    Source: "github.com/\\(.repository.full_name)?ref=\\(.pull_request.base.sha)",
-						    Inputs: {"github-event": .}
-						}' | curl "\(#ciceroApiUrl)/workflow/instance" --data-binary @-
-						"""
-				}
+					<<< '{payload}' \
+					jq -r '{"github-event": .}' \
+					| curl "\#(#ciceroApiUrl)/fact" --data-binary @-
+					"""#
 			})
 		}]
 	}
