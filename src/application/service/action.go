@@ -74,7 +74,7 @@ func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
 }
 
 func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]interface{}, error) {
-	self.logger.Debug().Str("id", action.ID.String()).Msg("Checking whether Action %s is runnable")
+	self.logger.Debug().Str("name", action.Name).Str("id", action.ID.String()).Msg("Checking whether Action is runnable")
 
 	inputFact := map[string]*domain.Fact{}
 	inputFacts := map[string][]*domain.Fact{}
