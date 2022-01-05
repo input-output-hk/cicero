@@ -203,7 +203,7 @@ func filterFields(factValue *interface{}, filter cue.Value) {
 	if strukt, err := filter.Struct(); err != nil {
 		if _, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
 			// fact is not allowed to be map because filter is not a struct
-			factValue = nil
+			*factValue = nil
 		}
 	} else if value, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
 		for k, v := range value {
