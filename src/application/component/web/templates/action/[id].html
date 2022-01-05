@@ -102,7 +102,7 @@
 				<table class="table">
 					<thead>
 						<tr>
-							<th colspan="4">Runs</th>
+							<th colspan="3">Runs</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -110,16 +110,14 @@
 							<th>Created At</th>
 							<th>Finished At</th>
 							<th>Nomad Job ID</th>
-							<th></th>
 						</tr>
 						{{range .}}
 							<tr>
 								<td>{{.CreatedAt}}</td>
 								<td>{{.FinishedAt}}</td>
-								<td>{{.NomadJobID}}</td>
 								<td>
 									<a href="/run/{{.NomadJobID}}">
-										→ Details
+										{{.NomadJobID}}
 									</a>
 								</td>
 							</tr>
