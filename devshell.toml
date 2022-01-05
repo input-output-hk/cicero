@@ -72,7 +72,7 @@ package = "damon"
 
 [[commands]]
 name = "lint"
-command = "golangci-lint run && gocritic check -enableAll ./... && fd -e nix -X nixfmt -c"
+command = "golangci-lint run && gocritic check -enableAll ./... && nixpkgs-fmt --check ."
 help = "Run code linters"
 
 [[commands]]
@@ -95,7 +95,6 @@ packages = [
   "cicero-evaluator-nix",
   "cue",
   "diffutils",
-  "fd",
   "gcc",
   "go",
   "gocode",
@@ -103,7 +102,7 @@ packages = [
   "goimports",
   "gopls",
   "grafana-loki",
-  "nixfmt",
+  "nixpkgs-fmt",
   "nomad-follower",
   "postgresql_12",
   "vector",
