@@ -7,9 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	swagger "github.com/davidebianchi/gswagger"
 	"github.com/davidebianchi/gswagger/apirouter"
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
@@ -17,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
+	"github.com/input-output-hk/cicero/src/application/component/web/apidoc"
 	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -38,63 +37,165 @@ func (self *Web) Start(ctx context.Context) error {
 	self.Logger.Info().Msg("Starting")
 
 	muxRouter := mux.NewRouter().StrictSlash(true).UseEncodedPath()
-	r, err := swagger.NewRouter(apirouter.NewGorillaMuxRouter(muxRouter), swagger.Options{
-		Context: ctx,
-		Openapi: &openapi3.T{
-			Info: &openapi3.Info{
-				Title:   "Cicero REST API",
-				Version: "1.0.0",
-			},
-		},
-	})
+	r, err := apidoc.NewRouterDocumented(apirouter.NewGorillaMuxRouter(muxRouter), "Cicero REST API", "1.0.0", "cicero", ctx)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create swagger router")
 	}
 
 	// sorted alphabetically, please keep it this way
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/current/{name}/definition", self.ApiActionCurrentNameDefinitionGet, genApiActionCurrentNameDefinitionGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/current/{name}/definition",
+		self.ApiActionCurrentNameDefinitionGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "name", Description: "name of an action", Value: "actionName"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/current/{name}", self.ApiActionCurrentNameGet, genApiActionCurrentNameGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/current/{name}",
+		self.ApiActionCurrentNameGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "name", Description: "name of an action", Value: "actionName"}}),
+			apidoc.BuildBodyRequest(domain.Action{}),
+			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/current", self.ApiActionCurrentGet, genApiActionCurrentGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/current",
+		self.ApiActionCurrentGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Action{}, "Ok")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/definition/{source}/{name}/{id}", self.ApiActionDefinitionSourceNameIdGet, genApiActionDefinitionSourceNameIdGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/definition/{source}/{name}/{id}",
+		self.ApiActionDefinitionSourceNameIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{
+				{Name: "source", Description: "source of one or more action definitions", Value: "source"},
+				{Name: "name", Description: "name of an action in the source", Value: "name"},
+				{Name: "id", Description: "id to evaluate the action's source with", Value: "UUID"},
+			}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "Ok")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/definition/{source}", self.ApiActionDefinitionSourceGet, genApiActionDefinitionSourceGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/definition/{source}",
+		self.ApiActionDefinitionSourceGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "source", Description: "source of one or more action definitions", Value: "source"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []string{}, "Ok")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}/definition", self.ApiActionIdDefinitionGet, genApiActionIdDefinitionGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/{id}/definition",
+		self.ApiActionIdDefinitionGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id to evaluate the action's source with", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "Ok")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action/{id}", self.ApiActionIdGet, genApiActionIdGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action/{id}",
+		self.ApiActionIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id to evaluate the action's source with", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Action{}, "Ok")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/action", self.ApiActionGet, genApiActionGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/action",
+		self.ApiActionGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Action{}, "Ok")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost, "/api/action", self.ApiActionPost, genApiActionPostSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/action",
+		self.ApiActionPost,
+		apidoc.BuildSwaggerDef(
+			nil,
+			apidoc.BuildBodyRequest(apiActionPostBody{}), //TODO: move to domain
+			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost, "/api/run/{id}/fact", self.ApiRunIdFactPost, genApiRunIdFactPostSwagDef()); err != nil {
+	var value interface{} //TODO: WIP
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/run/{id}/fact",
+		self.ApiRunIdFactPost,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an action", Value: "UUID"}}),
+			apidoc.BuildBodyRequest(value),
+			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/run/{id}/logs", self.ApiRunIdLogsGet, genApiRunIdLogsGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/run/{id}/logs",
+		self.ApiRunIdLogsGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an action", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]*domain.LokiOutput{"logs": {}}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/run/{id}", self.ApiRunIdGet, genApiRunIdGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/run/{id}",
+		self.ApiRunIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an action", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/run", self.ApiRunGet, genApiRunGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/run",
+		self.ApiRunGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Run{}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet, "/api/fact/{id}", self.ApiFactIdGet, genApiFactIdGetSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/fact/{id}",
+		self.ApiFactIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a fact", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
+	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost, "/api/fact", self.ApiFactPost, genApiFactPostSwagDef()); err != nil {
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/fact",
+		self.ApiFactPost,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
+	); err != nil {
 		return err
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
@@ -105,7 +206,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
-	// creates /documentation/json and /documentation/yaml routes
+	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
 	err = r.GenerateAndExposeSwagger()
 	if err != nil {
 		return errors.WithMessage(err, "Failed to generate and expose swagger: %s")
@@ -131,7 +232,7 @@ func (self *Web) Start(ctx context.Context) error {
 }
 
 func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
-	http.Redirect(w, req, "/action/current", 302)
+	http.Redirect(w, req, "/action/current", http.StatusFound)
 }
 
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
@@ -196,7 +297,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, err)
 		return
 	} else {
-		http.Redirect(w, req, "/action/current", 302)
+		http.Redirect(w, req, "/action/current", http.StatusFound)
 		return
 	}
 }
@@ -246,35 +347,10 @@ func (self *Web) ApiActionDefinitionSourceGet(w http.ResponseWriter, req *http.R
 	}
 
 	if wfs, err := self.EvaluationService.ListActions(source); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to list actions"))
+		self.ClientError(w, errors.WithMessage(err, "Failed to list actions"))
 		return
 	} else {
-		self.json(w, wfs, 200)
-	}
-}
-
-func genApiActionDefinitionSourceGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"source": {
-				Content:     swagger.Content{},
-				Description: "source of one or more action definitions",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: []string{}},
-				},
-				Description: "OK",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, wfs, http.StatusOK)
 	}
 }
 
@@ -291,46 +367,7 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 	} else if def, err := self.EvaluationService.EvaluateAction(source, name, id); err != nil {
 		self.ServerError(w, err)
 	} else {
-		self.json(w, def, 200)
-	}
-}
-
-func genApiActionDefinitionSourceNameIdGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"source": {
-				Content:     swagger.Content{},
-				Description: "source of one or more action definitions",
-			},
-			"name": {
-				Content:     swagger.Content{},
-				Description: "name of an action in the source",
-			},
-			"id": {
-				Content:     swagger.Content{},
-				Description: "id to evaluate the action's source with",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.ActionDefinition{}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, def, http.StatusOK)
 	}
 }
 
@@ -338,26 +375,7 @@ func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 	if runs, err := self.RunService.GetAll(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
 	} else {
-		self.json(w, runs, 200)
-	}
-}
-
-func genApiRunGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: []domain.Run{}},
-				},
-				Description: "OK",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, runs, http.StatusOK)
 	}
 }
 
@@ -385,7 +403,7 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 		}
 	} else {
 		if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Failed to list actions"))
+			self.ClientError(w, errors.WithMessage(err, "Failed to list actions"))
 			return
 		} else {
 			for _, actionName := range actionNames {
@@ -403,33 +421,6 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func genApiActionPostSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		RequestBody: &swagger.ContentValue{
-			Content: swagger.Content{
-				"application/json": {Value: apiActionPostBody{}},
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			204: {
-				Description: "NoContent",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
-	}
 }
 
 func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
@@ -451,38 +442,13 @@ func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		self.NotFound(w, errors.WithMessage(err, "Could not find run"))
 	}
-	self.json(w, run, 200)
-}
-
-func genApiRunIdGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Content:     swagger.Content{},
-				Description: "id of an action run",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.Run{}},
-				},
-				Description: "OK",
-			},
-			404: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "NotFound",
-			},
-		},
-	}
+	self.json(w, run, http.StatusOK)
 }
 
 func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	run, err := self.getRun(req)
 	if err != nil {
-		self.ServerError(w, err)
+		self.ClientError(w, err) //TODO: review 5XX error in openAPi documentation
 		return
 	}
 
@@ -513,64 +479,11 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func genApiRunIdFactPostSwagDef() swagger.Definitions {
-	var value interface{}
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Content:     swagger.Content{},
-				Description: "id of an action",
-			},
-		},
-		RequestBody: &swagger.ContentValue{
-			Content: swagger.Content{
-				"application/json": {Value: value},
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			204: {
-				Description: "NoContent",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
-	}
-}
-
 func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 	if actions, err := self.ActionService.GetAll(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get all actions"))
 	} else {
-		self.json(w, actions, 200)
-	}
-}
-
-func genApiActionGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: []domain.Action{}},
-				},
-				Description: "OK",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, actions, http.StatusOK)
 	}
 }
 
@@ -579,12 +492,8 @@ func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	if actions, err := self.ActionService.GetCurrent(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get current actions"))
 	} else {
-		self.json(w, actions, 200)
+		self.json(w, actions, http.StatusOK)
 	}
-}
-
-func genApiActionCurrentGetSwagDef() swagger.Definitions {
-	return genApiActionGetSwagDef()
 }
 
 func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
@@ -592,36 +501,9 @@ func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Reques
 	if name, err := url.PathUnescape(vars["name"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
 	} else if actions, err := self.ActionService.GetLatestByName(name); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "Failed to get current action named %q", name))
+		self.ClientError(w, errors.WithMessagef(err, "Failed to get current action named %q", name))
 	} else {
-		self.json(w, actions, 200)
-	}
-}
-
-func genApiActionCurrentNameGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"name": {
-				Content:     swagger.Content{},
-				Description: "name of an action",
-			},
-		},
-		RequestBody: &swagger.ContentValue{
-			Content: swagger.Content{
-				"application/json": {Value: &domain.Action{}},
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			204: {
-				Description: "NoContent",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, actions, http.StatusOK)
 	}
 }
 
@@ -630,16 +512,12 @@ func (self *Web) ApiActionCurrentNameDefinitionGet(w http.ResponseWriter, req *h
 	if name, err := url.PathUnescape(vars["name"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
 	} else if action, err := self.ActionService.GetLatestByName(name); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
+		self.ClientError(w, errors.WithMessage(err, "Failed to get action"))
 	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
 	} else {
-		self.json(w, actionDef, 200)
+		self.json(w, actionDef, http.StatusOK)
 	}
-}
-
-func genApiActionCurrentNameDefinitionGetSwagDef() swagger.Definitions {
-	return genApiActionIdDefinitionGetSwagDef()
 }
 
 func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
@@ -649,38 +527,7 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
 	} else {
-		self.json(w, action, 200)
-	}
-}
-
-func genApiActionIdGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Content:     swagger.Content{},
-				Description: "id of an action",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.Action{}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, action, http.StatusOK)
 	}
 }
 
@@ -693,38 +540,7 @@ func (self *Web) ApiActionIdDefinitionGet(w http.ResponseWriter, req *http.Reque
 	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
 	} else {
-		self.json(w, actionDef, 200)
-	}
-}
-
-func genApiActionIdDefinitionGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Content:     swagger.Content{},
-				Description: "id of an action",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.ActionDefinition{}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, actionDef, http.StatusOK)
 	}
 }
 
@@ -735,38 +551,7 @@ func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
 	} else if logs, err := self.RunService.JobLogs(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
-		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, 200)
-	}
-}
-
-func genApiRunIdLogsGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Content:     swagger.Content{},
-				Description: "id of an action",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: map[string]*domain.LokiOutput{"logs": {}}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, http.StatusOK)
 	}
 }
 
@@ -777,38 +562,7 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if fact, err := self.FactService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
 	} else {
-		self.json(w, fact, 200)
-	}
-}
-
-func genApiFactIdGetSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		PathParams: swagger.ParameterValue{
-			"id": {
-				Content:     swagger.Content{},
-				Description: "id of a fact",
-			},
-		},
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.Fact{}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
+		self.json(w, fact, http.StatusOK)
 	}
 }
 
@@ -837,39 +591,10 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 			return err
 		}
 
-		self.json(w, fact, 200)
+		self.json(w, fact, http.StatusOK)
 		return nil
 	}); err != nil {
 		self.ServerError(w, err)
 		return
 	}
-}
-
-func genApiFactPostSwagDef() swagger.Definitions {
-	return swagger.Definitions{
-		Responses: map[int]swagger.ContentValue{
-			200: {
-				Content: swagger.Content{
-					"text/html": {Value: domain.Fact{}},
-				},
-				Description: "OK",
-			},
-			412: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ClientError",
-			},
-			500: {
-				Content: swagger.Content{
-					"application/json": {Value: &errorResponse{}},
-				},
-				Description: "ServerError",
-			},
-		},
-	}
-}
-
-type errorResponse struct {
-	Message string `json:"message"`
 }
