@@ -61,7 +61,7 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 			context.Background(),
 			sql,
 			action.ID, action.Name, action.Source, inputs,
-		).Scan(&action.ID)
+		).Scan(&action.ID, &action.CreatedAt)
 	}
 }
 
