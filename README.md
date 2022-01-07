@@ -83,3 +83,9 @@ Run test with coverage
 ```
 go test -cover ./...
 ```
+
+Build mocks automatically
+```
+cd src/
+mockery --all --keeptree
+```
