@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"io"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 
@@ -9,7 +11,8 @@ import (
 
 type FactRepository interface {
 	GetById(uuid.UUID) (domain.Fact, error)
+	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
 	GetLatestByFields([][]string) (domain.Fact, error)
 	GetByFields([][]string) ([]*domain.Fact, error)
-	Save(pgx.Tx, *domain.Fact) error
+	Save(pgx.Tx, *domain.Fact, io.Reader) error
 }

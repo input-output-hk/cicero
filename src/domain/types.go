@@ -146,9 +146,7 @@ type Fact struct {
 	CreatedAt  time.Time   `json:"created_at"`
 	Value      interface{} `json:"value"`
 	BinaryHash *string     `json:"binary_hash,omitempty"`
-	// TODO too expensive to pass around, get from DB
-	// TODO hash using https://pkg.go.dev/github.com/direnv/direnv/v2/sri
-	// Binary     *[]byte     `json:"-"`
+	// TODO nyi: unique key over (value, binary_hash)?
 }
 
 type Action struct {

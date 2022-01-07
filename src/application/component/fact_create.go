@@ -1,8 +1,10 @@
 package component
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
@@ -65,8 +67,11 @@ func (self *FactCreateConsumer) processMessage(tx pgx.Tx, msg *liftbridge.Messag
 		return errors.WithMessage(err, "Could not save message")
 	}
 
+	valueReader := bytes.NewReader(msg.Value())
+
 	fact := domain.Fact{}
-	if err := json.Unmarshal(msg.Value(), &fact); err != nil {
+	factDecoder := json.NewDecoder(valueReader)
+	if err := factDecoder.Decode(&fact); err != nil {
 		return errors.WithMessage(err, "Invalid JSON received")
 	}
 
@@ -78,7 +83,7 @@ func (self *FactCreateConsumer) processMessage(tx pgx.Tx, msg *liftbridge.Messag
 		// but invoker may have already checked actions against facts by that time,
 		// so this fact may not have been visible to the invoker when it looked.
 		// ⇒ solution: delete this file, make invoker listen to facts directly.
-		if err := self.FactService.Save(tx, &fact); err != nil {
+		if err := self.FactService.Save(tx, &fact, io.MultiReader(factDecoder.Buffered(), valueReader)); err != nil {
 			return err
 		}
 	}

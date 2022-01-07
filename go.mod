@@ -4,12 +4,13 @@ go 1.17
 
 require (
 	cirello.io/oversight v1.0.3
+	cuelang.org/go v0.4.0
 	github.com/adrg/xdg v0.4.0
 	github.com/alexflint/go-arg v1.4.2
 	github.com/davidebianchi/gswagger v0.3.0
+	github.com/direnv/direnv/v2 v2.30.3
 	github.com/georgysavva/scany v0.2.9
 	github.com/getkin/kin-openapi v0.83.0
-	github.com/go-echarts/go-echarts/v2 v2.2.5-0.20211026072344-dc05f25cd7c2
 	github.com/google/uuid v1.2.0
 	github.com/gorilla/mux v1.8.0
 	github.com/grafana/loki v1.6.1
@@ -30,7 +31,6 @@ require (
 )
 
 require (
-	cuelang.org/go v0.4.0 // indirect
 	github.com/Workiva/go-datastructures v1.0.52 // indirect
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/alecthomas/jsonschema v0.0.0-20211022214203-8b29eab41725 // indirect
@@ -83,7 +83,6 @@ require (
 	github.com/hashicorp/hcl/v2 v2.9.2-0.20210407182552-eb14f8319bdc // indirect
 	github.com/hashicorp/raft v1.1.3-0.20200211192230-365023de17e6 // indirect
 	github.com/iancoleman/orderedmap v0.2.0 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.10.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -100,7 +99,7 @@ require (
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.7 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/minio/highwayhash v1.0.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
@@ -134,7 +133,6 @@ require (
 	github.com/sirupsen/logrus v1.7.0 // indirect
 	github.com/spf13/afero v1.3.1 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
-	github.com/spf13/cobra v1.0.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.7.0 // indirect
@@ -143,7 +141,6 @@ require (
 	github.com/uber/jaeger-client-go v2.25.0+incompatible // indirect
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/ulikunitz/xz v0.5.8 // indirect
-	github.com/vektra/mockery/v2 v2.9.4 // indirect
 	github.com/weaveworks/common v0.0.0-20200625145055-4b1847531bc9 // indirect
 	github.com/weaveworks/promrus v1.2.0 // indirect
 	github.com/zclconf/go-cty v1.8.0 // indirect
@@ -152,14 +149,11 @@ require (
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/goleak v1.1.12 // indirect
 	golang.org/x/crypto v0.0.0-20211117183948-ae814b36b871 // indirect
-	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20211107104306-e0b2ad06fe42 // indirect
-	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
-	golang.org/x/tools v0.1.5 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/genproto v0.0.0-20211104193956-4c6863e31247 // indirect
 	google.golang.org/grpc v1.42.0 // indirect

@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -175,6 +176,17 @@ func (self *Web) Start(ctx context.Context) error {
 			nil,
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/fact/{id}/binary",
+		self.ApiFactIdBinaryGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a fact", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []byte{}, "OK"),
+		),
 	); err != nil {
 		return err
 	}
@@ -566,15 +578,35 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	if id, err := uuid.Parse(vars["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+	} else if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if binary, err := self.FactService.GetBinaryById(tx, id); err != nil {
+			return errors.WithMessage(err, "Failed to get binary")
+		} else {
+			http.ServeContent(w, req, "", time.Time{}, binary)
+			if err := binary.Close(); err != nil {
+				return errors.WithMessage(err, "Failed to close binary")
+			}
+		}
+		return nil
+	}); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "While fetching and writing binary"))
+	}
+}
+
 func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	fact := domain.Fact{}
-	if err := json.NewDecoder(req.Body).Decode(&fact.Value); err != nil {
+	factDecoder := json.NewDecoder(req.Body)
+	if err := factDecoder.Decode(&fact.Value); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
 		return
 	}
 
 	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.FactService.Save(tx, &fact); err != nil {
+		if err := self.FactService.Save(tx, &fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
 			return errors.WithMessage(err, "Failed to save Fact")
 		}
 
