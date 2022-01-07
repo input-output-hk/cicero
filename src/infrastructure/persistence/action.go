@@ -53,9 +53,9 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 	} else {
 		var sql string
 		if action.ID == (uuid.UUID{}) {
-			sql = `INSERT INTO actions (    name, source, inputs) VALUES (    $2, $3, $4) RETURNING id`
+			sql = `INSERT INTO actions (    name, source, inputs) VALUES (    $2, $3, $4) RETURNING id, created_at`
 		} else {
-			sql = `INSERT INTO actions (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id`
+			sql = `INSERT INTO actions (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
 		}
 		return tx.QueryRow(
 			context.Background(),
