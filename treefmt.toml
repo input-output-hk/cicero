@@ -1,0 +1,20 @@
+# One CLI to format the code tree - https://github.com/numtide/treefmt
+
+[formatter.mylanguage]
+# Formatter to run
+command = "command-to-run"
+# Command-line arguments for the command
+options = []
+# Glob pattern of files to include
+includes = [ "*.<language-extension>" ]
+# Glob patterns of files to exclude
+excludes = []
+
+[formatter.go]
+command = "gofmt"
+options = ["-w"]
+includes = ["*.go"]
+
+[formatter.nix]
+command = "nixpkgs-fmt"
+includes = [".nix"]

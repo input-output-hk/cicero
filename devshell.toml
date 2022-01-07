@@ -52,12 +52,6 @@ package = "dbmate"
 package = "golangci-lint"
 
 [[commands]]
-package = "liftbridge-cli"
-
-[[commands]]
-package = "liftbridge"
-
-[[commands]]
 package = "gouml"
 
 [[commands]]
@@ -83,7 +77,7 @@ help = "psql into Cicero DB"
 [[commands]]
 name = "dev-run"
 command = "cue export ./jobs -e jobs.dev | nomad run -"
-help = "run postgres, loki, and liftbridge in nomad"
+help = "run postgres and loki in nomad"
 
 [devshell]
 name = "cicero"
@@ -102,4 +96,5 @@ packages = [
   "nomad-follower",
   "postgresql_12",
   "vector",
+  "treefmt",
 ]

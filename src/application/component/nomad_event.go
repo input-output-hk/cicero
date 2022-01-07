@@ -2,7 +2,6 @@ package component
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/georgysavva/scany/pgxscan"
@@ -19,12 +18,12 @@ import (
 )
 
 type NomadEventConsumer struct {
-	Logger              zerolog.Logger
-	MessageQueueService service.MessageQueueService
-	NomadEventService   service.NomadEventService
-	RunService          service.RunService
-	Db                  config.PgxIface
-	NomadClient         application.NomadClient
+	Logger            zerolog.Logger
+	FactService       service.FactService
+	NomadEventService service.NomadEventService
+	RunService        service.RunService
+	Db                config.PgxIface
+	NomadClient       application.NomadClient
 }
 
 func (self *NomadEventConsumer) Start(ctx context.Context) error {
@@ -68,6 +67,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 		index = events.Index
 	}
 }
+
 func (self *NomadEventConsumer) processNomadEvent(event *nomad.Event, tx pgx.Tx) error {
 	if err := self.handleNomadEvent(event, tx); err != nil {
 		return errors.WithMessage(err, "Error handling Nomad event")
@@ -117,16 +117,11 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		factValue = run.Failure
 	}
 	if factValue != nil {
-		if factJson, err := json.Marshal(domain.Fact{
+		fact := domain.Fact{
 			RunId: &run.NomadJobID,
 			Value: factValue,
-		}); err != nil {
-			return errors.WithMessage(err, "Failed to marshal Fact")
-		} else if err := self.MessageQueueService.Publish(
-			domain.FactCreateStreamName.String(),
-			domain.FactCreateStreamName,
-			factJson,
-		); err != nil {
+		}
+		if err := self.FactService.Save(tx, &fact, nil); err != nil {
 			return errors.WithMessage(err, "Could not publish Fact")
 		}
 	}

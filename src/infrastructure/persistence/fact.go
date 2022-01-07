@@ -54,18 +54,18 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	return
 }
 
-func (a *factRepository) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
+func (a *factRepository) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
 	err = pgxscan.Get(
-		context.Background(), a.DB, &fact,
+		context.Background(), tx, &fact,
 		`SELECT id, run_id, value, created_at, binary_hash FROM facts `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
 		pathsToQueryArgs(fields)...,
 	)
 	return
 }
 
-func (a *factRepository) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
+func (a *factRepository) GetByFields(tx pgx.Tx, fields [][]string) (facts []*domain.Fact, err error) {
 	err = pgxscan.Select(
-		context.Background(), a.DB, &facts,
+		context.Background(), tx, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash FROM facts `+sqlWhereHasPaths(fields),
 		pathsToQueryArgs(fields)...,
 	)

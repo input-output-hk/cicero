@@ -65,9 +65,9 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 	}
 }
 
-func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
+func (a *actionRepository) GetCurrent(tx pgx.Tx) (actions []*domain.Action, err error) {
 	err = pgxscan.Select(
-		context.Background(), a.DB, &actions,
+		context.Background(), tx, &actions,
 		`SELECT DISTINCT ON (name) * FROM actions ORDER BY name, created_at DESC`,
 	)
 	return

@@ -38,7 +38,6 @@ job: cicero: group: cicero: {
 			packages: [#ciceroFlake]
 			command: [
 				"/bin/entrypoint",
-				"--liftbridge-addr", #liftbridgeAddr,
 				"--prometheus-addr", #lokiAddr,
 				"--env", "NOMAD_ADDR", "NOMAD_TOKEN",
 				"--web-listen", ":8888",

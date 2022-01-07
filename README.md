@@ -65,8 +65,6 @@ nix develop
 4647 - Nomad, RPC
 4648 - Nomad, Serf WAN
 5432 - PostgreSQL
-4222 - Liftbridge, NATS client connections
-9292 - Liftbridge, standard client connections
 3100 - Loki, HTTP
 9095 - Loki, GRPC
 ```
