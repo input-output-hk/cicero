@@ -180,6 +180,17 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	if _, err := r.AddRoute(http.MethodGet,
+		"/api/fact/{id}/binary",
+		self.ApiFactIdBinaryGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a fact", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []byte{}, "OK"),
+		),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet,
 		"/api/fact/{id}",
 		self.ApiFactIdGet,
 		apidoc.BuildSwaggerDef(
@@ -564,6 +575,24 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
 	} else {
 		self.json(w, fact, http.StatusOK)
+	}
+}
+
+func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	if id, err := uuid.Parse(vars["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+	} else if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if binary, err := self.FactService.GetBinaryById(tx, id); err != nil {
+			return errors.WithMessage(err, "Failed to get binary")
+		} else if _, err := io.Copy(w, binary); err != nil {
+			return errors.WithMessage(err, "Failed to write binary to response")
+		} else if err := binary.Close(); err != nil {
+			return errors.WithMessage(err, "Failed to close binary")
+		}
+		return nil
+	}); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "While fetching and writing binary"))
 	}
 }
 
