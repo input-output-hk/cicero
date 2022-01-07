@@ -282,7 +282,7 @@ func collectFieldPaths(value cue.Value) (paths [][]string) {
 	return
 }
 
-func (self *actionService) Create(tx pgx.Tx, source string, name string) (*domain.Action, error) {
+func (self *actionService) Create(tx pgx.Tx, source, name string) (*domain.Action, error) {
 	action := domain.Action{
 		ID:     uuid.New(),
 		Name:   name,

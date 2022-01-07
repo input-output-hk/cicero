@@ -253,8 +253,10 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 		return errors.WithMessage(err, "Could not get current Actions")
 	}); err != nil {
 		self.ServerError(w, err)
-	} else {
-		render("action/current.html", w, actions)
+		return
+	} else if err := render("action/current.html", w, actions); err != nil {
+		self.ServerError(w, err)
+		return
 	}
 }
 
