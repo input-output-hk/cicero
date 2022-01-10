@@ -30,6 +30,19 @@ func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err erro
 	return
 }
 
+func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
+	err = pgxscan.Get(
+		context.Background(), a.DB, &action,
+		`SELECT * FROM actions WHERE EXISTS (
+			SELECT NULL FROM runs WHERE
+				runs.nomad_job_id = $1 AND
+				runs.action_id = actions.id
+		)`,
+		id,
+	)
+	return
+}
+
 func (a *actionRepository) GetLatestByName(name string) (action domain.Action, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &action,

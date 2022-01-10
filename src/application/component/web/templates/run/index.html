@@ -4,27 +4,35 @@
 	<table class="table">
 		<thead>
 			<tr>
-				<th>Nomad Job ID</th>
-				<th>Action ID</th>
+				<th>Action</th>
 				<th>Created At</th>
 				<th>Finished At</th>
+				<th>Duration</th>
+				<th>Nomad Job ID</th>
 			</tr>
 		</thead>
 		<tbody>
 			{{range .}}
 				<tr>
+					{{with .Action}}
+						<td>
+							{{.Name}}
+							<br/>
+							<a href="/action/{{.ID}}">
+								{{.ID}}
+							</a>
+						</td>
+					{{end}}
+					<td>{{.CreatedAt}}</td>
+					<td>{{.FinishedAt}}</td>
+					<td class="numerical">
+						{{.FinishedAt.Sub .CreatedAt}}
+					</td>
 					<td>
 						<a href="/run/{{.NomadJobID}}">
 							{{.NomadJobID}}
 						</a>
 					</td>
-					<td>
-						<a href="/action/{{.ActionId}}">
-							{{.ActionId}}
-						</a>
-					</td>
-					<td>{{.CreatedAt}}</td>
-					<td>{{.FinishedAt}}</td>
 				</tr>
 			{{end}}
 		</tbody>

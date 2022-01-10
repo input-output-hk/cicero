@@ -29,6 +29,10 @@ table.table.vertical > tbody > tr > th {
 	text-align: start;
 }
 
+table td.numerical {
+	text-align: end;
+}
+
 .tables {
 	display: flex;
 	flex-wrap: wrap;

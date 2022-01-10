@@ -19,6 +19,7 @@ import (
 
 type ActionService interface {
 	GetById(uuid.UUID) (domain.Action, error)
+	GetByRunId(uuid.UUID) (domain.Action, error)
 	GetLatestByName(string) (domain.Action, error)
 	GetAll() ([]*domain.Action, error)
 	GetCurrent(pgx.Tx) ([]*domain.Action, error)
@@ -52,6 +53,13 @@ func (self *actionService) GetById(id uuid.UUID) (action domain.Action, err erro
 	self.logger.Debug().Str("id", id.String()).Msg("Getting Action by ID")
 	action, err = self.actionRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for ID %q", id)
+	return
+}
+
+func (self *actionService) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
+	self.logger.Debug().Str("id", id.String()).Msg("Getting Action by Run ID")
+	action, err = self.actionRepository.GetByRunId(id)
+	err = errors.WithMessagef(err, "Could not select existing Action for Run ID %q", id)
 	return
 }
 

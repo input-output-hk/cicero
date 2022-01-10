@@ -348,8 +348,28 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	if runs, err := self.RunService.GetAll(); err != nil {
 		self.ServerError(w, err)
-	} else if err := render("run/index.html", w, runs); err != nil {
-		self.ServerError(w, err)
+	} else {
+		type RunWrapper struct {
+			*domain.Run
+			Action *domain.Action
+		}
+
+		runWrappers := make([]RunWrapper, len(runs))
+		for i, run := range runs {
+			if action, err := self.ActionService.GetByRunId(run.NomadJobID); err != nil {
+				self.ServerError(w, err)
+				return
+			} else {
+				runWrappers[i] = RunWrapper{
+					Run:    run,
+					Action: &action,
+				}
+			}
+		}
+
+		if err := render("run/index.html", w, runWrappers); err != nil {
+			self.ServerError(w, err)
+		}
 	}
 }
 
