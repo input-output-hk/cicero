@@ -17,8 +17,8 @@ import (
 type FactService interface {
 	GetById(uuid.UUID) (domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
-	GetLatestByFields([][]string) (domain.Fact, error)
-	GetByFields([][]string) ([]*domain.Fact, error)
+	GetLatestByFields(pgx.Tx, [][]string) (domain.Fact, error)
+	GetByFields(pgx.Tx, [][]string) ([]*domain.Fact, error)
 	Save(pgx.Tx, *domain.Fact, io.Reader) error
 	// TODO sometimes you need a Tx, sometimes not...
 	// → SaveTx() and Save() etc? another wrapper? Tx() to get one?
@@ -27,11 +27,13 @@ type FactService interface {
 type factService struct {
 	logger         zerolog.Logger
 	factRepository repository.FactRepository
+	actionService  ActionService
 }
 
-func NewFactService(db config.PgxIface, logger *zerolog.Logger) FactService {
+func NewFactService(db config.PgxIface, actionService ActionService, logger *zerolog.Logger) FactService {
 	return &factService{
 		logger:         logger.With().Str("component", "FactService").Logger(),
+		actionService:  actionService,
 		factRepository: persistence.NewFactRepository(db),
 	}
 }
@@ -60,21 +62,32 @@ func (self *factService) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) er
 		return errors.WithMessagef(err, "Could not insert Fact")
 	}
 	self.logger.Debug().Str("id", fact.ID.String()).Msg("Created Fact")
+
+	if actions, err := self.actionService.GetCurrent(tx); err != nil {
+		return err
+	} else {
+		for _, action := range actions {
+			if err := self.actionService.Invoke(tx, action); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
-func (self *factService) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
+func (self *factService) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
 	self.logger.Debug().Interface("fields", fields).Msg("Getting latest Facts by fields")
-	fact, err = self.factRepository.GetLatestByFields(fields)
+	fact, err = self.factRepository.GetLatestByFields(tx, fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select latest Facts by fields %q", fields)
 	}
 	return
 }
 
-func (self *factService) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
+func (self *factService) GetByFields(tx pgx.Tx, fields [][]string) (facts []*domain.Fact, err error) {
 	self.logger.Debug().Interface("fields", fields).Msg("Getting Facts by fields")
-	facts, err = self.factRepository.GetByFields(fields)
+	facts, err = self.factRepository.GetByFields(tx, fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select Facts by fields %q", fields)
 	}

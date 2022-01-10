@@ -8,6 +8,6 @@ std.behavior.onInputChange "run" name args {
 
   job = { run }:
     actionLib.simpleJob args (std.script "bash" ''
-      echo 'Running once because I have not run with "'${lib.escapeShellArg run.value.${name}}'" yet.'
+      echo 'Running once because my input has been updated by fact '${lib.escapeShellArg run.id}'.'
     '');
 }

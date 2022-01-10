@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
-	"github.com/liftbridge-io/go-liftbridge/v2"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -23,15 +22,14 @@ import (
 )
 
 type Web struct {
-	Listen              string
-	Logger              zerolog.Logger
-	RunService          service.RunService
-	ActionService       service.ActionService
-	FactService         service.FactService
-	MessageQueueService service.MessageQueueService
-	NomadEventService   service.NomadEventService
-	EvaluationService   service.EvaluationService
-	Db                  config.PgxIface
+	Listen            string
+	Logger            zerolog.Logger
+	RunService        service.RunService
+	ActionService     service.ActionService
+	FactService       service.FactService
+	NomadEventService service.NomadEventService
+	EvaluationService service.EvaluationService
+	Db                config.PgxIface
 }
 
 func (self *Web) Start(ctx context.Context) error {
@@ -228,7 +226,7 @@ func (self *Web) Start(ctx context.Context) error {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			self.Logger.Err(err).Msg("Failed to start web server")
+			self.Logger.Err(err).Msgf("Failed to start web server on %s", self.Listen)
 		}
 	}()
 
@@ -248,10 +246,15 @@ func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	if summary, err := self.ActionService.GetCurrent(); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Could not get current Actions"))
+	var actions []*domain.Action
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		var err error
+		actions, err = self.ActionService.GetCurrent(tx)
+		return errors.WithMessage(err, "Could not get current Actions")
+	}); err != nil {
+		self.ServerError(w, err)
 		return
-	} else if err := render("action/current.html", w, summary); err != nil {
+	} else if err := render("action/current.html", w, actions); err != nil {
 		self.ServerError(w, err)
 		return
 	}
@@ -300,16 +303,16 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := self.MessageQueueService.Publish(
-		domain.ActionCreateStream(name),
-		domain.ActionCreateStreamName,
-		[]byte{},
-		liftbridge.Header("source", []byte(source)),
-	); err != nil {
+	var action *domain.Action
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		var err error
+		action, err = self.ActionService.Create(tx, source, name)
+		return err
+	}); err != nil {
 		self.ServerError(w, err)
 		return
 	} else {
-		http.Redirect(w, req, "/action/current", http.StatusFound)
+		http.Redirect(w, req, "/action/"+action.ID.String(), http.StatusFound)
 		return
 	}
 }
@@ -403,36 +406,34 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if params.Name != nil {
-		if err := self.MessageQueueService.Publish(
-			domain.ActionCreateStream(*params.Name),
-			domain.ActionCreateStreamName,
-			[]byte{},
-			liftbridge.Header("source", []byte(params.Source)),
-		); err != nil {
-			self.ServerError(w, err)
-			return
-		}
-	} else {
-		if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
-			self.ClientError(w, errors.WithMessage(err, "Failed to list actions"))
-			return
+	var action *domain.Action
+	var err error
+
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if params.Name != nil {
+			action, err = self.ActionService.Create(tx, params.Source, *params.Name)
+			if err != nil {
+				return err
+			}
 		} else {
-			for _, actionName := range actionNames {
-				if err := self.MessageQueueService.Publish(
-					domain.ActionCreateStream(actionName),
-					domain.ActionCreateStreamName,
-					[]byte{},
-					liftbridge.Header("source", []byte(params.Source)),
-				); err != nil {
-					self.ServerError(w, err)
-					return
+			if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
+				return errors.WithMessage(err, "Failed to list actions")
+			} else {
+				for _, actionName := range actionNames {
+					action, err = self.ActionService.Create(tx, params.Source, actionName)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
+		return nil
+	}); err != nil {
+		self.ServerError(w, err)
+		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	self.json(w, action, http.StatusOK)
 }
 
 func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
@@ -470,25 +471,19 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	factJson, err := json.Marshal(domain.Fact{
+	fact := domain.Fact{
 		RunId: &run.NomadJobID,
 		Value: value,
-	})
-	if err != nil {
+	}
+
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		return self.FactService.Save(tx, &fact, nil)
+	}); err != nil {
 		self.ServerError(w, err)
 		return
 	}
 
-	if err := self.MessageQueueService.Publish(
-		domain.FactCreateStreamName.String(),
-		domain.FactCreateStreamName,
-		factJson,
-	); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Could not publish fact"))
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
+	self.json(w, fact, http.StatusOK)
 }
 
 func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
@@ -501,11 +496,18 @@ func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 
 // XXX respond with map[string]Action instead of []Action?
 func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	if actions, err := self.ActionService.GetCurrent(); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get current actions"))
-	} else {
-		self.json(w, actions, http.StatusOK)
+	var actions []*domain.Action
+
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		var err error
+		actions, err = self.ActionService.GetCurrent(tx)
+		return errors.WithMessage(err, "Failed to get current actions")
+	}); err != nil {
+		self.ServerError(w, err)
+		return
 	}
+
+	self.json(w, actions, http.StatusOK)
 }
 
 func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
@@ -606,27 +608,12 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.FactService.Save(tx, &fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
-			return errors.WithMessage(err, "Failed to save Fact")
-		}
-
-		factJson, err := json.Marshal(&fact)
-		if err != nil {
-			return errors.WithMessage(err, "Could not marshal Fact")
-		}
-
-		if err := self.MessageQueueService.Publish(
-			domain.FactCreateStreamName.String(),
-			domain.FactCreateStreamName,
-			factJson,
-		); err != nil {
-			return err
-		}
-
-		self.json(w, fact, http.StatusOK)
-		return nil
+		err := self.FactService.Save(tx, &fact, io.MultiReader(factDecoder.Buffered(), req.Body))
+		return errors.WithMessage(err, "Failed to save Fact")
 	}); err != nil {
 		self.ServerError(w, err)
 		return
 	}
+
+	self.json(w, fact, http.StatusOK)
 }

@@ -1,13 +1,14 @@
 package config
 
 import (
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"path"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type SupervisorLogger struct {
@@ -15,10 +16,10 @@ type SupervisorLogger struct {
 }
 
 func (l *SupervisorLogger) Printf(format string, v ...interface{}) {
-	l.Logger.Printf(format, v[0])
+	l.Logger.Printf(format, v...)
 }
 func (l *SupervisorLogger) Println(v ...interface{}) {
-	l.Logger.Print(v[0])
+	l.Logger.Print(v...)
 }
 
 type LoggerConfig struct {

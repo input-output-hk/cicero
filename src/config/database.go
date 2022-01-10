@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+
 	"github.com/jackc/pgtype"
 	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
 	"github.com/jackc/pgx/v4"

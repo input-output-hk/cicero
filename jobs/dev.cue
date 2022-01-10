@@ -17,12 +17,11 @@ job: dev: group: dev: {
 
 	network: {
 		mode: "host"
-		port: psql: static:       "5432"
-		port: liftbridge: static: "9292"
-		port: nats: static:       "4222"
-		port: http: static:       "8222"
-		port: routing: static:    "6222"
-		port: loki: static:       "3100"
+		port: psql: static:    "5432"
+		port: nats: static:    "4222"
+		port: http: static:    "8222"
+		port: routing: static: "6222"
+		port: loki: static:    "3100"
 	}
 
 	task: dev: {

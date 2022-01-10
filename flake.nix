@@ -25,8 +25,6 @@
           cicero = prev.callPackage ./pkgs/cicero { flake = self; };
           cicero-std = prev.callPackage ./pkgs/cicero/std { };
           cicero-evaluator-nix = prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
-          liftbridge = prev.callPackage ./pkgs/liftbridge.nix { };
-          liftbridge-cli = prev.callPackage ./pkgs/liftbridge-cli.nix { };
           go = prev.go_1_17;
           gouml = prev.callPackage ./pkgs/gouml.nix { };
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
@@ -60,8 +58,6 @@
         , cicero-std
         , cicero-evaluator-nix
         , cicero-entrypoint
-        , liftbridge
-        , liftbridge-cli
         , gocritic
         , go
         , webhook-trigger
@@ -95,49 +91,6 @@
 
               # re-enable TTY disabled by minimal profile for `machinectl shell`
               systemd.services."getty@tty1".enable = lib.mkForce true;
-
-              systemd.services.liftbridge = {
-                wantedBy = [ "multi-user.target" ];
-                after = [ "network.target" ];
-
-                serviceConfig =
-                  let
-                    cfg = builtins.toFile "liftbridge.yaml" (builtins.toJSON {
-                      listen = "0.0.0.0:9292";
-                      host = "127.0.0.1";
-                      port = "9292";
-                      data.dir = "/local/server";
-                      activity.stream.enabled = true;
-                      logging = {
-                        level = "debug";
-                        raft = true;
-                        nats = true;
-                        recovery = true;
-                      };
-                      nats = {
-                        embedded = true;
-                        servers = [ ];
-                      };
-                      streams = {
-                        retention.max = {
-                          age = "24h";
-                          messages = 1000;
-                        };
-                        compact.enabled = true;
-                      };
-                      clustering = {
-                        server.id = "voter";
-                        raft.bootstrap.seed = true;
-                        replica.max.lag.time = "20s";
-                      };
-                    });
-                  in
-                  {
-                    ExecStart = "${pkgs.liftbridge}/bin/liftbridge --config ${cfg}";
-                    Restart = "on-failure";
-                    RestartSec = "5s";
-                  };
-              };
 
               services.loki = {
                 enable = true;

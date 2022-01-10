@@ -1,8 +1,5 @@
 -- migrate:up
 
-DROP TABLE workflow_instances;
-DROP TABLE action_instances;
-
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE actions (
@@ -13,3 +10,7 @@ CREATE TABLE actions (
 	inputs jsonb NOT NULL,
 	created_at timestamp NOT NULL DEFAULT NOW()
 );
+
+-- migrate:down
+
+DROP TABLE actions;
