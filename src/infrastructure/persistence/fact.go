@@ -34,10 +34,11 @@ func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 	return
 }
 
-func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadSeekCloser, err error) {
+func (a *factRepository) GetBinaryById(id uuid.UUID) (binary io.ReadSeekCloser, err error) {
 	var oid uint32
+	ctx := context.Background()
 	err = pgxscan.Get(
-		context.Background(), tx, &oid,
+		ctx, a.DB, &oid,
 		`SELECT "binary" FROM facts WHERE id = $1`,
 		id,
 	)
@@ -45,8 +46,7 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 		return
 	}
 
-	los := tx.LargeObjects()
-	binary, err = los.Open(context.Background(), oid, pgx.LargeObjectModeRead)
+	err = pgxscan.Get(ctx, a.DB, &binary, "select lo_open($1, $2)", oid, pgx.LargeObjectModeRead)
 
 	if err != nil {
 		err = errors.WithMessagef(err, "Failed to open large object with OID %d", oid)
@@ -54,18 +54,18 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	return
 }
 
-func (a *factRepository) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
+func (a *factRepository) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
 	err = pgxscan.Get(
-		context.Background(), tx, &fact,
+		context.Background(), a.DB, &fact,
 		`SELECT id, run_id, value, created_at, binary_hash FROM facts `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
 		pathsToQueryArgs(fields)...,
 	)
 	return
 }
 
-func (a *factRepository) GetByFields(tx pgx.Tx, fields [][]string) (facts []*domain.Fact, err error) {
+func (a *factRepository) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
 	err = pgxscan.Select(
-		context.Background(), tx, &facts,
+		context.Background(), a.DB, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash FROM facts `+sqlWhereHasPaths(fields),
 		pathsToQueryArgs(fields)...,
 	)

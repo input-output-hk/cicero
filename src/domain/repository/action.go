@@ -11,6 +11,6 @@ type ActionRepository interface {
 	GetById(uuid.UUID) (domain.Action, error)
 	GetLatestByName(string) (domain.Action, error)
 	GetAll() ([]*domain.Action, error)
-	GetCurrent(pgx.Tx) ([]*domain.Action, error)
+	GetCurrent() ([]*domain.Action, error)
 	Save(pgx.Tx, *domain.Action) error
 }

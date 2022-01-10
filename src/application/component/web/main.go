@@ -246,13 +246,8 @@ func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	var actions []*domain.Action
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		var err error
-		actions, err = self.ActionService.GetCurrent(tx)
-		return errors.WithMessage(err, "Could not get current Actions")
-	}); err != nil {
-		self.ServerError(w, err)
+	if actions, err := self.ActionService.GetCurrent(); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Could not get current Actions"))
 		return
 	} else if err := render("action/current.html", w, actions); err != nil {
 		self.ServerError(w, err)
@@ -496,18 +491,12 @@ func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 
 // XXX respond with map[string]Action instead of []Action?
 func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	var actions []*domain.Action
-
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		var err error
-		actions, err = self.ActionService.GetCurrent(tx)
-		return errors.WithMessage(err, "Failed to get current actions")
-	}); err != nil {
+	if actions, err := self.ActionService.GetCurrent(); err != nil {
 		self.ServerError(w, err)
 		return
+	} else {
+		self.json(w, actions, http.StatusOK)
 	}
-
-	self.json(w, actions, http.StatusOK)
 }
 
 func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
@@ -584,18 +573,13 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if binary, err := self.FactService.GetBinaryById(tx, id); err != nil {
-			return errors.WithMessage(err, "Failed to get binary")
-		} else {
-			http.ServeContent(w, req, "", time.Time{}, binary)
-			if err := binary.Close(); err != nil {
-				return errors.WithMessage(err, "Failed to close binary")
-			}
+	} else if binary, err := self.FactService.GetBinaryById(id); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to get binary"))
+	} else {
+		http.ServeContent(w, req, "", time.Time{}, binary)
+		if err := binary.Close(); err != nil {
+			self.ClientError(w, errors.WithMessage(err, "Failed to close binary"))
 		}
-		return nil
-	}); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "While fetching and writing binary"))
 	}
 }
 
