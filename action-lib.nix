@@ -28,7 +28,7 @@ rec {
     std.chain action [
       jobDefaults
 
-      (std.escapeNames [] [])
+      (std.escapeNames [ ] [ ])
 
       std.singleTask
 
