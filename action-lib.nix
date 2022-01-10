@@ -28,8 +28,7 @@ rec {
     std.chain action [
       jobDefaults
 
-      # systemd-nspawn does not like underscore
-      (std.escapeNames [ "_" ] [ "-" ])
+      (std.escapeNames [] [])
 
       std.singleTask
 
