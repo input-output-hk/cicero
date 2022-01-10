@@ -97,4 +97,5 @@ packages = [
   "postgresql_12",
   "vector",
   "treefmt",
+  "go-mockery",
 ]
