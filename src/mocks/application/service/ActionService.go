@@ -16,6 +16,29 @@ type ActionService struct {
 	mock.Mock
 }
 
+// Create provides a mock function with given fields: _a0, _a1, _a2
+func (_m *ActionService) Create(_a0 pgx.Tx, _a1 string, _a2 string) (*domain.Action, error) {
+	ret := _m.Called(_a0, _a1, _a2)
+
+	var r0 *domain.Action
+	if rf, ok := ret.Get(0).(func(pgx.Tx, string, string) *domain.Action); ok {
+		r0 = rf(_a0, _a1, _a2)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.Action)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(pgx.Tx, string, string) error); ok {
+		r1 = rf(_a0, _a1, _a2)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetAll provides a mock function with given fields:
 func (_m *ActionService) GetAll() ([]*domain.Action, error) {
 	ret := _m.Called()
@@ -60,13 +83,13 @@ func (_m *ActionService) GetById(_a0 uuid.UUID) (domain.Action, error) {
 	return r0, r1
 }
 
-// GetCurrent provides a mock function with given fields:
-func (_m *ActionService) GetCurrent() ([]*domain.Action, error) {
-	ret := _m.Called()
+// GetCurrent provides a mock function with given fields: _a0
+func (_m *ActionService) GetCurrent(_a0 pgx.Tx) ([]*domain.Action, error) {
+	ret := _m.Called(_a0)
 
 	var r0 []*domain.Action
-	if rf, ok := ret.Get(0).(func() []*domain.Action); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(pgx.Tx) []*domain.Action); ok {
+		r0 = rf(_a0)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*domain.Action)
@@ -74,8 +97,8 @@ func (_m *ActionService) GetCurrent() ([]*domain.Action, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
+	if rf, ok := ret.Get(1).(func(pgx.Tx) error); ok {
+		r1 = rf(_a0)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -104,20 +127,34 @@ func (_m *ActionService) GetLatestByName(_a0 string) (domain.Action, error) {
 	return r0, r1
 }
 
-// IsRunnable provides a mock function with given fields: _a0
-func (_m *ActionService) IsRunnable(_a0 *domain.Action) (bool, map[string]interface{}, error) {
-	ret := _m.Called(_a0)
+// Invoke provides a mock function with given fields: _a0, _a1
+func (_m *ActionService) Invoke(_a0 pgx.Tx, _a1 *domain.Action) error {
+	ret := _m.Called(_a0, _a1)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(pgx.Tx, *domain.Action) error); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// IsRunnable provides a mock function with given fields: _a0, _a1
+func (_m *ActionService) IsRunnable(_a0 pgx.Tx, _a1 *domain.Action) (bool, map[string]interface{}, error) {
+	ret := _m.Called(_a0, _a1)
 
 	var r0 bool
-	if rf, ok := ret.Get(0).(func(*domain.Action) bool); ok {
-		r0 = rf(_a0)
+	if rf, ok := ret.Get(0).(func(pgx.Tx, *domain.Action) bool); ok {
+		r0 = rf(_a0, _a1)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
 	var r1 map[string]interface{}
-	if rf, ok := ret.Get(1).(func(*domain.Action) map[string]interface{}); ok {
-		r1 = rf(_a0)
+	if rf, ok := ret.Get(1).(func(pgx.Tx, *domain.Action) map[string]interface{}); ok {
+		r1 = rf(_a0, _a1)
 	} else {
 		if ret.Get(1) != nil {
 			r1 = ret.Get(1).(map[string]interface{})
@@ -125,8 +162,8 @@ func (_m *ActionService) IsRunnable(_a0 *domain.Action) (bool, map[string]interf
 	}
 
 	var r2 error
-	if rf, ok := ret.Get(2).(func(*domain.Action) error); ok {
-		r2 = rf(_a0)
+	if rf, ok := ret.Get(2).(func(pgx.Tx, *domain.Action) error); ok {
+		r2 = rf(_a0, _a1)
 	} else {
 		r2 = ret.Error(2)
 	}

@@ -3,7 +3,10 @@
 package mocks
 
 import (
+	io "io"
+
 	domain "github.com/input-output-hk/cicero/src/domain"
+
 	mock "github.com/stretchr/testify/mock"
 
 	pgx "github.com/jackc/pgx/v4"
@@ -16,13 +19,36 @@ type FactRepository struct {
 	mock.Mock
 }
 
-// GetByFields provides a mock function with given fields: _a0
-func (_m *FactRepository) GetByFields(_a0 [][]string) ([]*domain.Fact, error) {
-	ret := _m.Called(_a0)
+// GetBinaryById provides a mock function with given fields: _a0, _a1
+func (_m *FactRepository) GetBinaryById(_a0 pgx.Tx, _a1 uuid.UUID) (io.ReadSeekCloser, error) {
+	ret := _m.Called(_a0, _a1)
+
+	var r0 io.ReadSeekCloser
+	if rf, ok := ret.Get(0).(func(pgx.Tx, uuid.UUID) io.ReadSeekCloser); ok {
+		r0 = rf(_a0, _a1)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(io.ReadSeekCloser)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(pgx.Tx, uuid.UUID) error); ok {
+		r1 = rf(_a0, _a1)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetByFields provides a mock function with given fields: _a0, _a1
+func (_m *FactRepository) GetByFields(_a0 pgx.Tx, _a1 [][]string) ([]*domain.Fact, error) {
+	ret := _m.Called(_a0, _a1)
 
 	var r0 []*domain.Fact
-	if rf, ok := ret.Get(0).(func([][]string) []*domain.Fact); ok {
-		r0 = rf(_a0)
+	if rf, ok := ret.Get(0).(func(pgx.Tx, [][]string) []*domain.Fact); ok {
+		r0 = rf(_a0, _a1)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*domain.Fact)
@@ -30,8 +56,8 @@ func (_m *FactRepository) GetByFields(_a0 [][]string) ([]*domain.Fact, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func([][]string) error); ok {
-		r1 = rf(_a0)
+	if rf, ok := ret.Get(1).(func(pgx.Tx, [][]string) error); ok {
+		r1 = rf(_a0, _a1)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -60,20 +86,20 @@ func (_m *FactRepository) GetById(_a0 uuid.UUID) (domain.Fact, error) {
 	return r0, r1
 }
 
-// GetLatestByFields provides a mock function with given fields: _a0
-func (_m *FactRepository) GetLatestByFields(_a0 [][]string) (domain.Fact, error) {
-	ret := _m.Called(_a0)
+// GetLatestByFields provides a mock function with given fields: _a0, _a1
+func (_m *FactRepository) GetLatestByFields(_a0 pgx.Tx, _a1 [][]string) (domain.Fact, error) {
+	ret := _m.Called(_a0, _a1)
 
 	var r0 domain.Fact
-	if rf, ok := ret.Get(0).(func([][]string) domain.Fact); ok {
-		r0 = rf(_a0)
+	if rf, ok := ret.Get(0).(func(pgx.Tx, [][]string) domain.Fact); ok {
+		r0 = rf(_a0, _a1)
 	} else {
 		r0 = ret.Get(0).(domain.Fact)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func([][]string) error); ok {
-		r1 = rf(_a0)
+	if rf, ok := ret.Get(1).(func(pgx.Tx, [][]string) error); ok {
+		r1 = rf(_a0, _a1)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -81,13 +107,13 @@ func (_m *FactRepository) GetLatestByFields(_a0 [][]string) (domain.Fact, error)
 	return r0, r1
 }
 
-// Save provides a mock function with given fields: _a0, _a1
-func (_m *FactRepository) Save(_a0 pgx.Tx, _a1 *domain.Fact) error {
-	ret := _m.Called(_a0, _a1)
+// Save provides a mock function with given fields: _a0, _a1, _a2
+func (_m *FactRepository) Save(_a0 pgx.Tx, _a1 *domain.Fact, _a2 io.Reader) error {
+	ret := _m.Called(_a0, _a1, _a2)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(pgx.Tx, *domain.Fact) error); ok {
-		r0 = rf(_a0, _a1)
+	if rf, ok := ret.Get(0).(func(pgx.Tx, *domain.Fact, io.Reader) error); ok {
+		r0 = rf(_a0, _a1, _a2)
 	} else {
 		r0 = ret.Error(0)
 	}

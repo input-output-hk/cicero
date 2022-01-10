@@ -60,13 +60,13 @@ func (_m *ActionRepository) GetById(_a0 uuid.UUID) (domain.Action, error) {
 	return r0, r1
 }
 
-// GetCurrent provides a mock function with given fields:
-func (_m *ActionRepository) GetCurrent() ([]*domain.Action, error) {
-	ret := _m.Called()
+// GetCurrent provides a mock function with given fields: _a0
+func (_m *ActionRepository) GetCurrent(_a0 pgx.Tx) ([]*domain.Action, error) {
+	ret := _m.Called(_a0)
 
 	var r0 []*domain.Action
-	if rf, ok := ret.Get(0).(func() []*domain.Action); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(pgx.Tx) []*domain.Action); ok {
+		r0 = rf(_a0)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*domain.Action)
@@ -74,8 +74,8 @@ func (_m *ActionRepository) GetCurrent() ([]*domain.Action, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
+	if rf, ok := ret.Get(1).(func(pgx.Tx) error); ok {
+		r1 = rf(_a0)
 	} else {
 		r1 = ret.Error(1)
 	}
