@@ -46,8 +46,8 @@ Access WebUI:
 
 Access OpenAPI3 Schema:
 
-    open localhost:8080/documentation/json in browser // for json
-    open localhost:8080/documentation/yaml in browser // for yaml
+    open localhost:8080/documentation/cicero.json in browser // for json
+    open localhost:8080/documentation/cicero.yaml in browser // for yaml
 
 # How To …
 
@@ -82,7 +82,14 @@ Run test with coverage
 go test -cover ./...
 ```
 
+Run OpenApi validation tests
+
+```
+schemathesis run http://localhost:8080/documentation/cicero.yaml --validate-schema=false
+```
+
 Build mocks automatically
+
 ```
 cd src/
 mockery --all --keeptree

@@ -429,7 +429,7 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 		}
 		return nil
 	}); err != nil {
-		self.ServerError(w, err)
+		self.ClientError(w, err) //TODO: checking
 		return
 	}
 
