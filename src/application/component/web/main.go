@@ -208,12 +208,12 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	muxRouter.HandleFunc("/", self.IndexGet).Methods("GET")
-	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods("GET")
-	muxRouter.HandleFunc("/run", self.RunGet).Methods("GET")
-	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods("GET")
-	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods("GET")
-	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods("GET")
+	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
@@ -429,7 +429,7 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 		}
 		return nil
 	}); err != nil {
-		self.ServerError(w, err)
+		self.ClientError(w, err) //TODO: checking
 		return
 	}
 
