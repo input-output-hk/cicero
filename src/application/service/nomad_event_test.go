@@ -12,7 +12,8 @@ import (
 	repositoryMocks "github.com/input-output-hk/cicero/src/mocks/domain/repository"
 )
 
-func buildNomadEventService(nomadEventRepository *repositoryMocks.NomadEventRepository,
+func buildNomadEventService(
+	nomadEventRepository *repositoryMocks.NomadEventRepository,
 	runService *mocks.RunService) *nomadEventService {
 	return &nomadEventService{
 		logger:               log.Logger,
