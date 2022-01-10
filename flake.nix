@@ -10,15 +10,16 @@
     driver.url = "github:input-output-hk/nomad-driver-nix";
     follower.url = "github:input-output-hk/nomad-follower";
     data-merge.url = "github:divnix/data-merge";
+    poetry2nix.url = "github:nix-community/poetry2nix/fetched-projectdir-test";
   };
 
   outputs =
-    { self, nixpkgs, nixpkgs-os, utils, devshell, driver, follower, ... }:
+    { self, nixpkgs, nixpkgs-os, utils, devshell, driver, follower, poetry2nix, ... }:
     utils.lib.simpleFlake {
       systems = [ "x86_64-linux" ];
       inherit nixpkgs;
 
-      preOverlays = [ devshell.overlay ];
+      preOverlays = [ devshell.overlay poetry2nix.overlay ];
 
       overlay = final: prev:
         {
@@ -30,6 +31,7 @@
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
           webhook-trigger = prev.callPackage ./pkgs/trigger { };
           nomad-follower = follower.defaultPackage."${prev.system}";
+          schemathesis = final.callPackage ./pkgs/schemathesis.nix { };
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
 
@@ -67,6 +69,7 @@
         , run-python
         , run-perl
         , run-js
+        , schemathesis
         }@pkgs:
         pkgs // {
           inherit (nixpkgs) lib;

@@ -55,6 +55,13 @@ package = "golangci-lint"
 package = "gouml"
 
 [[commands]]
+name = "mockery"
+package = "go-mockery"
+
+[[commands]]
+package = "schemathesis"
+
+[[commands]]
 package = "nomad"
 
 [[commands]]
@@ -97,5 +104,4 @@ packages = [
   "postgresql_12",
   "vector",
   "treefmt",
-  "go-mockery",
 ]
