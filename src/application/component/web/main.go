@@ -325,7 +325,10 @@ func (self *Web) RunIdStopGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := self.RunService.Stop(id); err != nil {
+	if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.ClientError(w, err)
+		return
+	} else if err := self.RunService.Stop(&run); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Failed to stop Run %q", id))
 		return
 	}

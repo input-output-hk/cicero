@@ -57,8 +57,8 @@ func (a runRepository) Save(tx pgx.Tx, run *domain.Run) error {
 func (a runRepository) Update(tx pgx.Tx, run *domain.Run) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
-		`UPDATE runs SET finished_at = $2 WHERE nomad_job_id = $1`,
-		run.NomadJobID, run.FinishedAt,
+		`UPDATE runs SET finished_at = $2, success = $3, failure = $4 WHERE nomad_job_id = $1`,
+		run.NomadJobID, run.FinishedAt, run.Success, run.Failure,
 	)
 	return
 }

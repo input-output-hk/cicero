@@ -68,20 +68,32 @@
 					</thead>
 					<tbody>
 						<tr>
-							<td>
-								<textarea
-									readonly
-									rows="10"
-									cols="50"
-								>{{toJson .Success true}}</textarea>
-							</td>
-							<td>
-								<textarea
-									readonly
-									rows="10"
-									cols="50"
-								>{{toJson .Failure true}}</textarea>
-							</td>
+							{{if or .Success .Failure}}
+								<td>
+									<textarea
+										readonly
+										rows="10"
+										cols="50"
+									>{{toJson .Success true}}</textarea>
+								</td>
+								<td>
+									<textarea
+										readonly
+										rows="10"
+										cols="50"
+									>{{toJson .Failure true}}</textarea>
+								</td>
+							{{else}}
+								<td colspan="2">
+									<em>
+										<p>This Run has no outputs.</p>
+										<p>
+											If you expected to see outputs here
+											it was likely stopped manually.
+										</p>
+									</em>
+								</td>
+							{{end}}
 						</tr>
 					</tbody>
 				</table>

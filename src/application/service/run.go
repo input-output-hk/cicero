@@ -29,7 +29,7 @@ type RunService interface {
 	GetAll() ([]*domain.Run, error)
 	Save(pgx.Tx, *domain.Run) error
 	Update(pgx.Tx, *domain.Run) error
-	Stop(uuid.UUID) error
+	Stop(*domain.Run) error
 	JobLogs(uuid.UUID) (*domain.LokiOutput, error)
 	RunLogs(allocId string, taskGroup string) (*domain.LokiOutput, error)
 }
@@ -39,6 +39,7 @@ type runService struct {
 	runRepository repository.RunRepository
 	prometheus    prometheus.Client
 	nomadClient   application.NomadClient
+	db            config.PgxIface
 }
 
 func NewRunService(db config.PgxIface, prometheusAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
@@ -46,6 +47,7 @@ func NewRunService(db config.PgxIface, prometheusAddr string, nomadClient applic
 		logger:        logger.With().Str("component", "RunService").Logger(),
 		runRepository: persistence.NewRunRepository(db),
 		nomadClient:   nomadClient,
+		db:            db,
 	}
 
 	if prom, err := prometheus.NewClient(prometheus.Config{
@@ -101,12 +103,22 @@ func (self *runService) Update(tx pgx.Tx, run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) Stop(id uuid.UUID) error {
-	self.logger.Debug().Str("id", id.String()).Msg("Stopping Run")
-	if _, _, err := self.nomadClient.JobsDeregister(id.String(), false, &nomad.WriteOptions{}); err != nil {
-		return errors.WithMessagef(err, "Failed to deregister job %q", id)
+func (self *runService) Stop(run *domain.Run) error {
+	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopping Run")
+	// Nomad does not know whether the job simply ran to finish
+	// or was stopped manually. Zero out outputs to avoid publishing them.
+	run.RunOutputs = domain.RunOutputs{}
+	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if err := self.runRepository.Update(tx, run); err != nil {
+			return err
+		} else if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
+			return errors.WithMessagef(err, "Failed to deregister job %q", run.NomadJobID)
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
-	self.logger.Debug().Str("id", id.String()).Msg("Stopped Run")
+	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopped Run")
 	return nil
 }
 
