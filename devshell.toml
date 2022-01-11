@@ -4,7 +4,7 @@ imports = [
 
 [[env]]
 name = "DATABASE_URL"
-value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
+value = "postgres://cicero:@127.0.0.1:5432/cicero?sslmode=disable"
 
 [[env]]
 name = "LOKI_ADDR"
