@@ -34,11 +34,10 @@ func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 	return
 }
 
-func (a *factRepository) GetBinaryById(id uuid.UUID) (binary io.ReadSeekCloser, err error) {
+func (a *factRepository) GetBinaryByIdAndTx(tx pgx.Tx, id uuid.UUID) (binary io.ReadSeekCloser, err error) {
 	var oid uint32
-	ctx := context.Background()
 	err = pgxscan.Get(
-		ctx, a.DB, &oid,
+		context.Background(), tx, &oid,
 		`SELECT "binary" FROM facts WHERE id = $1`,
 		id,
 	)
@@ -46,7 +45,8 @@ func (a *factRepository) GetBinaryById(id uuid.UUID) (binary io.ReadSeekCloser, 
 		return
 	}
 
-	err = pgxscan.Get(ctx, a.DB, &binary, "select lo_open($1, $2)", oid, pgx.LargeObjectModeRead)
+	los := tx.LargeObjects()
+	binary, err = los.Open(context.Background(), oid, pgx.LargeObjectModeRead)
 
 	if err != nil {
 		err = errors.WithMessagef(err, "Failed to open large object with OID %d", oid)

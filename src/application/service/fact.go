@@ -1,12 +1,12 @@
 package service
 
 import (
-	"io"
-
+	"context"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"io"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -17,17 +17,17 @@ import (
 type FactService interface {
 	GetById(uuid.UUID) (domain.Fact, error)
 	GetBinaryById(uuid.UUID) (io.ReadSeekCloser, error)
+	CloseBinary(uuid.UUID, io.Closer, func() error) error
 	GetLatestByFields([][]string) (domain.Fact, error)
 	GetByFields([][]string) ([]*domain.Fact, error)
 	Save(pgx.Tx, *domain.Fact, io.Reader) error
-	// TODO sometimes you need a Tx, sometimes not...
-	// → SaveTx() and Save() etc? another wrapper? Tx() to get one?
 }
 
 type factService struct {
 	logger         zerolog.Logger
 	factRepository repository.FactRepository
 	actionService  ActionService
+	db             config.PgxIface
 }
 
 func NewFactService(db config.PgxIface, actionService ActionService, logger *zerolog.Logger) FactService {
@@ -35,6 +35,7 @@ func NewFactService(db config.PgxIface, actionService ActionService, logger *zer
 		logger:         logger.With().Str("component", "FactService").Logger(),
 		actionService:  actionService,
 		factRepository: persistence.NewFactRepository(db),
+		db:             db,
 	}
 }
 
@@ -49,11 +50,26 @@ func (self *factService) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 
 func (self *factService) GetBinaryById(id uuid.UUID) (binary io.ReadSeekCloser, err error) {
 	self.logger.Debug().Str("id", id.String()).Msg("Getting binary by ID")
-	binary, err = self.factRepository.GetBinaryById(id)
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select existing Fact for ID: %s", id)
+	if err = self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if binary, err = self.factRepository.GetBinaryByIdAndTx(tx, id); err != nil {
+			return errors.WithMessage(err, "Failed to get binary")
+		}
+		return nil
+	}); err != nil {
+		self.logger.Err(err).Str("id", id.String()).Msgf("While fetching and writing binary")
+		errors.WithMessage(err, "While fetching and writing binary")
 	}
 	return
+}
+
+func (self *factService) CloseBinary(id uuid.UUID, closer io.Closer, f func() error) error {
+	defer func() {
+		if err := closer.Close(); err != nil {
+			self.logger.Err(err).Str("id", id.String()).Msgf("Close Binary")
+			errors.WithMessage(err, "Close Binary")
+		}
+	}()
+	return f()
 }
 
 func (self *factService) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) error {

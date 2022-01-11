@@ -576,8 +576,10 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 	} else if binary, err := self.FactService.GetBinaryById(id); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to get binary"))
 	} else {
-		http.ServeContent(w, req, "", time.Time{}, binary)
-		if err := binary.Close(); err != nil {
+		if err := self.FactService.CloseBinary(id, binary, func() error {
+			http.ServeContent(w, req, "", time.Time{}, binary)
+			return nil
+		}); err != nil {
 			self.ClientError(w, errors.WithMessage(err, "Failed to close binary"))
 		}
 	}
