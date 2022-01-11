@@ -141,9 +141,6 @@ func (self *runService) LokiQueryRange(query string) (*domain.LokiOutput, error)
 		q.Set("direction", "FORWARD")
 		req.URL.RawQuery = q.Encode()
 
-		fmt.Println(req.URL.Query())
-		fmt.Println(req)
-
 		done, body, err := self.prometheus.Do(context.Background(), req)
 		if err != nil {
 			return output, errors.WithMessage(err, "Failed to talk with loki")
