@@ -573,15 +573,18 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else if binary, err := self.FactService.GetBinaryById(id); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Failed to get binary"))
-	} else {
-		if err := self.FactService.CloseBinary(id, binary, func() error {
+	} else if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if binary, err := self.FactService.GetBinaryByIdAndTx(tx, id); err != nil {
+			return errors.WithMessage(err, "Failed to get binary")
+		} else {
 			http.ServeContent(w, req, "", time.Time{}, binary)
-			return nil
-		}); err != nil {
-			self.ClientError(w, errors.WithMessage(err, "Failed to close binary"))
+			if err := binary.Close(); err != nil {
+				return errors.WithMessage(err, "Failed to close binary")
+			}
 		}
+		return nil
+	}); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "While fetching and writing binary"))
 	}
 }
 

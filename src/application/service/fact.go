@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
@@ -16,8 +15,7 @@ import (
 
 type FactService interface {
 	GetById(uuid.UUID) (domain.Fact, error)
-	GetBinaryById(uuid.UUID) (io.ReadSeekCloser, error)
-	CloseBinary(uuid.UUID, io.Closer, func() error) error
+	GetBinaryByIdAndTx(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
 	GetLatestByFields([][]string) (domain.Fact, error)
 	GetByFields([][]string) ([]*domain.Fact, error)
 	Save(pgx.Tx, *domain.Fact, io.Reader) error
@@ -48,28 +46,15 @@ func (self *factService) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 	return
 }
 
-func (self *factService) GetBinaryById(id uuid.UUID) (binary io.ReadSeekCloser, err error) {
+// GetBinaryByIdAndTx require a transaction (Tx) because is the is necessary to get a LargeObjects
+func (self *factService) GetBinaryByIdAndTx(tx pgx.Tx, id uuid.UUID) (binary io.ReadSeekCloser, err error) {
 	self.logger.Debug().Str("id", id.String()).Msg("Getting binary by ID")
-	if err = self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if binary, err = self.factRepository.GetBinaryByIdAndTx(tx, id); err != nil {
-			return errors.WithMessage(err, "Failed to get binary")
-		}
-		return nil
-	}); err != nil {
-		self.logger.Err(err).Str("id", id.String()).Msgf("While fetching and writing binary")
-		errors.WithMessage(err, "While fetching and writing binary")
+	binary, err = self.factRepository.GetBinaryByIdAndTx(tx, id)
+	if err != nil {
+		self.logger.Err(err).Str("id", id.String()).Msgf("Could not select Binary from Fact")
+		err = errors.WithMessagef(err, "Could not select Binary from Fact for ID: %s", id)
 	}
 	return
-}
-
-func (self *factService) CloseBinary(id uuid.UUID, closer io.Closer, f func() error) error {
-	defer func() {
-		if err := closer.Close(); err != nil {
-			self.logger.Err(err).Str("id", id.String()).Msgf("Close Binary")
-			errors.WithMessage(err, "Close Binary")
-		}
-	}()
-	return f()
 }
 
 func (self *factService) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) error {
