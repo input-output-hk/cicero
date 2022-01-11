@@ -209,6 +209,7 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run/{id}/stop", self.RunIdStopGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
@@ -314,6 +315,25 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	} else {
 		http.Redirect(w, req, "/action/"+action.ID.String(), http.StatusFound)
 		return
+	}
+}
+
+func (self *Web) RunIdStopGet(w http.ResponseWriter, req *http.Request) {
+	id, err := uuid.Parse(mux.Vars(req)["id"])
+	if err != nil {
+		self.ClientError(w, err)
+		return
+	}
+
+	if err := self.RunService.Stop(id); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Failed to stop Run %q", id))
+		return
+	}
+
+	if referer := req.Header.Get("Referer"); referer != "" {
+		http.Redirect(w, req, referer, http.StatusFound)
+	} else {
+		http.Redirect(w, req, "/run/"+id.String(), http.StatusFound)
 	}
 }
 

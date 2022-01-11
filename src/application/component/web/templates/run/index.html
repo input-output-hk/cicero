@@ -24,7 +24,15 @@
 						</td>
 					{{end}}
 					<td>{{.CreatedAt}}</td>
-					<td>{{.FinishedAt}}</td>
+					<td>
+						{{if .FinishedAt}}
+							{{.FinishedAt}}
+						{{else}}
+							<a href="/run/{{.NomadJobID}}/stop">
+								Stop
+							</a>
+						{{end}}
+					</td>
 					<td class="numerical">
 						{{if .FinishedAt}}
 							{{.FinishedAt.Sub .CreatedAt}}

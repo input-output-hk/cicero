@@ -82,7 +82,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	})
 
 	runService := once(func() interface{} {
-		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr, logger)
+		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr, nomadClientWrapper().(application.NomadClient), logger)
 	})
 	evaluationService := once(func() interface{} {
 		return service.NewEvaluationService(cmd.Evaluators, cmd.Env, logger)

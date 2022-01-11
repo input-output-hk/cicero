@@ -10,11 +10,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/grafana/loki/pkg/loghttp"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/api"
 	"github.com/rs/zerolog"
 
+	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
@@ -27,6 +29,7 @@ type RunService interface {
 	GetAll() ([]*domain.Run, error)
 	Save(pgx.Tx, *domain.Run) error
 	Update(pgx.Tx, *domain.Run) error
+	Stop(uuid.UUID) error
 	JobLogs(uuid.UUID) (*domain.LokiOutput, error)
 	RunLogs(allocId string, taskGroup string) (*domain.LokiOutput, error)
 }
@@ -35,12 +38,14 @@ type runService struct {
 	logger        zerolog.Logger
 	runRepository repository.RunRepository
 	prometheus    prometheus.Client
+	nomadClient   application.NomadClient
 }
 
-func NewRunService(db config.PgxIface, prometheusAddr string, logger *zerolog.Logger) RunService {
+func NewRunService(db config.PgxIface, prometheusAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
 	impl := runService{
 		logger:        logger.With().Str("component", "RunService").Logger(),
 		runRepository: persistence.NewRunRepository(db),
+		nomadClient:   nomadClient,
 	}
 
 	if prom, err := prometheus.NewClient(prometheus.Config{
@@ -93,6 +98,15 @@ func (self *runService) Update(tx pgx.Tx, run *domain.Run) error {
 		return errors.WithMessagef(err, "Could not update Run ID: %s", run.NomadJobID)
 	}
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Updated Run")
+	return nil
+}
+
+func (self *runService) Stop(id uuid.UUID) error {
+	self.logger.Debug().Str("id", id.String()).Msg("Stopping Run")
+	if _, _, err := self.nomadClient.JobsDeregister(id.String(), false, &nomad.WriteOptions{}); err != nil {
+		return errors.WithMessagef(err, "Failed to deregister job %q", id)
+	}
+	self.logger.Debug().Str("id", id.String()).Msg("Stopped Run")
 	return nil
 }
 
