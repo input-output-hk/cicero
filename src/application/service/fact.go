@@ -16,8 +16,8 @@ import (
 type FactService interface {
 	GetById(uuid.UUID) (domain.Fact, error)
 	GetBinaryByIdAndTx(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
-	GetLatestByFields([][]string) (domain.Fact, error)
-	GetByFields([][]string) ([]*domain.Fact, error)
+	GetLatestByFields(pgx.Tx, [][]string) (domain.Fact, error)
+	GetByFields(pgx.Tx, [][]string) ([]*domain.Fact, error)
 	Save(pgx.Tx, *domain.Fact, io.Reader) error
 }
 
@@ -77,18 +77,18 @@ func (self *factService) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) er
 	return nil
 }
 
-func (self *factService) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
+func (self *factService) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
 	self.logger.Debug().Interface("fields", fields).Msg("Getting latest Facts by fields")
-	fact, err = self.factRepository.GetLatestByFields(fields)
+	fact, err = self.factRepository.GetLatestByFields(tx, fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select latest Facts by fields %q", fields)
 	}
 	return
 }
 
-func (self *factService) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
+func (self *factService) GetByFields(tx pgx.Tx, fields [][]string) (facts []*domain.Fact, err error) {
 	self.logger.Debug().Interface("fields", fields).Msg("Getting Facts by fields")
-	facts, err = self.factRepository.GetByFields(fields)
+	facts, err = self.factRepository.GetByFields(tx, fields)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select Facts by fields %q", fields)
 	}
