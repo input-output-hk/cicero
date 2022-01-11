@@ -158,9 +158,12 @@
 
                 initialScript = pkgs.writeText "init.sql" ''
                   CREATE DATABASE cicero;
+
                   CREATE USER cicero;
-                  GRANT ALL PRIVILEGES ON DATABASE cicero to cicero;
+                  GRANT ALL PRIVILEGES ON DATABASE cicero TO cicero;
                   ALTER USER cicero WITH SUPERUSER;
+
+                  CREATE ROLE cicero_api;
                 '';
               };
             })
