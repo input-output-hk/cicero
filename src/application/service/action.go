@@ -23,7 +23,7 @@ type ActionService interface {
 	GetAll() ([]*domain.Action, error)
 	GetCurrent() ([]*domain.Action, error)
 	Save(pgx.Tx, *domain.Action) error
-	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
+	IsRunnable(pgx.Tx, *domain.Action) (bool, map[string]interface{}, error)
 	Create(pgx.Tx, string, string) (*domain.Action, error)
 	Invoke(pgx.Tx, *domain.Action) error
 }
@@ -83,7 +83,7 @@ func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
 	return
 }
 
-func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]interface{}, error) {
+func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, map[string]interface{}, error) {
 	self.logger.Debug().Str("name", action.Name).Str("id", action.ID.String()).Msg("Checking whether Action is runnable")
 
 	inputFact := map[string]*domain.Fact{}
@@ -105,7 +105,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
-			if fact, err := self.getInputFactLatest(input.Match.WithoutInputs()); err != nil {
+			if fact, err := self.getInputFactLatest(tx, input.Match.WithoutInputs()); err != nil {
 				return false, nil, err
 			} else if fact == nil {
 				if !input.Not && !input.Optional {
@@ -118,7 +118,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 				}
 			}
 		case domain.InputDefinitionSelectAll:
-			if facts, err := self.getInputFacts(input.Match.WithoutInputs()); err != nil {
+			if facts, err := self.getInputFacts(tx, input.Match.WithoutInputs()); err != nil {
 				return false, nil, err
 			} else if len(facts) == 0 {
 				if !input.Not && !input.Optional {
@@ -230,16 +230,16 @@ func filterFields(factValue *interface{}, filter cue.Value) {
 	}
 }
 
-func (self *actionService) getInputFactLatest(value cue.Value) (*domain.Fact, error) {
-	fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(value))
+func (self *actionService) getInputFactLatest(tx pgx.Tx, value cue.Value) (*domain.Fact, error) {
+	fact, err := self.factRepository.GetLatestByFields(tx, collectFieldPaths(value))
 	if err != nil && errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	return &fact, err
 }
 
-func (self *actionService) getInputFacts(value cue.Value) ([]*domain.Fact, error) {
-	facts, err := self.factRepository.GetByFields(collectFieldPaths(value))
+func (self *actionService) getInputFacts(tx pgx.Tx, value cue.Value) ([]*domain.Fact, error) {
+	facts, err := self.factRepository.GetByFields(tx, collectFieldPaths(value))
 	if err != nil && errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -308,7 +308,7 @@ func (self *actionService) Create(tx pgx.Tx, source, name string) (*domain.Actio
 }
 
 func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) error {
-	if runnable, inputs, err := self.IsRunnable(action); err != nil {
+	if runnable, inputs, err := self.IsRunnable(tx, action); err != nil {
 		return err
 	} else if runnable {
 		if runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); err != nil {

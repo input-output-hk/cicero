@@ -54,18 +54,22 @@ func (a *factRepository) GetBinaryByIdAndTx(tx pgx.Tx, id uuid.UUID) (binary io.
 	return
 }
 
-func (a *factRepository) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
+//GetLatestByFields uses the tx to query with the default ISOLATION LEVEL as "READ COMMITTED"
+//so the statement can only see the committed rows before starting.
+func (a *factRepository) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
 	err = pgxscan.Get(
-		context.Background(), a.DB, &fact,
+		context.Background(), tx, &fact,
 		`SELECT id, run_id, value, created_at, binary_hash FROM facts `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
 		pathsToQueryArgs(fields)...,
 	)
 	return
 }
 
-func (a *factRepository) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
+//GetByFields uses the tx to query with the default ISOLATION LEVEL as "READ COMMITTED"
+//so the statement can only see the committed rows before starting.
+func (a *factRepository) GetByFields(tx pgx.Tx, fields [][]string) (facts []*domain.Fact, err error) {
 	err = pgxscan.Select(
-		context.Background(), a.DB, &facts,
+		context.Background(), tx, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash FROM facts `+sqlWhereHasPaths(fields),
 		pathsToQueryArgs(fields)...,
 	)
