@@ -5,4 +5,4 @@ includes = ["*.go"]
 
 [formatter.nix]
 command = "nixpkgs-fmt"
-includes = [".nix"]
+includes = ["*.nix"]
