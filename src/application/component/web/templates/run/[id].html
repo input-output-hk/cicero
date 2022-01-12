@@ -37,8 +37,8 @@
 								{{if .FinishedAt}}
 									{{.FinishedAt}}
 								{{else}}
-									<a href="/run/{{.NomadJobID}}/stop">
-										Stop
+									<a href="/run/{{.NomadJobID}}/cancel">
+										Cancel
 									</a>
 								{{end}}
 							</td>
@@ -57,46 +57,98 @@
 				<table class="table vertical">
 					<thead>
 						<tr>
-							<th colspan="2">
-								Outputs
+							<th
+								colspan="2"
+								title="Facts that this Run published"
+							>
+								Facts
 							</th>
-						</tr>
-						<tr>
-							<th>Success</th>
-							<th>Failure</th>
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
-							{{if or .Success .Failure}}
+						{{range $.facts}}
+							<tr>
+								<td>Created at</td>
+								<td>
+									{{.CreatedAt}}
+								</td>
+							</tr>
+							<tr>
+								<td>Value</td>
 								<td>
 									<textarea
 										readonly
 										rows="10"
 										cols="50"
-									>{{toJson .Success true}}</textarea>
+									>{{toJson .Value true}}</textarea>
 								</td>
-								<td>
-									<textarea
-										readonly
-										rows="10"
-										cols="50"
-									>{{toJson .Failure true}}</textarea>
-								</td>
-							{{else}}
-								<td colspan="2">
-									<em>
-										<p>This Run has no outputs.</p>
-										<p>
-											If you expected to see outputs here
-											it was likely stopped manually.
-										</p>
-									</em>
-								</td>
+							</tr>
+							{{if .BinaryHash}}
+								<tr>
+									<td>Binary</td>
+									<td>
+										<a href="/fact/{{.ID}}/binary"><code>{{.BinaryHash}}</code></a>
+									</td>
+								</tr>
 							{{end}}
-						</tr>
+						{{else}}
+							<tr>
+								<td colspan="2">
+									<em>This Run has not published any facts.</em>
+								</td>
+							</tr>
+						{{end}}
 					</tbody>
 				</table>
+
+				{{if not .FinishedAt}}
+					<table class="table vertical">
+						<thead>
+							<tr>
+								<th
+									colspan="2"
+									title="Fact that will be published when the Run ends"
+								>
+									Output
+								</th>
+							</tr>
+							<tr>
+								<th>Success</th>
+								<th>Failure</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								{{if or .output.Success .output.Failure}}
+									<td>
+										<textarea
+											readonly
+											rows="10"
+											cols="50"
+										>{{toJson .output.Success true}}</textarea>
+									</td>
+									<td>
+										<textarea
+											readonly
+											rows="10"
+											cols="50"
+										>{{toJson .output.Failure true}}</textarea>
+									</td>
+								{{else}}
+									<td colspan="2">
+										<em>
+											<p>This Run has no output.</p>
+											<p>
+												If this Run declares an output
+												this means it was canceled.
+											</p>
+										</em>
+									</td>
+								{{end}}
+							</tr>
+						</tbody>
+					</table>
+				{{end}}
 			{{end}}
 		</div>
 

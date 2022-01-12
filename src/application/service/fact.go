@@ -16,6 +16,7 @@ import (
 
 type FactService interface {
 	GetById(uuid.UUID) (domain.Fact, error)
+	GetByRunId(uuid.UUID) ([]*domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
 	GetLatestByFields(pgx.Tx, [][]string) (domain.Fact, error)
 	GetByFields(pgx.Tx, [][]string) ([]*domain.Fact, error)
@@ -42,7 +43,16 @@ func (self *factService) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 	self.logger.Debug().Str("id", id.String()).Msg("Getting Fact by ID")
 	fact, err = self.factRepository.GetById(id)
 	if err != nil {
-		err = errors.WithMessagef(err, "Could not select existing Fact for ID: %s", id)
+		err = errors.WithMessagef(err, "Could not select existing Fact with ID %q", id)
+	}
+	return
+}
+
+func (self *factService) GetByRunId(id uuid.UUID) (facts []*domain.Fact, err error) {
+	self.logger.Debug().Str("id", id.String()).Msg("Getting Facts by Run ID")
+	facts, err = self.factRepository.GetByRunId(id)
+	if err != nil {
+		err = errors.WithMessagef(err, "Could not select Facts for Run with ID %q", id)
 	}
 	return
 }
@@ -51,7 +61,7 @@ func (self *factService) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	self.logger.Debug().Str("id", id.String()).Msg("Getting binary by ID")
 	binary, err = self.factRepository.GetBinaryById(tx, id)
 	if err != nil {
-		err = errors.WithMessagef(err, "Could not select existing Fact for ID: %s", id)
+		err = errors.WithMessagef(err, "Could not select existing Fact with ID %q", id)
 	}
 	return
 }

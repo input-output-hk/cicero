@@ -200,7 +200,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 		return def, errors.WithMessagef(err, "While unmarshaling evaluator output %s into freeform definition", string(output))
 	}
 
-	def.Outputs = freeformDef.Outputs
+	def.Output = freeformDef.Output
 	if freeformDef.Job != nil {
 		if job, err := json.Marshal(*freeformDef.Job); err != nil {
 			return def, err

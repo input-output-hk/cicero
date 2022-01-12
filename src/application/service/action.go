@@ -327,18 +327,17 @@ func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) error {
 				return err
 			}
 		} else if runDef.IsDecision() {
-			if runDef.Outputs.Success != nil {
-				if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Outputs.Success}, nil); err != nil {
+			if runDef.Output.Success != nil {
+				if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
 					return errors.WithMessage(err, "Could not publish fact")
 				}
 			}
 		} else {
 			run := domain.Run{
-				ActionId:   action.ID,
-				RunOutputs: runDef.Outputs,
+				ActionId: action.ID,
 			}
 
-			if err := self.runService.Save(tx, &run); err != nil {
+			if err := self.runService.Save(tx, &run, &runDef.Output); err != nil {
 				return errors.WithMessage(err, "Could not insert Run")
 			}
 

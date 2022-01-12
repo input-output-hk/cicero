@@ -34,6 +34,17 @@ func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 	return
 }
 
+func (a *factRepository) GetByRunId(id uuid.UUID) (facts []*domain.Fact, err error) {
+	err = pgxscan.Select(
+		context.Background(), a.DB, &facts,
+		`SELECT id, run_id, value, created_at, binary_hash
+		FROM facts WHERE run_id = $1
+		ORDER BY created_at DESC`,
+		id,
+	)
+	return
+}
+
 func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadSeekCloser, err error) {
 	var oid uint32
 	err = pgxscan.Get(

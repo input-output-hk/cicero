@@ -109,20 +109,24 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return err
 	}
 
-	var factValue *interface{}
-	switch allocation.ClientStatus {
-	case "complete":
-		factValue = run.Success
-	case "failed":
-		factValue = run.Failure
-	}
-	if factValue != nil {
-		fact := domain.Fact{
-			RunId: &run.NomadJobID,
-			Value: factValue,
+	if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil && !pgxscan.NotFound(err) {
+		return err
+	} else {
+		var factValue *interface{}
+		switch allocation.ClientStatus {
+		case "complete":
+			factValue = output.Success
+		case "failed":
+			factValue = output.Failure
 		}
-		if err := self.FactService.Save(tx, &fact, nil); err != nil {
-			return errors.WithMessage(err, "Could not publish Fact")
+		if factValue != nil {
+			fact := domain.Fact{
+				RunId: &run.NomadJobID,
+				Value: factValue,
+			}
+			if err := self.FactService.Save(tx, &fact, nil); err != nil {
+				return errors.WithMessage(err, "Could not publish Fact")
+			}
 		}
 	}
 
@@ -132,8 +136,8 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 	).UTC()
 	run.FinishedAt = &modifyTime
 
-	if err := self.RunService.Update(tx, &run); err != nil {
-		return errors.WithMessagef(err, "Failed to update Run with ID %q", run.NomadJobID)
+	if err := self.RunService.End(tx, &run); err != nil {
+		return errors.WithMessagef(err, "Failed to end Run with ID %q", run.NomadJobID)
 	}
 
 	if _, _, err := self.NomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {

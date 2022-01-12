@@ -25,29 +25,33 @@ import (
 
 type RunService interface {
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
+	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
 	GetByActionId(uuid.UUID) ([]*domain.Run, error)
 	GetAll() ([]*domain.Run, error)
-	Save(pgx.Tx, *domain.Run) error
+	Save(pgx.Tx, *domain.Run, *domain.RunOutput) error
 	Update(pgx.Tx, *domain.Run) error
-	Stop(*domain.Run) error
+	End(pgx.Tx, *domain.Run) error
+	Cancel(*domain.Run) error
 	JobLogs(uuid.UUID) (*domain.LokiOutput, error)
 	RunLogs(allocId string, taskGroup string) (*domain.LokiOutput, error)
 }
 
 type runService struct {
-	logger        zerolog.Logger
-	runRepository repository.RunRepository
-	prometheus    prometheus.Client
-	nomadClient   application.NomadClient
-	db            config.PgxIface
+	logger              zerolog.Logger
+	runRepository       repository.RunRepository
+	runOutputRepository repository.RunOutputRepository
+	prometheus          prometheus.Client
+	nomadClient         application.NomadClient
+	db                  config.PgxIface
 }
 
 func NewRunService(db config.PgxIface, prometheusAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
 	impl := runService{
-		logger:        logger.With().Str("component", "RunService").Logger(),
-		runRepository: persistence.NewRunRepository(db),
-		nomadClient:   nomadClient,
-		db:            db,
+		logger:              logger.With().Str("component", "RunService").Logger(),
+		runRepository:       persistence.NewRunRepository(db),
+		runOutputRepository: persistence.NewRunOutputRepository(db),
+		nomadClient:         nomadClient,
+		db:                  db,
 	}
 
 	if prom, err := prometheus.NewClient(prometheus.Config{
@@ -63,10 +67,19 @@ func NewRunService(db config.PgxIface, prometheusAddr string, nomadClient applic
 }
 
 func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
-	self.logger.Debug().Str("action-id", id.String()).Msg("Getting Run by Nomad Job ID")
+	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
 	if err != nil {
 		err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
+	}
+	return
+}
+
+func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOutput, err error) {
+	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run Output by Nomad Job ID")
+	output, err = self.runOutputRepository.GetByRunId(id)
+	if err != nil {
+		err = errors.WithMessagef(err, "Could not select existing Run Output by Nomad Job ID %q", id)
 	}
 	return
 }
@@ -85,10 +98,13 @@ func (self *runService) GetAll() ([]*domain.Run, error) {
 	return self.runRepository.GetAll()
 }
 
-func (self *runService) Save(tx pgx.Tx, run *domain.Run) error {
+func (self *runService) Save(tx pgx.Tx, run *domain.Run, output *domain.RunOutput) error {
 	self.logger.Debug().Msg("Saving new Run")
 	if err := self.runRepository.Save(tx, run); err != nil {
 		return errors.WithMessagef(err, "Could not insert Run")
+	}
+	if err := self.runOutputRepository.Save(tx, run.NomadJobID, output); err != nil {
+		return errors.WithMessagef(err, "Could not insert Run Output")
 	}
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Created Run")
 	return nil
@@ -97,19 +113,30 @@ func (self *runService) Save(tx pgx.Tx, run *domain.Run) error {
 func (self *runService) Update(tx pgx.Tx, run *domain.Run) error {
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Updating Run")
 	if err := self.runRepository.Update(tx, run); err != nil {
-		return errors.WithMessagef(err, "Could not update Run ID: %s", run.NomadJobID)
+		return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
 	}
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Updated Run")
 	return nil
 }
 
-func (self *runService) Stop(run *domain.Run) error {
+func (self *runService) End(tx pgx.Tx, run *domain.Run) error {
+	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Ending Run")
+	if err := self.runRepository.Update(tx, run); err != nil {
+		return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
+	}
+	if err := self.runOutputRepository.Delete(tx, run.NomadJobID); err != nil {
+		return errors.WithMessagef(err, "Could not update Run Output with ID %q", run.NomadJobID)
+	}
+	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Ended Run")
+	return nil
+}
+
+func (self *runService) Cancel(run *domain.Run) error {
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopping Run")
 	// Nomad does not know whether the job simply ran to finish
-	// or was stopped manually. Zero out outputs to avoid publishing them.
-	run.RunOutputs = domain.RunOutputs{}
+	// or was stopped manually. Delete outputs to avoid publishing them.
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.runRepository.Update(tx, run); err != nil {
+		if err := self.runOutputRepository.Delete(tx, run.NomadJobID); err != nil {
 			return err
 		} else if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
 			return errors.WithMessagef(err, "Failed to deregister job %q", run.NomadJobID)

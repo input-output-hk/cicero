@@ -11,6 +11,7 @@ import (
 
 type FactRepository interface {
 	GetById(uuid.UUID) (domain.Fact, error)
+	GetByRunId(uuid.UUID) ([]*domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
 	GetLatestByFields(pgx.Tx, [][]string) (domain.Fact, error)
 	GetByFields(pgx.Tx, [][]string) ([]*domain.Fact, error)

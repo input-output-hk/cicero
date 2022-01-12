@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/davidebianchi/gswagger/apirouter"
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
@@ -209,7 +210,7 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/run/{id}/stop", self.RunIdStopGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run/{id}/cancel", self.RunIdCancelGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
@@ -318,7 +319,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) RunIdStopGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) RunIdCancelGet(w http.ResponseWriter, req *http.Request) {
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
@@ -328,8 +329,8 @@ func (self *Web) RunIdStopGet(w http.ResponseWriter, req *http.Request) {
 	if run, err := self.RunService.GetByNomadJobId(id); err != nil {
 		self.ClientError(w, err)
 		return
-	} else if err := self.RunService.Stop(&run); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "Failed to stop Run %q", id))
+	} else if err := self.RunService.Cancel(&run); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", id))
 		return
 	}
 
@@ -359,8 +360,22 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	output, err := self.RunService.GetOutputByNomadJobId(id)
+	if err != nil && !pgxscan.NotFound(err) {
+		self.ServerError(w, err)
+		return
+	}
+
+	facts, err := self.FactService.GetByRunId(id)
+	if err != nil && !pgxscan.NotFound(err) {
+		self.ServerError(w, err)
+		return
+	}
+
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run":    run,
+		"output": output,
+		"facts":  facts,
 		"allocs": allocs,
 	}); err != nil {
 		self.ServerError(w, err)

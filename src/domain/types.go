@@ -126,14 +126,14 @@ type ActionDefinition struct {
 	Inputs map[string]InputDefinition `json:"inputs"`
 }
 
-type RunOutputs struct {
+type RunOutput struct {
 	Failure *interface{} `json:"failure"`
 	Success *interface{} `json:"success"`
 }
 
 type RunDefinition struct {
-	Outputs RunOutputs `json:"outputs"`
-	Job     *nomad.Job `json:"job"`
+	Output RunOutput  `json:"output"`
+	Job    *nomad.Job `json:"job"`
 }
 
 func (s *RunDefinition) IsDecision() bool {
@@ -162,5 +162,4 @@ type Run struct {
 	ActionId   uuid.UUID  `json:"action_id"`
 	CreatedAt  time.Time  `json:"created_at"`
 	FinishedAt *time.Time `json:"finished_at"`
-	RunOutputs            // XXX do not save this forever (duplicated in `facts` table after run finished) → save in `pending_facts` table and delete row after saving to `facts` when run finished?
 }
