@@ -205,22 +205,6 @@
         "type": "github"
       }
     },
-    "nixpkgs-os": {
-      "locked": {
-        "lastModified": 1634821460,
-        "narHash": "sha256-JYMDrBX4cn1Je5EOEybZEbNH+uibT7bN5DBPjDddD+4=",
-        "owner": "manveru",
-        "repo": "nixpkgs",
-        "rev": "e629023c0742f2726e1b2bb52d3c04fc28f7c00c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "manveru",
-        "ref": "use-atomic-bind-mounts",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
     "nixpkgs_2": {
       "locked": {
         "lastModified": 1635934775,
@@ -239,11 +223,11 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1635214691,
-        "narHash": "sha256-65D0Q6fAKzX3ZGlJSTZGj4jbIB7fttZ8FD754AOYeiQ=",
+        "lastModified": 1641909823,
+        "narHash": "sha256-Uxo+Wm6c/ijNhaJlYtFLJG9mh75FYZaBreMC2ZE0nEY=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "30f73c6493b4877753da54bfafd1aef90f0eebdf",
+        "rev": "f0f67400bc49c44f305d6fe17698a2f1ce1c29a0",
         "type": "github"
       },
       "original": {
@@ -296,7 +280,6 @@
         "follower": "follower",
         "inclusive": "inclusive_3",
         "nixpkgs": "nixpkgs_3",
-        "nixpkgs-os": "nixpkgs-os",
         "poetry2nix": "poetry2nix",
         "utils": "utils_3"
       }

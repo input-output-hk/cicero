@@ -5,7 +5,6 @@
     devshell.url = "github:numtide/devshell";
     inclusive.url = "github:input-output-hk/nix-inclusive";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nixpkgs-os.url = "github:manveru/nixpkgs/use-atomic-bind-mounts";
     utils.url = "github:kreisys/flake-utils";
     driver.url = "github:input-output-hk/nomad-driver-nix";
     follower.url = "github:input-output-hk/nomad-follower";
@@ -14,7 +13,7 @@
   };
 
   outputs =
-    { self, nixpkgs, nixpkgs-os, utils, devshell, driver, follower, poetry2nix, ... }:
+    { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, ... }:
     utils.lib.simpleFlake {
       systems = [ "x86_64-linux" ];
       inherit nixpkgs;
@@ -77,16 +76,16 @@
         };
 
       extraOutputs.nixosConfigurations = {
-        dev = nixpkgs-os.lib.nixosSystem {
+        dev = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           specialArgs = { inherit self; };
           modules = [
             ({ pkgs, config, lib, ... }: {
               imports = [
                 driver.nixosModules.nix-driver-nomad
-                (nixpkgs-os + /nixos/modules/misc/version.nix)
-                (nixpkgs-os + /nixos/modules/profiles/headless.nix)
-                (nixpkgs-os + /nixos/modules/profiles/minimal.nix)
+                (nixpkgs + /nixos/modules/misc/version.nix)
+                (nixpkgs + /nixos/modules/profiles/headless.nix)
+                (nixpkgs + /nixos/modules/profiles/minimal.nix)
               ];
 
               nixpkgs.overlays = [ self.overlay ];
