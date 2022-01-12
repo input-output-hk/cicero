@@ -173,7 +173,7 @@ func (self *runService) LokiQueryRange(query string) (*domain.LokiOutput, error)
 		}
 
 		if done.StatusCode/100 != 2 {
-			return output, fmt.Errorf("Error response %d from Loki: %s (%s)", done.StatusCode, string(body), err.Error())
+			return output, fmt.Errorf("Error response %d from Loki: %s", done.StatusCode, string(body))
 		}
 
 		response := loghttp.QueryResponse{}
