@@ -39,12 +39,12 @@ func (n nomadEventRepository) GetLastNomadEvent() (index uint64, err error) {
 
 func (n nomadEventRepository) GetEventAllocByNomadJobId(id uuid.UUID) (results []map[string]interface{}, err error) {
 	err = pgxscan.Select(context.Background(), n.DB, &results, `
-		SELECT index, payload->>'Allocation' AS alloc
+		SELECT "index", payload->>'Allocation' AS alloc
 		FROM nomad_events
 		WHERE payload#>>'{Allocation,JobID}' = $1
 			AND topic = 'Allocation'
 			AND type = 'AllocationUpdated'
-		ORDER BY index DESC
+		ORDER BY "index" ASC
 	`, id)
 	return
 }

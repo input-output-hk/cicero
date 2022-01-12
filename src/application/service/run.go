@@ -31,7 +31,7 @@ type RunService interface {
 	Update(pgx.Tx, *domain.Run) error
 	Stop(*domain.Run) error
 	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (*domain.LokiOutput, error)
-	RunLogs(allocId, taskGroup string, start time.Time, end *time.Time) (*domain.LokiOutput, error)
+	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiOutput, error)
 }
 
 type runService struct {
@@ -128,9 +128,9 @@ func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time
 		start, end)
 }
 
-func (self *runService) RunLogs(allocID, taskGroup string, start time.Time, end *time.Time) (*domain.LokiOutput, error) {
+func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiOutput, error) {
 	return self.LokiQueryRange(
-		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q}`, allocID, taskGroup),
+		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
 		start, end)
 }
 

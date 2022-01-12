@@ -79,10 +79,10 @@ std.behavior.onInputChange "start" name args
                 (std.github.reportStatus cfg.statuses_url))
 
               (std.wrapScript "bash" (next: ''
-                set -x
+                set -ex
                 mkdir -p /etc
                 echo "nameserver 1.1.1.1" >> /etc/resolv.conf
-                ${lib.escapeShellArgs next}
+                exec ${lib.escapeShellArgs next}
               ''))
 
               (std.git.clone cfg)
@@ -99,7 +99,7 @@ std.behavior.onInputChange "start" name args
               }
 
               (std.script "bash" ''
-                schemathesis run http://127.0.0.1:$NOMAD_PORT_http/documentation/cicero.yaml --validate-schema=false
+                exec schemathesis run http://127.0.0.1:$NOMAD_PORT_http/documentation/cicero.yaml --validate-schema=false
               '')
             ];
           };
