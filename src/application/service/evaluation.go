@@ -80,8 +80,8 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 		return nil, err
 	}
 
-	cacheDir, err := config.GetenvStr("CICERO_CACHE_DIR")
-	if err != nil {
+	cacheDir := config.GetenvStr("CICERO_CACHE_DIR")
+	if cacheDir == "" {
 		e.logger.Debug().Err(err).Msg("Falling back to XDG cache directory")
 		cacheDir = xdg.CacheHome + "/cicero"
 	}
