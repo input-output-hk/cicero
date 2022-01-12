@@ -128,8 +128,7 @@ Run OpenApi validation tests:
 
 Build mocks automatically:
 
-	cd src/
-	mockery --all --keeptree
+	go generate ./...
 
 See the commands listed by:
 
