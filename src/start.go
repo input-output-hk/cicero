@@ -26,7 +26,7 @@ type StartCmd struct {
 	Evaluators     []string `arg:"--evaluators"`
 	Env            []string `arg:"--env"`
 
-	WebListen string `arg:"--web-listen" default:":8080"`
+	WebListen string `arg:"--web-listen,env:WEB_LISTEN" default:":8080"`
 }
 
 func (cmd *StartCmd) Run(logger *zerolog.Logger) error {

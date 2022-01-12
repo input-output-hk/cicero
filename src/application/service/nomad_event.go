@@ -18,7 +18,7 @@ import (
 type NomadEventService interface {
 	Save(pgx.Tx, *nomad.Event) error
 	GetLastNomadEvent() (uint64, error)
-	GetEventAllocByNomadJobId(uuid.UUID) (map[string]domain.AllocWrapper, error)
+	GetEventAllocByNomadJobId(id uuid.UUID) (map[string]domain.AllocWrapper, error)
 }
 
 type nomadEventService struct {
@@ -68,7 +68,12 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 			return nil, err
 		}
 
-		logs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup)
+		run, err := n.runService.GetByNomadJobId(nomadJobId)
+		if err != nil {
+			return nil, err
+		}
+
+		logs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup, run.CreatedAt, run.FinishedAt)
 		if err != nil {
 			return nil, err
 		}

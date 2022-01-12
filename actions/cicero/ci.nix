@@ -1,4 +1,4 @@
-{ name, std, lib, actionLib, ... } @ args:
+{ name, std, lib, actionLib, ... }@args:
 
 std.behavior.onInputChange "start" name args
 
@@ -12,7 +12,8 @@ std.behavior.onInputChange "start" name args
   '';
 
   job = { start }:
-    let cfg = start.value.${name}.start; in
+    let cfg = start.value."${name}".start;
+    in
     std.chain args [
       actionLib.jobDefaults
 
@@ -30,26 +31,42 @@ std.behavior.onInputChange "start" name args
               (lib.optionalAttrs (cfg ? statuses_url)
                 (std.github.reportStatus cfg.statuses_url))
 
+              (std.wrapScript "bash" (next: ''
+                set -x
+                mkdir -p /etc
+                echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+                ${lib.escapeShellArgs next}
+              ''))
+
               (std.git.clone cfg)
 
               {
                 resources = {
-                  memory = 4 * 1024;
+                  memory = 32 * 1024;
                   cpu = 16000;
                 };
+
+                config.packages = std.data-merge.append [
+                  "github:input-output-hk/cicero#devShell.x86_64-linux"
+                ];
               }
 
-              std.nix.develop
               (std.wrapScript "bash" (next: ''
-                lint
-                ${lib.escapeShellArg next}
+                set -exuo pipefail
+
+                golangci-lint run
+                gocritic check -enableAll -disable=ifElseChain,ptrToRefParam,unnamedResult,appendAssign ./...
+                nixpkgs-fmt --check .
+
+                ${lib.escapeShellArgs next}
               ''))
 
               std.nix.build
             ];
 
-            cicero = {
-              config.nixos = "github:input-output-hk/cicero/${cfg.sha}#dev";
+            dev = {
+              config.nixos =
+                "github:input-output-hk/cicero/${cfg.sha}#nixosConfigurations.dev";
 
               lifecycle = {
                 hook = "prestart";
@@ -61,12 +78,28 @@ std.behavior.onInputChange "start" name args
               (lib.optionalAttrs (cfg ? statuses_url)
                 (std.github.reportStatus cfg.statuses_url))
 
+              (std.wrapScript "bash" (next: ''
+                set -x
+                mkdir -p /etc
+                echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+                ${lib.escapeShellArgs next}
+              ''))
+
               (std.git.clone cfg)
 
-              std.nix.develop
+              {
+                resources = {
+                  memory = 32 * 1024;
+                  cpu = 16000;
+                };
+
+                config.packages = std.data-merge.append [
+                  "github:input-output-hk/cicero#devShell.x86_64-linux"
+                ];
+              }
 
               (std.script "bash" ''
-                schemathesis run http://localhost:$NOMAD_PORT_http/documentation/cicero.yaml --validate-schema=false
+                schemathesis run http://127.0.0.1:$NOMAD_PORT_http/documentation/cicero.yaml --validate-schema=false
               '')
             ];
           };

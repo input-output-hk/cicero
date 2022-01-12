@@ -605,10 +605,18 @@ func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else if logs, err := self.RunService.JobLogs(id); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
-		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, http.StatusOK)
+		run, err := self.RunService.GetByNomadJobId(id)
+		if err != nil {
+			self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
+			return
+		}
+
+		if logs, err := self.RunService.JobLogs(id, run.CreatedAt, run.FinishedAt); err != nil {
+			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
+		} else {
+			self.json(w, map[string]*domain.LokiOutput{"logs": logs}, http.StatusOK)
+		}
 	}
 }
 

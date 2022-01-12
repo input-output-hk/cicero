@@ -101,4 +101,5 @@ packages = [
   "vector",
   "treefmt",
   "go-mockery",
+  "httpie",
 ]
