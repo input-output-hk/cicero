@@ -73,12 +73,12 @@ rec {
           inputs."behavior: input \"${input}\" changed for \"${key}\"" = {
             not = true;
             match = ''
-              "_behavior": onInputChange: "${key}": _inputs."${input}".id
+              "_behavior": onInputChange: "${key}": "${input}": _inputs."${input}".id
             '';
           };
 
           output = inputs:
-            let fact._behavior.onInputChange.${key} = inputs.${input}.id; in
+            let fact._behavior.onInputChange.${key}.${input} = inputs.${input}.id; in
             { success = fact; } //
             lib.optionalAttrs (next ? job) {
               failure = fact;
