@@ -375,9 +375,9 @@
 									</table>
 
 									<h3>Task Logs</h3>
-									{{if $wrapper.Logs.Stdout}}
+                  {{if (index $wrapper.Logs $taskName).Stdout}}
 										<table class="panel log">
-											{{range $wrapper.Logs.Stdout}}
+											{{range (index $wrapper.Logs $taskName).Stdout}}
 												<tr>
 													<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
 													<td class="line">{{.Text}}</td>
@@ -385,9 +385,9 @@
 											{{end}}
 										</table>
 									{{end}}
-									{{if $wrapper.Logs.Stderr}}
+									{{if (index $wrapper.Logs $taskName).Stderr}}
 										<table class="panel log">
-											{{range $wrapper.Logs.Stderr}}
+											{{range (index $wrapper.Logs $taskName).Stderr}}
 												<tr class="stderr">
 													<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
 													<td class="line">{{.Text}}</td>

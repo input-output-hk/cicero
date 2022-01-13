@@ -32,8 +32,8 @@ type RunService interface {
 	Update(pgx.Tx, *domain.Run) error
 	End(pgx.Tx, *domain.Run) error
 	Cancel(*domain.Run) error
-	JobLogs(uuid.UUID) (*domain.LokiOutput, error)
-	RunLogs(allocId string, taskGroup string) (*domain.LokiOutput, error)
+	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (*domain.LokiOutput, error)
+	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiOutput, error)
 }
 
 type runService struct {
@@ -149,33 +149,36 @@ func (self *runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) JobLogs(nomadJobID uuid.UUID) (*domain.LokiOutput, error) {
-	return self.LokiQueryRange(fmt.Sprintf(
-		`{nomad_job_id=%q}`,
-		nomadJobID.String(),
-	))
+func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (*domain.LokiOutput, error) {
+	return self.LokiQueryRange(
+		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
+		start, end)
 }
 
-func (self *runService) RunLogs(allocID, taskGroup string) (*domain.LokiOutput, error) {
-	return self.LokiQueryRange(fmt.Sprintf(
-		`{nomad_alloc_id=%q,nomad_task_group=%q}`,
-		allocID,
-		taskGroup,
-	))
+func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiOutput, error) {
+	return self.LokiQueryRange(
+		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
+		start, end)
 }
 
-func (self *runService) LokiQueryRange(query string) (*domain.LokiOutput, error) {
+func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (*domain.LokiOutput, error) {
 	linesToFetch := 10000
 	// TODO: figure out the correct value for our infra, 5000 is the default
 	// configuration in loki
 	var limit int64 = 5000
-	from := time.Unix(0, 0)
 	output := &domain.LokiOutput{
 		Stdout: []domain.LokiLine{},
 		Stderr: []domain.LokiLine{},
 	}
 
-	// TODO: reduce allocations in this loop
+	if end == nil {
+		now := time.Now().UTC()
+		end = &now
+	}
+
+	endLater := end.Add(1 * time.Minute)
+	end = &endLater
+
 	for {
 		req, err := http.NewRequest(
 			"GET",
@@ -189,8 +192,8 @@ func (self *runService) LokiQueryRange(query string) (*domain.LokiOutput, error)
 		q := req.URL.Query()
 		q.Set("query", query)
 		q.Set("limit", strconv.FormatInt(limit, 10))
-		q.Set("start", strconv.FormatInt(from.UnixNano(), 10))
-		q.Set("end", strconv.FormatInt(time.Now().UnixNano(), 10))
+		q.Set("start", strconv.FormatInt(start.UnixNano(), 10))
+		q.Set("end", strconv.FormatInt(end.UnixNano(), 10))
 		q.Set("direction", "FORWARD")
 		req.URL.RawQuery = q.Encode()
 
@@ -235,7 +238,7 @@ func (self *runService) LokiQueryRange(query string) (*domain.LokiOutput, error)
 			}
 
 			if int64(len(stream.Entries)) >= limit {
-				from = stream.Entries[len(stream.Entries)-1].Timestamp
+				start = stream.Entries[len(stream.Entries)-1].Timestamp
 			} else if int64(len(stream.Entries)) < limit {
 				return output, nil
 			}

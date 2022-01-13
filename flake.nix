@@ -38,9 +38,12 @@
 
           nomad-dev =
             let
-              cfg = builtins.toFile "nomad.hcl" ''
+              cfg = prev.writeText "nomad.hcl" ''
                 log_level = "TRACE"
                 plugin "nix_driver" {}
+                client {
+                  cni_path = "${prev.cni-plugins}/bin"
+                }
               '';
             in
             prev.writeShellScriptBin "nomad-dev" ''
