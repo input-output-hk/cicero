@@ -119,20 +119,20 @@
 						</thead>
 						<tbody>
 							<tr>
-								{{if or .output.Success .output.Failure}}
+								{{if or $.output.Success $.output.Failure}}
 									<td>
 										<textarea
 											readonly
 											rows="10"
 											cols="50"
-										>{{toJson .output.Success true}}</textarea>
+										>{{toJson $.output.Success true}}</textarea>
 									</td>
 									<td>
 										<textarea
 											readonly
 											rows="10"
 											cols="50"
-										>{{toJson .output.Failure true}}</textarea>
+										>{{toJson $.output.Failure true}}</textarea>
 									</td>
 								{{else}}
 									<td colspan="2">
