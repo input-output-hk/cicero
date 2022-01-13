@@ -179,7 +179,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 	}
 
 	output, err := e.evaluate(src, command{
-		Command: []string{"eval", "outputs", "job"},
+		Command: []string{"eval", "output", "job"},
 		ExtraEnv: []string{
 			"CICERO_ACTION_NAME=" + name,
 			"CICERO_ACTION_ID=" + id.String(),

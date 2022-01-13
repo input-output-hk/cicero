@@ -9,7 +9,7 @@
         "${workflow}": !="ping" & !="pong" & !="ping-pong"
       '';
 
-      outputs = _: {
+      output = _: {
         success.${workflow} = "ping";
       };
 

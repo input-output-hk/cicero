@@ -21,7 +21,7 @@ std.behavior.onInputChange "github-event" name args
     }
   '';
 
-  outputs = { github-event }:
+  output = { github-event }:
     let event = github-event.value.github-event; in
     {
       success."cicero/ci".start = {

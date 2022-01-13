@@ -13,10 +13,10 @@ rec {
           base.inputs or { } //
           part.inputs or { };
 
-        outputs = inputs:
+        output = inputs:
           lib.recursiveUpdate
-            (base.outputs or (_: { }) inputs)
-            (part.outputs or (_: { }) inputs);
+            (base.output or (_: { }) inputs)
+            (part.output or (_: { }) inputs);
       };
 
     behavior = {
@@ -33,7 +33,7 @@ rec {
             '';
           };
 
-          outputs = _:
+          output = _:
             let fact._behavior.once.${key} = null; in
             { success = fact; } //
             lib.optionalAttrs (next ? job) {
@@ -50,7 +50,7 @@ rec {
           '';
         };
 
-        outputs = _: {
+        output = _: {
           success._behavior.stopOnSuccess.${key} = null;
         };
       };
@@ -63,7 +63,7 @@ rec {
           '';
         };
 
-        outputs = _: {
+        output = _: {
           failure._behavior.stopOnFailure.${key} = null;
         };
       };
@@ -77,7 +77,7 @@ rec {
             '';
           };
 
-          outputs = inputs:
+          output = inputs:
             let fact._behavior.onInputChange.${key} = inputs.${input}.id; in
             { success = fact; } //
             lib.optionalAttrs (next ? job) {

@@ -9,7 +9,7 @@ std.behavior.onInputChange "state" workflow args {
     "${workflow}": "pong"
   '';
 
-  outputs = _: {
+  output = _: {
     success.${workflow} = "ping-pong";
   };
 

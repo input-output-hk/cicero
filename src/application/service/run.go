@@ -134,7 +134,7 @@ func (self *runService) End(tx pgx.Tx, run *domain.Run) error {
 func (self *runService) Cancel(run *domain.Run) error {
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopping Run")
 	// Nomad does not know whether the job simply ran to finish
-	// or was stopped manually. Delete outputs to avoid publishing them.
+	// or was stopped manually. Delete output to avoid publishing them.
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if err := self.runOutputRepository.Delete(tx, run.NomadJobID); err != nil {
 			return err

@@ -7,14 +7,14 @@ Think of it like an if-this-then-that machine on HashiCorp Nomad.
 Cicero’s actions are flexible enough to build Continuous Integration (CI) and
 Continuous Delivery (CD) pipelines. It offers a rich Web UI as well as a CLI
 tool for developers to query and inspect actions and their runs,
-as well as the action outputs. Integration with third party applications (e.g.
+as well as the action output. Integration with third party applications (e.g.
 JIRA) is possible, for automatic status updates. By using a declarative
 approach to actions, dependencies and intermediate results can be easily cached,
 and execution parallelised, thus reducing build times.
 
 ## Vocabulary
 
-- An **Action** is a description of a Nomad job with **inputs** and **outputs**.
+- An **Action** is a description of a Nomad job with **inputs** and **output**.
 	- An **Input** is mainly a CUE document that describes a required **fact**.
 	- An **Output** is a JSON document that will be published as a **fact**.
 		There may be one output for the success and failure case each.
@@ -48,7 +48,7 @@ matching fact for a negated input.
 If an action is runnable it is evaluated with its matching facts given as inputs.
 This produces a run for which a job is scheduled on the Nomad cluster.
 
-When this job finishes, respective outputs are published as new facts,
+When this job finishes, respective output are published as new facts,
 restarting the cycle.
 
 Facts can also be published from within a run using Cicero's API endpoints
@@ -67,7 +67,7 @@ Cicero currently only ships a Nix evaluator but others are planned.
 ## Nix Standard Library
 
 For actions written in Nix, Cicero provides a standard library of functions
-that help writing actions' inputs, outputs, and Nomad jobs in a concise way.
+that help writing actions' inputs, output, and Nomad jobs in a concise way.
 
 Documentation is currently only available in the form of source code
 [comments](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix)
