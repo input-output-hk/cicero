@@ -4,21 +4,21 @@ CREATE SCHEMA api;
 
 GRANT USAGE ON SCHEMA api TO cicero_api;
 
-CREATE VIEW api.current_actions AS
+CREATE VIEW api.current_action AS
 SELECT DISTINCT ON (name) *
-FROM public.actions
+FROM public.action
 ORDER BY name, created_at DESC;
 
-CREATE VIEW api.artifacts AS
+CREATE VIEW api.artifact AS
 SELECT *
-FROM facts
+FROM fact
 WHERE "binary" IS NOT NULL;
 
 CREATE FUNCTION api.input_select_all(paths jsonb)
-RETURNS SETOF facts
+RETURNS SETOF fact
 LANGUAGE plpgsql AS $$
 	DECLARE
-		sql text := 'SELECT * FROM public.facts WHERE TRUE';
+		sql text := 'SELECT * FROM public.fact WHERE TRUE';
 		parts text[];
 
 		i int := 1;
@@ -44,7 +44,7 @@ LANGUAGE plpgsql AS $$
 $$;
 
 CREATE FUNCTION api.input_select_latest(paths jsonb)
-RETURNS SETOF facts
+RETURNS SETOF fact
 LANGUAGE plpgsql AS $$
 	BEGIN
 		RETURN QUERY

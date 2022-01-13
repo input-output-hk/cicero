@@ -76,7 +76,7 @@ func TestShouldSaveAction(t *testing.T) {
 	}
 	mock, tx := mocks.BuildTransaction(context.Background(), t)
 	rows := mock.NewRows([]string{"id", "created_at"}).AddRow(actionId, dateTime)
-	mock.ExpectQuery("INSERT INTO actions").WithArgs(action.ID, action.Name, action.Source, marshalInputs).WillReturnRows(rows)
+	mock.ExpectQuery("INSERT INTO action").WithArgs(action.ID, action.Name, action.Source, marshalInputs).WillReturnRows(rows)
 	mock.ExpectCommit()
 	repository := NewActionRepository(mock)
 

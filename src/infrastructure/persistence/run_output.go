@@ -23,7 +23,7 @@ func NewRunOutputRepository(db config.PgxIface) repository.RunOutputRepository {
 func (a runOutputRepository) GetByRunId(id uuid.UUID) (output domain.RunOutput, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &output,
-		`SELECT success, failure FROM run_outputs WHERE run_id = $1`,
+		`SELECT success, failure FROM run_output WHERE run_id = $1`,
 		id,
 	)
 	return
@@ -32,7 +32,7 @@ func (a runOutputRepository) GetByRunId(id uuid.UUID) (output domain.RunOutput, 
 func (a runOutputRepository) Save(tx pgx.Tx, runId uuid.UUID, output *domain.RunOutput) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
-		`INSERT INTO run_outputs (run_id, success, failure) VALUES ($1, $2, $3)`,
+		`INSERT INTO run_output (run_id, success, failure) VALUES ($1, $2, $3)`,
 		runId, output.Success, output.Failure,
 	)
 	return
@@ -41,7 +41,7 @@ func (a runOutputRepository) Save(tx pgx.Tx, runId uuid.UUID, output *domain.Run
 func (a runOutputRepository) Update(tx pgx.Tx, runId uuid.UUID, output *domain.RunOutput) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
-		`UPDATE run_outputs (success, failure) VALUES ($2, $3) WHERE run_id = $1`,
+		`UPDATE run_output (success, failure) VALUES ($2, $3) WHERE run_id = $1`,
 		runId, output.Success, output.Failure,
 	)
 	return
@@ -50,7 +50,7 @@ func (a runOutputRepository) Update(tx pgx.Tx, runId uuid.UUID, output *domain.R
 func (a runOutputRepository) Delete(tx pgx.Tx, runId uuid.UUID) (err error) {
 	_, err = tx.Exec(
 		context.Background(),
-		`DELETE FROM run_outputs WHERE run_id = $1`,
+		`DELETE FROM run_output WHERE run_id = $1`,
 		runId,
 	)
 	return

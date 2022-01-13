@@ -1,6 +1,6 @@
 -- migrate:up
 
-create table nomad_events (
+create table nomad_event (
 	topic text NOT NULL,
 	type text NOT NULL,
 	key text NOT NULL,
@@ -11,4 +11,4 @@ create table nomad_events (
 
 -- migrate:down
 
-drop table nomad_events;
+drop table nomad_event;

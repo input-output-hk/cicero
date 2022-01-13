@@ -28,7 +28,7 @@ func NewFactRepository(db config.PgxIface) repository.FactRepository {
 func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &fact,
-		`SELECT id, run_id, value, created_at, binary_hash FROM facts WHERE id = $1`,
+		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE id = $1`,
 		id,
 	)
 	return
@@ -38,7 +38,7 @@ func (a *factRepository) GetByRunId(id uuid.UUID) (facts []*domain.Fact, err err
 	err = pgxscan.Select(
 		context.Background(), a.DB, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash
-		FROM facts WHERE run_id = $1
+		FROM fact WHERE run_id = $1
 		ORDER BY created_at DESC`,
 		id,
 	)
@@ -49,7 +49,7 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	var oid uint32
 	err = pgxscan.Get(
 		context.Background(), tx, &oid,
-		`SELECT "binary" FROM facts WHERE id = $1`,
+		`SELECT "binary" FROM fact WHERE id = $1`,
 		id,
 	)
 	if err != nil {
@@ -68,7 +68,7 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 func (a *factRepository) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
 	err = pgxscan.Get(
 		context.Background(), tx, &fact,
-		`SELECT id, run_id, value, created_at, binary_hash FROM facts `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
+		`SELECT id, run_id, value, created_at, binary_hash FROM fact `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
 		pathsToQueryArgs(fields)...,
 	)
 	return
@@ -77,7 +77,7 @@ func (a *factRepository) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact d
 func (a *factRepository) GetByFields(tx pgx.Tx, fields [][]string) (facts []*domain.Fact, err error) {
 	err = pgxscan.Select(
 		context.Background(), tx, &facts,
-		`SELECT id, run_id, value, created_at, binary_hash FROM facts `+sqlWhereHasPaths(fields),
+		`SELECT id, run_id, value, created_at, binary_hash FROM fact `+sqlWhereHasPaths(fields),
 		pathsToQueryArgs(fields)...,
 	)
 	return
@@ -145,7 +145,7 @@ func (a *factRepository) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) er
 
 	if err := pgxscan.Get(
 		context.Background(), tx, fact,
-		`INSERT INTO facts (run_id, value, binary_hash, "binary") VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
+		`INSERT INTO fact (run_id, value, binary_hash, "binary") VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
 		fact.RunId, fact.Value, fact.BinaryHash, binaryOid,
 	); err != nil {
 		return err
