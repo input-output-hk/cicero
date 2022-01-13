@@ -2,14 +2,15 @@ package persistence
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"github.com/input-output-hk/cicero/src/config/mocks"
-	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pashagolub/pgxmock"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/input-output-hk/cicero/src/config/mocks"
+	"github.com/input-output-hk/cicero/src/domain"
 )
 
 func TestShouldGetRunByActionId(t *testing.T) {
