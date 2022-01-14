@@ -47,43 +47,66 @@ type LoggerConfig struct {
 }
 
 func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
-	consoleLoggingEnabled, err := GetenvBool("CONSOLE_LOGGING_ENABLED")
-	if err != nil {
-		return nil, err
-	}
-	encodeLogsAsJson, err := GetenvBool("ENCODE_LOGS_AS_JSON")
-	if err != nil {
-		return nil, err
-	}
-	fileLoggingEnabled, err := GetenvBool("FILE_LOGGING_ENABLED")
-	if err != nil {
-		return nil, err
-	}
 	conf := LoggerConfig{
-		ConsoleLoggingEnabled: *consoleLoggingEnabled,
-		DebugModeEnabled:      debugModeEnabled,
-		EncodeLogsAsJson:      *encodeLogsAsJson,
-		FileLoggingEnabled:    *fileLoggingEnabled,
+		DebugModeEnabled: debugModeEnabled,
 	}
-	if *fileLoggingEnabled {
-		conf.Directory = GetenvStr("LOGS_DIRECTORY")
-		conf.Filename = GetenvStr("LOGS_FILE_NAME")
-		if maxSize, err := GetenvInt("LOGS_MAX_SIZE"); err != nil {
-			return nil, err
+
+	if v, err := GetenvBool("CONSOLE_LOGGING_ENABLED"); err != nil {
+		return nil, err
+	} else if v != nil {
+		conf.ConsoleLoggingEnabled = *v
+	} else {
+		conf.ConsoleLoggingEnabled = true
+	}
+
+	if v, err := GetenvBool("ENCODE_LOGS_AS_JSON"); err != nil {
+		return nil, err
+	} else if v != nil {
+		conf.EncodeLogsAsJson = *v
+	} else {
+		conf.EncodeLogsAsJson = true
+	}
+
+	if v, err := GetenvBool("FILE_LOGGING_ENABLED"); err != nil {
+		return nil, err
+	} else if v != nil && *v {
+		if v := GetenvStr("LOGS_DIRECTORY"); v == "" {
+			conf.Directory = "logs"
 		} else {
-			conf.MaxSize = *maxSize
+			conf.Directory = v
 		}
-		if maxBackups, err := GetenvInt("LOGS_MAX_BACKUPS"); err != nil {
-			return nil, err
+
+		if v := GetenvStr("LOGS_FILE_NAME"); v == "" {
+			conf.Filename = "cicero.log"
 		} else {
-			conf.MaxBackups = *maxBackups
+			conf.Filename = v
 		}
-		if maxAge, err := GetenvInt("LOGS_MAX_AGE"); err != nil {
+
+		if v, err := GetenvInt("LOGS_MAX_SIZE"); err != nil {
 			return nil, err
+		} else if v != nil {
+			conf.MaxSize = *v
 		} else {
-			conf.MaxAge = *maxAge
+			conf.MaxSize = 10
+		}
+
+		if v, err := GetenvInt("LOGS_MAX_BACKUPS"); err != nil {
+			return nil, err
+		} else if v != nil {
+			conf.MaxBackups = *v
+		} else {
+			conf.MaxBackups = 10
+		}
+
+		if v, err := GetenvInt("LOGS_MAX_AGE"); err != nil {
+			return nil, err
+		} else if v != nil {
+			conf.MaxAge = *v
+		} else {
+			conf.MaxAge = 10
 		}
 	}
+
 	return &conf, nil
 }
 
