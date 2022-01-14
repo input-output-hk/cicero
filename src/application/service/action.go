@@ -36,6 +36,7 @@ type actionService struct {
 	evaluationService EvaluationService
 	runService        RunService
 	nomadClient       application.NomadClient
+	db                config.PgxIface
 }
 
 func NewActionService(db config.PgxIface, nomadClient application.NomadClient, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
@@ -240,7 +241,7 @@ func filterFields(factValue *interface{}, filter cue.Value) {
 
 func (self *actionService) getInputFactLatest(tx pgx.Tx, value cue.Value) (*domain.Fact, error) {
 	fact, err := self.factRepository.GetLatestByFields(tx, collectFieldPaths(value))
-	if err != nil && errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && self.db.NotFound(err) {
 		return nil, nil
 	}
 	return &fact, err
@@ -248,7 +249,7 @@ func (self *actionService) getInputFactLatest(tx pgx.Tx, value cue.Value) (*doma
 
 func (self *actionService) getInputFacts(tx pgx.Tx, value cue.Value) ([]*domain.Fact, error) {
 	facts, err := self.factRepository.GetByFields(tx, collectFieldPaths(value))
-	if err != nil && errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && self.db.NotFound(err) {
 		return nil, nil
 	}
 	return facts, err

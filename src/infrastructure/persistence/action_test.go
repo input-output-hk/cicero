@@ -33,7 +33,7 @@ func TestShouldGetActionById(t *testing.T) {
 		action.Source, action.CreatedAt)
 	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId).WillReturnRows(rows)
 
-	repository := NewActionRepository(mock)
+	repository := NewActionRepository(mocks.NewDBMocked(mock))
 
 	// when
 	ActionResult, err := repository.GetById(actionId)
@@ -74,9 +74,9 @@ func TestShouldSaveAction(t *testing.T) {
 		t.Fatalf("an error '%s' was not expected when marshaling the action.Inputs", err)
 	}
 	mock, tx := mocks.BuildTransaction(context.Background(), t)
-	rows := mock.NewRows([]string{"id", "created_at"}).AddRow(actionId, dateTime)
-	mock.ExpectQuery("INSERT INTO actions").WithArgs(action.ID, action.Name, action.Source, marshalInputs).WillReturnRows(rows)
-	mock.ExpectCommit()
+	rows := mock.DB.NewRows([]string{"id", "created_at"}).AddRow(actionId, dateTime)
+	mock.DB.ExpectQuery("INSERT INTO actions").WithArgs(action.ID, action.Name, action.Source, marshalInputs).WillReturnRows(rows)
+	mock.DB.ExpectCommit()
 	repository := NewActionRepository(mock)
 
 	// when

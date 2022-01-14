@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
@@ -30,7 +29,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	self.Logger.Info().Msg("Starting")
 
 	index, err := self.NomadEventService.GetLastNomadEvent()
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && !self.Db.NotFound(err) {
 		return errors.WithMessage(err, "Could not get last Nomad event index")
 	}
 	index += 1
@@ -102,7 +101,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 
 	run, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
-		if pgxscan.NotFound(err) {
+		if self.Db.NotFound(err) {
 			self.Logger.Debug().Str("nomad-job-id", allocation.JobID).Msg("Ignoring Nomad event for Job (no such Run)")
 			return nil
 		}

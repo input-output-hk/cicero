@@ -31,7 +31,7 @@ func TestShouldGetRunByActionId(t *testing.T) {
 	defer mock.Close(context.Background())
 	rows := mock.NewRows([]string{"nomad_job_id", "action_id", "created_at", "finished_at"}).AddRow(run.NomadJobID, run.ActionId, run.CreatedAt, run.FinishedAt)
 	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId).WillReturnRows(rows)
-	repository := NewRunRepository(mock)
+	repository := NewRunRepository(mocks.NewDBMocked(mock))
 
 	// when
 	runResult, err := repository.GetByActionId(actionId)
@@ -56,8 +56,8 @@ func TestShouldUpdateRun(t *testing.T) {
 
 	// given
 	mock, tx := mocks.BuildTransaction(context.Background(), t)
-	mock.ExpectExec("UPDATE runs").WithArgs(run.NomadJobID, run.FinishedAt, run.Success, run.Failure).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
-	mock.ExpectCommit()
+	mock.DB.ExpectExec("UPDATE runs").WithArgs(run.NomadJobID, run.FinishedAt, run.Success, run.Failure).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.DB.ExpectCommit()
 	repository := NewRunRepository(mock)
 
 	// when
