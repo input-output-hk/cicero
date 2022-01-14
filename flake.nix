@@ -49,9 +49,12 @@
             prev.writeShellScriptBin "nomad-dev" ''
               set -exuo pipefail
 
-              sudo ${prev.nomad}/bin/nomad \
-                agent \
-                -dev \
+              # Preserve PATH for systems that
+              # don't have nix in their root's PATH,
+              # like conventional linux distros
+              # with a standalone nix install.
+              sudo --preserve-env=PATH \
+                ${prev.nomad}/bin/nomad agent -dev \
                 -config ${cfg} \
                 -plugin-dir "${final.nomad-driver-nix}/bin"
             '';
