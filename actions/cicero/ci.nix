@@ -12,8 +12,7 @@ std.behavior.onInputChange "start" name args
   '';
 
   job = { start }:
-    let cfg = start.value."${name}".start;
-    in
+    let cfg = start.value.${name}.start; in
     std.chain args [
       actionLib.jobDefaults
 
@@ -23,7 +22,10 @@ std.behavior.onInputChange "start" name args
         cicero-ci.group.cicero = {
           network = {
             mode = "bridge";
-            port.http.to = 8080;
+            port = {
+              http.to = 8080;
+              db.to = 5432;
+            };
           };
 
           task = {
@@ -31,70 +33,64 @@ std.behavior.onInputChange "start" name args
               (lib.optionalAttrs (cfg ? statuses_url)
                 (std.github.reportStatus cfg.statuses_url))
 
-              (std.wrapScript "bash" (next: ''
-                set -x
-                mkdir -p /etc
-                echo "nameserver 1.1.1.1" >> /etc/resolv.conf
-                ${lib.escapeShellArgs next}
-              ''))
+              (std.networking.addNameservers [ "1.1.1.1" ])
 
               (std.git.clone cfg)
 
               {
-                resources = {
-                  memory = 32 * 1024;
-                  cpu = 16000;
-                };
+                resources.memory = 1024 * 3;
 
                 config.packages = std.data-merge.append [
-                  "github:input-output-hk/cicero#devShell.x86_64-linux"
+                  "github:input-output-hk/cicero/${cfg.sha}#devShell.x86_64-linux"
                 ];
               }
 
               (std.wrapScript "bash" (next: ''
-                set -exuo pipefail
-
-                golangci-lint run
-                gocritic check -enableAll -disable=ifElseChain,ptrToRefParam,unnamedResult,appendAssign ./...
-                nixpkgs-fmt --check .
-
+                set -ex
+                go generate ./...
+                lint
                 ${lib.escapeShellArgs next}
               ''))
 
               std.nix.build
             ];
 
-            dev = {
-              config.nixos =
-                "github:input-output-hk/cicero/${cfg.sha}#nixosConfigurations.dev";
-
+            cicero = {
               lifecycle = {
                 hook = "prestart";
                 sidecar = true;
               };
+
+              config = {
+                packages = [
+                  "github:input-output-hk/cicero/${cfg.sha}#cicero-entrypoint"
+                ];
+                command = [ "/bin/entrypoint" ];
+              };
+
+              env.DATABASE_URL = "postgres://cicero:@127.0.0.1:\${NOMAD_PORT_db}/cicero?sslmode=disable";
+            };
+
+            dev = {
+              lifecycle = {
+                hook = "prestart";
+                sidecar = true;
+              };
+
+              config.nixos = "github:input-output-hk/cicero/${cfg.sha}#nixosConfigurations.dev";
             };
 
             schemathesis = std.chain args [
               (lib.optionalAttrs (cfg ? statuses_url)
                 (std.github.reportStatus cfg.statuses_url))
 
-              (std.wrapScript "bash" (next: ''
-                set -ex
-                mkdir -p /etc
-                echo "nameserver 1.1.1.1" >> /etc/resolv.conf
-                exec ${lib.escapeShellArgs next}
-              ''))
+              (std.networking.addNameservers [ "1.1.1.1" ])
 
               (std.git.clone cfg)
 
               {
-                resources = {
-                  memory = 32 * 1024;
-                  cpu = 16000;
-                };
-
                 config.packages = std.data-merge.append [
-                  "github:input-output-hk/cicero#devShell.x86_64-linux"
+                  "github:input-output-hk/cicero/${cfg.sha}#devShell.x86_64-linux"
                 ];
               }
 

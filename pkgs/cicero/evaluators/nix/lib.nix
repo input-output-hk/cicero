@@ -207,6 +207,33 @@ rec {
             template = data-merge.append outer.template;
           };
 
+      networking = {
+        nameservers = nameservers: action: next:
+          data-merge.merge
+            (next // {
+              # XXX we have to pre-create `template` because it may not be present
+              # see https://github.com/divnix/data-merge/issues/1
+              template = next.template or [ ];
+            })
+            {
+              template = data-merge.append [{
+                destination = "/etc/resolv.conf";
+                left_delimiter = "";
+                right_delimiter = "";
+                data = lib.concatStringsSep "\n" (map (ns: "nameserver " + ns) nameservers);
+              }];
+            };
+
+        addNameservers = nameservers:
+          wrapScript "bash" (next: ''
+            mkdir -p /etc
+            for nameserver in ${lib.escapeShellArgs nameservers}; do
+              echo "nameserver $nameserver" >> /etc/resolv.conf
+            done
+            ${lib.escapeShellArgs next}
+          '');
+      };
+
       nix = {
         install = action: next:
           data-merge.merge
@@ -359,6 +386,6 @@ rec {
   inherit (tasks) script;
   inherit (chains) chain;
   inherit (chains.jobs) escapeNames singleTask;
-  inherit (chains.tasks) wrapScript nix makes git github;
+  inherit (chains.tasks) wrapScript networking nix makes git github;
   inherit data-merge;
 }
