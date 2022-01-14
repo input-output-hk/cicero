@@ -98,6 +98,8 @@ Run the required services in Nomad:
 Start the Nomad follower to capture logs:
 
 	sudo nomad-follower
+	# If nomad-follower is not found, use the full path:
+	# sudo $DEVSHELL_DIR/bin/nomad-follower
 
 Migrate the database:
 
