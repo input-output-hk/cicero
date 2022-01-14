@@ -64,8 +64,8 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 
 	db := once(func() interface{} {
 		if db, err := config.DBConnection(); err != nil {
-			logger.Fatal().Err(err)
-			return err
+			logger.Fatal().Err(err).Send()
+			return nil
 		} else {
 			return db
 		}
@@ -73,8 +73,8 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 
 	nomadClient := once(func() interface{} {
 		if client, err := config.NewNomadClient(); err != nil {
-			logger.Fatal().Err(err)
-			return err
+			logger.Fatal().Err(err).Send()
+			return nil
 		} else {
 			return client
 		}
