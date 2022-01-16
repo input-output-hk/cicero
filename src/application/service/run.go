@@ -27,7 +27,7 @@ type RunService interface {
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
 	GetByActionId(uuid.UUID) ([]*domain.Run, error)
-	GetAll() ([]*domain.Run, error)
+	GetAll(page *domain.FetchParam) (*domain.FetchRunsResponse, error)
 	Save(pgx.Tx, *domain.Run, *domain.RunOutput) error
 	Update(pgx.Tx, *domain.Run) error
 	End(pgx.Tx, *domain.Run) error
@@ -93,9 +93,21 @@ func (self *runService) GetByActionId(id uuid.UUID) (runs []*domain.Run, err err
 	return
 }
 
-func (self *runService) GetAll() ([]*domain.Run, error) {
+func (self *runService) GetAll(fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {
 	self.logger.Debug().Msg("Getting all Runs")
-	return self.runRepository.GetAll()
+	if runs, err := self.runRepository.GetAll(fetchParam); err != nil {
+		self.logger.Err(err).Msgf("fail to fetch runs with offset %s and limit %s", fetchParam.OffSet, fetchParam.Limit)
+		return nil, err
+	} else {
+		size := len(runs)
+		return &domain.FetchRunsResponse{
+			Runs: runs,
+			Pagination: domain.PageResponse{
+				NextOffSet: fetchParam.OffSet + fetchParam.Limit,
+				LastPage:   size > fetchParam.Limit,
+			},
+		}, nil
+	}
 }
 
 func (self *runService) Save(tx pgx.Tx, run *domain.Run, output *domain.RunOutput) error {

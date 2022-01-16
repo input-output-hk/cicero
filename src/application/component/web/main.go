@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/davidebianchi/gswagger/apirouter"
@@ -383,30 +384,46 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func getPage(req *http.Request) (*domain.FetchParam, error) {
+	offset, err := strconv.Atoi(mux.Vars(req)["offset"])
+	if err != nil {
+		return nil, errors.New("offset parameter is invalid, should be positive integer")
+	}
+	limit, err := strconv.Atoi(mux.Vars(req)["limit"])
+	if err != nil {
+		return nil, errors.New("limit parameter is invalid, should be positive integer")
+	}
+	return &domain.FetchParam{Limit: limit, OffSet: offset}, nil
+}
+
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
-	if runs, err := self.RunService.GetAll(); err != nil {
+	if fetchParam, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 	} else {
-		type RunWrapper struct {
-			*domain.Run
-			Action *domain.Action
-		}
+		if runs, err := self.RunService.GetAll(fetchParam); err != nil {
+			self.ServerError(w, err)
+		} else {
+			type RunWrapper struct {
+				*domain.Run
+				Action *domain.Action
+			}
 
-		runWrappers := make([]RunWrapper, len(runs))
-		for i, run := range runs {
-			if action, err := self.ActionService.GetByRunId(run.NomadJobID); err != nil {
-				self.ServerError(w, err)
-				return
-			} else {
-				runWrappers[i] = RunWrapper{
-					Run:    run,
-					Action: &action,
+			runWrappers := make([]RunWrapper, len(runs.Runs))
+			for i, run := range runs.Runs {
+				if action, err := self.ActionService.GetById(run.ActionId); err != nil {
+					self.ServerError(w, err)
+					return
+				} else {
+					runWrappers[i] = RunWrapper{
+						Run:    run,
+						Action: &action,
+					}
 				}
 			}
-		}
 
-		if err := render("run/index.html", w, runWrappers); err != nil {
-			self.ServerError(w, err)
+			if err := render("run/index.html", w, runWrappers); err != nil {
+				self.ServerError(w, err)
+			}
 		}
 	}
 }
@@ -445,10 +462,14 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 }
 
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
-	if runs, err := self.RunService.GetAll(); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
+	if fetchParam, err := getPage(req); err != nil {
+		self.ServerError(w, err)
 	} else {
-		self.json(w, runs, http.StatusOK)
+		if runs, err := self.RunService.GetAll(fetchParam); err != nil {
+			self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
+		} else {
+			self.json(w, runs, http.StatusOK)
+		}
 	}
 }
 

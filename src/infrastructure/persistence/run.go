@@ -38,10 +38,14 @@ func (a *runRepository) GetByActionId(id uuid.UUID) (runs []*domain.Run, err err
 	return
 }
 
-func (a *runRepository) GetAll() (instances []*domain.Run, err error) {
+func (a *runRepository) GetAll(fetchParam *domain.FetchParam) (instances []*domain.Run, err error) {
+	from := fetchParam.OffSet
+	to := fetchParam.Limit + fetchParam.Limit + 1
 	err = pgxscan.Select(
 		context.Background(), a.DB, &instances,
-		`SELECT * FROM run ORDER BY created_at DESC`,
+		`SELECT * FROM run ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+		to,
+		from,
 	)
 	return
 }

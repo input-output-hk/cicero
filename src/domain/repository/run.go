@@ -10,7 +10,7 @@ import (
 type RunRepository interface {
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetByActionId(uuid.UUID) ([]*domain.Run, error)
-	GetAll() ([]*domain.Run, error)
+	GetAll(*domain.FetchParam) ([]*domain.Run, error)
 	Save(pgx.Tx, *domain.Run) error
 	Update(pgx.Tx, *domain.Run) error
 }
