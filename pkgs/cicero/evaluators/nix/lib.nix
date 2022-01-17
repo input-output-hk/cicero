@@ -320,11 +320,6 @@ rec {
             (inner: ''
               export SSL_CERT_FILE=/current-profile/etc/ssl/certs/ca-bundle.crt
 
-              # TODO Only get from vault. Env var is just for development.
-              if [[ -z "''${GITHUB_TOKEN:-}" ]]; then
-                GITHUB_TOKEN=$(vault kv get -field=token kv/data/cicero/github)
-              fi
-
               function cleanup {
                 rm -f "$secret_headers"
               }
@@ -333,7 +328,7 @@ rec {
               secret_headers="$(mktemp)"
 
               cat >> "$secret_headers" <<EOF
-              Authorization: token $GITHUB_TOKEN
+              Authorization: token $(< "$NOMAD_SECRETS_DIR"/cicero/github/token)
               EOF
 
               function report {
@@ -375,9 +370,13 @@ rec {
             config.packages = data-merge.append [
               "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
               "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
-              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#vault"
               "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
             ];
+
+            template = data-merge.append [{
+              destination = "secrets/cicero/github/token";
+              data = ''{{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}'';
+            }];
           };
     };
   };
