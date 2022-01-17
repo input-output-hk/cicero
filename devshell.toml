@@ -11,8 +11,8 @@ name = "LOKI_ADDR"
 value = "http://127.0.0.1:3100"
 
 [[env]]
-name = "ENCODE_LOGS_AS_JSON"
-value = "false"
+name = "CONSOLE_LOGGING_ENABLED"
+value = "true"
 
 [[commands]]
 package = "go"

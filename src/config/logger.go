@@ -12,7 +12,7 @@ import (
 )
 
 type SupervisorLogger struct {
-	Logger *zerolog.Logger
+	*zerolog.Logger
 }
 
 func (l *SupervisorLogger) Printf(format string, v ...interface{}) {
@@ -23,14 +23,12 @@ func (l *SupervisorLogger) Println(v ...interface{}) {
 }
 
 type LoggerConfig struct {
-	// Enable console logging
+	// Print human-readable output to console
 	ConsoleLoggingEnabled bool
 
 	// Enable Debug mode
 	DebugModeEnabled bool
 
-	// EncodeLogsAsJson makes the log framework log JSON
-	EncodeLogsAsJson bool
 	// FileLoggingEnabled makes the framework log to a file
 	// the fields below can be skipped if this value is false!
 	FileLoggingEnabled bool
@@ -55,16 +53,6 @@ func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
 		return nil, err
 	} else if v != nil {
 		conf.ConsoleLoggingEnabled = *v
-	} else {
-		conf.ConsoleLoggingEnabled = true
-	}
-
-	if v, err := GetenvBool("ENCODE_LOGS_AS_JSON"); err != nil {
-		return nil, err
-	} else if v != nil {
-		conf.EncodeLogsAsJson = *v
-	} else {
-		conf.EncodeLogsAsJson = true
 	}
 
 	if v, err := GetenvBool("FILE_LOGGING_ENABLED"); err != nil {
@@ -114,28 +102,34 @@ func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
 	config, err := buildLoggerConfig(debugModeEnabled)
 	if err != nil {
 		log.Fatal().Err(err).Msg("can't get logger config")
+		return nil
 	}
-	var writers []io.Writer
 
+	var writers []io.Writer
 	if config.ConsoleLoggingEnabled {
-		writers = append(writers, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+		writers = append(writers, zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+			w.Out = os.Stderr
+			w.TimeFormat = time.RFC3339
+		}))
+	} else {
+		writers = append(writers, os.Stderr)
 	}
 	if config.FileLoggingEnabled {
 		writers = append(writers, newRollingFile(config))
 	}
-	mw := io.MultiWriter(writers...)
 
-	logger := zerolog.New(mw).With().Timestamp().Logger()
+	logger := zerolog.New(zerolog.MultiLevelWriter(writers...)).
+		With().Timestamp().Logger()
 
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	if debugModeEnabled {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
 
 	logger.Info().
 		Bool("consoleLogging", config.ConsoleLoggingEnabled).
 		Bool("debugMode", config.DebugModeEnabled).
-		Bool("jsonLogOutput", config.EncodeLogsAsJson).
 		Bool("fileLogging", config.FileLoggingEnabled).
 		Str("logDirectory", config.Directory).
 		Str("fileName", config.Filename).
