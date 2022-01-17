@@ -3,6 +3,8 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -213,7 +215,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}/cancel", self.RunIdCancelGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run", self.RunGet).Queries("offset", "{offset}", "limit", "{limit}").Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
@@ -385,11 +387,11 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func getPage(req *http.Request) (*domain.FetchParam, error) {
-	offset, err := strconv.Atoi(mux.Vars(req)["offset"])
+	offset, err := strconv.Atoi(req.FormValue("offset"))
 	if err != nil {
 		return nil, errors.New("offset parameter is invalid, should be positive integer")
 	}
-	limit, err := strconv.Atoi(mux.Vars(req)["limit"])
+	limit, err := strconv.Atoi(req.FormValue("limit"))
 	if err != nil {
 		return nil, errors.New("limit parameter is invalid, should be positive integer")
 	}
@@ -398,14 +400,20 @@ func getPage(req *http.Request) (*domain.FetchParam, error) {
 
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	if fetchParam, err := getPage(req); err != nil {
-		self.ServerError(w, err)
+		self.BadRequest(w, err)
 	} else {
+		self.Logger.Info().Msgf("Page offset: %d - limit: %d", fetchParam.OffSet, fetchParam.Limit)
 		if runs, err := self.RunService.GetAll(fetchParam); err != nil {
 			self.ServerError(w, err)
 		} else {
+
 			type RunWrapper struct {
 				*domain.Run
 				Action *domain.Action
+			}
+			type ResponseWrapper struct {
+				Runs []RunWrapper
+				Page domain.PageResponse
 			}
 
 			runWrappers := make([]RunWrapper, len(runs.Runs))
@@ -420,8 +428,20 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 					}
 				}
 			}
+			responseWrapper := &ResponseWrapper{
+				Runs: runWrappers,
+				Page: domain.PageResponse{
+					PageNumber: runs.FetchParamResponse.PageNumber,
+				},
+			}
+			if runs.FetchParamResponse.PrevOffSet != nil {
+				responseWrapper.Page.PrevPage = html.UnescapeString(fmt.Sprintf(`run/?limit=%d&offset=%d`, fetchParam.Limit, *runs.FetchParamResponse.PrevOffSet))
+			}
+			if runs.FetchParamResponse.NextOffSet != nil {
+				responseWrapper.Page.NextPage = html.UnescapeString(fmt.Sprintf(`run/?limit=%d&offset=%d`, fetchParam.Limit, *runs.FetchParamResponse.NextOffSet))
+			}
 
-			if err := render("run/index.html", w, runWrappers); err != nil {
+			if err := render("run/index.html", w, responseWrapper); err != nil {
 				self.ServerError(w, err)
 			}
 		}
@@ -462,6 +482,7 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 }
 
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
+	self.Logger.Info().Msg("When is called???")
 	if fetchParam, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 	} else {

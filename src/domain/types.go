@@ -165,16 +165,23 @@ type Run struct {
 }
 
 type FetchRunsResponse struct {
-	Runs []*Run
-	Pagination PageResponse
+	Runs               []*Run
+	FetchParamResponse FetchParamResponse
 }
 
 type PageResponse struct {
-	NextOffSet int
-	LastPage bool
+	PageNumber int
+	PrevPage   string
+	NextPage   string
 }
 
 type FetchParam struct {
-	Limit int
+	Limit  int
 	OffSet int
+}
+
+type FetchParamResponse struct {
+	PageNumber int
+	PrevOffSet *int
+	NextOffSet *int
 }

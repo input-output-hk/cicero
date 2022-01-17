@@ -31,6 +31,10 @@ func (self *Web) NotFound(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusNotFound)
 }
 
+func (self *Web) BadRequest(w http.ResponseWriter, err error) {
+	http.Error(w, err.Error(), http.StatusBadRequest)
+}
+
 func (self *Web) Error(w http.ResponseWriter, err error, status int) {
 	self.Logger.Err(err)
 	http.Error(w, err.Error(), status)

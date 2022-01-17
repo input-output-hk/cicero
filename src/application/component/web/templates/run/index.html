@@ -12,7 +12,7 @@
 			</tr>
 		</thead>
 		<tbody>
-			{{range .}}
+			{{range .Runs}}
 				<tr>
 					{{with .Action}}
 						<td>
@@ -47,4 +47,21 @@
 			{{end}}
 		</tbody>
 	</table>
+	<nav aria-label="...">
+		<ul class="pagination justify-content-center">
+
+			<li class="page-item">
+				<a class="page-link" href="{{.Page.PrevPage}}">Previous</a>
+			</li>
+
+			<li class="page-item active" aria-current="page">
+				<a class="page-link" href="#"> <span class="sr-only">{{.Page.PageNumber}}</span></a>
+			</li>
+
+			<li class="page-item">
+				<a class="page-link" href="{{.Page.NextPage}}">Next</a>
+			</li>
+
+		</ul>
+	</nav>
 {{end}}
