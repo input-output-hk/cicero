@@ -19,6 +19,7 @@ rec {
                   CICERO_WEB_URL = "http://127.0.0.1:8080";
                   CICERO_API_URL = "http://127.0.0.1:8080/api";
                 };
+                vault.policies = [ "cicero" ];
               }) group.task or { };
           }) job.group or { };
       })
