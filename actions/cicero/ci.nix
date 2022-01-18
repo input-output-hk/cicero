@@ -47,7 +47,6 @@ std.behavior.onInputChange "start" name args
 
               (std.wrapScript "bash" (next: ''
                 set -ex
-                go generate ./...
                 lint
                 ${lib.escapeShellArgs next}
               ''))
