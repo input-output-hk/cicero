@@ -15,7 +15,7 @@ buildGoModule rec {
 
   nativeBuildInputs = [ go-mockery ];
 
-  preBuild = ''
+  preCheck = ''
     go generate ./...
   '';
 
