@@ -98,48 +98,9 @@
 					</tbody>
 				</table>
 			{{end}}
-
-			{{with .Runs}}
-				<table class="table">
-					<thead>
-						<tr>
-							<th colspan="4">Runs</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr>
-							<th>Created At</th>
-							<th>Finished At</th>
-							<th>Duration</th>
-							<th>Nomad Job ID</th>
-						</tr>
-						{{range .}}
-							<tr>
-								<td>{{.CreatedAt}}</td>
-								<td>
-									{{if .FinishedAt}}
-										{{.FinishedAt}}
-									{{else}}
-										<a href="/run/{{.NomadJobID}}/cancel">
-											Cancel
-										</a>
-									{{end}}
-								</td>
-								<td class="numerical">
-									{{if .FinishedAt}}
-										{{.FinishedAt.Sub .CreatedAt}}
-									{{end}}
-								</td>
-								<td>
-									<a href="/run/{{.NomadJobID}}">
-										{{.NomadJobID}}
-									</a>
-								</td>
-							</tr>
-						{{end}}
-					</tbody>
-				</table>
-			{{end}}
+			<div class="embed-container">
+				<iframe src="/action/{{.Action.ID}}/run?limit=10&offset=0"></iframe>
+			</div>
 		</div>
 	</div>
 

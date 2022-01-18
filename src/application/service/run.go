@@ -26,8 +26,8 @@ import (
 type RunService interface {
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
-	GetByActionId(uuid.UUID) ([]*domain.Run, error)
-	GetAll(page *domain.FetchParam) (*domain.FetchRunsResponse, error)
+	GetByActionId(id uuid.UUID, fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error)
+	GetAll(fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error)
 	Save(pgx.Tx, *domain.Run, *domain.RunOutput) error
 	Update(pgx.Tx, *domain.Run) error
 	End(pgx.Tx, *domain.Run) error
@@ -84,13 +84,32 @@ func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOu
 	return
 }
 
-func (self *runService) GetByActionId(id uuid.UUID) (runs []*domain.Run, err error) {
+func (self *runService) GetByActionId(id uuid.UUID, fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {
 	self.logger.Debug().Str("action-id", id.String()).Msg("Getting Run by Action ID")
-	runs, err = self.runRepository.GetByActionId(id)
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select existing Run by Action ID %q", id)
+	if runs, err := self.runRepository.GetByActionId(id, fetchParam); err != nil {
+		return nil, errors.WithMessagef(err, "Could not select existing Run by Action ID %q", id)
+	} else {
+		sizePage := len(runs)
+		if sizePage > 0 {
+			runs = runs[:len(runs)-1]
+		}
+		var fetchParamResponse = &domain.FetchRunsResponse{
+			Runs: runs,
+			FetchParamResponse: domain.FetchParamResponse{
+				PageNumber: fetchParam.OffSet / fetchParam.Limit,
+			},
+		}
+		if (fetchParam.OffSet - fetchParam.Limit) >= 0 {
+			prevOffSet := fetchParam.OffSet - fetchParam.Limit
+			fetchParamResponse.FetchParamResponse.PrevOffSet = &prevOffSet
+		}
+
+		if sizePage == (fetchParam.Limit + 1) {
+			nextOffSet := fetchParam.OffSet + fetchParam.Limit
+			fetchParamResponse.FetchParamResponse.NextOffSet = &nextOffSet
+		}
+		return fetchParamResponse, nil
 	}
-	return
 }
 
 func (self *runService) GetAll(fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {

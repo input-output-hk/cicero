@@ -219,6 +219,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}/run", self.GetRunsByActionId).Queries("offset", "{offset}", "limit", "{limit}").Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
@@ -265,18 +266,65 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (self *Web) GetRunsByActionId(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+	} else if fetchParam, err := getPage(req); err != nil {
+		self.BadRequest(w, err)
+		return
+	} else if runs, err := self.RunService.GetByActionId(id, fetchParam); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get Runs by Action ID: %q", id))
+		return
+	} else {
+
+		type RunWrapper struct {
+			*domain.Run
+			Action *domain.Action
+		}
+		type ResponseWrapper struct {
+			Runs []RunWrapper
+			Page domain.PageResponse
+		}
+
+		runWrappers := make([]RunWrapper, len(runs.Runs))
+		for i, run := range runs.Runs {
+			if action, err := self.ActionService.GetById(run.ActionId); err != nil {
+				self.ServerError(w, err)
+				return
+			} else {
+				runWrappers[i] = RunWrapper{
+					Run:    run,
+					Action: &action,
+				}
+			}
+		}
+		responseWrapper := &ResponseWrapper{
+			Runs: runWrappers,
+			Page: domain.PageResponse{
+				PageNumber: runs.FetchParamResponse.PageNumber,
+			},
+		}
+		if runs.FetchParamResponse.PrevOffSet != nil {
+			responseWrapper.Page.PrevPage = html.UnescapeString(fmt.Sprintf(`run?limit=%d&offset=%d`, fetchParam.Limit, *runs.FetchParamResponse.PrevOffSet))
+		}
+		if runs.FetchParamResponse.NextOffSet != nil {
+			responseWrapper.Page.NextPage = html.UnescapeString(fmt.Sprintf(`run?limit=%d&offset=%d`, fetchParam.Limit, *runs.FetchParamResponse.NextOffSet))
+		}
+
+		if err := render("action/runs.html", w, responseWrapper); err != nil {
+			self.ServerError(w, err)
+		}
+	}
+}
+
 func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
-	} else if runs, err := self.RunService.GetByActionId(id); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "Could not get Runs by Action ID: %q", id))
-		return
 	} else if err := render("action/[id].html", w, map[string]interface{}{
 		"Action": action,
-		"Runs":   runs,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
