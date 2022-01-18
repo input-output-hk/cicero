@@ -64,7 +64,7 @@ job: webhooks: group: webhooks: {
 				"github:nixos/nixpkgs/nixpkgs-unstable#jq",
 				"github:nixos/nixpkgs/nixpkgs-unstable#curl",
 			]
-			command: ["/bin/trigger", "--config", "/local/trigger.yaml"]
+			command: ["/bin/trigger", "--config", "secrets/trigger.yaml"]
 		}
 
 		vault: {
@@ -74,7 +74,7 @@ job: webhooks: group: webhooks: {
 		}
 
 		template: [{
-			destination: "/local/trigger.yaml"
+			destination: "secrets/trigger.yaml"
 			data: #"""
 				{
 					"settings": {
