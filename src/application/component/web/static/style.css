@@ -85,3 +85,32 @@ iframe.iframe {
 .tabs > input:checked + label + div {
 	display: block;
 }
+
+ul.pagination {
+	display: inline-block;
+	padding: 0;
+	margin: 0;
+}
+
+ul.pagination li {
+	display: inline;
+	transition: background-color .3s;
+}
+
+ul.pagination li a {
+	color: black;
+	float: left;
+	padding: 8px 16px;
+	text-decoration: none;
+	border: 1px solid var(--border);
+}
+
+ul.pagination a:hover:not(.current) {
+	background-color: var(--border);
+}
+
+ul.pagination li a.disabled {
+	pointer-events: none;
+	cursor: default;
+	opacity: 0.6;
+}

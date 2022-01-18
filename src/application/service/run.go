@@ -99,17 +99,21 @@ func (self *runService) GetAll(fetchParam *domain.FetchParam) (*domain.FetchRuns
 		self.logger.Err(err).Msgf("fail to fetch runs with offset %s and limit %s", fetchParam.OffSet, fetchParam.Limit)
 		return nil, err
 	} else {
+		sizePage := len(runs)
+		if sizePage > 0 {
+			runs = runs[:len(runs)-1]
+		}
 		var fetchParamResponse = &domain.FetchRunsResponse{
 			Runs: runs,
 			FetchParamResponse: domain.FetchParamResponse{
 				PageNumber: fetchParam.OffSet / fetchParam.Limit,
 			},
 		}
-		if (fetchParam.OffSet - fetchParam.Limit) > 0 {
+		if (fetchParam.OffSet - fetchParam.Limit) >= 0 {
 			prevOffSet := fetchParam.OffSet - fetchParam.Limit
 			fetchParamResponse.FetchParamResponse.PrevOffSet = &prevOffSet
 		}
-		sizePage := len(runs)
+
 		if sizePage == (fetchParam.Limit + 1) {
 			nextOffSet := fetchParam.OffSet + fetchParam.Limit
 			fetchParamResponse.FetchParamResponse.NextOffSet = &nextOffSet

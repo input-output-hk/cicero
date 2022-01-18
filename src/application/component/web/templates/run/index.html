@@ -47,21 +47,26 @@
 			{{end}}
 		</tbody>
 	</table>
-	<nav aria-label="...">
-		<ul class="pagination justify-content-center">
 
-			<li class="page-item">
-				<a class="page-link" href="{{.Page.PrevPage}}">Previous</a>
+	<nav>
+		<ul class="pagination">
+			<li>
+				<a	{{if .Page.PrevPage}}
+					  class="page-item"
+					  {{else}}
+					  class="disabled"
+					  {{end}} href="{{.Page.PrevPage}}">«</a>
 			</li>
-
-			<li class="page-item active" aria-current="page">
-				<a class="page-link" href="#"> <span class="sr-only">{{.Page.PageNumber}}</span></a>
+			<li aria-current="page">
+				<a class="current" href="#"> <span>{{.Page.PageNumber}}</span></a>
 			</li>
-
-			<li class="page-item">
-				<a class="page-link" href="{{.Page.NextPage}}">Next</a>
+			<li>
+				<a	{{if .Page.NextPage}}
+					  class="page-item"
+					  {{else}}
+					  class="disabled"
+					  {{end}} href="{{.Page.NextPage}}">»</a>
 			</li>
-
 		</ul>
 	</nav>
 {{end}}
