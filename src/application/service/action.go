@@ -119,26 +119,28 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
-			if fact, err := self.getInputFactLatest(tx, input.Match.WithoutInputs()); err != nil {
+			switch fact, err := self.getInputFactLatest(tx, input.Match.WithoutInputs()); {
+			case err != nil:
 				return false, nil, err
-			} else if fact == nil {
+			case fact == nil:
 				if !input.Not && !input.Optional {
 					return false, nil, nil
 				}
-			} else {
+			default:
 				inputFact[name] = fact
 				if !input.Not {
 					inputs[name] = fact
 				}
 			}
 		case domain.InputDefinitionSelectAll:
-			if facts, err := self.getInputFacts(tx, input.Match.WithoutInputs()); err != nil {
+			switch facts, err := self.getInputFacts(tx, input.Match.WithoutInputs()); {
+			case err != nil:
 				return false, nil, err
-			} else if len(facts) == 0 {
+			case len(facts) == 0:
 				if !input.Not && !input.Optional {
 					return false, nil, nil
 				}
-			} else {
+			default:
 				inputFacts[name] = facts
 				if !input.Not {
 					inputs[name] = facts
@@ -406,20 +408,20 @@ func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) error {
 	if runnable, inputs, err := self.IsRunnable(tx, action); err != nil {
 		return err
 	} else if runnable {
-		if runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); err != nil {
+		switch runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); {
+		case err != nil:
 			var evalErr EvaluationError
 			if errors.As(err, &evalErr) {
 				self.logger.Err(evalErr).Str("source", action.Source).Str("name", action.Name).Msg("Could not evaluate action")
-			} else {
-				return err
 			}
-		} else if runDef.IsDecision() {
+			return err
+		case runDef.IsDecision():
 			if runDef.Output.Success != nil {
 				if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
 					return errors.WithMessage(err, "Could not publish fact")
 				}
 			}
-		} else {
+		default:
 			run := domain.Run{
 				ActionId: action.ID,
 			}

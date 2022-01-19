@@ -102,8 +102,8 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 
 	tryEval := func(evaluator string) ([]byte, error) {
 		cmd := exec.Command("cicero-evaluator-"+evaluator, command.Command...)
-		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst)
-		cmd.Env = append(os.Environ(), extraEnv...)
+		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst) //nolint:gocritic // false positive
+		cmd.Env = append(os.Environ(), extraEnv...)                    //nolint:gocritic // false positive
 
 		e.logger.Debug().
 			Strs("command", cmd.Args).

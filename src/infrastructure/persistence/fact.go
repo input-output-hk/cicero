@@ -124,15 +124,16 @@ func (a *factRepository) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) er
 			return errors.WithMessagef(err, "Failed to open large object with OID %d", oid)
 		} else {
 			hash := sri.NewWriter(lo, sri.SHA256)
-			if written, err := io.Copy(hash, binary); err != nil {
+			switch written, err := io.Copy(hash, binary); {
+			case err != nil:
 				return errors.WithMessagef(err, "Failed to write to large object with OID %d", oid)
-			} else if written == 0 {
+			case written == 0:
 				// Nothing was written because the read stream was empty.
 				// We treat that case as if we had `binary == nil`.
 				if err := los.Unlink(context.Background(), oid); err != nil {
 					return errors.WithMessagef(err, "Failed to unlink large object with OID %d", oid)
 				}
-			} else {
+			default:
 				sum := hash.Sum()
 				if fact.BinaryHash != nil && *fact.BinaryHash != sum {
 					return fmt.Errorf("Binary has hash %q instead of expected %q", sum, *fact.BinaryHash)
