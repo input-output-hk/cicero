@@ -104,7 +104,7 @@ func (self *runService) GetAll(fetchParam *domain.FetchParam) (*domain.FetchRuns
 
 func (self *runService) buildFetchRunsResponse(fetchParam *domain.FetchParam, runs []*domain.Run) *domain.FetchRunsResponse {
 	sizePage := len(runs)
-	if sizePage > 0 {
+	if sizePage > fetchParam.Limit {
 		runs = runs[:len(runs)-1]
 	}
 	var fetchParamResponse = &domain.FetchRunsResponse{
