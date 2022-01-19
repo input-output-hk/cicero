@@ -223,8 +223,8 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 
 			switch input.Select {
 			case domain.InputDefinitionSelectLatest:
-				if len(inputFactIds[name]) > 1 {
-					err := fmt.Errorf("Run %q should only have one fact for input %q but has %d", run.NomadJobID, name, len(inputFactIds[name]))
+				if len(inputFactIds[name]) != 1 {
+					err := fmt.Errorf("Run %q should have one fact for input %q but has %d", run.NomadJobID, name, len(inputFactIds[name]))
 					logger.Fatal().Err(err).Send()
 					return false, inputs, err
 				}
