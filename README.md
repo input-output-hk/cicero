@@ -41,9 +41,10 @@ Shadowed actions with equal names are called the previous versions of an action.
 
 When a fact is published all current actions are checked for runnability.
 
-An action is runnable if its inputs are satisfied. This means there has to be
+An action is runnable if its inputs are satisfied. That means there has to be
 a matching fact for each input that is not optional and there must be no
-matching fact for a negated input.
+matching fact for a negated input. Matching facts must also be different ones
+than those that satisfied the input for the previous run of this action.
 
 If an action is runnable it is evaluated with its matching facts given as inputs.
 This produces a run for which a job is scheduled on the Nomad cluster.
