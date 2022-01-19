@@ -219,7 +219,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/{id}/run", self.GetRunsByActionId).Queries("offset", "{offset}", "limit", "{limit}").Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}/run", self.RunsByActionIdGet).Queries("offset", "{offset}", "limit", "{limit}").Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
@@ -266,7 +266,7 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) GetRunsByActionId(w http.ResponseWriter, req *http.Request) {
+func (self *Web) RunsByActionIdGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 	} else if fetchParam, err := getPage(req); err != nil {
@@ -277,29 +277,13 @@ func (self *Web) GetRunsByActionId(w http.ResponseWriter, req *http.Request) {
 		return
 	} else {
 
-		type RunWrapper struct {
-			*domain.Run
-			Action *domain.Action
-		}
 		type ResponseWrapper struct {
-			Runs []RunWrapper
+			Runs []*domain.Run
 			Page domain.PageResponse
 		}
 
-		runWrappers := make([]RunWrapper, len(runs.Runs))
-		for i, run := range runs.Runs {
-			if action, err := self.ActionService.GetById(run.ActionId); err != nil {
-				self.ServerError(w, err)
-				return
-			} else {
-				runWrappers[i] = RunWrapper{
-					Run:    run,
-					Action: &action,
-				}
-			}
-		}
 		responseWrapper := &ResponseWrapper{
-			Runs: runWrappers,
+			Runs: runs.Runs,
 			Page: domain.PageResponse{
 				PageNumber: runs.FetchParamResponse.PageNumber,
 			},
@@ -450,7 +434,6 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	if fetchParam, err := getPage(req); err != nil {
 		self.BadRequest(w, err)
 	} else {
-		self.Logger.Info().Msgf("Page offset: %d - limit: %d", fetchParam.OffSet, fetchParam.Limit)
 		if runs, err := self.RunService.GetAll(fetchParam); err != nil {
 			self.ServerError(w, err)
 		} else {

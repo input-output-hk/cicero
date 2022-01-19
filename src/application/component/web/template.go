@@ -20,23 +20,23 @@ var templatesFs embed.FS
 var staticFs embed.FS
 
 func (self *Web) ServerError(w http.ResponseWriter, err error) {
-	http.Error(w, err.Error(), http.StatusInternalServerError)
+	self.Error(w, err, http.StatusInternalServerError)
 }
 
 func (self *Web) ClientError(w http.ResponseWriter, err error) {
-	http.Error(w, err.Error(), http.StatusPreconditionFailed)
+	self.Error(w, err, http.StatusPreconditionFailed)
 }
 
 func (self *Web) NotFound(w http.ResponseWriter, err error) {
-	http.Error(w, err.Error(), http.StatusNotFound)
+	self.Error(w, err, http.StatusNotFound)
 }
 
 func (self *Web) BadRequest(w http.ResponseWriter, err error) {
-	http.Error(w, err.Error(), http.StatusBadRequest)
+	self.Error(w, err, http.StatusBadRequest)
 }
 
 func (self *Web) Error(w http.ResponseWriter, err error, status int) {
-	self.Logger.Err(err)
+	self.Logger.Err(err).Msg("Handler error")
 	http.Error(w, err.Error(), status)
 }
 

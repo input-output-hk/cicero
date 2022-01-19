@@ -85,60 +85,44 @@ func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOu
 }
 
 func (self *runService) GetByActionId(id uuid.UUID, fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {
-	self.logger.Debug().Str("action-id", id.String()).Msg("Getting Run by Action ID")
+	self.logger.Debug().Msgf("Getting Run by Action ID $q with offset %s and limit %s", id, fetchParam.OffSet, fetchParam.Limit)
 	if runs, err := self.runRepository.GetByActionId(id, fetchParam); err != nil {
-		return nil, errors.WithMessagef(err, "Could not select existing Run by Action ID %q", id)
+		return nil, errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, fetchParam.OffSet, fetchParam.Limit)
 	} else {
-		sizePage := len(runs)
-		if sizePage > 0 {
-			runs = runs[:len(runs)-1]
-		}
-		var fetchParamResponse = &domain.FetchRunsResponse{
-			Runs: runs,
-			FetchParamResponse: domain.FetchParamResponse{
-				PageNumber: fetchParam.OffSet / fetchParam.Limit,
-			},
-		}
-		if (fetchParam.OffSet - fetchParam.Limit) >= 0 {
-			prevOffSet := fetchParam.OffSet - fetchParam.Limit
-			fetchParamResponse.FetchParamResponse.PrevOffSet = &prevOffSet
-		}
-
-		if sizePage == (fetchParam.Limit + 1) {
-			nextOffSet := fetchParam.OffSet + fetchParam.Limit
-			fetchParamResponse.FetchParamResponse.NextOffSet = &nextOffSet
-		}
-		return fetchParamResponse, nil
+		return self.buildFetchRunsResponse(fetchParam, runs), nil
 	}
 }
 
 func (self *runService) GetAll(fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {
-	self.logger.Debug().Msg("Getting all Runs")
+	self.logger.Debug().Msgf("Getting all Runs with offset %s and limit %s", fetchParam.OffSet, fetchParam.Limit)
 	if runs, err := self.runRepository.GetAll(fetchParam); err != nil {
-		self.logger.Err(err).Msgf("fail to fetch runs with offset %s and limit %s", fetchParam.OffSet, fetchParam.Limit)
-		return nil, err
+		return nil, errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", fetchParam.OffSet, fetchParam.Limit)
 	} else {
-		sizePage := len(runs)
-		if sizePage > 0 {
-			runs = runs[:len(runs)-1]
-		}
-		var fetchParamResponse = &domain.FetchRunsResponse{
-			Runs: runs,
-			FetchParamResponse: domain.FetchParamResponse{
-				PageNumber: fetchParam.OffSet / fetchParam.Limit,
-			},
-		}
-		if (fetchParam.OffSet - fetchParam.Limit) >= 0 {
-			prevOffSet := fetchParam.OffSet - fetchParam.Limit
-			fetchParamResponse.FetchParamResponse.PrevOffSet = &prevOffSet
-		}
-
-		if sizePage == (fetchParam.Limit + 1) {
-			nextOffSet := fetchParam.OffSet + fetchParam.Limit
-			fetchParamResponse.FetchParamResponse.NextOffSet = &nextOffSet
-		}
-		return fetchParamResponse, nil
+		return self.buildFetchRunsResponse(fetchParam, runs), nil
 	}
+}
+
+func (self *runService) buildFetchRunsResponse(fetchParam *domain.FetchParam, runs []*domain.Run) *domain.FetchRunsResponse {
+	sizePage := len(runs)
+	if sizePage > 0 {
+		runs = runs[:len(runs)-1]
+	}
+	var fetchParamResponse = &domain.FetchRunsResponse{
+		Runs: runs,
+		FetchParamResponse: domain.FetchParamResponse{
+			PageNumber: fetchParam.OffSet / fetchParam.Limit,
+		},
+	}
+	if (fetchParam.OffSet - fetchParam.Limit) >= 0 {
+		prevOffSet := fetchParam.OffSet - fetchParam.Limit
+		fetchParamResponse.FetchParamResponse.PrevOffSet = &prevOffSet
+	}
+
+	if sizePage == (fetchParam.Limit + 1) {
+		nextOffSet := fetchParam.OffSet + fetchParam.Limit
+		fetchParamResponse.FetchParamResponse.NextOffSet = &nextOffSet
+	}
+	return fetchParamResponse
 }
 
 func (self *runService) Save(tx pgx.Tx, run *domain.Run, output *domain.RunOutput) error {
