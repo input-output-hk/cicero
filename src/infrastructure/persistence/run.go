@@ -111,11 +111,11 @@ func (a *runRepository) Save(tx pgx.Tx, run *domain.Run, inputs map[string]inter
 				sql += `, `
 			}
 
-			switch factOrFacts.(type) {
+			switch factOrFactsTyped := factOrFacts.(type) {
 			case *domain.Fact:
-				addRow(factOrFacts.(*domain.Fact).ID)
+				addRow(factOrFactsTyped.ID)
 			case []*domain.Fact:
-				for _, fact := range factOrFacts.([]*domain.Fact) {
+				for _, fact := range factOrFactsTyped {
 					addRow(fact.ID)
 				}
 			default:
