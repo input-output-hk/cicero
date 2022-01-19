@@ -105,7 +105,7 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst)
 		cmd.Env = append(os.Environ(), extraEnv...)
 
-		e.logger.Info().
+		e.logger.Debug().
 			Strs("command", cmd.Args).
 			Strs("environment", extraEnv).
 			Msg("Running evaluator")
@@ -132,7 +132,7 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 			return output, nil
 		}
 	} else {
-		e.logger.Info().Msg("No evaluator given in source, trying all")
+		e.logger.Debug().Msg("No evaluator given in source, trying all")
 		var evalErr error
 		for _, evaluator := range e.Evaluators {
 			if output, err := tryEval(evaluator); err != nil {

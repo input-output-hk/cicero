@@ -64,28 +64,37 @@ job: webhooks: group: webhooks: {
 				"github:nixos/nixpkgs/nixpkgs-unstable#jq",
 				"github:nixos/nixpkgs/nixpkgs-unstable#curl",
 			]
-			command: ["/bin/trigger", "--config", "/local/trigger.yaml"]
+			command: ["/bin/trigger", "--config", "secrets/trigger.yaml"]
+		}
+
+		vault: {
+			if #env == "prod" {
+				policies: ["cicero"]
+			}
 		}
 
 		template: [{
-			destination: "/local/trigger.yaml"
-			data:        json.Marshal({
-				settings: {
-					host:           "0.0.0.0:4567"
-					print_commands: true
-					capture_output: false
-					secret:         "TODO get from vault"
+			destination: "secrets/trigger.yaml"
+			data: #"""
+				{
+					"settings": {
+						"host":           "0.0.0.0:4567",
+						"print_commands": true,
+						"capture_output": false,
+						"secret":         "{{with secret "kv/data/cicero/github"}}{{.Data.data.webhooks}}{{end}}"
+					},
+					"events": \#(json.Marshal(_data_events))
 				}
-				events: all: #"""
-					set -exuo pipefail
+				"""#
+			_data_events: all: #"""
+				set -exuo pipefail
 
-					echo "nameserver \#(#nameserver)" >> /etc/resolv.conf
+				echo "nameserver \#(#nameserver)" >> /etc/resolv.conf
 
-					<<< '{payload}' \
-					jq -r '{"github-event": .}' \
-					| curl "\#(#ciceroApiUrl)/fact" --data-binary @-
-					"""#
-			})
+				<<< '{payload}' \
+				jq -r '{"github-event": .}' \
+				| curl "\#(#ciceroApiUrl)/fact" --data-binary @-
+				"""#
 		}]
 	}
 }

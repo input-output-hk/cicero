@@ -36,7 +36,7 @@ func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err e
 		`SELECT * FROM action WHERE EXISTS (
 			SELECT NULL FROM run WHERE
 				run.nomad_job_id = $1 AND
-				run.action_id = actions.id
+				run.action_id = action.id
 		)`,
 		id,
 	)

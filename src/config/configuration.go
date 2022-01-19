@@ -12,29 +12,25 @@ func GetenvStr(key string) string {
 func GetenvInt(key string) (*int, error) {
 	s := GetenvStr(key)
 	if s == "" {
-		var i int
-		return &i, nil
+		return nil, nil
 	}
 
 	v, err := strconv.Atoi(s)
 	if err != nil {
-		var i int
-		return &i, err
+		return nil, err
 	}
 	return &v, nil
 }
 
-func GetenvBool(key string) (*bool, error) {
+func GetenvBool(key string) (result *bool, err error) {
 	s := GetenvStr(key)
 	if s == "" {
-		b := false
-		return &b, nil
+		return
 	}
 
 	v, err := strconv.ParseBool(s)
 	if err != nil {
-		b := false
-		return &b, err
+		return nil, err
 	}
 	return &v, nil
 }
