@@ -87,9 +87,9 @@ func (a *runRepository) Save(tx pgx.Tx, run *domain.Run, inputs map[string]inter
 
 	err = tx.QueryRow(
 		ctx,
-		`INSERT INTO run (action_id) VALUES ($1) RETURNING nomad_job_id`,
+		`INSERT INTO run (action_id) VALUES ($1) RETURNING nomad_job_id, created_at`,
 		run.ActionId,
-	).Scan(&run.NomadJobID)
+	).Scan(&run.NomadJobID, &run.CreatedAt)
 	if err != nil {
 		return err
 	}

@@ -408,20 +408,13 @@ func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) error {
 	if runnable, inputs, err := self.IsRunnable(tx, action); err != nil {
 		return err
 	} else if runnable {
-		switch runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); {
-		case err != nil:
+		if runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); err != nil {
 			var evalErr EvaluationError
 			if errors.As(err, &evalErr) {
 				self.logger.Err(evalErr).Str("source", action.Source).Str("name", action.Name).Msg("Could not evaluate action")
 			}
 			return err
-		case runDef.IsDecision():
-			if runDef.Output.Success != nil {
-				if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
-					return errors.WithMessage(err, "Could not publish fact")
-				}
-			}
-		default:
+		} else {
 			run := domain.Run{
 				ActionId: action.ID,
 			}
@@ -430,17 +423,31 @@ func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) error {
 				return errors.WithMessage(err, "Could not insert Run")
 			}
 
-			runId := run.NomadJobID.String()
-			runDef.Job.ID = &runId
+			if runDef.IsDecision() {
+				if runDef.Output.Success != nil {
+					if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
+						return errors.WithMessage(err, "Could not publish fact")
+					}
+				}
 
-			if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
-				return errors.WithMessage(err, "Failed to run Action")
-			} else if len(response.Warnings) > 0 {
-				self.logger.Warn().
-					Str("nomad-job", runId).
-					Str("nomad-evaluation", response.EvalID).
-					Str("warnings", response.Warnings).
-					Msg("Warnings occured registering Nomad job")
+				run.CreatedAt = run.CreatedAt.UTC()
+				run.FinishedAt = &run.CreatedAt
+				if err := self.runService.Update(tx, &run); err != nil {
+					return errors.WithMessage(err, "Could not update decision Run")
+				}
+			} else {
+				runId := run.NomadJobID.String()
+				runDef.Job.ID = &runId
+
+				if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
+					return errors.WithMessage(err, "Failed to run Action")
+				} else if len(response.Warnings) > 0 {
+					self.logger.Warn().
+						Str("nomad-job", runId).
+						Str("nomad-evaluation", response.EvalID).
+						Str("warnings", response.Warnings).
+						Msg("Warnings occured registering Nomad job")
+				}
 			}
 		}
 	}
