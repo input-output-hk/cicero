@@ -29,23 +29,23 @@ func (a *runRepository) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error
 	return
 }
 
-func (a *runRepository) GetByActionId(id uuid.UUID, fetchParam *domain.FetchParam) (runs []*domain.Run, err error) {
+func (a *runRepository) GetByActionId(id uuid.UUID, limit int, offSet int) (runs []*domain.Run, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &runs,
 		`SELECT * FROM run WHERE action_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
 		id,
-		fetchParam.Limit+1,
-		fetchParam.OffSet,
+		limit,
+		offSet,
 	)
 	return
 }
 
-func (a *runRepository) GetAll(fetchParam *domain.FetchParam) (instances []*domain.Run, err error) {
+func (a *runRepository) GetAll(limit int, offSet int) (instances []*domain.Run, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &instances,
 		`SELECT * FROM run ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-		fetchParam.Limit+1,
-		fetchParam.OffSet,
+		limit,
+		offSet,
 	)
 	return
 }

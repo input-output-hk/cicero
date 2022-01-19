@@ -19,7 +19,6 @@ func TestShouldGetRunByActionId(t *testing.T) {
 	actionId := uuid.New()
 	offset := 0
 	limit := 1
-	fetchParameter := domain.FetchParam{OffSet: offset, Limit: limit}
 
 	run := domain.Run{
 		NomadJobID: uuid.New(),
@@ -35,11 +34,11 @@ func TestShouldGetRunByActionId(t *testing.T) {
 	}
 	defer mock.Close(context.Background())
 	rows := mock.NewRows([]string{"nomad_job_id", "action_id", "created_at", "finished_at"}).AddRow(run.NomadJobID, run.ActionId, run.CreatedAt, run.FinishedAt)
-	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId, limit+1, offset).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId, limit, offset).WillReturnRows(rows)
 	repository := NewRunRepository(mock)
 
 	// when
-	runResult, err := repository.GetByActionId(actionId, &fetchParameter)
+	runResult, err := repository.GetByActionId(actionId, limit, offset)
 
 	// then
 	assert.Nil(t, err)
