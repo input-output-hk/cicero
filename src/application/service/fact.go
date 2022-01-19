@@ -73,17 +73,7 @@ func (self *factService) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) er
 	}
 	self.logger.Debug().Str("id", fact.ID.String()).Msg("Created Fact")
 
-	if actions, err := self.actionService.GetCurrent(tx); err != nil {
-		return err
-	} else {
-		for _, action := range actions {
-			if err := self.actionService.Invoke(tx, action); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	return self.actionService.InvokeCurrent(tx)
 }
 
 func (self *factService) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
