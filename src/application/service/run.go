@@ -85,7 +85,7 @@ func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOu
 }
 
 func (self *runService) GetByActionId(id uuid.UUID, fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {
-	self.logger.Debug().Msgf("Getting Run by Action ID $q with offset %s and limit %s", id, fetchParam.OffSet, fetchParam.Limit)
+	self.logger.Debug().Msgf("Getting Run by Action ID %q with offset %d and limit %d", id, fetchParam.OffSet, fetchParam.Limit)
 	if runs, err := self.runRepository.GetByActionId(id, fetchParam); err != nil {
 		return nil, errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, fetchParam.OffSet, fetchParam.Limit)
 	} else {
@@ -94,7 +94,7 @@ func (self *runService) GetByActionId(id uuid.UUID, fetchParam *domain.FetchPara
 }
 
 func (self *runService) GetAll(fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {
-	self.logger.Debug().Msgf("Getting all Runs with offset %s and limit %s", fetchParam.OffSet, fetchParam.Limit)
+	self.logger.Debug().Msgf("Getting all Runs with offset %d and limit %d", fetchParam.OffSet, fetchParam.Limit)
 	if runs, err := self.runRepository.GetAll(fetchParam); err != nil {
 		return nil, errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", fetchParam.OffSet, fetchParam.Limit)
 	} else {
