@@ -1,7 +1,5 @@
 { name, std, lib, actionLib, ... }@args:
 
-std.behavior.onInputChange "start" name args
-
 {
   inputs.start = ''
     "cicero/ci": start: {

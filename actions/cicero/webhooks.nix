@@ -4,8 +4,6 @@ let
   pkg = pkg: "github:NixOS/nixpkgs/${nixpkgsRev}#${pkg}";
 in
 
-std.behavior.onInputChange "start" name args
-
 {
   inputs.start = ''
     "${name}": {
