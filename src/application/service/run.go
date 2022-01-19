@@ -25,10 +25,12 @@ import (
 
 type RunService interface {
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
+	GetInputFactIdsByNomadJobId(pgx.Tx, uuid.UUID) (map[string][]uuid.UUID, error)
 	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
 	GetByActionId(uuid.UUID) ([]*domain.Run, error)
+	GetLatestByActionId(pgx.Tx, uuid.UUID) (domain.Run, error)
 	GetAll() ([]*domain.Run, error)
-	Save(pgx.Tx, *domain.Run, *domain.RunOutput) error
+	Save(pgx.Tx, *domain.Run, map[string]interface{}, *domain.RunOutput) error
 	Update(pgx.Tx, *domain.Run) error
 	End(pgx.Tx, *domain.Run) error
 	Cancel(*domain.Run) error
@@ -75,6 +77,15 @@ func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error
 	return
 }
 
+func (self *runService) GetInputFactIdsByNomadJobId(tx pgx.Tx, id uuid.UUID) (inputFactIds map[string][]uuid.UUID, err error) {
+	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run input fact IDs by Nomad Job ID")
+	inputFactIds, err = self.runRepository.GetInputFactIdsByNomadJobId(tx, id)
+	if err != nil {
+		err = errors.WithMessagef(err, "Could not select Run input fact IDs by Nomad Job ID %q", id)
+	}
+	return
+}
+
 func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOutput, err error) {
 	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run Output by Nomad Job ID")
 	output, err = self.runOutputRepository.GetByRunId(id)
@@ -93,14 +104,23 @@ func (self *runService) GetByActionId(id uuid.UUID) (runs []*domain.Run, err err
 	return
 }
 
+func (self *runService) GetLatestByActionId(tx pgx.Tx, id uuid.UUID) (run domain.Run, err error) {
+	self.logger.Debug().Str("action-id", id.String()).Msg("Getting latest Run by Action ID")
+	run, err = self.runRepository.GetLatestByActionId(tx, id)
+	if err != nil {
+		err = errors.WithMessagef(err, "Could not select latest Run by Action ID %q", id)
+	}
+	return
+}
+
 func (self *runService) GetAll() ([]*domain.Run, error) {
 	self.logger.Debug().Msg("Getting all Runs")
 	return self.runRepository.GetAll()
 }
 
-func (self *runService) Save(tx pgx.Tx, run *domain.Run, output *domain.RunOutput) error {
+func (self *runService) Save(tx pgx.Tx, run *domain.Run, inputs map[string]interface{}, output *domain.RunOutput) error {
 	self.logger.Debug().Msg("Saving new Run")
-	if err := self.runRepository.Save(tx, run); err != nil {
+	if err := self.runRepository.Save(tx, run, inputs); err != nil {
 		return errors.WithMessagef(err, "Could not insert Run")
 	}
 	if err := self.runOutputRepository.Save(tx, run.NomadJobID, output); err != nil {

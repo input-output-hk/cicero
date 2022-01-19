@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
@@ -38,6 +39,41 @@ func (a *runRepository) GetByActionId(id uuid.UUID) (runs []*domain.Run, err err
 	return
 }
 
+func (a *runRepository) GetLatestByActionId(tx pgx.Tx, id uuid.UUID) (run domain.Run, err error) {
+	err = pgxscan.Get(
+		context.Background(), tx, &run,
+		`SELECT DISTINCT ON (action_id) * FROM run WHERE action_id = $1 ORDER BY action_id, created_at DESC`,
+		id,
+	)
+	return
+}
+
+func (a *runRepository) GetInputFactIdsByNomadJobId(tx pgx.Tx, id uuid.UUID) (inputFactIds map[string][]uuid.UUID, err error) {
+	runInputs := []struct {
+		InputName string    `json:"input_name"`
+		FactId    uuid.UUID `json:"fact_id"`
+	}{}
+
+	err = pgxscan.Select(
+		context.Background(), tx, &runInputs,
+		`SELECT input_name, fact_id FROM run_inputs WHERE run_id = $1`,
+		id,
+	)
+	if err != nil {
+		return
+	}
+
+	inputFactIds = map[string][]uuid.UUID{}
+	for _, runInput := range runInputs {
+		if _, exists := inputFactIds[runInput.InputName]; !exists {
+			inputFactIds[runInput.InputName] = []uuid.UUID{}
+		}
+		inputFactIds[runInput.InputName] = append(inputFactIds[runInput.InputName], runInput.FactId)
+	}
+
+	return inputFactIds, nil
+}
+
 func (a *runRepository) GetAll() (instances []*domain.Run, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &instances,
@@ -46,12 +82,53 @@ func (a *runRepository) GetAll() (instances []*domain.Run, err error) {
 	return
 }
 
-func (a *runRepository) Save(tx pgx.Tx, run *domain.Run) (err error) {
+func (a *runRepository) Save(tx pgx.Tx, run *domain.Run, inputs map[string]interface{}) (err error) {
+	ctx := context.Background()
+
 	err = tx.QueryRow(
-		context.Background(),
+		ctx,
 		`INSERT INTO run (action_id) VALUES ($1) RETURNING nomad_job_id`,
 		run.ActionId,
 	).Scan(&run.NomadJobID)
+	if err != nil {
+		return err
+	}
+
+	if len(inputs) > 0 {
+		sql := `INSERT INTO run_inputs (run_id, input_name, fact_id) VALUES`
+		args := []interface{}{}
+
+		i := 1
+		for name, factOrFacts := range inputs {
+			addRow := func(factId uuid.UUID) {
+				sql += `($` + strconv.Itoa(i) + `, $` + strconv.Itoa(i+1) + `, $` + strconv.Itoa(i+2) + `)`
+				args = append(args, run.NomadJobID, name, factId)
+				i += 3
+			}
+
+			if i > 1 {
+				// the comma between value lists
+				sql += `, `
+			}
+
+			switch factOrFacts.(type) {
+			case *domain.Fact:
+				addRow(factOrFacts.(*domain.Fact).ID)
+			case []*domain.Fact:
+				for _, fact := range factOrFacts.([]*domain.Fact) {
+					addRow(fact.ID)
+				}
+			default:
+				panic("inputs must be pointer to a Fact or array")
+			}
+		}
+
+		_, err = tx.Exec(ctx, sql, args...)
+		if err != nil {
+			return err
+		}
+	}
+
 	return
 }
 

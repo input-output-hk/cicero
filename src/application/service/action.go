@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
@@ -92,7 +93,12 @@ func (self *actionService) GetCurrent(tx pgx.Tx) (actions []*domain.Action, err 
 }
 
 func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, map[string]interface{}, error) {
-	self.logger.Debug().Str("name", action.Name).Str("id", action.ID.String()).Msg("Checking whether Action is runnable")
+	logger := self.logger.With().
+		Str("name", action.Name).
+		Str("id", action.ID.String()).
+		Logger()
+
+	logger.Debug().Msg("Checking whether Action is runnable")
 
 	inputFact := map[string]*domain.Fact{}
 	inputFacts := map[string][]*domain.Fact{}
@@ -109,7 +115,7 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 	// would be changed, as what is latest currently means "latest with these paths"
 	// but would then mean "latest with these paths AND matching values", so beware!
 
-	// FIXME race condition: facts may change in between checking whether each input is satisfied
+	// Select candidate facts.
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
@@ -143,6 +149,7 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 		}
 	}
 
+	// Match candidate facts.
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
@@ -196,6 +203,86 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 		}
 	}
 
+	// Not runnable if the inputs are the same as last run.
+	if run, err := self.runService.GetLatestByActionId(tx, action.ID); err != nil {
+		if !pgxscan.NotFound(err) {
+			return false, inputs, err
+		}
+	} else if inputFactIds, err := self.runService.GetInputFactIdsByNomadJobId(tx, run.NomadJobID); err != nil {
+		return false, inputs, err
+	} else {
+		inputFactsChanged := false
+
+	InputFactsChanged:
+		for name, input := range action.Inputs {
+			if _, exists := inputs[name]; !exists {
+				// We only care about inputs that are
+				// passed into the evaluation.
+				continue
+			}
+
+			switch input.Select {
+			case domain.InputDefinitionSelectLatest:
+				if len(inputFactIds[name]) > 1 {
+					err := fmt.Errorf("Run %q should only have one fact for input %q but has %d", run.NomadJobID, name, len(inputFactIds[name]))
+					logger.Fatal().Err(err).Send()
+					return false, inputs, err
+				}
+
+				if inputFact[name].ID != inputFactIds[name][0] {
+					if logger.Debug().Enabled() {
+						logger.Debug().
+							Str("input", name).
+							Str("old-fact", inputFactIds[name][0].String()).
+							Str("new-fact", inputFact[name].ID.String()).
+							Msg("input satisfied by new Fact")
+					}
+					inputFactsChanged = true
+					break InputFactsChanged
+				}
+			case domain.InputDefinitionSelectAll:
+				if len(inputFacts[name]) != len(inputFactIds[name]) {
+					if logger.Debug().Enabled() {
+						logger.Debug().
+							Str("input", name).
+							Int("num-old-facts", len(inputFactIds[name])).
+							Int("num-new-facts", len(inputFacts[name])).
+							Msg("input satisfied by different number of Facts than last Run")
+					}
+					inputFactsChanged = true
+					break InputFactsChanged
+				}
+
+				for _, match := range inputFacts[name] {
+					for _, inputFactId := range inputFactIds[name] {
+						if match.ID != inputFactId {
+							if logger.Debug().Enabled() {
+								logger.Debug().
+									Str("input", name).
+									Str("old-fact", inputFactId.String()).
+									Str("new-fact", match.ID.String()).
+									Msg("input satisfied by new Fact")
+							}
+							inputFactsChanged = true
+							break InputFactsChanged
+						}
+					}
+				}
+			default:
+				panic("This should have already been caught by the loop above!")
+			}
+
+			logger.Debug().
+				Str("input", name).
+				Msg("input satisfied by same Fact(s) as last Run")
+		}
+
+		if !inputFactsChanged {
+			return false, inputs, nil
+		}
+	}
+
+	// Filter input facts. We only provide keys requested by the CUE expression.
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
@@ -337,7 +424,7 @@ func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) error {
 				ActionId: action.ID,
 			}
 
-			if err := self.runService.Save(tx, &run, &runDef.Output); err != nil {
+			if err := self.runService.Save(tx, &run, inputs, &runDef.Output); err != nil {
 				return errors.WithMessage(err, "Could not insert Run")
 			}
 
