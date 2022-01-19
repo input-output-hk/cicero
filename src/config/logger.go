@@ -70,27 +70,30 @@ func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
 			conf.Filename = v
 		}
 
-		if v, err := GetenvInt("LOGS_MAX_SIZE"); err != nil {
+		switch v, err := GetenvInt("LOGS_MAX_SIZE"); {
+		case err != nil:
 			return nil, err
-		} else if v != nil {
+		case v != nil:
 			conf.MaxSize = *v
-		} else {
+		default:
 			conf.MaxSize = 10
 		}
 
-		if v, err := GetenvInt("LOGS_MAX_BACKUPS"); err != nil {
+		switch v, err := GetenvInt("LOGS_MAX_BACKUPS"); {
+		case err != nil:
 			return nil, err
-		} else if v != nil {
+		case v != nil:
 			conf.MaxBackups = *v
-		} else {
+		default:
 			conf.MaxBackups = 10
 		}
 
-		if v, err := GetenvInt("LOGS_MAX_AGE"); err != nil {
+		switch v, err := GetenvInt("LOGS_MAX_AGE"); {
+		case err != nil:
 			return nil, err
-		} else if v != nil {
+		case v != nil:
 			conf.MaxAge = *v
-		} else {
+		default:
 			conf.MaxAge = 10
 		}
 	}

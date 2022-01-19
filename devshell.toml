@@ -37,7 +37,7 @@ package = "damon"
 
 [[commands]]
 name = "lint"
-command = "golangci-lint run && gocritic check -enableAll -disable=ifElseChain,ptrToRefParam,unnamedResult,appendAssign ./... && nixpkgs-fmt --check ."
+command = "golangci-lint run -E gocritic && nixpkgs-fmt --check ."
 help = "Run code linters"
 
 [[commands]]
@@ -63,7 +63,6 @@ packages = [
   "gcc",
   "go",
   "gocode",
-  "gocritic",
   "goimports",
   "gopls",
   "grafana-loki",
