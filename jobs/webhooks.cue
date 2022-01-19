@@ -67,8 +67,8 @@ job: webhooks: group: webhooks: {
 			command: ["/bin/trigger", "--config", "secrets/trigger.yaml"]
 		}
 
-		vault: {
-			if #env == "prod" {
+		if #env == "prod" {
+			vault: {
 				policies: ["cicero"]
 			}
 		}
