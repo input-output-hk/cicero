@@ -216,6 +216,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/run/{id}/cancel", self.RunIdCancelGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run", self.RunGet).Queries("offset", "{offset}", "limit", "{limit}").Methods(http.MethodGet)
+	// muxRouter.HandleFunc("/run", self.RunGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
@@ -307,9 +308,7 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
-	} else if err := render("action/[id].html", w, map[string]interface{}{
-		"Action": action,
-	}); err != nil {
+	} else if err := render("action/[id].html", w, action); err != nil {
 		self.ServerError(w, err)
 		return
 	}
@@ -513,7 +512,6 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 }
 
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
-	self.Logger.Info().Msg("When is called???")
 	if fetchParam, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 	} else {
