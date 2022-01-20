@@ -71,27 +71,21 @@ func NewRunService(db config.PgxIface, prometheusAddr string, nomadClient applic
 func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
 	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
-	}
+	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
 	return
 }
 
 func (self *runService) GetInputFactIdsByNomadJobId(tx pgx.Tx, id uuid.UUID) (inputFactIds map[string][]uuid.UUID, err error) {
 	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run input fact IDs by Nomad Job ID")
 	inputFactIds, err = self.runRepository.GetInputFactIdsByNomadJobId(tx, id)
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select Run input fact IDs by Nomad Job ID %q", id)
-	}
+	err = errors.WithMessagef(err, "Could not select Run input fact IDs by Nomad Job ID %q", id)
 	return
 }
 
 func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOutput, err error) {
 	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run Output by Nomad Job ID")
 	output, err = self.runOutputRepository.GetByRunId(id)
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select existing Run Output by Nomad Job ID %q", id)
-	}
+	err = errors.WithMessagef(err, "Could not select existing Run Output by Nomad Job ID %q", id)
 	return
 }
 
@@ -103,12 +97,11 @@ func (self *runService) GetByActionId(id uuid.UUID, fetchParam *domain.FetchPara
 		return self.buildFetchRunsResponse(fetchParam, runs), nil
 	}
 }
+
 func (self *runService) GetLatestByActionId(tx pgx.Tx, id uuid.UUID) (run domain.Run, err error) {
 	self.logger.Debug().Str("action-id", id.String()).Msg("Getting latest Run by Action ID")
 	run, err = self.runRepository.GetLatestByActionId(tx, id)
-	if err != nil {
-		err = errors.WithMessagef(err, "Could not select latest Run by Action ID %q", id)
-	}
+	err = errors.WithMessagef(err, "Could not select latest Run by Action ID %q", id)
 	return
 }
 

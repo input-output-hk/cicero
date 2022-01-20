@@ -115,12 +115,14 @@ func pathsToQueryArgs(paths [][]string) (args []interface{}) {
 }
 
 func (a *factRepository) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) error {
+	ctx := context.Background()
+
 	var binaryOid *uint32
 	if binary != nil {
 		los := tx.LargeObjects()
-		if oid, err := los.Create(context.Background(), 0); err != nil {
+		if oid, err := los.Create(ctx, 0); err != nil {
 			return errors.WithMessage(err, "Failed to create large object")
-		} else if lo, err := los.Open(context.Background(), oid, pgx.LargeObjectModeWrite); err != nil {
+		} else if lo, err := los.Open(ctx, oid, pgx.LargeObjectModeWrite); err != nil {
 			return errors.WithMessagef(err, "Failed to open large object with OID %d", oid)
 		} else {
 			hash := sri.NewWriter(lo, sri.SHA256)
@@ -130,7 +132,7 @@ func (a *factRepository) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) er
 			case written == 0:
 				// Nothing was written because the read stream was empty.
 				// We treat that case as if we had `binary == nil`.
-				if err := los.Unlink(context.Background(), oid); err != nil {
+				if err := los.Unlink(ctx, oid); err != nil {
 					return errors.WithMessagef(err, "Failed to unlink large object with OID %d", oid)
 				}
 			default:
@@ -145,7 +147,7 @@ func (a *factRepository) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) er
 	}
 
 	if err := pgxscan.Get(
-		context.Background(), tx, fact,
+		ctx, tx, fact,
 		`INSERT INTO fact (run_id, value, binary_hash, "binary") VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
 		fact.RunId, fact.Value, fact.BinaryHash, binaryOid,
 	); err != nil {

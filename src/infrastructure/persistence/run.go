@@ -73,7 +73,7 @@ func (a *runRepository) GetInputFactIdsByNomadJobId(tx pgx.Tx, id uuid.UUID) (in
 		inputFactIds[runInput.InputName] = append(inputFactIds[runInput.InputName], runInput.FactId)
 	}
 
-	return inputFactIds, nil
+	return
 }
 
 func (a *runRepository) GetAll(limit int, offSet int) (instances []*domain.Run, err error) {
@@ -86,15 +86,14 @@ func (a *runRepository) GetAll(limit int, offSet int) (instances []*domain.Run, 
 	return
 }
 
-func (a *runRepository) Save(tx pgx.Tx, run *domain.Run, inputs map[string]interface{}) (err error) {
+func (a *runRepository) Save(tx pgx.Tx, run *domain.Run, inputs map[string]interface{}) error {
 	ctx := context.Background()
 
-	err = tx.QueryRow(
+	if err := tx.QueryRow(
 		ctx,
-		`INSERT INTO run (action_id) VALUES ($1) RETURNING nomad_job_id`,
+		`INSERT INTO run (action_id) VALUES ($1) RETURNING nomad_job_id, created_at`,
 		run.ActionId,
-	).Scan(&run.NomadJobID)
-	if err != nil {
+	).Scan(&run.NomadJobID, &run.CreatedAt); err != nil {
 		return err
 	}
 
@@ -105,14 +104,13 @@ func (a *runRepository) Save(tx pgx.Tx, run *domain.Run, inputs map[string]inter
 		i := 1
 		for name, factOrFacts := range inputs {
 			addRow := func(factId uuid.UUID) {
+				if i > 1 {
+					sql += `, `
+				}
+
 				sql += `($` + strconv.Itoa(i) + `, $` + strconv.Itoa(i+1) + `, $` + strconv.Itoa(i+2) + `)`
 				args = append(args, run.NomadJobID, name, factId)
 				i += 3
-			}
-
-			if i > 1 {
-				// the comma between value lists
-				sql += `, `
 			}
 
 			switch factOrFactsTyped := factOrFacts.(type) {
@@ -127,13 +125,12 @@ func (a *runRepository) Save(tx pgx.Tx, run *domain.Run, inputs map[string]inter
 			}
 		}
 
-		_, err = tx.Exec(ctx, sql, args...)
-		if err != nil {
+		if _, err := tx.Exec(ctx, sql, args...); err != nil {
 			return err
 		}
 	}
 
-	return
+	return nil
 }
 
 func (a *runRepository) Update(tx pgx.Tx, run *domain.Run) (err error) {

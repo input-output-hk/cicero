@@ -69,6 +69,20 @@ rec {
       };
 
       validateAction = { inputs, ... }@action:
+        let
+          validateInputFunctionArgs = key:
+            (mapAttrs
+              (input: hasDefault:
+                if !(inputs ? ${input})
+                then throw ''`${key}` can only take arguments declared in `inputs` which `${input}` is not''
+                else if inputs.${input}.not
+                then throw ''`${key}`'s cannot take argument `${input}` because it refers to a negated input''
+                else if inputs.${input}.optional && !hasDefault
+                then throw ''`${key}`'s argument `${input}` must have a default value because it refers to an optional input''
+                else null
+              )
+              (functionArgs action.${key}));
+        in
         lib.pipe action (map deepSeq [
           (
             let t = typeOf inputs; in
@@ -129,21 +143,9 @@ rec {
             )
             inputs)
 
-          (map
-            (input:
-              if !(inputs ? ${input})
-              then throw ''`output` can only take arguments declared in `inputs` which "${input}" is not''
-              else null
-            )
-            (attrNames (functionArgs action.output)))
+          (validateInputFunctionArgs "output")
 
-          (map
-            (input:
-              if !(inputs ? ${input})
-              then throw ''`job` can only take arguments declared in `inputs` which "${input}" is not''
-              else null
-            )
-            (lib.optionals (action ? job) (attrNames (functionArgs action.job))))
+          (lib.optionals (action ? job) (validateInputFunctionArgs "job"))
         ]);
 
       hydrateNomadJob = mapAttrs (k: job:

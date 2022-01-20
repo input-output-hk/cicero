@@ -27,7 +27,8 @@ type ActionService interface {
 	Save(pgx.Tx, *domain.Action) error
 	IsRunnable(pgx.Tx, *domain.Action) (bool, map[string]interface{}, error)
 	Create(pgx.Tx, string, string) (*domain.Action, error)
-	Invoke(pgx.Tx, *domain.Action) error
+	Invoke(pgx.Tx, *domain.Action) (bool, error)
+	InvokeCurrent(pgx.Tx) error
 }
 
 type actionService struct {
@@ -210,9 +211,15 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 		if !pgxscan.NotFound(err) {
 			return false, inputs, err
 		}
-	} else if inputFactIds, err := self.runService.GetInputFactIdsByNomadJobId(tx, run.NomadJobID); err != nil {
-		return false, inputs, err
 	} else {
+		var inputFactIds map[string][]uuid.UUID
+		if inputFactIds, err = self.runService.GetInputFactIdsByNomadJobId(tx, run.NomadJobID); err != nil {
+			if !pgxscan.NotFound(err) {
+				return false, inputs, err
+			}
+			inputFactIds = map[string][]uuid.UUID{}
+		}
+
 		inputFactsChanged := false
 
 	InputFactsChanged:
@@ -223,55 +230,92 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 				continue
 			}
 
-			switch input.Select {
-			case domain.InputDefinitionSelectLatest:
-				if len(inputFactIds[name]) != 1 {
-					err := fmt.Errorf("Run %q should have one fact for input %q but has %d", run.NomadJobID, name, len(inputFactIds[name]))
-					logger.Fatal().Err(err).Send()
-					return false, inputs, err
+			didInputFactChange := func(oldFactIdsIndex int, newFact *domain.Fact) bool {
+				var oldFactId *uuid.UUID
+				if _, hasOldFact := inputFactIds[name]; hasOldFact {
+					oldFactId = &inputFactIds[name][oldFactIdsIndex]
 				}
 
-				if inputFact[name].ID != inputFactIds[name][0] {
+				switch {
+				case input.Optional && oldFactId == nil:
+					if newFact != nil {
+						if logger.Debug().Enabled() {
+							logger.Debug().
+								Str("input", name).
+								Bool("input-optional", true).
+								Interface("old-fact", nil).
+								Str("new-fact", newFact.ID.String()).
+								Msg("input satisfied by new Fact")
+						}
+						return true
+					}
+				case input.Optional && oldFactId != nil:
+					if newFact == nil || *oldFactId != newFact.ID {
+						if logger.Debug().Enabled() {
+							var newFactIdToLog *string
+							if newFact != nil {
+								newFactIdToLogValue := newFact.ID.String()
+								newFactIdToLog = &newFactIdToLogValue
+							}
+							logger.Debug().
+								Str("input", name).
+								Bool("input-optional", true).
+								Str("old-fact", oldFactId.String()).
+								Interface("new-fact", newFactIdToLog).
+								Msg("input satisfied by new Fact or absence of one")
+						}
+						return true
+					}
+				case oldFactId == nil:
+					// A previous Run would not have been started
+					// if a non-optional input was not satisfied.
+					// We are not looking at a negated input here
+					// because those are never passed into the evaluation.
+					panic("This should never happen™")
+				case *oldFactId != newFact.ID:
 					if logger.Debug().Enabled() {
 						logger.Debug().
 							Str("input", name).
-							Str("old-fact", inputFactIds[name][0].String()).
-							Str("new-fact", inputFact[name].ID.String()).
+							Str("old-fact", oldFactId.String()).
+							Str("new-fact", newFact.ID.String()).
 							Msg("input satisfied by new Fact")
 					}
-					inputFactsChanged = true
-					break InputFactsChanged
-				}
-			case domain.InputDefinitionSelectAll:
-				if len(inputFacts[name]) != len(inputFactIds[name]) {
-					if logger.Debug().Enabled() {
-						logger.Debug().
-							Str("input", name).
-							Int("num-old-facts", len(inputFactIds[name])).
-							Int("num-new-facts", len(inputFacts[name])).
-							Msg("input satisfied by different number of Facts than last Run")
-					}
-					inputFactsChanged = true
-					break InputFactsChanged
+					return true
 				}
 
-				for _, match := range inputFacts[name] {
-					for _, inputFactId := range inputFactIds[name] {
-						if match.ID != inputFactId {
-							if logger.Debug().Enabled() {
-								logger.Debug().
-									Str("input", name).
-									Str("old-fact", inputFactId.String()).
-									Str("new-fact", match.ID.String()).
-									Msg("input satisfied by new Fact")
+				return false
+			}
+
+			switch input.Select {
+			case domain.InputDefinitionSelectLatest:
+				if didInputFactChange(0, inputFact[name]) {
+					inputFactsChanged = true
+				}
+			case domain.InputDefinitionSelectAll:
+				if lenNew, lenOld := len(inputFacts[name]), len(inputFactIds[name]); lenNew != lenOld {
+					logger.Debug().
+						Str("input", name).
+						Int("num-old-facts", lenOld).
+						Int("num-new-facts", lenNew).
+						Msg("input satisfied by different number of Facts than last Run")
+					inputFactsChanged = true
+				} else {
+				LoopOverNewInputFacts:
+					for _, match := range inputFacts[name] {
+						for i := range inputFactIds[name] {
+							if didInputFactChange(i, match) {
+								inputFactsChanged = true
+								break LoopOverNewInputFacts
 							}
-							inputFactsChanged = true
-							break InputFactsChanged
 						}
 					}
 				}
 			default:
 				panic("This should have already been caught by the loop above!")
+			}
+
+			if inputFactsChanged {
+				break InputFactsChanged
 			}
 
 			logger.Debug().
@@ -401,47 +445,88 @@ func (self *actionService) Create(tx pgx.Tx, source, name string) (*domain.Actio
 		return nil, err
 	}
 
-	return &action, self.Invoke(tx, &action)
+	_, err := self.Invoke(tx, &action)
+	return &action, err
 }
 
-func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) error {
-	if runnable, inputs, err := self.IsRunnable(tx, action); err != nil {
+func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) (bool, error) {
+	runnable, inputs, err := self.IsRunnable(tx, action)
+	if err != nil || !runnable {
+		return runnable, err
+	}
+
+	runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs)
+	if err != nil {
+		var evalErr EvaluationError
+		if errors.As(err, &evalErr) {
+			self.logger.Err(evalErr).
+				Str("source", action.Source).
+				Str("name", action.Name).
+				Msg("Could not evaluate action")
+		}
+		return runnable, err
+	}
+
+	run := domain.Run{
+		ActionId: action.ID,
+	}
+
+	if err := self.runService.Save(tx, &run, inputs, &runDef.Output); err != nil {
+		return runnable, errors.WithMessage(err, "Could not insert Run")
+	}
+
+	if runDef.IsDecision() {
+		if runDef.Output.Success != nil {
+			if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
+				return runnable, errors.WithMessage(err, "Could not publish fact")
+			}
+		}
+
+		run.CreatedAt = run.CreatedAt.UTC()
+		run.FinishedAt = &run.CreatedAt
+
+		err := self.runService.Update(tx, &run)
+		err = errors.WithMessage(err, "Could not update decision Run")
+
+		return runnable, err
+	}
+
+	runId := run.NomadJobID.String()
+	runDef.Job.ID = &runId
+
+	if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
+		return runnable, errors.WithMessage(err, "Failed to run Action")
+	} else if len(response.Warnings) > 0 {
+		self.logger.Warn().
+			Str("nomad-job", runId).
+			Str("nomad-evaluation", response.EvalID).
+			Str("warnings", response.Warnings).
+			Msg("Warnings occured registering Nomad job")
+	}
+
+	return runnable, nil
+}
+
+func (self *actionService) InvokeCurrent(tx pgx.Tx) error {
+	actions, err := self.GetCurrent(tx)
+	if err != nil {
 		return err
-	} else if runnable {
-		switch runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); {
-		case err != nil:
-			var evalErr EvaluationError
-			if errors.As(err, &evalErr) {
-				self.logger.Err(evalErr).Str("source", action.Source).Str("name", action.Name).Msg("Could not evaluate action")
-			}
-			return err
-		case runDef.IsDecision():
-			if runDef.Output.Success != nil {
-				if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
-					return errors.WithMessage(err, "Could not publish fact")
-				}
-			}
-		default:
-			run := domain.Run{
-				ActionId: action.ID,
+	}
+
+	for {
+		anyRunnable := false
+
+		for _, action := range actions {
+			runnable, err := self.Invoke(tx, action)
+			if err != nil {
+				return err
 			}
 
-			if err := self.runService.Save(tx, &run, inputs, &runDef.Output); err != nil {
-				return errors.WithMessage(err, "Could not insert Run")
-			}
+			anyRunnable = anyRunnable || runnable
+		}
 
-			runId := run.NomadJobID.String()
-			runDef.Job.ID = &runId
-
-			if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
-				return errors.WithMessage(err, "Failed to run Action")
-			} else if len(response.Warnings) > 0 {
-				self.logger.Warn().
-					Str("nomad-job", runId).
-					Str("nomad-evaluation", response.EvalID).
-					Str("warnings", response.Warnings).
-					Msg("Warnings occured registering Nomad job")
-			}
+		if !anyRunnable {
+			break
 		}
 	}
 
