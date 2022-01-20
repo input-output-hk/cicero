@@ -41,7 +41,7 @@
 
               config = {
                 packages = [ "github:input-output-hk/cicero/${cfg.sha}#cicero-entrypoint" ];
-                command = [ "/bin/entrypoint" ];
+                command = [ "/bin/entrypoint" "--web-listen" ":\${NOMAD_PORT_http}" ];
               };
 
               env.DATABASE_URL = "postgres://cicero:@127.0.0.1:\${NOMAD_PORT_db}/cicero?sslmode=disable";
