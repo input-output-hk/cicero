@@ -24,6 +24,7 @@ rec {
 
       # Same as `stopOnSuccess` and `stopOnFailure` combined
       # but more efficient (just one input so only one DB query).
+      # TODO this is actually not significantly more efficient
       once = key: _: next: actions.apply
         {
           inputs."behavior: run only once for \"${key}\"" = {
