@@ -3,8 +3,6 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -23,6 +21,7 @@ import (
 	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 )
 
 type Web struct {
@@ -219,7 +218,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/{id}/run", self.RunsByActionIdGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
@@ -266,37 +265,24 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) RunsByActionIdGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
-	} else if fetchParam, err := getPage(req); err != nil {
+	} else if page, err := getPage(req); err != nil {
 		self.BadRequest(w, err)
 		return
-	} else if runs, err := self.RunService.GetByActionId(id, fetchParam); err != nil {
+	} else if runs, err := self.RunService.GetByActionId(id, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Runs by Action ID: %q", id))
 		return
-	} else {
-		type ResponseWrapper struct {
-			Runs []*domain.Run
-			Page domain.PageResponse
-		}
-
-		responseWrapper := &ResponseWrapper{
-			Runs: runs.Runs,
-			Page: domain.PageResponse{
-				PageNumber: runs.FetchParamResponse.PageNumber,
-			},
-		}
-		if runs.FetchParamResponse.PrevOffSet != nil {
-			responseWrapper.Page.PrevPage = html.UnescapeString(fmt.Sprintf(`run?limit=%d&offset=%d`, fetchParam.Limit, *runs.FetchParamResponse.PrevOffSet))
-		}
-		if runs.FetchParamResponse.NextOffSet != nil {
-			responseWrapper.Page.NextPage = html.UnescapeString(fmt.Sprintf(`run?limit=%d&offset=%d`, fetchParam.Limit, *runs.FetchParamResponse.NextOffSet))
-		}
-
-		if err := render("action/runs.html", w, responseWrapper); err != nil {
-			self.ServerError(w, err)
-		}
+	} else if err := render("action/runs.html", w, struct {
+		Runs []*domain.Run
+		*repository.Page
+	}{
+		Runs: runs,
+		Page: page,
+	}); err != nil {
+		self.ServerError(w, err)
+		return
 	}
 }
 
@@ -415,63 +401,59 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func getPage(req *http.Request) (*domain.FetchParam, error) {
-	offset, err := strconv.Atoi(req.FormValue("offset"))
-	if err != nil {
-		return nil, errors.New("offset parameter is invalid, should be positive integer")
+func getPage(req *http.Request) (*repository.Page, error) {
+	page := repository.Page{}
+
+	if offset, err := strconv.Atoi(req.FormValue("offset")); err != nil {
+		return nil, errors.WithMessage(err, "offset parameter is invalid, should be positive integer")
+	} else {
+		page.Offset = offset
 	}
-	limit, err := strconv.Atoi(req.FormValue("limit"))
-	if err != nil {
-		return nil, errors.New("limit parameter is invalid, should be positive integer")
+
+	if limit, err := strconv.Atoi(req.FormValue("limit")); err != nil {
+		return nil, errors.WithMessage(err, "limit parameter is invalid, should be positive integer")
+	} else {
+		page.Limit = limit
 	}
-	return &domain.FetchParam{Limit: limit, OffSet: offset}, nil
+
+	return &page, nil
 }
 
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
-	if fetchParam, err := getPage(req); err != nil {
+	if page, err := getPage(req); err != nil {
 		self.BadRequest(w, err)
+		return
+	} else if runs, err := self.RunService.GetAll(page); err != nil {
+		self.ServerError(w, err)
+		return
 	} else {
-		if runs, err := self.RunService.GetAll(fetchParam); err != nil {
-			self.ServerError(w, err)
-		} else {
+		type RunWrapper struct {
+			*domain.Run
+			Action *domain.Action
+		}
 
-			type RunWrapper struct {
-				*domain.Run
-				Action *domain.Action
-			}
-			type ResponseWrapper struct {
-				Runs []RunWrapper
-				Page domain.PageResponse
-			}
-
-			runWrappers := make([]RunWrapper, len(runs.Runs))
-			for i, run := range runs.Runs {
-				if action, err := self.ActionService.GetById(run.ActionId); err != nil {
-					self.ServerError(w, err)
-					return
-				} else {
-					runWrappers[i] = RunWrapper{
-						Run:    run,
-						Action: &action,
-					}
+		runWrappers := make([]RunWrapper, len(runs))
+		for i, run := range runs {
+			if action, err := self.ActionService.GetById(run.ActionId); err != nil {
+				self.ServerError(w, err)
+				return
+			} else {
+				runWrappers[i] = RunWrapper{
+					Run:    run,
+					Action: &action,
 				}
 			}
-			responseWrapper := &ResponseWrapper{
-				Runs: runWrappers,
-				Page: domain.PageResponse{
-					PageNumber: runs.FetchParamResponse.PageNumber,
-				},
-			}
-			if runs.FetchParamResponse.PrevOffSet != nil {
-				responseWrapper.Page.PrevPage = html.UnescapeString(fmt.Sprintf(`run/?limit=%d&offset=%d`, fetchParam.Limit, *runs.FetchParamResponse.PrevOffSet))
-			}
-			if runs.FetchParamResponse.NextOffSet != nil {
-				responseWrapper.Page.NextPage = html.UnescapeString(fmt.Sprintf(`run/?limit=%d&offset=%d`, fetchParam.Limit, *runs.FetchParamResponse.NextOffSet))
-			}
+		}
 
-			if err := render("run/index.html", w, responseWrapper); err != nil {
-				self.ServerError(w, err)
-			}
+		if err := render("run/index.html", w, struct {
+			Runs []RunWrapper
+			*repository.Page
+		}{
+			Runs: runWrappers,
+			Page: page,
+		}); err != nil {
+			self.ServerError(w, err)
+			return
 		}
 	}
 }
@@ -510,10 +492,10 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 }
 
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
-	if fetchParam, err := getPage(req); err != nil {
+	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 	} else {
-		if runs, err := self.RunService.GetAll(fetchParam); err != nil {
+		if runs, err := self.RunService.GetAll(page); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
 		} else {
 			self.json(w, runs, http.StatusOK)

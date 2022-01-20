@@ -27,9 +27,9 @@ type RunService interface {
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetInputFactIdsByNomadJobId(pgx.Tx, uuid.UUID) (map[string][]uuid.UUID, error)
 	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
-	GetByActionId(id uuid.UUID, fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error)
+	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
 	GetLatestByActionId(pgx.Tx, uuid.UUID) (domain.Run, error)
-	GetAll(fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error)
+	GetAll(*repository.Page) ([]*domain.Run, error)
 	Save(pgx.Tx, *domain.Run, map[string]interface{}, *domain.RunOutput) error
 	Update(pgx.Tx, *domain.Run) error
 	End(pgx.Tx, *domain.Run) error
@@ -89,12 +89,12 @@ func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOu
 	return
 }
 
-func (self *runService) GetByActionId(id uuid.UUID, fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {
-	self.logger.Debug().Msgf("Getting Run by Action ID %q with offset %d and limit %d", id, fetchParam.OffSet, fetchParam.Limit)
-	if runs, err := self.runRepository.GetByActionId(id, fetchParam.Limit+1, fetchParam.OffSet); err != nil {
-		return nil, errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, fetchParam.OffSet, fetchParam.Limit)
+func (self *runService) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Run, error) {
+	self.logger.Debug().Msgf("Getting Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
+	if runs, err := self.runRepository.GetByActionId(id, page); err != nil {
+		return nil, errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
 	} else {
-		return self.buildFetchRunsResponse(fetchParam, runs), nil
+		return runs, nil
 	}
 }
 
@@ -105,36 +105,13 @@ func (self *runService) GetLatestByActionId(tx pgx.Tx, id uuid.UUID) (run domain
 	return
 }
 
-func (self *runService) GetAll(fetchParam *domain.FetchParam) (*domain.FetchRunsResponse, error) {
-	self.logger.Debug().Msgf("Getting all Runs with offset %d and limit %d", fetchParam.OffSet, fetchParam.Limit)
-	if runs, err := self.runRepository.GetAll(fetchParam.Limit+1, fetchParam.OffSet); err != nil {
-		return nil, errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", fetchParam.OffSet, fetchParam.Limit)
+func (self *runService) GetAll(page *repository.Page) ([]*domain.Run, error) {
+	self.logger.Debug().Msgf("Getting all Runs with offset %d and limit %d", page.Offset, page.Limit)
+	if runs, err := self.runRepository.GetAll(page); err != nil {
+		return nil, errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
 	} else {
-		return self.buildFetchRunsResponse(fetchParam, runs), nil
+		return runs, nil
 	}
-}
-
-func (self *runService) buildFetchRunsResponse(fetchParam *domain.FetchParam, runs []*domain.Run) *domain.FetchRunsResponse {
-	sizePage := len(runs)
-	if sizePage > fetchParam.Limit {
-		runs = runs[:len(runs)-1]
-	}
-	var fetchParamResponse = &domain.FetchRunsResponse{
-		Runs: runs,
-		FetchParamResponse: domain.FetchParamResponse{
-			PageNumber: fetchParam.OffSet / fetchParam.Limit,
-		},
-	}
-	if (fetchParam.OffSet - fetchParam.Limit) >= 0 {
-		prevOffSet := fetchParam.OffSet - fetchParam.Limit
-		fetchParamResponse.FetchParamResponse.PrevOffSet = &prevOffSet
-	}
-
-	if sizePage == (fetchParam.Limit + 1) {
-		nextOffSet := fetchParam.OffSet + fetchParam.Limit
-		fetchParamResponse.FetchParamResponse.NextOffSet = &nextOffSet
-	}
-	return fetchParamResponse
 }
 
 func (self *runService) Save(tx pgx.Tx, run *domain.Run, inputs map[string]interface{}, output *domain.RunOutput) error {

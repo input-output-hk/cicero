@@ -163,25 +163,3 @@ type Run struct {
 	CreatedAt  time.Time  `json:"created_at"`
 	FinishedAt *time.Time `json:"finished_at"`
 }
-
-type FetchRunsResponse struct {
-	Runs               []*Run
-	FetchParamResponse FetchParamResponse
-}
-
-type PageResponse struct {
-	PageNumber int
-	PrevPage   string
-	NextPage   string
-}
-
-type FetchParam struct {
-	Limit  int
-	OffSet int
-}
-
-type FetchParamResponse struct {
-	PageNumber int
-	PrevOffSet *int
-	NextOffSet *int
-}

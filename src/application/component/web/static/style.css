@@ -87,47 +87,37 @@ iframe.iframe {
 }
 
 ul.pagination {
-	display: inline-block;
 	padding: 0;
 	margin: 0;
-}
+	list-style: none;
 
-ul.pagination li {
-	display: inline;
-	transition: background-color .3s;
+	display: flex;
 }
+ul.pagination > li {
+	border: 3px solid var(--border);
+	background: var(--border);
 
-ul.pagination li a {
-	color: black;
-	float: left;
-	padding: 8px 16px;
-	text-decoration: none;
-	border: 1px solid var(--border);
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
-
-ul.pagination a:hover:not(.current) {
-	background-color: var(--border);
+ul.pagination > li:first-child,
+ul.pagination > li:last-child {
+	min-width: 2em;
+	min-height: 2em;
+	transition: background .25s;
+	user-select: none;
+	cursor: pointer;
 }
-
-ul.pagination li a.disabled {
-	pointer-events: none;
-	cursor: default;
-	opacity: 0.5;
+ul.pagination > li:first-child:hover,
+ul.pagination > li:last-child:hover {
+	background: rgba(var(--border-rgb), 25%);
 }
-
-.embed-container {
-	position: relative;
-	padding-bottom: 56.25%; /* ratio 16x9 */
-	height: 0;
-	overflow: hidden;
-	width: 100%;
-	height: auto;
-}
-.embed-container iframe {
-	border-width: 0px;
-	position: absolute;
-	top: 0;
-	left: 0;
+ul.pagination > li > a {
 	width: 100%;
 	height: 100%;
+
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }

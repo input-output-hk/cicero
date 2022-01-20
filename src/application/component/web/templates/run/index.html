@@ -1,7 +1,10 @@
 {{template "layout.html" .}}
 
 {{define "main"}}
-	<table class="table">
+	<table
+		class="table"
+		style="width: 100%"
+	>
 		<thead>
 			<tr>
 				<th>Action</th>
@@ -48,37 +51,7 @@
 		</tbody>
 	</table>
 
-	<nav>
-		<ul class="pagination">
-			<li>
-				<a
-					href="{{.Page.PrevPage}}"
-					class="
-						{{if .Page.PrevPage}}
-							page-item
-						{{else}}
-							disabled
-						{{end}}
-					"
-				>«</a>
-			</li>
-			<li aria-current="page">
-				<a class="current" href="#">
-					<span>{{.Page.PageNumber}}</span>
-				</a>
-			</li>
-			<li>
-				<a
-					href="{{.Page.NextPage}}"
-					class="
-						{{if .Page.NextPage}}
-							page-item
-						{{else}}
-							disabled
-						{{end}}
-					"
-				>»</a>
-			</li>
-		</ul>
+	<nav style="display: flex; justify-content: end">
+		{{template "pagination" .}}
 	</nav>
 {{end}}

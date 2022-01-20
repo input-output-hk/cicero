@@ -47,6 +47,36 @@
 		}
 		</style>
 	</head>
+
+	{{define "pagination"}}
+		<ul class="pagination">
+			<li>
+				{{if .PrevOffset}}
+					<a href="?limit={{.Limit}}&offset={{.PrevOffset}}">«</a>
+				{{else}}
+					«
+				{{end}}
+			</li>
+			<li aria-current="page">
+				{{.Number}}
+			</li>
+			<li>/</li>
+			<li>{{.Pages}}</li>
+			<li>
+				<span style="opacity: 50%">
+					({{.Total}})
+				</span>
+			</li>
+			<li>
+				{{if .NextOffset}}
+					<a href="?limit={{.Limit}}&offset={{.NextOffset}}">»</a>
+				{{else}}
+					»
+				{{end}}
+			</li>
+		</ul>
+	{{end}}
+
 	<body>
 		<nav>
 			<ul>
