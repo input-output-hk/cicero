@@ -215,12 +215,11 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}/cancel", self.RunIdCancelGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/run", self.RunGet).Queries("offset", "{offset}", "limit", "{limit}").Methods(http.MethodGet)
-	// muxRouter.HandleFunc("/run", self.RunGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run", self.RunGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/{id}/run", self.RunsByActionIdGet).Queries("offset", "{offset}", "limit", "{limit}").Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}/run", self.RunsByActionIdGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
