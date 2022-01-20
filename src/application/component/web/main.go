@@ -276,7 +276,6 @@ func (self *Web) RunsByActionIdGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Runs by Action ID: %q", id))
 		return
 	} else {
-
 		type ResponseWrapper struct {
 			Runs []*domain.Run
 			Page domain.PageResponse
