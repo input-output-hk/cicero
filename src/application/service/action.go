@@ -211,9 +211,15 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 		if !pgxscan.NotFound(err) {
 			return false, inputs, err
 		}
-	} else if inputFactIds, err := self.runService.GetInputFactIdsByNomadJobId(tx, run.NomadJobID); err != nil {
-		return false, inputs, err
 	} else {
+		var inputFactIds map[string][]uuid.UUID
+		if inputFactIds, err = self.runService.GetInputFactIdsByNomadJobId(tx, run.NomadJobID); err != nil {
+			if !pgxscan.NotFound(err) {
+				return false, inputs, err
+			}
+			inputFactIds = map[string][]uuid.UUID{}
+		}
+
 		inputFactsChanged := false
 
 	InputFactsChanged:
@@ -224,55 +230,92 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 				continue
 			}
 
-			switch input.Select {
-			case domain.InputDefinitionSelectLatest:
-				if len(inputFactIds[name]) != 1 {
-					err := fmt.Errorf("Run %q should have one fact for input %q but has %d", run.NomadJobID, name, len(inputFactIds[name]))
-					logger.Fatal().Err(err).Send()
-					return false, inputs, err
+			didInputFactChange := func(oldFactIdsIndex int, newFact *domain.Fact) bool {
+				var oldFactId *uuid.UUID
+				if _, hasOldFact := inputFactIds[name]; hasOldFact {
+					oldFactId = &inputFactIds[name][oldFactIdsIndex]
 				}
 
-				if inputFact[name].ID != inputFactIds[name][0] {
+				switch {
+				case input.Optional && oldFactId == nil:
+					if newFact != nil {
+						if logger.Debug().Enabled() {
+							logger.Debug().
+								Str("input", name).
+								Bool("input-optional", true).
+								Interface("old-fact", nil).
+								Str("new-fact", newFact.ID.String()).
+								Msg("input satisfied by new Fact")
+						}
+						return true
+					}
+				case input.Optional && oldFactId != nil:
+					if newFact == nil || *oldFactId != newFact.ID {
+						if logger.Debug().Enabled() {
+							var newFactIdToLog *string
+							if newFact != nil {
+								newFactIdToLogValue := newFact.ID.String()
+								newFactIdToLog = &newFactIdToLogValue
+							}
+							logger.Debug().
+								Str("input", name).
+								Bool("input-optional", true).
+								Str("old-fact", oldFactId.String()).
+								Interface("new-fact", newFactIdToLog).
+								Msg("input satisfied by new Fact or absence of one")
+						}
+						return true
+					}
+				case oldFactId == nil:
+					// A previous Run would not have been started
+					// if a non-optional input was not satisfied.
+					// We are not looking at a negated input here
+					// because those are never passed into the evaluation.
+					panic("This should never happen™")
+				case *oldFactId != newFact.ID:
 					if logger.Debug().Enabled() {
 						logger.Debug().
 							Str("input", name).
-							Str("old-fact", inputFactIds[name][0].String()).
-							Str("new-fact", inputFact[name].ID.String()).
+							Str("old-fact", oldFactId.String()).
+							Str("new-fact", newFact.ID.String()).
 							Msg("input satisfied by new Fact")
 					}
-					inputFactsChanged = true
-					break InputFactsChanged
-				}
-			case domain.InputDefinitionSelectAll:
-				if len(inputFacts[name]) != len(inputFactIds[name]) {
-					if logger.Debug().Enabled() {
-						logger.Debug().
-							Str("input", name).
-							Int("num-old-facts", len(inputFactIds[name])).
-							Int("num-new-facts", len(inputFacts[name])).
-							Msg("input satisfied by different number of Facts than last Run")
-					}
-					inputFactsChanged = true
-					break InputFactsChanged
+					return true
 				}
 
-				for _, match := range inputFacts[name] {
-					for _, inputFactId := range inputFactIds[name] {
-						if match.ID != inputFactId {
-							if logger.Debug().Enabled() {
-								logger.Debug().
-									Str("input", name).
-									Str("old-fact", inputFactId.String()).
-									Str("new-fact", match.ID.String()).
-									Msg("input satisfied by new Fact")
+				return false
+			}
+
+			switch input.Select {
+			case domain.InputDefinitionSelectLatest:
+				if didInputFactChange(0, inputFact[name]) {
+					inputFactsChanged = true
+				}
+			case domain.InputDefinitionSelectAll:
+				if lenNew, lenOld := len(inputFacts[name]), len(inputFactIds[name]); lenNew != lenOld {
+					logger.Debug().
+						Str("input", name).
+						Int("num-old-facts", lenOld).
+						Int("num-new-facts", lenNew).
+						Msg("input satisfied by different number of Facts than last Run")
+					inputFactsChanged = true
+				} else {
+				LoopOverNewInputFacts:
+					for _, match := range inputFacts[name] {
+						for i := range inputFactIds[name] {
+							if didInputFactChange(i, match) {
+								inputFactsChanged = true
+								break LoopOverNewInputFacts
 							}
-							inputFactsChanged = true
-							break InputFactsChanged
 						}
 					}
 				}
 			default:
 				panic("This should have already been caught by the loop above!")
+			}
+
+			if inputFactsChanged {
+				break InputFactsChanged
 			}
 
 			logger.Debug().
