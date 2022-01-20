@@ -71,7 +71,7 @@ func (a *runRepository) GetInputFactIdsByNomadJobId(tx pgx.Tx, id uuid.UUID) (in
 		inputFactIds[runInput.InputName] = append(inputFactIds[runInput.InputName], runInput.FactId)
 	}
 
-	return inputFactIds, nil
+	return
 }
 
 func (a *runRepository) GetAll() (instances []*domain.Run, err error) {
