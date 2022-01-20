@@ -1,63 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <link rel="stylesheet" type="text/css" href="/static/style.css"/>
-</head>
-<table class="table">
-    <thead>
-    <tr>
-        <th>Created At</th>
-        <th>Finished At</th>
-        <th>Duration</th>
-        <th>Nomad Job ID</th>
-    </tr>
-    </thead>
-    <tbody>
-    {{range .Runs}}
-    <tr>
-        <td>{{.CreatedAt}}</td>
-        <td>
-            {{if .FinishedAt}}
-            {{.FinishedAt}}
-            {{else}}
-            <a target="_parent" href="/run/{{.NomadJobID}}/cancel">
-                Cancel
-            </a>
-            {{end}}
-        </td>
-        <td class="numerical">
-            {{if .FinishedAt}}
-            {{.FinishedAt.Sub .CreatedAt}}
-            {{end}}
-        </td>
-        <td>
-            <a target="_parent" href="/run/{{.NomadJobID}}">
-                {{.NomadJobID}}
-            </a>
-        </td>
-    </tr>
-    {{end}}
-    </tbody>
-</table>
+	<head>
+		<link rel="stylesheet" type="text/css" href="/static/style.css"/>
+	</head>
 
-<nav>
-    <ul class="pagination">
-        <li>
-            <a	{{if .Page.PrevPage}}
-                  class="page-item"
-                  {{else}}
-                  class="disabled"
-                  {{end}} href="{{.Page.PrevPage}}">«</a>
-        </li>
-        <li aria-current="page">
-            <a class="current" href="#"> <span>{{.Page.PageNumber}}</span></a>
-        </li>
-        <li>
-            <a	{{if .Page.NextPage}}
-                  class="page-item"
-                  {{else}}
-                  class="disabled"
-                  {{end}} href="{{.Page.NextPage}}">»</a>
-        </li>
-    </ul>
-</nav>
+	<body>
+		<table class="table">
+			<thead>
+				<tr>
+					<th>Created At</th>
+					<th>Finished At</th>
+					<th>Duration</th>
+					<th>Nomad Job ID</th>
+				</tr>
+			</thead>
+			<tbody>
+				{{range .Runs}}
+					<tr>
+						<td>{{.CreatedAt}}</td>
+						<td>
+							{{if .FinishedAt}}
+								{{.FinishedAt}}
+							{{else}}
+								<a target="_parent" href="/run/{{.NomadJobID}}/cancel">
+									Cancel
+								</a>
+							{{end}}
+						</td>
+						<td class="numerical">
+							{{if .FinishedAt}}
+								{{.FinishedAt.Sub .CreatedAt}}
+							{{end}}
+						</td>
+						<td>
+							<a target="_parent" href="/run/{{.NomadJobID}}">
+								{{.NomadJobID}}
+							</a>
+						</td>
+					</tr>
+				{{end}}
+			</tbody>
+		</table>
+
+		<nav>
+			<ul class="pagination">
+				<li>
+					<a
+						href="{{.Page.PrevPage}}"
+						class="
+							{{if .Page.PrevPage}}
+								page-item
+							{{else}}
+								disabled
+							{{end}}
+						"
+					>«</a>
+				</li>
+				<li aria-current="page">
+					<a class="current" href="#">
+						<span>{{.Page.PageNumber}}</span>
+					</a>
+				</li>
+				<li>
+					<a
+						href="{{.Page.NextPage}}"
+						class="
+							{{if .Page.NextPage}}
+								page-item
+							{{else}}
+								disabled
+							{{end}}
+						"
+					>»</a>
+				</li>
+			</ul>
+		</nav>
+	</body>
+</html>

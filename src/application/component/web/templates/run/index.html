@@ -51,21 +51,33 @@
 	<nav>
 		<ul class="pagination">
 			<li>
-				<a	{{if .Page.PrevPage}}
-					  class="page-item"
-					  {{else}}
-					  class="disabled"
-					  {{end}} href="{{.Page.PrevPage}}">«</a>
+				<a
+					href="{{.Page.PrevPage}}"
+					class="
+						{{if .Page.PrevPage}}
+							page-item
+						{{else}}
+							disabled
+						{{end}}
+					"
+				>«</a>
 			</li>
 			<li aria-current="page">
-				<a class="current" href="#"> <span>{{.Page.PageNumber}}</span></a>
+				<a class="current" href="#">
+					<span>{{.Page.PageNumber}}</span>
+				</a>
 			</li>
 			<li>
-				<a	{{if .Page.NextPage}}
-					  class="page-item"
-					  {{else}}
-					  class="disabled"
-					  {{end}} href="{{.Page.NextPage}}">»</a>
+				<a
+					href="{{.Page.NextPage}}"
+					class="
+						{{if .Page.NextPage}}
+							page-item
+						{{else}}
+							disabled
+						{{end}}
+					"
+				>»</a>
 			</li>
 		</ul>
 	</nav>
