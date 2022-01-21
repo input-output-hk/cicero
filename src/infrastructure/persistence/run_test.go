@@ -2,20 +2,25 @@ package persistence
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"github.com/input-output-hk/cicero/src/config/mocks"
-	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pashagolub/pgxmock"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/input-output-hk/cicero/src/config/mocks"
+	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 )
 
 func TestShouldGetRunByActionId(t *testing.T) {
+	t.Skip("pgxmock does not support SendBatch()", "https://github.com/pashagolub/pgxmock/issues/52")
+
 	t.Parallel()
 	now := time.Now().UTC()
 	actionId := uuid.New()
+
 	run := domain.Run{
 		NomadJobID: uuid.New(),
 		ActionId:   uuid.New(),
@@ -23,18 +28,23 @@ func TestShouldGetRunByActionId(t *testing.T) {
 		FinishedAt: &now,
 	}
 
+	page := repository.Page{
+		Limit:  1,
+		Offset: 0,
+	}
+
 	// given
 	mock, err := pgxmock.NewConn()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		t.Fatalf("an error %q was not expected when opening a stub database connection", err)
 	}
 	defer mock.Close(context.Background())
 	rows := mock.NewRows([]string{"nomad_job_id", "action_id", "created_at", "finished_at"}).AddRow(run.NomadJobID, run.ActionId, run.CreatedAt, run.FinishedAt)
-	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId, page.Limit, page.Offset).WillReturnRows(rows)
 	repository := NewRunRepository(mock)
 
 	// when
-	runResult, err := repository.GetByActionId(actionId)
+	runResult, err := repository.GetByActionId(actionId, &page)
 
 	// then
 	assert.Nil(t, err)
@@ -56,7 +66,7 @@ func TestShouldUpdateRun(t *testing.T) {
 
 	// given
 	mock, tx := mocks.BuildTransaction(context.Background(), t)
-	mock.ExpectExec("UPDATE runs").WithArgs(run.NomadJobID, run.FinishedAt).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
+	mock.ExpectExec("UPDATE run").WithArgs(run.NomadJobID, run.FinishedAt).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 	mock.ExpectCommit()
 	repository := NewRunRepository(mock)
 

@@ -12,7 +12,7 @@ import (
 )
 
 type SupervisorLogger struct {
-	Logger *zerolog.Logger
+	*zerolog.Logger
 }
 
 func (l *SupervisorLogger) Printf(format string, v ...interface{}) {
@@ -23,14 +23,12 @@ func (l *SupervisorLogger) Println(v ...interface{}) {
 }
 
 type LoggerConfig struct {
-	// Enable console logging
+	// Print human-readable output to console
 	ConsoleLoggingEnabled bool
 
 	// Enable Debug mode
 	DebugModeEnabled bool
 
-	// EncodeLogsAsJson makes the log framework log JSON
-	EncodeLogsAsJson bool
 	// FileLoggingEnabled makes the framework log to a file
 	// the fields below can be skipped if this value is false!
 	FileLoggingEnabled bool
@@ -47,51 +45,59 @@ type LoggerConfig struct {
 }
 
 func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
-	consoleLoggingEnabled, err := GetenvBool("CONSOLE_LOGGING_ENABLED")
-	if err != nil {
-		return nil, err
-	}
-	encodeLogsAsJson, err := GetenvBool("ENCODE_LOGS_AS_JSON")
-	if err != nil {
-		return nil, err
-	}
-	fileLoggingEnabled, err := GetenvBool("FILE_LOGGING_ENABLED")
-	if err != nil {
-		return nil, err
-	}
 	conf := LoggerConfig{
-		ConsoleLoggingEnabled: consoleLoggingEnabled,
-		DebugModeEnabled:      debugModeEnabled,
-		EncodeLogsAsJson:      encodeLogsAsJson,
-		FileLoggingEnabled:    fileLoggingEnabled,
+		DebugModeEnabled: debugModeEnabled,
 	}
-	if fileLoggingEnabled {
-		directory, err := GetenvStr("LOGS_DIRECTORY")
-		if err != nil {
-			return nil, err
-		}
-		fileName, err := GetenvStr("LOGS_FILE_NAME")
-		if err != nil {
-			return nil, err
-		}
-		maxSize, err := GetenvInt("LOGS_MAX_SIZE")
-		if err != nil {
-			return nil, err
-		}
-		maxBackups, err := GetenvInt("LOGS_MAX_BACKUPS")
-		if err != nil {
-			return nil, err
-		}
-		maxAge, err := GetenvInt("LOGS_MAX_AGE")
-		if err != nil {
-			return nil, err
-		}
-		conf.Directory = directory
-		conf.Filename = fileName
-		conf.MaxSize = maxSize
-		conf.MaxBackups = maxBackups
-		conf.MaxAge = maxAge
+
+	if v, err := GetenvBool("CONSOLE_LOGGING_ENABLED"); err != nil {
+		return nil, err
+	} else if v != nil {
+		conf.ConsoleLoggingEnabled = *v
 	}
+
+	if v, err := GetenvBool("FILE_LOGGING_ENABLED"); err != nil {
+		return nil, err
+	} else if v != nil && *v {
+		if v := GetenvStr("LOGS_DIRECTORY"); v == "" {
+			conf.Directory = "logs"
+		} else {
+			conf.Directory = v
+		}
+
+		if v := GetenvStr("LOGS_FILE_NAME"); v == "" {
+			conf.Filename = "cicero.log"
+		} else {
+			conf.Filename = v
+		}
+
+		switch v, err := GetenvInt("LOGS_MAX_SIZE"); {
+		case err != nil:
+			return nil, err
+		case v != nil:
+			conf.MaxSize = *v
+		default:
+			conf.MaxSize = 10
+		}
+
+		switch v, err := GetenvInt("LOGS_MAX_BACKUPS"); {
+		case err != nil:
+			return nil, err
+		case v != nil:
+			conf.MaxBackups = *v
+		default:
+			conf.MaxBackups = 10
+		}
+
+		switch v, err := GetenvInt("LOGS_MAX_AGE"); {
+		case err != nil:
+			return nil, err
+		case v != nil:
+			conf.MaxAge = *v
+		default:
+			conf.MaxAge = 10
+		}
+	}
+
 	return &conf, nil
 }
 
@@ -99,28 +105,34 @@ func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
 	config, err := buildLoggerConfig(debugModeEnabled)
 	if err != nil {
 		log.Fatal().Err(err).Msg("can't get logger config")
+		return nil
 	}
-	var writers []io.Writer
 
+	var writers []io.Writer
 	if config.ConsoleLoggingEnabled {
-		writers = append(writers, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+		writers = append(writers, zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+			w.Out = os.Stderr
+			w.TimeFormat = time.RFC3339
+		}))
+	} else {
+		writers = append(writers, os.Stderr)
 	}
 	if config.FileLoggingEnabled {
 		writers = append(writers, newRollingFile(config))
 	}
-	mw := io.MultiWriter(writers...)
 
-	logger := zerolog.New(mw).With().Timestamp().Logger()
+	logger := zerolog.New(zerolog.MultiLevelWriter(writers...)).
+		With().Timestamp().Logger()
 
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	if debugModeEnabled {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
 
 	logger.Info().
 		Bool("consoleLogging", config.ConsoleLoggingEnabled).
 		Bool("debugMode", config.DebugModeEnabled).
-		Bool("jsonLogOutput", config.EncodeLogsAsJson).
 		Bool("fileLogging", config.FileLoggingEnabled).
 		Str("logDirectory", config.Directory).
 		Str("fileName", config.Filename).

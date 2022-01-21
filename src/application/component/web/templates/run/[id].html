@@ -33,7 +33,23 @@
 						</tr>
 						<tr>
 							<th>Finished at</th>
-							<td>{{.FinishedAt}}</td>
+							<td>
+								{{if .FinishedAt}}
+									{{.FinishedAt}}
+								{{else}}
+									<a href="/run/{{.NomadJobID}}/cancel">
+										Cancel
+									</a>
+								{{end}}
+							</td>
+						</tr>
+						<tr>
+							<th>Duration</th>
+							<td>
+								{{if .FinishedAt}}
+									{{.FinishedAt.Sub .CreatedAt}}
+								{{end}}
+							</td>
 						</tr>
 					</tbody>
 				</table>
@@ -41,34 +57,98 @@
 				<table class="table vertical">
 					<thead>
 						<tr>
-							<th colspan="2">
-								Outputs
+							<th
+								colspan="2"
+								title="Facts that this Run published"
+							>
+								Facts
 							</th>
-						</tr>
-						<tr>
-							<th>Success</th>
-							<th>Failure</th>
 						</tr>
 					</thead>
 					<tbody>
-						<tr>
-							<td>
-								<textarea
-									readonly
-									rows="10"
-									cols="50"
-								>{{toJson .Success true}}</textarea>
-							</td>
-							<td>
-								<textarea
-									readonly
-									rows="10"
-									cols="50"
-								>{{toJson .Failure true}}</textarea>
-							</td>
-						</tr>
+						{{range $.facts}}
+							<tr>
+								<td>Created at</td>
+								<td>
+									{{.CreatedAt}}
+								</td>
+							</tr>
+							<tr>
+								<td>Value</td>
+								<td>
+									<textarea
+										readonly
+										rows="10"
+										cols="50"
+									>{{toJson .Value true}}</textarea>
+								</td>
+							</tr>
+							{{if .BinaryHash}}
+								<tr>
+									<td>Binary</td>
+									<td>
+										<a href="/fact/{{.ID}}/binary"><code>{{.BinaryHash}}</code></a>
+									</td>
+								</tr>
+							{{end}}
+						{{else}}
+							<tr>
+								<td colspan="2">
+									<em>This Run has not published any facts.</em>
+								</td>
+							</tr>
+						{{end}}
 					</tbody>
 				</table>
+
+				{{if not .FinishedAt}}
+					<table class="table vertical">
+						<thead>
+							<tr>
+								<th
+									colspan="2"
+									title="Fact that will be published when the Run ends"
+								>
+									Output
+								</th>
+							</tr>
+							<tr>
+								<th>Success</th>
+								<th>Failure</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								{{if or $.output.Success $.output.Failure}}
+									<td>
+										<textarea
+											readonly
+											rows="10"
+											cols="50"
+										>{{toJson $.output.Success true}}</textarea>
+									</td>
+									<td>
+										<textarea
+											readonly
+											rows="10"
+											cols="50"
+										>{{toJson $.output.Failure true}}</textarea>
+									</td>
+								{{else}}
+									<td colspan="2">
+										<em>
+											<p>This Run has no output.</p>
+											<p>
+												If this Run declares an output
+												this means it was canceled.
+											</p>
+										</em>
+									</td>
+								{{end}}
+							</tr>
+						</tbody>
+					</table>
+				{{end}}
 			{{end}}
 		</div>
 
@@ -295,9 +375,9 @@
 									</table>
 
 									<h3>Task Logs</h3>
-									{{if $wrapper.Logs.Stdout}}
+                  {{if (index $wrapper.Logs $taskName).Stdout}}
 										<table class="panel log">
-											{{range $wrapper.Logs.Stdout}}
+											{{range (index $wrapper.Logs $taskName).Stdout}}
 												<tr>
 													<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
 													<td class="line">{{.Text}}</td>
@@ -305,9 +385,9 @@
 											{{end}}
 										</table>
 									{{end}}
-									{{if $wrapper.Logs.Stderr}}
+									{{if (index $wrapper.Logs $taskName).Stderr}}
 										<table class="panel log">
-											{{range $wrapper.Logs.Stderr}}
+											{{range (index $wrapper.Logs $taskName).Stderr}}
 												<tr class="stderr">
 													<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
 													<td class="line">{{.Text}}</td>

@@ -17,6 +17,8 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 )
 
+//go:generate mockery --all --keeptree
+
 type StartCmd struct {
 	Components []string `arg:"positional" help:"any of: nomad, web"`
 
@@ -24,7 +26,7 @@ type StartCmd struct {
 	Evaluators     []string `arg:"--evaluators"`
 	Env            []string `arg:"--env"`
 
-	WebListen string `arg:"--web-listen" default:":8080"`
+	WebListen string `arg:"--web-listen,env:WEB_LISTEN" default:":8080"`
 }
 
 func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
@@ -62,8 +64,8 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 
 	db := once(func() interface{} {
 		if db, err := config.DBConnection(); err != nil {
-			logger.Fatal().Err(err)
-			return err
+			logger.Fatal().Err(err).Send()
+			return nil
 		} else {
 			return db
 		}
@@ -71,8 +73,8 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 
 	nomadClient := once(func() interface{} {
 		if client, err := config.NewNomadClient(); err != nil {
-			logger.Fatal().Err(err)
-			return err
+			logger.Fatal().Err(err).Send()
+			return nil
 		} else {
 			return client
 		}
@@ -82,7 +84,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	})
 
 	runService := once(func() interface{} {
-		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr, logger)
+		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr, nomadClientWrapper().(application.NomadClient), logger)
 	})
 	evaluationService := once(func() interface{} {
 		return service.NewEvaluationService(cmd.Evaluators, cmd.Env, logger)

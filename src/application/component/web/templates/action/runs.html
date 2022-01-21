@@ -1,0 +1,51 @@
+<html>
+	<head>
+		<link rel="stylesheet" type="text/css" href="/static/style.css"/>
+	</head>
+
+	<body>
+		<table
+			class="table"
+			style="width: 100%"
+		>
+			<thead>
+				<tr>
+					<th>Created At</th>
+					<th>Finished At</th>
+					<th>Duration</th>
+					<th>Nomad Job ID</th>
+				</tr>
+			</thead>
+			<tbody>
+				{{range .Runs}}
+					<tr>
+						<td>{{.CreatedAt}}</td>
+						<td>
+							{{with .FinishedAt}}
+								{{.}}
+							{{else}}
+								<a target="_parent" href="/run/{{.NomadJobID}}/cancel">
+									Cancel
+								</a>
+							{{end}}
+						</td>
+						<td class="numerical">
+							{{if .FinishedAt}}
+								{{.FinishedAt.Sub .CreatedAt}}
+							{{end}}
+						</td>
+						<td>
+							<a target="_parent" href="/run/{{.NomadJobID}}">
+								{{.NomadJobID}}
+							</a>
+						</td>
+					</tr>
+				{{end}}
+			</tbody>
+		</table>
+
+		<nav style="display: flex; justify-content: end">
+			{{template "pagination" .}}
+		</nav>
+	</body>
+</html>

@@ -1,32 +1,57 @@
 {{template "layout.html" .}}
 
 {{define "main"}}
-	<table class="table">
+	<table
+		class="table"
+		style="width: 100%"
+	>
 		<thead>
 			<tr>
-				<th>Nomad Job ID</th>
-				<th>Action ID</th>
+				<th>Action</th>
 				<th>Created At</th>
 				<th>Finished At</th>
+				<th>Duration</th>
+				<th>Nomad Job ID</th>
 			</tr>
 		</thead>
 		<tbody>
-			{{range .}}
+			{{range .Runs}}
 				<tr>
+					{{with .Action}}
+						<td>
+							{{.Name}}
+							<br/>
+							<a href="/action/{{.ID}}">
+								{{.ID}}
+							</a>
+						</td>
+					{{end}}
+					<td>{{.CreatedAt}}</td>
+					<td>
+						{{if .FinishedAt}}
+							{{.FinishedAt}}
+						{{else}}
+							<a href="/run/{{.NomadJobID}}/cancel">
+								Cancel
+							</a>
+						{{end}}
+					</td>
+					<td class="numerical">
+						{{if .FinishedAt}}
+							{{.FinishedAt.Sub .CreatedAt}}
+						{{end}}
+					</td>
 					<td>
 						<a href="/run/{{.NomadJobID}}">
 							{{.NomadJobID}}
 						</a>
 					</td>
-					<td>
-						<a href="/action/{{.ActionId}}">
-							{{.ActionId}}
-						</a>
-					</td>
-					<td>{{.CreatedAt}}</td>
-					<td>{{.FinishedAt}}</td>
 				</tr>
 			{{end}}
 		</tbody>
 	</table>
+
+	<nav style="display: flex; justify-content: end">
+		{{template "pagination" .}}
+	</nav>
 {{end}}

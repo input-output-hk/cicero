@@ -7,14 +7,14 @@ Think of it like an if-this-then-that machine on HashiCorp Nomad.
 Cicero’s actions are flexible enough to build Continuous Integration (CI) and
 Continuous Delivery (CD) pipelines. It offers a rich Web UI as well as a CLI
 tool for developers to query and inspect actions and their runs,
-as well as the action outputs. Integration with third party applications (e.g.
+as well as the action output. Integration with third party applications (e.g.
 JIRA) is possible, for automatic status updates. By using a declarative
 approach to actions, dependencies and intermediate results can be easily cached,
 and execution parallelised, thus reducing build times.
 
 ## Vocabulary
 
-- An **Action** is a description of a Nomad job with **inputs** and **outputs**.
+- An **Action** is a description of a Nomad job with **inputs** and **output**.
 	- An **Input** is mainly a CUE document that describes a required **fact**.
 	- An **Output** is a JSON document that will be published as a **fact**.
 		There may be one output for the success and failure case each.
@@ -41,14 +41,15 @@ Shadowed actions with equal names are called the previous versions of an action.
 
 When a fact is published all current actions are checked for runnability.
 
-An action is runnable if its inputs are satisfied. This means there has to be
+An action is runnable if its inputs are satisfied. That means there has to be
 a matching fact for each input that is not optional and there must be no
-matching fact for a negated input.
+matching fact for a negated input. Matching facts must also be different ones
+than those that satisfied the input for the previous run of this action.
 
 If an action is runnable it is evaluated with its matching facts given as inputs.
 This produces a run for which a job is scheduled on the Nomad cluster.
 
-When this job finishes, respective outputs are published as new facts,
+When this job finishes, respective output are published as new facts,
 restarting the cycle.
 
 Facts can also be published from within a run using Cicero's API endpoints
@@ -67,13 +68,21 @@ Cicero currently only ships a Nix evaluator but others are planned.
 ## Nix Standard Library
 
 For actions written in Nix, Cicero provides a standard library of functions
-that help writing actions' inputs, outputs, and Nomad jobs in a concise way.
+that help writing actions' inputs, output, and Nomad jobs in a concise way.
 
 Documentation is currently only available in the form of source code
 [comments](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix)
 and [example actions](https://github.com/input-output-hk/cicero/tree/main/actions/examples).
 
 # Development
+
+## Prerequisites
+
+- Nix
+	- At least version 2.4
+	- Enable flakes in your `/etc/nix/nix.conf`: `experimental-features = nix-command flakes`
+- (Linux with systemd)
+	- You can run Cicero on other platforms but the [Nix actions library](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix) requires [nomad-driver-nix](https://github.com/input-output-hk/nomad-driver-nix).
 
 ## How To Run
 
@@ -90,6 +99,8 @@ Run the required services in Nomad:
 Start the Nomad follower to capture logs:
 
 	sudo nomad-follower
+	# If nomad-follower is not found, use the full path:
+	# sudo $DEVSHELL_DIR/bin/nomad-follower
 
 Migrate the database:
 
@@ -128,8 +139,7 @@ Run OpenApi validation tests:
 
 Build mocks automatically:
 
-	cd src/
-	mockery --all --keeptree
+	go generate ./...
 
 See the commands listed by:
 

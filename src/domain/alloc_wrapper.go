@@ -1,8 +1,9 @@
 package domain
 
 import (
-	nomad "github.com/hashicorp/nomad/api"
 	"time"
+
+	nomad "github.com/hashicorp/nomad/api"
 )
 
 type LokiLine struct {
@@ -17,5 +18,5 @@ type LokiOutput struct {
 
 type AllocWrapper struct {
 	Alloc *nomad.Allocation
-	Logs  *LokiOutput
+	Logs  map[string]*LokiOutput
 }

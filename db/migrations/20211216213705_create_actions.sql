@@ -2,7 +2,7 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE actions (
+CREATE TABLE action (
 	id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
 	name text NOT NULL CHECK (name <> ''),
 	meta jsonb,
@@ -13,4 +13,4 @@ CREATE TABLE actions (
 
 -- migrate:down
 
-DROP TABLE actions;
+DROP TABLE action;

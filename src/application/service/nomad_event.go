@@ -18,7 +18,7 @@ import (
 type NomadEventService interface {
 	Save(pgx.Tx, *nomad.Event) error
 	GetLastNomadEvent() (uint64, error)
-	GetEventAllocByNomadJobId(uuid.UUID) (map[string]domain.AllocWrapper, error)
+	GetEventAllocByNomadJobId(id uuid.UUID) (map[string]domain.AllocWrapper, error)
 }
 
 type nomadEventService struct {
@@ -51,7 +51,7 @@ func (n *nomadEventService) GetLastNomadEvent() (uint64, error) {
 
 func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]domain.AllocWrapper, error) {
 	allocs := map[string]domain.AllocWrapper{}
-	n.logger.Debug().Msgf("Getting EventAlloc by Nomad Job ID: %d", nomadJobId)
+	n.logger.Debug().Msgf("Getting EventAlloc by Nomad Job ID: %q", nomadJobId)
 	results, err := n.nomadEventRepository.GetEventAllocByNomadJobId(nomadJobId)
 	if err != nil {
 		return nil, err
@@ -68,13 +68,24 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 			return nil, err
 		}
 
-		logs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup)
+		run, err := n.runService.GetByNomadJobId(nomadJobId)
 		if err != nil {
 			return nil, err
 		}
 
+		logs := map[string]*domain.LokiOutput{}
+
+		for taskName := range alloc.TaskResources {
+			taskLogs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
+			if err != nil {
+				return nil, err
+			}
+			logs[taskName] = taskLogs
+		}
+
 		allocs[alloc.Name] = domain.AllocWrapper{Alloc: alloc, Logs: logs}
 	}
-	n.logger.Debug().Msgf("Got EventAlloc by Nomad Job ID: %d", nomadJobId)
+
+	n.logger.Debug().Msgf("Got EventAlloc by Nomad Job ID: %q", nomadJobId)
 	return allocs, nil
 }

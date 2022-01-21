@@ -28,7 +28,7 @@ self:
   };
 
   # these are the defaults
-  outputs = inputs: {
+  output = inputs: {
   success.${name} = true;
   failure.${name} = false;
   };
@@ -55,7 +55,7 @@ rec {
       inherit (builtins)
         isFunction typeOf attrValues attrNames functionArgs deepSeq;
 
-      expandAction = { inputs ? { }, outputs ? _: { }, ... }@action: action // {
+      expandAction = { inputs ? { }, output ? _: { }, ... }@action: action // {
         inputs = mapAttrs
           (k: v: {
             select = "latest";
@@ -65,10 +65,24 @@ rec {
           } // lib.optionalAttrs (typeOf v != "string") v)
           inputs;
 
-        inherit outputs;
+        inherit output;
       };
 
       validateAction = { inputs, ... }@action:
+        let
+          validateInputFunctionArgs = key:
+            (mapAttrs
+              (input: hasDefault:
+                if !(inputs ? ${input})
+                then throw ''`${key}` can only take arguments declared in `inputs` which `${input}` is not''
+                else if inputs.${input}.not
+                then throw ''`${key}`'s cannot take argument `${input}` because it refers to a negated input''
+                else if inputs.${input}.optional && !hasDefault
+                then throw ''`${key}`'s argument `${input}` must have a default value because it refers to an optional input''
+                else null
+              )
+              (functionArgs action.${key}));
+        in
         lib.pipe action (map deepSeq [
           (
             let t = typeOf inputs; in
@@ -129,21 +143,9 @@ rec {
             )
             inputs)
 
-          (map
-            (input:
-              if !(inputs ? ${input})
-              then throw ''`outputs` can only take arguments declared in `inputs` which "${input}" is not''
-              else null
-            )
-            (attrNames (functionArgs action.outputs)))
+          (validateInputFunctionArgs "output")
 
-          (map
-            (input:
-              if !(inputs ? ${input})
-              then throw ''`job` can only take arguments declared in `inputs` which "${input}" is not''
-              else null
-            )
-            (lib.optionals (action ? job) (attrNames (functionArgs action.job))))
+          (lib.optionals (action ? job) (validateInputFunctionArgs "job"))
         ]);
 
       hydrateNomadJob = mapAttrs (k: job:
@@ -162,12 +164,12 @@ rec {
 
       mkActionState = action: action // {
         inherit (action) inputs;
-        outputs =
-          let outputs = action.outputs inputs; in
-          # Impossible to check in `validateAction` because calling `outputs` with `{}` as dummy inputs
-            # would break if `outputs` decides which attributes to return based on the inputs.
-          lib.warnIf (!action ? job && !outputs ? success) "This decision Action does not declare a success output! It will not do anything." (
-            lib.warnIf (!action ? job && outputs ? failure) "This decision Action declares a failure output! It will never be published." outputs
+        output =
+          let output = action.output inputs; in
+          # Impossible to check in `validateAction` because calling `output` with `{}` as dummy inputs
+            # would break if `output` decides which attributes to return based on the inputs.
+          lib.warnIf (!action ? job && !output ? success) "This decision Action does not declare a success output! It will not do anything." (
+            lib.warnIf (!action ? job && output ? failure) "This decision Action declares a failure output! It will never be published." output
           );
       } // lib.optionalAttrs (action ? job) {
         job = hydrateNomadJob (action.job inputs);

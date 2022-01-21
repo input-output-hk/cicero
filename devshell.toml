@@ -4,7 +4,7 @@ imports = [
 
 [[env]]
 name = "DATABASE_URL"
-value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
+value = "postgres://cicero:@127.0.0.1:5432/cicero?sslmode=disable"
 
 [[env]]
 name = "LOKI_ADDR"
@@ -13,34 +13,6 @@ value = "http://127.0.0.1:3100"
 [[env]]
 name = "CONSOLE_LOGGING_ENABLED"
 value = "true"
-
-[[env]]
-name = "ENCODE_LOGS_AS_JSON"
-value = "false"
-
-[[env]]
-name = "FILE_LOGGING_ENABLED"
-value = "false"
-
-[[env]]
-name = "LOGS_DIRECTORY"
-value = "logs"
-
-[[env]]
-name = "LOGS_FILE_NAME"
-value = "cicero.log"
-
-[[env]]
-name = "LOGS_MAX_SIZE"
-value = "10"
-
-[[env]]
-name = "LOGS_MAX_BACKUPS"
-value = "10"
-
-[[env]]
-name = "LOGS_MAX_AGE"
-value = "10"
 
 [[commands]]
 package = "go"
@@ -55,6 +27,9 @@ package = "golangci-lint"
 package = "gouml"
 
 [[commands]]
+package = "schemathesis"
+
+[[commands]]
 package = "nomad"
 
 [[commands]]
@@ -62,7 +37,7 @@ package = "damon"
 
 [[commands]]
 name = "lint"
-command = "golangci-lint run && gocritic check -enableAll -disable=ifElseChain,ptrToRefParam,unnamedResult,appendAssign ./... && nixpkgs-fmt --check ."
+command = "golangci-lint run -E gocritic && nixpkgs-fmt --check ."
 help = "Run code linters"
 
 [[commands]]
@@ -88,7 +63,6 @@ packages = [
   "gcc",
   "go",
   "gocode",
-  "gocritic",
   "goimports",
   "gopls",
   "grafana-loki",
@@ -98,4 +72,5 @@ packages = [
   "vector",
   "treefmt",
   "go-mockery",
+  "httpie",
 ]

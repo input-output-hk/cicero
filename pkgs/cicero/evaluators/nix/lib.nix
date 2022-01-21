@@ -13,10 +13,10 @@ rec {
           base.inputs or { } //
           part.inputs or { };
 
-        outputs = inputs:
+        output = inputs:
           lib.recursiveUpdate
-            (base.outputs or (_: { }) inputs)
-            (part.outputs or (_: { }) inputs);
+            (base.output or (_: { }) inputs)
+            (part.output or (_: { }) inputs);
       };
 
     behavior = {
@@ -24,6 +24,7 @@ rec {
 
       # Same as `stopOnSuccess` and `stopOnFailure` combined
       # but more efficient (just one input so only one DB query).
+      # TODO this is actually not significantly more efficient
       once = key: _: next: actions.apply
         {
           inputs."behavior: run only once for \"${key}\"" = {
@@ -33,7 +34,7 @@ rec {
             '';
           };
 
-          outputs = _:
+          output = _:
             let fact._behavior.once.${key} = null; in
             { success = fact; } //
             lib.optionalAttrs (next ? job) {
@@ -50,7 +51,7 @@ rec {
           '';
         };
 
-        outputs = _: {
+        output = _: {
           success._behavior.stopOnSuccess.${key} = null;
         };
       };
@@ -63,7 +64,7 @@ rec {
           '';
         };
 
-        outputs = _: {
+        output = _: {
           failure._behavior.stopOnFailure.${key} = null;
         };
       };
@@ -73,12 +74,12 @@ rec {
           inputs."behavior: input \"${input}\" changed for \"${key}\"" = {
             not = true;
             match = ''
-              "_behavior": onInputChange: "${key}": _inputs."${input}".id
+              "_behavior": onInputChange: "${key}": "${input}": _inputs."${input}".id
             '';
           };
 
-          outputs = inputs:
-            let fact._behavior.onInputChange.${key} = inputs.${input}.id; in
+          output = inputs:
+            let fact._behavior.onInputChange.${key}.${input} = inputs.${input}.id; in
             { success = fact; } //
             lib.optionalAttrs (next ? job) {
               failure = fact;

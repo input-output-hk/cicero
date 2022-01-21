@@ -1,39 +1,36 @@
 package config
 
 import (
-	"github.com/pkg/errors"
 	"os"
 	"strconv"
 )
 
-func GetenvStr(key string) (string, error) {
-	v := os.Getenv(key)
-	if v == "" {
-		return v, errors.Errorf("Environment Variable %s is not set or empty", key)
-	}
-	return v, nil
+func GetenvStr(key string) string {
+	return os.Getenv(key)
 }
 
-func GetenvInt(key string) (int, error) {
-	s, err := GetenvStr(key)
-	if err != nil {
-		return 0, err
+func GetenvInt(key string) (*int, error) {
+	s := GetenvStr(key)
+	if s == "" {
+		return nil, nil
 	}
+
 	v, err := strconv.Atoi(s)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return v, nil
+	return &v, nil
 }
 
-func GetenvBool(key string) (bool, error) {
-	s, err := GetenvStr(key)
-	if err != nil {
-		return false, err
+func GetenvBool(key string) (result *bool, err error) {
+	s := GetenvStr(key)
+	if s == "" {
+		return
 	}
+
 	v, err := strconv.ParseBool(s)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return v, nil
+	return &v, nil
 }

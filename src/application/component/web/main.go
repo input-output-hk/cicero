@@ -6,9 +6,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/davidebianchi/gswagger/apirouter"
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v4"
@@ -19,6 +21,7 @@ import (
 	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 )
 
 type Web struct {
@@ -209,11 +212,13 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run/{id}/cancel", self.RunIdCancelGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run", self.RunGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
@@ -246,10 +251,36 @@ func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	if actions, err := self.ActionService.GetCurrent(); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Could not get current Actions"))
+	var actions []*domain.Action
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		var err error
+		actions, err = self.ActionService.GetCurrent(tx)
+		return errors.WithMessage(err, "Could not get current Actions")
+	}); err != nil {
+		self.ServerError(w, err)
 		return
 	} else if err := render("action/current.html", w, actions); err != nil {
+		self.ServerError(w, err)
+		return
+	}
+}
+
+func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+	} else if page, err := getPage(req); err != nil {
+		self.BadRequest(w, err)
+		return
+	} else if runs, err := self.RunService.GetByActionId(id, page); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get Runs by Action ID: %q", id))
+		return
+	} else if err := render("action/runs.html", w, struct {
+		Runs []*domain.Run
+		*repository.Page
+	}{
+		Runs: runs,
+		Page: page,
+	}); err != nil {
 		self.ServerError(w, err)
 		return
 	}
@@ -261,13 +292,7 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
-	} else if runs, err := self.RunService.GetByActionId(id); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "Could not get Runs by Action ID: %q", id))
-		return
-	} else if err := render("action/[id].html", w, map[string]interface{}{
-		"Action": action,
-		"Runs":   runs,
-	}); err != nil {
+	} else if err := render("action/[id].html", w, action); err != nil {
 		self.ServerError(w, err)
 		return
 	}
@@ -312,6 +337,28 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (self *Web) RunIdCancelGet(w http.ResponseWriter, req *http.Request) {
+	id, err := uuid.Parse(mux.Vars(req)["id"])
+	if err != nil {
+		self.ClientError(w, err)
+		return
+	}
+
+	if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.ClientError(w, err)
+		return
+	} else if err := self.RunService.Cancel(&run); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", id))
+		return
+	}
+
+	if referer := req.Header.Get("Referer"); referer != "" {
+		http.Redirect(w, req, referer, http.StatusFound)
+	} else {
+		http.Redirect(w, req, "/run/"+id.String(), http.StatusFound)
+	}
+}
+
 func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
@@ -331,8 +378,22 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	output, err := self.RunService.GetOutputByNomadJobId(id)
+	if err != nil && !pgxscan.NotFound(err) {
+		self.ServerError(w, err)
+		return
+	}
+
+	facts, err := self.FactService.GetByRunId(id)
+	if err != nil && !pgxscan.NotFound(err) {
+		self.ServerError(w, err)
+		return
+	}
+
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run":    run,
+		"output": output,
+		"facts":  facts,
 		"allocs": allocs,
 	}); err != nil {
 		self.ServerError(w, err)
@@ -340,11 +401,60 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func getPage(req *http.Request) (*repository.Page, error) {
+	page := repository.Page{}
+
+	if offset, err := strconv.Atoi(req.FormValue("offset")); err != nil {
+		return nil, errors.WithMessage(err, "offset parameter is invalid, should be positive integer")
+	} else {
+		page.Offset = offset
+	}
+
+	if limit, err := strconv.Atoi(req.FormValue("limit")); err != nil {
+		return nil, errors.WithMessage(err, "limit parameter is invalid, should be positive integer")
+	} else {
+		page.Limit = limit
+	}
+
+	return &page, nil
+}
+
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
-	if runs, err := self.RunService.GetAll(); err != nil {
+	if page, err := getPage(req); err != nil {
+		self.BadRequest(w, err)
+		return
+	} else if runs, err := self.RunService.GetAll(page); err != nil {
 		self.ServerError(w, err)
-	} else if err := render("run/index.html", w, runs); err != nil {
-		self.ServerError(w, err)
+		return
+	} else {
+		type RunWrapper struct {
+			*domain.Run
+			Action *domain.Action
+		}
+
+		runWrappers := make([]RunWrapper, len(runs))
+		for i, run := range runs {
+			if action, err := self.ActionService.GetById(run.ActionId); err != nil {
+				self.ServerError(w, err)
+				return
+			} else {
+				runWrappers[i] = RunWrapper{
+					Run:    run,
+					Action: &action,
+				}
+			}
+		}
+
+		if err := render("run/index.html", w, struct {
+			Runs []RunWrapper
+			*repository.Page
+		}{
+			Runs: runWrappers,
+			Page: page,
+		}); err != nil {
+			self.ServerError(w, err)
+			return
+		}
 	}
 }
 
@@ -382,10 +492,14 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 }
 
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
-	if runs, err := self.RunService.GetAll(); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
+	if page, err := getPage(req); err != nil {
+		self.ServerError(w, err)
 	} else {
-		self.json(w, runs, http.StatusOK)
+		if runs, err := self.RunService.GetAll(page); err != nil {
+			self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
+		} else {
+			self.json(w, runs, http.StatusOK)
+		}
 	}
 }
 
@@ -491,12 +605,18 @@ func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 
 // XXX respond with map[string]Action instead of []Action?
 func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	if actions, err := self.ActionService.GetCurrent(); err != nil {
+	var actions []*domain.Action
+
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		var err error
+		actions, err = self.ActionService.GetCurrent(tx)
+		return errors.WithMessage(err, "Failed to get current actions")
+	}); err != nil {
 		self.ServerError(w, err)
 		return
-	} else {
-		self.json(w, actions, http.StatusOK)
 	}
+
+	self.json(w, actions, http.StatusOK)
 }
 
 func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
@@ -551,10 +671,18 @@ func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else if logs, err := self.RunService.JobLogs(id); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
-		self.json(w, map[string]*domain.LokiOutput{"logs": logs}, http.StatusOK)
+		run, err := self.RunService.GetByNomadJobId(id)
+		if err != nil {
+			self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
+			return
+		}
+
+		if logs, err := self.RunService.JobLogs(id, run.CreatedAt, run.FinishedAt); err != nil {
+			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
+		} else {
+			self.json(w, map[string]*domain.LokiOutput{"logs": logs}, http.StatusOK)
+		}
 	}
 }
 
@@ -574,7 +702,7 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
 	} else if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if binary, err := self.FactService.GetBinaryByIdAndTx(tx, id); err != nil {
+		if binary, err := self.FactService.GetBinaryById(tx, id); err != nil {
 			return errors.WithMessage(err, "Failed to get binary")
 		} else {
 			http.ServeContent(w, req, "", time.Time{}, binary)

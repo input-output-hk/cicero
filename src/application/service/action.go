@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
@@ -19,13 +20,15 @@ import (
 
 type ActionService interface {
 	GetById(uuid.UUID) (domain.Action, error)
+	GetByRunId(uuid.UUID) (domain.Action, error)
 	GetLatestByName(string) (domain.Action, error)
 	GetAll() ([]*domain.Action, error)
-	GetCurrent() ([]*domain.Action, error)
+	GetCurrent(pgx.Tx) ([]*domain.Action, error)
 	Save(pgx.Tx, *domain.Action) error
 	IsRunnable(pgx.Tx, *domain.Action) (bool, map[string]interface{}, error)
 	Create(pgx.Tx, string, string) (*domain.Action, error)
-	Invoke(pgx.Tx, *domain.Action) error
+	Invoke(pgx.Tx, *domain.Action) (bool, error)
+	InvokeCurrent(pgx.Tx) error
 }
 
 type actionService struct {
@@ -55,6 +58,13 @@ func (self *actionService) GetById(id uuid.UUID) (action domain.Action, err erro
 	return
 }
 
+func (self *actionService) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
+	self.logger.Debug().Str("id", id.String()).Msg("Getting Action by Run ID")
+	action, err = self.actionRepository.GetByRunId(id)
+	err = errors.WithMessagef(err, "Could not select existing Action for Run ID %q", id)
+	return
+}
+
 func (self *actionService) GetLatestByName(name string) (action domain.Action, err error) {
 	self.logger.Debug().Str("name", name).Msg("Getting latest Action by name")
 	action, err = self.actionRepository.GetLatestByName(name)
@@ -76,15 +86,20 @@ func (self *actionService) Save(tx pgx.Tx, action *domain.Action) error {
 	return nil
 }
 
-func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
+func (self *actionService) GetCurrent(tx pgx.Tx) (actions []*domain.Action, err error) {
 	self.logger.Debug().Msg("Getting current Actions")
-	actions, err = self.actionRepository.GetCurrent()
+	actions, err = self.actionRepository.GetCurrent(tx)
 	err = errors.WithMessagef(err, "Could not select current Actions")
 	return
 }
 
 func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, map[string]interface{}, error) {
-	self.logger.Debug().Str("name", action.Name).Str("id", action.ID.String()).Msg("Checking whether Action is runnable")
+	logger := self.logger.With().
+		Str("name", action.Name).
+		Str("id", action.ID.String()).
+		Logger()
+
+	logger.Debug().Msg("Checking whether Action is runnable")
 
 	inputFact := map[string]*domain.Fact{}
 	inputFacts := map[string][]*domain.Fact{}
@@ -101,30 +116,32 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 	// would be changed, as what is latest currently means "latest with these paths"
 	// but would then mean "latest with these paths AND matching values", so beware!
 
-	// FIXME race condition: facts may change in between checking whether each input is satisfied
+	// Select candidate facts.
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
-			if fact, err := self.getInputFactLatest(tx, input.Match.WithoutInputs()); err != nil {
+			switch fact, err := self.getInputFactLatest(tx, input.Match.WithoutInputs()); {
+			case err != nil:
 				return false, nil, err
-			} else if fact == nil {
+			case fact == nil:
 				if !input.Not && !input.Optional {
 					return false, nil, nil
 				}
-			} else {
+			default:
 				inputFact[name] = fact
 				if !input.Not {
 					inputs[name] = fact
 				}
 			}
 		case domain.InputDefinitionSelectAll:
-			if facts, err := self.getInputFacts(tx, input.Match.WithoutInputs()); err != nil {
+			switch facts, err := self.getInputFacts(tx, input.Match.WithoutInputs()); {
+			case err != nil:
 				return false, nil, err
-			} else if len(facts) == 0 {
+			case len(facts) == 0:
 				if !input.Not && !input.Optional {
 					return false, nil, nil
 				}
-			} else {
+			default:
 				inputFacts[name] = facts
 				if !input.Not {
 					inputs[name] = facts
@@ -135,6 +152,7 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 		}
 	}
 
+	// Match candidate facts.
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
@@ -188,6 +206,129 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 		}
 	}
 
+	// Not runnable if the inputs are the same as last run.
+	if run, err := self.runService.GetLatestByActionId(tx, action.ID); err != nil {
+		if !pgxscan.NotFound(err) {
+			return false, inputs, err
+		}
+	} else {
+		var inputFactIds map[string][]uuid.UUID
+		if inputFactIds, err = self.runService.GetInputFactIdsByNomadJobId(tx, run.NomadJobID); err != nil {
+			if !pgxscan.NotFound(err) {
+				return false, inputs, err
+			}
+			inputFactIds = map[string][]uuid.UUID{}
+		}
+
+		inputFactsChanged := false
+
+	InputFactsChanged:
+		for name, input := range action.Inputs {
+			if _, exists := inputs[name]; !exists {
+				// We only care about inputs that are
+				// passed into the evaluation.
+				continue
+			}
+
+			didInputFactChange := func(oldFactIdsIndex int, newFact *domain.Fact) bool {
+				var oldFactId *uuid.UUID
+				if _, hasOldFact := inputFactIds[name]; hasOldFact {
+					oldFactId = &inputFactIds[name][oldFactIdsIndex]
+				}
+
+				switch {
+				case input.Optional && oldFactId == nil:
+					if newFact != nil {
+						if logger.Debug().Enabled() {
+							logger.Debug().
+								Str("input", name).
+								Bool("input-optional", true).
+								Interface("old-fact", nil).
+								Str("new-fact", newFact.ID.String()).
+								Msg("input satisfied by new Fact")
+						}
+						return true
+					}
+				case input.Optional && oldFactId != nil:
+					if newFact == nil || *oldFactId != newFact.ID {
+						if logger.Debug().Enabled() {
+							var newFactIdToLog *string
+							if newFact != nil {
+								newFactIdToLogValue := newFact.ID.String()
+								newFactIdToLog = &newFactIdToLogValue
+							}
+							logger.Debug().
+								Str("input", name).
+								Bool("input-optional", true).
+								Str("old-fact", oldFactId.String()).
+								Interface("new-fact", newFactIdToLog).
+								Msg("input satisfied by new Fact or absence of one")
+						}
+						return true
+					}
+				case oldFactId == nil:
+					// A previous Run would not have been started
+					// if a non-optional input was not satisfied.
+					// We are not looking at a negated input here
+					// because those are never passed into the evaluation.
+					panic("This should never happen™")
+				case *oldFactId != newFact.ID:
+					if logger.Debug().Enabled() {
+						logger.Debug().
+							Str("input", name).
+							Str("old-fact", oldFactId.String()).
+							Str("new-fact", newFact.ID.String()).
+							Msg("input satisfied by new Fact")
+					}
+					return true
+				}
+
+				return false
+			}
+
+			switch input.Select {
+			case domain.InputDefinitionSelectLatest:
+				if didInputFactChange(0, inputFact[name]) {
+					inputFactsChanged = true
+				}
+			case domain.InputDefinitionSelectAll:
+				if lenNew, lenOld := len(inputFacts[name]), len(inputFactIds[name]); lenNew != lenOld {
+					logger.Debug().
+						Str("input", name).
+						Int("num-old-facts", lenOld).
+						Int("num-new-facts", lenNew).
+						Msg("input satisfied by different number of Facts than last Run")
+					inputFactsChanged = true
+				} else {
+				LoopOverNewInputFacts:
+					for _, match := range inputFacts[name] {
+						for i := range inputFactIds[name] {
+							if didInputFactChange(i, match) {
+								inputFactsChanged = true
+								break LoopOverNewInputFacts
+							}
+						}
+					}
+				}
+			default:
+				panic("This should have already been caught by the loop above!")
+			}
+
+			if inputFactsChanged {
+				break InputFactsChanged
+			}
+
+			logger.Debug().
+				Str("input", name).
+				Msg("input satisfied by same Fact(s) as last Run")
+		}
+
+		if !inputFactsChanged {
+			return false, inputs, nil
+		}
+	}
+
+	// Filter input facts. We only provide keys requested by the CUE expression.
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
@@ -304,48 +445,88 @@ func (self *actionService) Create(tx pgx.Tx, source, name string) (*domain.Actio
 		return nil, err
 	}
 
-	return &action, self.Invoke(tx, &action)
+	_, err := self.Invoke(tx, &action)
+	return &action, err
 }
 
-func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) error {
-	if runnable, inputs, err := self.IsRunnable(tx, action); err != nil {
+func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) (bool, error) {
+	runnable, inputs, err := self.IsRunnable(tx, action)
+	if err != nil || !runnable {
+		return runnable, err
+	}
+
+	runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs)
+	if err != nil {
+		var evalErr EvaluationError
+		if errors.As(err, &evalErr) {
+			self.logger.Err(evalErr).
+				Str("source", action.Source).
+				Str("name", action.Name).
+				Msg("Could not evaluate action")
+		}
+		return runnable, err
+	}
+
+	run := domain.Run{
+		ActionId: action.ID,
+	}
+
+	if err := self.runService.Save(tx, &run, inputs, &runDef.Output); err != nil {
+		return runnable, errors.WithMessage(err, "Could not insert Run")
+	}
+
+	if runDef.IsDecision() {
+		if runDef.Output.Success != nil {
+			if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
+				return runnable, errors.WithMessage(err, "Could not publish fact")
+			}
+		}
+
+		run.CreatedAt = run.CreatedAt.UTC()
+		run.FinishedAt = &run.CreatedAt
+
+		err := self.runService.Update(tx, &run)
+		err = errors.WithMessage(err, "Could not update decision Run")
+
+		return runnable, err
+	}
+
+	runId := run.NomadJobID.String()
+	runDef.Job.ID = &runId
+
+	if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
+		return runnable, errors.WithMessage(err, "Failed to run Action")
+	} else if len(response.Warnings) > 0 {
+		self.logger.Warn().
+			Str("nomad-job", runId).
+			Str("nomad-evaluation", response.EvalID).
+			Str("warnings", response.Warnings).
+			Msg("Warnings occured registering Nomad job")
+	}
+
+	return runnable, nil
+}
+
+func (self *actionService) InvokeCurrent(tx pgx.Tx) error {
+	actions, err := self.GetCurrent(tx)
+	if err != nil {
 		return err
-	} else if runnable {
-		if runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs); err != nil {
-			var evalErr EvaluationError
-			if errors.As(err, &evalErr) {
-				self.logger.Err(evalErr).Str("source", action.Source).Str("name", action.Name).Msg("Could not evaluate action")
-			} else {
+	}
+
+	for {
+		anyRunnable := false
+
+		for _, action := range actions {
+			runnable, err := self.Invoke(tx, action)
+			if err != nil {
 				return err
 			}
-		} else if runDef.IsDecision() {
-			if runDef.Outputs.Success != nil {
-				if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Outputs.Success}, nil); err != nil {
-					return errors.WithMessage(err, "Could not publish fact")
-				}
-			}
-		} else {
-			run := domain.Run{
-				ActionId:   action.ID,
-				RunOutputs: runDef.Outputs,
-			}
 
-			if err := self.runService.Save(tx, &run); err != nil {
-				return errors.WithMessage(err, "Could not insert Run")
-			}
+			anyRunnable = anyRunnable || runnable
+		}
 
-			runId := run.NomadJobID.String()
-			runDef.Job.ID = &runId
-
-			if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
-				return errors.WithMessage(err, "Failed to run Action")
-			} else if len(response.Warnings) > 0 {
-				self.logger.Warn().
-					Str("nomad-job", runId).
-					Str("nomad-evaluation", response.EvalID).
-					Str("warnings", response.Warnings).
-					Msg("Warnings occured registering Nomad job")
-			}
+		if !anyRunnable {
+			break
 		}
 	}
 

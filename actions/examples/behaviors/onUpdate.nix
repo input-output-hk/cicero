@@ -8,7 +8,7 @@ std.behavior.onUpdate args {
     '';
   };
 
-  outputs = _: {
+  output = _: {
     success.${name} = id;
   };
 

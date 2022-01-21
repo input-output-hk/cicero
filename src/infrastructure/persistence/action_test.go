@@ -3,14 +3,15 @@ package persistence
 import (
 	"context"
 	"encoding/json"
-	"github.com/google/uuid"
-	"github.com/input-output-hk/cicero/src/config/mocks"
-	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pashagolub/pgxmock"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/input-output-hk/cicero/src/config/mocks"
+	"github.com/input-output-hk/cicero/src/domain"
 )
 
 func TestShouldGetActionById(t *testing.T) {
@@ -75,7 +76,7 @@ func TestShouldSaveAction(t *testing.T) {
 	}
 	mock, tx := mocks.BuildTransaction(context.Background(), t)
 	rows := mock.NewRows([]string{"id", "created_at"}).AddRow(actionId, dateTime)
-	mock.ExpectQuery("INSERT INTO actions").WithArgs(action.ID, action.Name, action.Source, marshalInputs).WillReturnRows(rows)
+	mock.ExpectQuery("INSERT INTO action").WithArgs(action.ID, action.Name, action.Source, marshalInputs).WillReturnRows(rows)
 	mock.ExpectCommit()
 	repository := NewActionRepository(mock)
 

@@ -80,8 +80,8 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 		return nil, err
 	}
 
-	cacheDir, err := config.GetenvStr("CICERO_CACHE_DIR")
-	if err != nil {
+	cacheDir := config.GetenvStr("CICERO_CACHE_DIR")
+	if cacheDir == "" {
 		e.logger.Debug().Err(err).Msg("Falling back to XDG cache directory")
 		cacheDir = xdg.CacheHome + "/cicero"
 	}
@@ -102,10 +102,10 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 
 	tryEval := func(evaluator string) ([]byte, error) {
 		cmd := exec.Command("cicero-evaluator-"+evaluator, command.Command...)
-		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst)
-		cmd.Env = append(os.Environ(), extraEnv...)
+		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst) //nolint:gocritic // false positive
+		cmd.Env = append(os.Environ(), extraEnv...)                    //nolint:gocritic // false positive
 
-		e.logger.Info().
+		e.logger.Debug().
 			Strs("command", cmd.Args).
 			Strs("environment", extraEnv).
 			Msg("Running evaluator")
@@ -132,7 +132,7 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 			return output, nil
 		}
 	} else {
-		e.logger.Info().Msg("No evaluator given in source, trying all")
+		e.logger.Debug().Msg("No evaluator given in source, trying all")
 		var evalErr error
 		for _, evaluator := range e.Evaluators {
 			if output, err := tryEval(evaluator); err != nil {
@@ -179,7 +179,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 	}
 
 	output, err := e.evaluate(src, command{
-		Command: []string{"eval", "outputs", "job"},
+		Command: []string{"eval", "output", "job"},
 		ExtraEnv: []string{
 			"CICERO_ACTION_NAME=" + name,
 			"CICERO_ACTION_ID=" + id.String(),
@@ -200,7 +200,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 		return def, errors.WithMessagef(err, "While unmarshaling evaluator output %s into freeform definition", string(output))
 	}
 
-	def.Outputs = freeformDef.Outputs
+	def.Output = freeformDef.Output
 	if freeformDef.Job != nil {
 		if job, err := json.Marshal(*freeformDef.Job); err != nil {
 			return def, err

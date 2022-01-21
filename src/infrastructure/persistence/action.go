@@ -24,7 +24,20 @@ func NewActionRepository(db config.PgxIface) repository.ActionRepository {
 func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &action,
-		`SELECT * FROM actions WHERE id = $1`,
+		`SELECT * FROM action WHERE id = $1`,
+		id,
+	)
+	return
+}
+
+func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
+	err = pgxscan.Get(
+		context.Background(), a.DB, &action,
+		`SELECT * FROM action WHERE EXISTS (
+			SELECT NULL FROM run WHERE
+				run.nomad_job_id = $1 AND
+				run.action_id = action.id
+		)`,
 		id,
 	)
 	return
@@ -33,7 +46,7 @@ func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err erro
 func (a *actionRepository) GetLatestByName(name string) (action domain.Action, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &action,
-		`SELECT DISTINCT ON (name) * FROM actions WHERE name = $1 ORDER BY name, created_at DESC`,
+		`SELECT DISTINCT ON (name) * FROM action WHERE name = $1 ORDER BY name, created_at DESC`,
 		name,
 	)
 	return
@@ -42,7 +55,7 @@ func (a *actionRepository) GetLatestByName(name string) (action domain.Action, e
 func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
-		`SELECT * FROM actions ORDER BY created_at DESC`,
+		`SELECT * FROM action ORDER BY created_at DESC`,
 	)
 	return
 }
@@ -53,9 +66,9 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 	} else {
 		var sql string
 		if action.ID == (uuid.UUID{}) {
-			sql = `INSERT INTO actions (    name, source, inputs) VALUES (    $2, $3, $4) RETURNING id, created_at`
+			sql = `INSERT INTO action (    name, source, inputs) VALUES (    $2, $3, $4) RETURNING id, created_at`
 		} else {
-			sql = `INSERT INTO actions (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
+			sql = `INSERT INTO action (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
 		}
 		return tx.QueryRow(
 			context.Background(),
@@ -65,10 +78,10 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 	}
 }
 
-func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
+func (a *actionRepository) GetCurrent(tx pgx.Tx) (actions []*domain.Action, err error) {
 	err = pgxscan.Select(
-		context.Background(), a.DB, &actions,
-		`SELECT DISTINCT ON (name) * FROM actions ORDER BY name, created_at DESC`,
+		context.Background(), tx, &actions,
+		`SELECT DISTINCT ON (name) * FROM action ORDER BY name, created_at DESC`,
 	)
 	return
 }

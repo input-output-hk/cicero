@@ -5,20 +5,20 @@
     devshell.url = "github:numtide/devshell";
     inclusive.url = "github:input-output-hk/nix-inclusive";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nixpkgs-os.url = "github:manveru/nixpkgs/use-atomic-bind-mounts";
     utils.url = "github:kreisys/flake-utils";
     driver.url = "github:input-output-hk/nomad-driver-nix";
     follower.url = "github:input-output-hk/nomad-follower";
     data-merge.url = "github:divnix/data-merge";
+    poetry2nix.url = "github:nix-community/poetry2nix/fetched-projectdir-test";
   };
 
   outputs =
-    { self, nixpkgs, nixpkgs-os, utils, devshell, driver, follower, ... }:
+    { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, ... }:
     utils.lib.simpleFlake {
       systems = [ "x86_64-linux" ];
       inherit nixpkgs;
 
-      preOverlays = [ devshell.overlay ];
+      preOverlays = [ devshell.overlay poetry2nix.overlay ];
 
       overlay = final: prev:
         {
@@ -30,6 +30,7 @@
           gocritic = prev.callPackage ./pkgs/gocritic.nix { };
           webhook-trigger = prev.callPackage ./pkgs/trigger { };
           nomad-follower = follower.defaultPackage."${prev.system}";
+          schemathesis = final.callPackage ./pkgs/schemathesis.nix { };
 
           inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
 
@@ -37,17 +38,23 @@
 
           nomad-dev =
             let
-              cfg = builtins.toFile "nomad.hcl" ''
+              cfg = prev.writeText "nomad.hcl" ''
                 log_level = "TRACE"
                 plugin "nix_driver" {}
+                client {
+                  cni_path = "${prev.cni-plugins}/bin"
+                }
               '';
             in
             prev.writeShellScriptBin "nomad-dev" ''
               set -exuo pipefail
 
-              sudo ${prev.nomad}/bin/nomad \
-                agent \
-                -dev \
+              # Preserve PATH for systems that
+              # don't have nix in their root's PATH,
+              # like conventional linux distros
+              # with a standalone nix install.
+              sudo --preserve-env=PATH \
+                ${prev.nomad}/bin/nomad agent -dev \
                 -config ${cfg} \
                 -plugin-dir "${final.nomad-driver-nix}/bin"
             '';
@@ -67,6 +74,7 @@
         , run-python
         , run-perl
         , run-js
+        , schemathesis
         }@pkgs:
         pkgs // {
           inherit (nixpkgs) lib;
@@ -74,16 +82,16 @@
         };
 
       extraOutputs.nixosConfigurations = {
-        dev = nixpkgs-os.lib.nixosSystem {
+        dev = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           specialArgs = { inherit self; };
           modules = [
             ({ pkgs, config, lib, ... }: {
               imports = [
                 driver.nixosModules.nix-driver-nomad
-                (nixpkgs-os + /nixos/modules/misc/version.nix)
-                (nixpkgs-os + /nixos/modules/profiles/headless.nix)
-                (nixpkgs-os + /nixos/modules/profiles/minimal.nix)
+                (nixpkgs + /nixos/modules/misc/version.nix)
+                (nixpkgs + /nixos/modules/profiles/headless.nix)
+                (nixpkgs + /nixos/modules/profiles/minimal.nix)
               ];
 
               nixpkgs.overlays = [ self.overlay ];
@@ -158,9 +166,12 @@
 
                 initialScript = pkgs.writeText "init.sql" ''
                   CREATE DATABASE cicero;
+
                   CREATE USER cicero;
-                  GRANT ALL PRIVILEGES ON DATABASE cicero to cicero;
+                  GRANT ALL PRIVILEGES ON DATABASE cicero TO cicero;
                   ALTER USER cicero WITH SUPERUSER;
+
+                  CREATE ROLE cicero_api;
                 '';
               };
             })
