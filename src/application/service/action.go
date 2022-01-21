@@ -292,17 +292,17 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 					inputFactsChanged = true
 				}
 			case domain.InputDefinitionSelectAll:
-				if lenNew, lenOld := len(inputFacts[name]), len(inputFactIds[name]); lenNew != lenOld {
+				if newFacts, oldFacts := inputFacts[name], inputFactIds[name]; len(newFacts) != len(oldFacts) {
 					logger.Debug().
 						Str("input", name).
-						Int("num-old-facts", lenOld).
-						Int("num-new-facts", lenNew).
+						Int("num-old-facts", len(oldFacts)).
+						Int("num-new-facts", len(newFacts)).
 						Msg("input satisfied by different number of Facts than last Run")
 					inputFactsChanged = true
 				} else {
 				LoopOverNewInputFacts:
-					for _, match := range inputFacts[name] {
-						for i := range inputFactIds[name] {
+					for _, match := range newFacts {
+						for i := range oldFacts {
 							if didInputFactChange(i, match) {
 								inputFactsChanged = true
 								break LoopOverNewInputFacts
