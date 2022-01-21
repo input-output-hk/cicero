@@ -251,12 +251,7 @@ func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	var actions []*domain.Action
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		var err error
-		actions, err = self.ActionService.GetCurrent(tx)
-		return errors.WithMessage(err, "Could not get current Actions")
-	}); err != nil {
+	if actions, err := self.ActionService.GetCurrent(); err != nil {
 		self.ServerError(w, err)
 		return
 	} else if err := render("action/current.html", w, actions); err != nil {
@@ -323,12 +318,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var action *domain.Action
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		var err error
-		action, err = self.ActionService.Create(tx, source, name)
-		return err
-	}); err != nil {
+	if action, err := self.ActionService.Create(source, name); err != nil {
 		self.ServerError(w, err)
 		return
 	} else {
@@ -379,26 +369,21 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	inputs := map[string][]domain.Fact{}
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if inputFactIds, err := self.RunService.GetInputFactIdsByNomadJobId(tx, id); err != nil {
-			return err
-		} else {
-			for input, ids := range inputFactIds {
-				inputs[input] = make([]domain.Fact, len(ids))
-				for i, id := range ids {
-					// FIXME should be in the same transaction
-					if fact, err := self.FactService.GetById(id); err != nil {
-						return err
-					} else {
-						inputs[input][i] = fact
-					}
+	if inputFactIds, err := self.RunService.GetInputFactIdsByNomadJobId(id); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
+		return
+	} else {
+		for input, ids := range inputFactIds {
+			inputs[input] = make([]domain.Fact, len(ids))
+			for i, id := range ids {
+				if fact, err := self.FactService.GetById(id); err != nil {
+					self.ServerError(w, err)
+					return
+				} else {
+					inputs[input][i] = fact
 				}
 			}
 		}
-		return nil
-	}); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
-		return
 	}
 
 	output, err := self.RunService.GetOutputByNomadJobId(id)
@@ -543,34 +528,30 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var action *domain.Action
-	var err error
-
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if params.Name != nil {
-			action, err = self.ActionService.Create(tx, params.Source, *params.Name)
-			if err != nil {
-				return err
-			}
+	if params.Name != nil {
+		if action, err := self.ActionService.Create(params.Source, *params.Name); err != nil {
+			self.ClientError(w, err) //TODO: checking
+			return
 		} else {
-			if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
-				return errors.WithMessage(err, "Failed to list actions")
-			} else {
-				for _, actionName := range actionNames {
-					action, err = self.ActionService.Create(tx, params.Source, actionName)
-					if err != nil {
-						return err
-					}
+			self.json(w, action, http.StatusOK)
+		}
+	} else {
+		if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
+			self.ClientError(w, errors.WithMessage(err, "Failed to list actions")) //TODO: checking
+			return 
+		} else {
+			actions := make([]*domain.Action, len(actionNames))
+			for i, actionName := range actionNames {
+				if action, err := self.ActionService.Create(params.Source, actionName); err != nil {
+					self.ClientError(w, err) //TODO: checking
+					return
+				} else {
+					actions[i] = action
 				}
 			}
+			self.json(w, actions, http.StatusOK)
 		}
-		return nil
-	}); err != nil {
-		self.ClientError(w, err) //TODO: checking
-		return
 	}
-
-	self.json(w, action, http.StatusOK)
 }
 
 func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
@@ -613,9 +594,7 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 		Value: value,
 	}
 
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		return self.FactService.Save(tx, &fact, nil)
-	}); err != nil {
+	if err := self.FactService.Save(&fact, nil); err != nil {
 		self.ServerError(w, err)
 		return
 	}
@@ -633,18 +612,12 @@ func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 
 // XXX respond with map[string]Action instead of []Action?
 func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	var actions []*domain.Action
-
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		var err error
-		actions, err = self.ActionService.GetCurrent(tx)
-		return errors.WithMessage(err, "Failed to get current actions")
-	}); err != nil {
-		self.ServerError(w, err)
+	if actions, err := self.ActionService.GetCurrent(); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get current actions"))
 		return
+	} else {
+		self.json(w, actions, http.StatusOK)
 	}
-
-	self.json(w, actions, http.StatusOK)
 }
 
 func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
@@ -752,11 +725,8 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		err := self.FactService.Save(tx, &fact, io.MultiReader(factDecoder.Buffered(), req.Body))
-		return errors.WithMessage(err, "Failed to save Fact")
-	}); err != nil {
-		self.ServerError(w, err)
+	if err := self.FactService.Save(&fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to save Fact"))
 		return
 	}
 

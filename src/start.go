@@ -6,7 +6,6 @@ import (
 
 	"cirello.io/oversight"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -84,19 +83,19 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	})
 
 	runService := once(func() interface{} {
-		return service.NewRunService(db().(*pgxpool.Pool), cmd.PrometheusAddr, nomadClientWrapper().(application.NomadClient), logger)
+		return service.NewRunService(db().(config.PgxIface), cmd.PrometheusAddr, nomadClientWrapper().(application.NomadClient), logger)
 	})
 	evaluationService := once(func() interface{} {
 		return service.NewEvaluationService(cmd.Evaluators, cmd.Env, logger)
 	})
 	actionService := once(func() interface{} {
-		return service.NewActionService(db().(*pgxpool.Pool), nomadClientWrapper().(application.NomadClient), runService().(service.RunService), evaluationService().(service.EvaluationService), logger)
+		return service.NewActionService(db().(config.PgxIface), nomadClientWrapper().(application.NomadClient), runService().(service.RunService), evaluationService().(service.EvaluationService), logger)
 	})
 	factService := once(func() interface{} {
-		return service.NewFactService(db().(*pgxpool.Pool), actionService().(service.ActionService), logger)
+		return service.NewFactService(db().(config.PgxIface), actionService().(service.ActionService), logger)
 	})
 	nomadEventService := once(func() interface{} {
-		return service.NewNomadEventService(db().(*pgxpool.Pool), runService().(service.RunService), logger)
+		return service.NewNomadEventService(db().(config.PgxIface), runService().(service.RunService), logger)
 	})
 
 	supervisor := cmd.newSupervisor(logger)
@@ -108,7 +107,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 			NomadEventService: nomadEventService().(service.NomadEventService),
 			FactService:       factService().(service.FactService),
 			NomadClient:       nomadClientWrapper().(application.NomadClient),
-			Db:                db().(*pgxpool.Pool),
+			Db:                db().(config.PgxIface),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err
@@ -124,7 +123,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 			FactService:       factService().(service.FactService),
 			NomadEventService: nomadEventService().(service.NomadEventService),
 			EvaluationService: evaluationService().(service.EvaluationService),
-			Db:                db().(*pgxpool.Pool),
+			Db:                db().(config.PgxIface),
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err

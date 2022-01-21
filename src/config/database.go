@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgtype"
 	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
 	"github.com/jackc/pgx/v4"
@@ -11,12 +12,20 @@ import (
 )
 
 type PgxIface interface {
-	Query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error)
+	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...interface{}) pgx.Row
+	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
 	BeginFunc(context.Context, func(pgx.Tx) error) error
 	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
 }
 
-func DBConnection() (*pgxpool.Pool, error) {
+var (
+	_ PgxIface = &pgxpool.Pool{}
+	_ PgxIface = &pgx.Conn{}
+	_ PgxIface = pgx.Tx(nil)
+)
+
+func DBConnection() (PgxIface, error) {
 	url := GetenvStr("DATABASE_URL")
 	if url == "" {
 		return nil, errors.New("Environment variable DATABASE_URL not set or empty")

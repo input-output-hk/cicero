@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -16,7 +15,9 @@ import (
 )
 
 type NomadEventService interface {
-	Save(pgx.Tx, *nomad.Event) error
+	WithQuerier(config.PgxIface) NomadEventService
+
+	Save(*nomad.Event) error
 	GetLastNomadEvent() (uint64, error)
 	GetEventAllocByNomadJobId(id uuid.UUID) (map[string]domain.AllocWrapper, error)
 }
@@ -35,9 +36,17 @@ func NewNomadEventService(db config.PgxIface, runService RunService, logger *zer
 	}
 }
 
-func (n *nomadEventService) Save(tx pgx.Tx, event *nomad.Event) error {
+func (n *nomadEventService) WithQuerier(querier config.PgxIface) NomadEventService {
+	return &nomadEventService{
+		logger:               n.logger,
+		nomadEventRepository: n.nomadEventRepository.WithQuerier(querier),
+		runService:           n.runService.WithQuerier(querier),
+	}
+}
+
+func (n *nomadEventService) Save(event *nomad.Event) error {
 	n.logger.Debug().Msgf("Saving new NomadEvent %d", event.Index)
-	if err := n.nomadEventRepository.Save(tx, event); err != nil {
+	if err := n.nomadEventRepository.Save(event); err != nil {
 		return errors.WithMessagef(err, "Could not insert NomadEvent")
 	}
 	n.logger.Debug().Msgf("Created NomadEvent %d", event.Index)

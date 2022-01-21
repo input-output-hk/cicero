@@ -22,7 +22,11 @@ type factRepository struct {
 }
 
 func NewFactRepository(db config.PgxIface) repository.FactRepository {
-	return &factRepository{DB: db}
+	return &factRepository{db}
+}
+
+func (a *factRepository) WithQuerier(querier config.PgxIface) repository.FactRepository {
+	return &factRepository{querier}
 }
 
 func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
@@ -58,25 +62,23 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 
 	los := tx.LargeObjects()
 	binary, err = los.Open(context.Background(), oid, pgx.LargeObjectModeRead)
+	err = errors.WithMessagef(err, "Failed to open large object with OID %d", oid)
 
-	if err != nil {
-		err = errors.WithMessagef(err, "Failed to open large object with OID %d", oid)
-	}
 	return
 }
 
-func (a *factRepository) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
+func (a *factRepository) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
 	err = pgxscan.Get(
-		context.Background(), tx, &fact,
+		context.Background(), a.DB, &fact,
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
 		pathsToQueryArgs(fields)...,
 	)
 	return
 }
 
-func (a *factRepository) GetByFields(tx pgx.Tx, fields [][]string) (facts []*domain.Fact, err error) {
+func (a *factRepository) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
 	err = pgxscan.Select(
-		context.Background(), tx, &facts,
+		context.Background(), a.DB, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact `+sqlWhereHasPaths(fields),
 		pathsToQueryArgs(fields)...,
 	)
@@ -114,45 +116,42 @@ func pathsToQueryArgs(paths [][]string) (args []interface{}) {
 	return
 }
 
-func (a *factRepository) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) error {
+func (a *factRepository) Save(fact *domain.Fact, binary io.Reader) error {
 	ctx := context.Background()
-
-	var binaryOid *uint32
-	if binary != nil {
-		los := tx.LargeObjects()
-		if oid, err := los.Create(ctx, 0); err != nil {
-			return errors.WithMessage(err, "Failed to create large object")
-		} else if lo, err := los.Open(ctx, oid, pgx.LargeObjectModeWrite); err != nil {
-			return errors.WithMessagef(err, "Failed to open large object with OID %d", oid)
-		} else {
-			hash := sri.NewWriter(lo, sri.SHA256)
-			switch written, err := io.Copy(hash, binary); {
-			case err != nil:
-				return errors.WithMessagef(err, "Failed to write to large object with OID %d", oid)
-			case written == 0:
-				// Nothing was written because the read stream was empty.
-				// We treat that case as if we had `binary == nil`.
-				if err := los.Unlink(ctx, oid); err != nil {
-					return errors.WithMessagef(err, "Failed to unlink large object with OID %d", oid)
+	return a.DB.BeginFunc(ctx, func(tx pgx.Tx) error {
+		var binaryOid *uint32
+		if binary != nil {
+			los := tx.LargeObjects()
+			if oid, err := los.Create(ctx, 0); err != nil {
+				return errors.WithMessage(err, "Failed to create large object")
+			} else if lo, err := los.Open(ctx, oid, pgx.LargeObjectModeWrite); err != nil {
+				return errors.WithMessagef(err, "Failed to open large object with OID %d", oid)
+			} else {
+				hash := sri.NewWriter(lo, sri.SHA256)
+				switch written, err := io.Copy(hash, binary); {
+				case err != nil:
+					return errors.WithMessagef(err, "Failed to write to large object with OID %d", oid)
+				case written == 0:
+					// Nothing was written because the read stream was empty.
+					// We treat that case as if we had `binary == nil`.
+					if err := los.Unlink(ctx, oid); err != nil {
+						return errors.WithMessagef(err, "Failed to unlink large object with OID %d", oid)
+					}
+				default:
+					sum := hash.Sum()
+					if fact.BinaryHash != nil && *fact.BinaryHash != sum {
+						return fmt.Errorf("Binary has hash %q instead of expected %q", sum, *fact.BinaryHash)
+					}
+					fact.BinaryHash = &sum
+					binaryOid = &oid
 				}
-			default:
-				sum := hash.Sum()
-				if fact.BinaryHash != nil && *fact.BinaryHash != sum {
-					return fmt.Errorf("Binary has hash %q instead of expected %q", sum, *fact.BinaryHash)
-				}
-				fact.BinaryHash = &sum
-				binaryOid = &oid
 			}
 		}
-	}
 
-	if err := pgxscan.Get(
-		ctx, tx, fact,
-		`INSERT INTO fact (run_id, value, binary_hash, "binary") VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
-		fact.RunId, fact.Value, fact.BinaryHash, binaryOid,
-	); err != nil {
-		return err
-	}
-
-	return nil
+		return pgxscan.Get(
+			ctx, tx, fact,
+			`INSERT INTO fact (run_id, value, binary_hash, "binary") VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
+			fact.RunId, fact.Value, fact.BinaryHash, binaryOid,
+		)
+	})
 }

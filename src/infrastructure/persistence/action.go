@@ -6,7 +6,6 @@ import (
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -19,6 +18,12 @@ type actionRepository struct {
 
 func NewActionRepository(db config.PgxIface) repository.ActionRepository {
 	return &actionRepository{DB: db}
+}
+
+func (a *actionRepository) WithQuerier(querier config.PgxIface) repository.ActionRepository {
+	return &actionRepository{
+		DB: querier,
+	}
 }
 
 func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err error) {
@@ -60,7 +65,7 @@ func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {
 	return
 }
 
-func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
+func (a *actionRepository) Save(action *domain.Action) error {
 	if inputs, err := json.Marshal(action.Inputs); err != nil {
 		return err
 	} else {
@@ -70,7 +75,7 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 		} else {
 			sql = `INSERT INTO action (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
 		}
-		return tx.QueryRow(
+		return a.DB.QueryRow(
 			context.Background(),
 			sql,
 			action.ID, action.Name, action.Source, inputs,
@@ -78,9 +83,9 @@ func (a *actionRepository) Save(tx pgx.Tx, action *domain.Action) error {
 	}
 }
 
-func (a *actionRepository) GetCurrent(tx pgx.Tx) (actions []*domain.Action, err error) {
+func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
 	err = pgxscan.Select(
-		context.Background(), tx, &actions,
+		context.Background(), a.DB, &actions,
 		`SELECT DISTINCT ON (name) * FROM action ORDER BY name, created_at DESC`,
 	)
 	return

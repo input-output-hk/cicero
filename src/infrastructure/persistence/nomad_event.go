@@ -6,7 +6,6 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain/repository"
@@ -17,11 +16,15 @@ type nomadEventRepository struct {
 }
 
 func NewNomadEventRepository(db config.PgxIface) repository.NomadEventRepository {
-	return nomadEventRepository{DB: db}
+	return nomadEventRepository{db}
 }
 
-func (n nomadEventRepository) Save(tx pgx.Tx, event *nomad.Event) (err error) {
-	_, err = tx.Exec(
+func (n nomadEventRepository) WithQuerier(querier config.PgxIface) repository.NomadEventRepository {
+	return nomadEventRepository{querier}
+}
+
+func (n nomadEventRepository) Save(event *nomad.Event) (err error) {
+	_, err = n.DB.Exec(
 		context.Background(),
 		`INSERT INTO nomad_event (topic, "type", "key", filter_keys, "index", payload) VALUES ($1, $2, $3, $4, $5, $6)`,
 		event.Topic, event.Type, event.Key, event.FilterKeys, event.Index, event.Payload,

@@ -5,7 +5,6 @@ import (
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -17,7 +16,11 @@ type runOutputRepository struct {
 }
 
 func NewRunOutputRepository(db config.PgxIface) repository.RunOutputRepository {
-	return runOutputRepository{DB: db}
+	return runOutputRepository{db}
+}
+
+func (a runOutputRepository) WithQuerier(querier config.PgxIface) repository.RunOutputRepository {
+	return runOutputRepository{querier}
 }
 
 func (a runOutputRepository) GetByRunId(id uuid.UUID) (output domain.RunOutput, err error) {
@@ -29,8 +32,8 @@ func (a runOutputRepository) GetByRunId(id uuid.UUID) (output domain.RunOutput, 
 	return
 }
 
-func (a runOutputRepository) Save(tx pgx.Tx, runId uuid.UUID, output *domain.RunOutput) (err error) {
-	_, err = tx.Exec(
+func (a runOutputRepository) Save(runId uuid.UUID, output *domain.RunOutput) (err error) {
+	_, err = a.DB.Exec(
 		context.Background(),
 		`INSERT INTO run_output (run_id, success, failure) VALUES ($1, $2, $3)`,
 		runId, output.Success, output.Failure,
@@ -38,8 +41,8 @@ func (a runOutputRepository) Save(tx pgx.Tx, runId uuid.UUID, output *domain.Run
 	return
 }
 
-func (a runOutputRepository) Update(tx pgx.Tx, runId uuid.UUID, output *domain.RunOutput) (err error) {
-	_, err = tx.Exec(
+func (a runOutputRepository) Update(runId uuid.UUID, output *domain.RunOutput) (err error) {
+	_, err = a.DB.Exec(
 		context.Background(),
 		`UPDATE run_output (success, failure) VALUES ($2, $3) WHERE run_id = $1`,
 		runId, output.Success, output.Failure,
@@ -47,8 +50,8 @@ func (a runOutputRepository) Update(tx pgx.Tx, runId uuid.UUID, output *domain.R
 	return
 }
 
-func (a runOutputRepository) Delete(tx pgx.Tx, runId uuid.UUID) (err error) {
-	_, err = tx.Exec(
+func (a runOutputRepository) Delete(runId uuid.UUID) (err error) {
+	_, err = a.DB.Exec(
 		context.Background(),
 		`DELETE FROM run_output WHERE run_id = $1`,
 		runId,

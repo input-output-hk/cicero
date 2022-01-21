@@ -26,6 +26,17 @@ type NomadEventConsumer struct {
 	NomadClient       application.NomadClient
 }
 
+func (self *NomadEventConsumer) WithQuerier(querier config.PgxIface) *NomadEventConsumer {
+	return &NomadEventConsumer{
+		Logger:            self.Logger,
+		FactService:       self.FactService.WithQuerier(querier),
+		NomadEventService: self.NomadEventService.WithQuerier(querier),
+		RunService:        self.RunService.WithQuerier(querier),
+		Db:                querier,
+		NomadClient:       self.NomadClient,
+	}
+}
+
 func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	self.Logger.Info().Msg("Starting")
 
@@ -58,7 +69,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 		for _, event := range events.Events {
 			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 				self.Logger.Debug().Uint64("index", event.Index).Msg("Processing Nomad Event")
-				return self.processNomadEvent(&event, tx)
+				return self.WithQuerier(tx).processNomadEvent(&event)
 			}); err != nil {
 				return errors.WithMessagef(err, "Error processing Nomad event with index: %d", event.Index)
 			}
@@ -68,28 +79,28 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	}
 }
 
-func (self *NomadEventConsumer) processNomadEvent(event *nomad.Event, tx pgx.Tx) error {
-	if err := self.handleNomadEvent(event, tx); err != nil {
+func (self *NomadEventConsumer) processNomadEvent(event *nomad.Event) error {
+	if err := self.handleNomadEvent(event); err != nil {
 		return errors.WithMessage(err, "Error handling Nomad event")
 	}
-	if err := self.NomadEventService.Save(tx, event); err != nil {
+	if err := self.NomadEventService.Save(event); err != nil {
 		return errors.WithMessage(err, "Error to save Nomad event")
 	}
 	return nil
 }
 
-func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event, tx pgx.Tx) error {
+func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event) error {
 	if event.Topic == "Allocation" && event.Type == "AllocationUpdated" {
 		allocation, err := event.Allocation()
 		if err != nil {
 			return errors.WithMessage(err, "Error getting Nomad event's allocation")
 		}
-		return self.handleNomadAllocationEvent(allocation, tx)
+		return self.handleNomadAllocationEvent(allocation)
 	}
 	return nil
 }
 
-func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation, tx pgx.Tx) error {
+func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation) error {
 	if !allocation.ClientTerminalStatus() {
 		self.Logger.Debug().Str("ClientStatus", allocation.ClientStatus).Msg("Ignoring allocation event with non-terminal client status")
 		return nil
@@ -125,7 +136,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 				RunId: &run.NomadJobID,
 				Value: factValue,
 			}
-			if err := self.FactService.Save(tx, &fact, nil); err != nil {
+			if err := self.FactService.Save(&fact, nil); err != nil {
 				return errors.WithMessage(err, "Could not publish Fact")
 			}
 		}
@@ -137,7 +148,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 	).UTC()
 	run.FinishedAt = &modifyTime
 
-	if err := self.RunService.End(tx, &run); err != nil {
+	if err := self.RunService.End(&run); err != nil {
 		return errors.WithMessagef(err, "Failed to end Run with ID %q", run.NomadJobID)
 	}
 

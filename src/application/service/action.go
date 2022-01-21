@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 
 	"cuelang.org/go/cue"
@@ -19,16 +20,18 @@ import (
 )
 
 type ActionService interface {
+	WithQuerier(config.PgxIface) ActionService
+
 	GetById(uuid.UUID) (domain.Action, error)
 	GetByRunId(uuid.UUID) (domain.Action, error)
 	GetLatestByName(string) (domain.Action, error)
 	GetAll() ([]*domain.Action, error)
-	GetCurrent(pgx.Tx) ([]*domain.Action, error)
-	Save(pgx.Tx, *domain.Action) error
-	IsRunnable(pgx.Tx, *domain.Action) (bool, map[string]interface{}, error)
-	Create(pgx.Tx, string, string) (*domain.Action, error)
-	Invoke(pgx.Tx, *domain.Action) (bool, error)
-	InvokeCurrent(pgx.Tx) error
+	GetCurrent() ([]*domain.Action, error)
+	Save(*domain.Action) error
+	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
+	Create(string, string) (*domain.Action, error)
+	Invoke(*domain.Action) (bool, error)
+	InvokeCurrent() error
 }
 
 type actionService struct {
@@ -38,6 +41,7 @@ type actionService struct {
 	evaluationService EvaluationService
 	runService        RunService
 	nomadClient       application.NomadClient
+	db                config.PgxIface
 }
 
 func NewActionService(db config.PgxIface, nomadClient application.NomadClient, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
@@ -48,6 +52,19 @@ func NewActionService(db config.PgxIface, nomadClient application.NomadClient, r
 		evaluationService: evaluationService,
 		nomadClient:       nomadClient,
 		runService:        runService,
+		db:                db,
+	}
+}
+
+func (self *actionService) WithQuerier(querier config.PgxIface) ActionService {
+	return &actionService{
+		logger:            self.logger,
+		actionRepository:  self.actionRepository.WithQuerier(querier),
+		factRepository:    self.factRepository.WithQuerier(querier),
+		runService:        self.runService.WithQuerier(querier),
+		evaluationService: self.evaluationService,
+		nomadClient:       self.nomadClient,
+		db:                querier,
 	}
 }
 
@@ -77,23 +94,23 @@ func (self *actionService) GetAll() ([]*domain.Action, error) {
 	return self.actionRepository.GetAll()
 }
 
-func (self *actionService) Save(tx pgx.Tx, action *domain.Action) error {
+func (self *actionService) Save(action *domain.Action) error {
 	self.logger.Debug().Str("name", action.Name).Msg("Saving new Action")
-	if err := self.actionRepository.Save(tx, action); err != nil {
+	if err := self.actionRepository.Save(action); err != nil {
 		return errors.WithMessagef(err, "Could not insert Action")
 	}
 	self.logger.Debug().Str("id", action.ID.String()).Msg("Created Action")
 	return nil
 }
 
-func (self *actionService) GetCurrent(tx pgx.Tx) (actions []*domain.Action, err error) {
+func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
 	self.logger.Debug().Msg("Getting current Actions")
-	actions, err = self.actionRepository.GetCurrent(tx)
+	actions, err = self.actionRepository.GetCurrent()
 	err = errors.WithMessagef(err, "Could not select current Actions")
 	return
 }
 
-func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, map[string]interface{}, error) {
+func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]interface{}, error) {
 	logger := self.logger.With().
 		Str("name", action.Name).
 		Str("id", action.ID.String()).
@@ -120,7 +137,7 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 	for name, input := range action.Inputs {
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
-			switch fact, err := self.getInputFactLatest(tx, input.Match.WithoutInputs()); {
+			switch fact, err := self.getInputFactLatest(input.Match.WithoutInputs()); {
 			case err != nil:
 				return false, nil, err
 			case fact == nil:
@@ -134,7 +151,7 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 				}
 			}
 		case domain.InputDefinitionSelectAll:
-			switch facts, err := self.getInputFacts(tx, input.Match.WithoutInputs()); {
+			switch facts, err := self.getInputFacts(input.Match.WithoutInputs()); {
 			case err != nil:
 				return false, nil, err
 			case len(facts) == 0:
@@ -158,10 +175,10 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 		case domain.InputDefinitionSelectLatest:
 			if inputFactEntry, exists := inputFact[name]; exists {
 				if match, err := matchFact(input.Match.WithInputs(inputs), inputFactEntry); err != nil {
-					return false, inputs, err
+					return false, nil, err
 				} else if match == input.Not {
 					if !input.Optional || input.Not {
-						return false, inputs, nil
+						return false, nil, nil
 					}
 					delete(inputs, name)
 				}
@@ -170,10 +187,10 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 			if inputFactsEntry, exists := inputFacts[name]; exists {
 				for i, fact := range inputFactsEntry {
 					if match, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
-						return false, inputs, err
+						return false, nil, err
 					} else if match == input.Not {
 						if !input.Optional || input.Not {
-							return false, inputs, nil
+							return false, nil, nil
 						}
 						if facts, exists := inputs[name]; exists {
 							// We will filter `nil`s out later as doing that here would be costly.
@@ -195,7 +212,7 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 
 					if len(newFacts) == 0 {
 						if !input.Optional {
-							return false, inputs, nil
+							return false, nil, nil
 						}
 						delete(inputs, name)
 					}
@@ -207,15 +224,15 @@ func (self *actionService) IsRunnable(tx pgx.Tx, action *domain.Action) (bool, m
 	}
 
 	// Not runnable if the inputs are the same as last run.
-	if run, err := self.runService.GetLatestByActionId(tx, action.ID); err != nil {
+	if run, err := self.runService.GetLatestByActionId(action.ID); err != nil {
 		if !pgxscan.NotFound(err) {
-			return false, inputs, err
+			return false, nil, err
 		}
 	} else {
 		var inputFactIds map[string][]uuid.UUID
-		if inputFactIds, err = self.runService.GetInputFactIdsByNomadJobId(tx, run.NomadJobID); err != nil {
+		if inputFactIds, err = self.runService.GetInputFactIdsByNomadJobId(run.NomadJobID); err != nil {
 			if !pgxscan.NotFound(err) {
-				return false, inputs, err
+				return false, nil, err
 			}
 			inputFactIds = map[string][]uuid.UUID{}
 		}
@@ -371,16 +388,16 @@ func filterFields(factValue *interface{}, filter cue.Value) {
 	}
 }
 
-func (self *actionService) getInputFactLatest(tx pgx.Tx, value cue.Value) (*domain.Fact, error) {
-	fact, err := self.factRepository.GetLatestByFields(tx, collectFieldPaths(value))
+func (self *actionService) getInputFactLatest(value cue.Value) (*domain.Fact, error) {
+	fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(value))
 	if err != nil && errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	return &fact, err
 }
 
-func (self *actionService) getInputFacts(tx pgx.Tx, value cue.Value) ([]*domain.Fact, error) {
-	facts, err := self.factRepository.GetByFields(tx, collectFieldPaths(value))
+func (self *actionService) getInputFacts(value cue.Value) ([]*domain.Fact, error) {
+	facts, err := self.factRepository.GetByFields(collectFieldPaths(value))
 	if err != nil && errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -423,7 +440,7 @@ func collectFieldPaths(value cue.Value) (paths [][]string) {
 	return
 }
 
-func (self *actionService) Create(tx pgx.Tx, source, name string) (*domain.Action, error) {
+func (self *actionService) Create(source, name string) (*domain.Action, error) {
 	action := domain.Action{
 		ID:     uuid.New(),
 		Name:   name,
@@ -441,94 +458,113 @@ func (self *actionService) Create(tx pgx.Tx, source, name string) (*domain.Actio
 	action.Meta = actionDef.Meta
 	action.Inputs = actionDef.Inputs
 
-	if err := self.Save(tx, &action); err != nil {
+	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
+
+		if err := txSelf.Save(&action); err != nil {
+			return err
+		}
+
+		_, err := txSelf.Invoke(&action)
+
+		return err
+	}); err != nil {
 		return nil, err
 	}
 
-	_, err := self.Invoke(tx, &action)
-	return &action, err
+	return &action, nil
 }
 
-func (self *actionService) Invoke(tx pgx.Tx, action *domain.Action) (bool, error) {
-	runnable, inputs, err := self.IsRunnable(tx, action)
-	if err != nil || !runnable {
-		return runnable, err
-	}
+func (self *actionService) Invoke(action *domain.Action) (bool, error) {
+	runnable := false
+	return runnable, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
 
-	runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs)
-	if err != nil {
-		var evalErr EvaluationError
-		if errors.As(err, &evalErr) {
-			self.logger.Err(evalErr).
-				Str("source", action.Source).
-				Str("name", action.Name).
-				Msg("Could not evaluate action")
+		runnable_, inputs, err := txSelf.IsRunnable(action)
+		runnable = runnable_
+		if err != nil || !runnable {
+			return err
 		}
-		return runnable, err
-	}
 
-	run := domain.Run{
-		ActionId: action.ID,
-	}
+		runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs)
+		if err != nil {
+			var evalErr EvaluationError
+			if errors.As(err, &evalErr) {
+				self.logger.Err(evalErr).
+					Str("source", action.Source).
+					Str("name", action.Name).
+					Msg("Could not evaluate action")
+			}
+			return err
+		}
 
-	if err := self.runService.Save(tx, &run, inputs, &runDef.Output); err != nil {
-		return runnable, errors.WithMessage(err, "Could not insert Run")
-	}
+		run := domain.Run{
+			ActionId: action.ID,
+		}
 
-	if runDef.IsDecision() {
-		if runDef.Output.Success != nil {
-			if err := self.factRepository.Save(tx, &domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
-				return runnable, errors.WithMessage(err, "Could not publish fact")
+		if err := self.runService.WithQuerier(tx).Save(&run, inputs, &runDef.Output); err != nil {
+			return errors.WithMessage(err, "Could not insert Run")
+		}
+
+		if runDef.IsDecision() {
+			if runDef.Output.Success != nil {
+				if err := self.factRepository.WithQuerier(tx).Save(&domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
+					return errors.WithMessage(err, "Could not publish fact")
+				}
+			}
+
+			run.CreatedAt = run.CreatedAt.UTC()
+			run.FinishedAt = &run.CreatedAt
+
+			err := self.runService.WithQuerier(tx).Update(&run)
+			err = errors.WithMessage(err, "Could not update decision Run")
+
+			return err
+		}
+
+		runId := run.NomadJobID.String()
+		runDef.Job.ID = &runId
+
+		if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
+			return errors.WithMessage(err, "Failed to run Action")
+		} else if len(response.Warnings) > 0 {
+			self.logger.Warn().
+				Str("nomad-job", runId).
+				Str("nomad-evaluation", response.EvalID).
+				Str("warnings", response.Warnings).
+				Msg("Warnings occured registering Nomad job")
+		}
+
+		return nil
+	})
+}
+
+func (self *actionService) InvokeCurrent() error {
+	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
+
+		actions, err := txSelf.GetCurrent()
+		if err != nil {
+			return err
+		}
+
+		for {
+			anyRunnable := false
+
+			for _, action := range actions {
+				runnable, err := txSelf.Invoke(action)
+				if err != nil {
+					return err
+				}
+
+				anyRunnable = anyRunnable || runnable
+			}
+
+			if !anyRunnable {
+				break
 			}
 		}
 
-		run.CreatedAt = run.CreatedAt.UTC()
-		run.FinishedAt = &run.CreatedAt
-
-		err := self.runService.Update(tx, &run)
-		err = errors.WithMessage(err, "Could not update decision Run")
-
-		return runnable, err
-	}
-
-	runId := run.NomadJobID.String()
-	runDef.Job.ID = &runId
-
-	if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
-		return runnable, errors.WithMessage(err, "Failed to run Action")
-	} else if len(response.Warnings) > 0 {
-		self.logger.Warn().
-			Str("nomad-job", runId).
-			Str("nomad-evaluation", response.EvalID).
-			Str("warnings", response.Warnings).
-			Msg("Warnings occured registering Nomad job")
-	}
-
-	return runnable, nil
-}
-
-func (self *actionService) InvokeCurrent(tx pgx.Tx) error {
-	actions, err := self.GetCurrent(tx)
-	if err != nil {
-		return err
-	}
-
-	for {
-		anyRunnable := false
-
-		for _, action := range actions {
-			runnable, err := self.Invoke(tx, action)
-			if err != nil {
-				return err
-			}
-
-			anyRunnable = anyRunnable || runnable
-		}
-
-		if !anyRunnable {
-			break
-		}
-	}
-
-	return nil
+		return nil
+	})
 }

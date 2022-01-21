@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"io"
 
 	"github.com/google/uuid"
@@ -15,20 +16,21 @@ import (
 )
 
 type FactService interface {
+	WithQuerier(config.PgxIface) FactService
+
 	GetById(uuid.UUID) (domain.Fact, error)
 	GetByRunId(uuid.UUID) ([]*domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
-	GetLatestByFields(pgx.Tx, [][]string) (domain.Fact, error)
-	GetByFields(pgx.Tx, [][]string) ([]*domain.Fact, error)
-	Save(pgx.Tx, *domain.Fact, io.Reader) error
-	// TODO sometimes you need a Tx, sometimes not...
-	// → SaveTx() and Save() etc? another wrapper? Tx() to get one?
+	GetLatestByFields([][]string) (domain.Fact, error)
+	GetByFields([][]string) ([]*domain.Fact, error)
+	Save(*domain.Fact, io.Reader) error
 }
 
 type factService struct {
 	logger         zerolog.Logger
 	factRepository repository.FactRepository
 	actionService  ActionService
+	db             config.PgxIface
 }
 
 func NewFactService(db config.PgxIface, actionService ActionService, logger *zerolog.Logger) FactService {
@@ -36,6 +38,16 @@ func NewFactService(db config.PgxIface, actionService ActionService, logger *zer
 		logger:         logger.With().Str("component", "FactService").Logger(),
 		actionService:  actionService,
 		factRepository: persistence.NewFactRepository(db),
+		db:             db,
+	}
+}
+
+func (self *factService) WithQuerier(querier config.PgxIface) FactService {
+	return &factService{
+		logger:         self.logger,
+		factRepository: self.factRepository.WithQuerier(querier),
+		actionService:  self.actionService.WithQuerier(querier),
+		db:             querier,
 	}
 }
 
@@ -60,26 +72,28 @@ func (self *factService) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	return
 }
 
-func (self *factService) Save(tx pgx.Tx, fact *domain.Fact, binary io.Reader) error {
-	self.logger.Debug().Msg("Saving new Fact")
-	if err := self.factRepository.Save(tx, fact, binary); err != nil {
-		return errors.WithMessagef(err, "Could not insert Fact")
-	}
-	self.logger.Debug().Str("id", fact.ID.String()).Msg("Created Fact")
+func (self *factService) Save(fact *domain.Fact, binary io.Reader) error {
+	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		self.logger.Debug().Msg("Saving new Fact")
+		if err := self.factRepository.WithQuerier(tx).Save(fact, binary); err != nil {
+			return errors.WithMessagef(err, "Could not insert Fact")
+		}
+		self.logger.Debug().Str("id", fact.ID.String()).Msg("Created Fact")
 
-	return self.actionService.InvokeCurrent(tx)
+		return self.actionService.WithQuerier(tx).InvokeCurrent()
+	})
 }
 
-func (self *factService) GetLatestByFields(tx pgx.Tx, fields [][]string) (fact domain.Fact, err error) {
+func (self *factService) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
 	self.logger.Debug().Interface("fields", fields).Msg("Getting latest Facts by fields")
-	fact, err = self.factRepository.GetLatestByFields(tx, fields)
+	fact, err = self.factRepository.GetLatestByFields(fields)
 	err = errors.WithMessagef(err, "Could not select latest Facts by fields %q", fields)
 	return
 }
 
-func (self *factService) GetByFields(tx pgx.Tx, fields [][]string) (facts []*domain.Fact, err error) {
+func (self *factService) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
 	self.logger.Debug().Interface("fields", fields).Msg("Getting Facts by fields")
-	facts, err = self.factRepository.GetByFields(tx, fields)
+	facts, err = self.factRepository.GetByFields(fields)
 	err = errors.WithMessagef(err, "Could not select Facts by fields %q", fields)
 	return
 }
