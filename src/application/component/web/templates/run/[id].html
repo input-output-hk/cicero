@@ -54,6 +54,73 @@
 					</tbody>
 				</table>
 
+				<table class="table">
+					<thead>
+						<tr>
+							<th
+								colspan="2"
+								title="Facts that satisfy inputs"
+							>
+								Inputs
+							</th>
+						</tr>
+						<tr>
+							<th>Name</th>
+							<th>Facts</th>
+						</tr>
+					</thead>
+					<tbody>
+						{{range $name, $facts := $.inputs}}
+							<tr>
+								<td>{{$name}}</td>
+								<td>
+									<ul style="list-style: none; padding: 0; margin: 0">
+										{{range $facts}}
+											<li>
+												<details class="collapse">
+													<summary>{{.ID}}</summary>
+													<dl class="panel">
+														<dt>Created At</dt>
+														<dd>{{.CreatedAt}}</dd>
+
+														<dt>Value</dt>
+														<dd>
+															<textarea
+																readonly
+																rows="10"
+																cols="50"
+															>{{toJson .Value true}}</textarea>
+														</dd>
+
+														{{if .BinaryHash}}
+															<dt>Binary</dt>
+															<dd>
+																<a href="/fact/{{.ID}}/binary"><code>{{.BinaryHash}}</code></a>
+															</dd>
+														{{end}}
+													</dl>
+												</details>
+											</li>
+										{{end}}
+									</ul>
+								</td>
+							</tr>
+						{{else}}
+							<tr>
+								<td colspan="2">
+									<em>
+										<p>No facts found that satisfy any inputs.</p>
+										<p>
+											That is correct if this action has only optional or negated inputs.<br/>
+											Otherwise, maybe they were garbage collected?
+										</p>
+									</em>
+								</td>
+							</tr>
+						{{end}}
+					</tbody>
+				</table>
+
 				<table class="table vertical">
 					<thead>
 						<tr>

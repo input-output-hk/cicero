@@ -59,6 +59,10 @@ iframe.iframe {
 	border: 5px groove var(--border);
 }
 
+details.collapse > summary {
+	cursor: pointer;
+}
+
 .tabs {
 	display: grid;
 	grid-template-rows: auto 1fr;

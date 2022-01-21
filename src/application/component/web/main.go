@@ -378,6 +378,29 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	inputs := map[string][]domain.Fact{}
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if inputFactIds, err := self.RunService.GetInputFactIdsByNomadJobId(tx, id); err != nil {
+			return err
+		} else {
+			for input, ids := range inputFactIds {
+				inputs[input] = make([]domain.Fact, len(ids))
+				for i, id := range ids {
+					// FIXME should be in the same transaction
+					if fact, err := self.FactService.GetById(id); err != nil {
+						return err
+					} else {
+						inputs[input][i] = fact
+					}
+				}
+			}
+		}
+		return nil
+	}); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
+		return
+	}
+
 	output, err := self.RunService.GetOutputByNomadJobId(id)
 	if err != nil && !pgxscan.NotFound(err) {
 		self.ServerError(w, err)
@@ -392,6 +415,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run":    run,
+		"inputs": inputs,
 		"output": output,
 		"facts":  facts,
 		"allocs": allocs,
