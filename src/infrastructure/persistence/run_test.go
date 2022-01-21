@@ -11,14 +11,15 @@ import (
 
 	"github.com/input-output-hk/cicero/src/config/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/domain/repository"
 )
 
 func TestShouldGetRunByActionId(t *testing.T) {
+	t.Skip("pgxmock does not support SendBatch()", "https://github.com/pashagolub/pgxmock/issues/52")
+
 	t.Parallel()
 	now := time.Now().UTC()
 	actionId := uuid.New()
-	offset := 0
-	limit := 1
 
 	run := domain.Run{
 		NomadJobID: uuid.New(),
@@ -27,18 +28,23 @@ func TestShouldGetRunByActionId(t *testing.T) {
 		FinishedAt: &now,
 	}
 
+	page := repository.Page{
+		Limit:  1,
+		Offset: 0,
+	}
+
 	// given
 	mock, err := pgxmock.NewConn()
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+		t.Fatalf("an error %q was not expected when opening a stub database connection", err)
 	}
 	defer mock.Close(context.Background())
 	rows := mock.NewRows([]string{"nomad_job_id", "action_id", "created_at", "finished_at"}).AddRow(run.NomadJobID, run.ActionId, run.CreatedAt, run.FinishedAt)
-	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId, limit, offset).WillReturnRows(rows)
+	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId, page.Limit, page.Offset).WillReturnRows(rows)
 	repository := NewRunRepository(mock)
 
 	// when
-	runResult, err := repository.GetByActionId(actionId, limit, offset)
+	runResult, err := repository.GetByActionId(actionId, &page)
 
 	// then
 	assert.Nil(t, err)
