@@ -214,11 +214,11 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}/cancel", self.RunIdCancelGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/run", self.RunGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Queries("offset", "", "limit", "").Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
@@ -404,13 +404,17 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 func getPage(req *http.Request) (*repository.Page, error) {
 	page := repository.Page{}
 
-	if offset, err := strconv.Atoi(req.FormValue("offset")); err != nil {
+	if offsetStr := req.FormValue("offset"); offsetStr == "" {
+		page.Offset = 0
+	} else if offset, err := strconv.Atoi(offsetStr); err != nil {
 		return nil, errors.WithMessage(err, "offset parameter is invalid, should be positive integer")
 	} else {
 		page.Offset = offset
 	}
 
-	if limit, err := strconv.Atoi(req.FormValue("limit")); err != nil {
+	if limitStr := req.FormValue("limit"); limitStr == "" {
+		page.Limit = 10
+	} else if limit, err := strconv.Atoi(limitStr); err != nil {
 		return nil, errors.WithMessage(err, "limit parameter is invalid, should be positive integer")
 	} else {
 		page.Limit = limit
