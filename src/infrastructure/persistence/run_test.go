@@ -65,13 +65,13 @@ func TestShouldUpdateRun(t *testing.T) {
 	}
 
 	// given
-	mock, tx := mocks.BuildTransaction(context.Background(), t)
+	mock, _ := mocks.BuildTransaction(context.Background(), t)
 	mock.ExpectExec("UPDATE run").WithArgs(run.NomadJobID, run.FinishedAt).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 	mock.ExpectCommit()
 	repository := NewRunRepository(mock)
 
 	// when
-	err := repository.Update(tx, &run)
+	err := repository.Update(&run)
 
 	// then
 	assert.Nil(t, err)

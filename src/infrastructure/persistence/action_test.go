@@ -74,14 +74,14 @@ func TestShouldSaveAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when marshaling the action.Inputs", err)
 	}
-	mock, tx := mocks.BuildTransaction(context.Background(), t)
+	mock, _ := mocks.BuildTransaction(context.Background(), t)
 	rows := mock.NewRows([]string{"id", "created_at"}).AddRow(actionId, dateTime)
 	mock.ExpectQuery("INSERT INTO action").WithArgs(action.ID, action.Name, action.Source, marshalInputs).WillReturnRows(rows)
 	mock.ExpectCommit()
 	repository := NewActionRepository(mock)
 
 	// when
-	err = repository.Save(tx, &action)
+	err = repository.Save(&action)
 
 	// then
 	assert.Nil(t, err)
