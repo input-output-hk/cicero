@@ -101,7 +101,7 @@ func (a *runRepository) GetAll(page *repository.Page) ([]*domain.Run, error) {
 
 	if rows, err := br.Query(); err != nil {
 		return nil, err
-	} else if scanNextRow(rows, &page.Total); err != nil {
+	} else if err := scanNextRow(rows, &page.Total); err != nil {
 		return nil, err
 	}
 
