@@ -179,7 +179,6 @@ func (self *runService) Cancel(run *domain.Run) error {
 	} else if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
 		return errors.WithMessagef(err, "Failed to deregister job %q", run.NomadJobID)
 	}
-	return nil
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopped Run")
 	return nil
 }
