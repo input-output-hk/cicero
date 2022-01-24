@@ -135,6 +135,8 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 	// Select candidate facts.
 	for name, input := range action.Inputs {
+		inputLogger := logger.With().Str("input", name).Logger()
+
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
 			switch fact, err := self.getInputFactLatest(input.Match.WithoutInputs()); {
@@ -142,6 +144,9 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 				return false, nil, err
 			case fact == nil:
 				if !input.Not && !input.Optional {
+					inputLogger.Debug().
+						Bool("runnable", false).
+						Msg("No fact found for required input")
 					return false, nil, nil
 				}
 			default:
@@ -156,6 +161,9 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 				return false, nil, err
 			case len(facts) == 0:
 				if !input.Not && !input.Optional {
+					inputLogger.Debug().
+						Bool("runnable", false).
+						Msg("No facts found for required input")
 					return false, nil, nil
 				}
 			default:
@@ -171,6 +179,8 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 	// Match candidate facts.
 	for name, input := range action.Inputs {
+		inputLogger := logger.With().Str("input", name).Logger()
+
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
 			if inputFactEntry, exists := inputFact[name]; exists {
@@ -178,6 +188,10 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 					return false, nil, err
 				} else if match == input.Not {
 					if !input.Optional || input.Not {
+						inputLogger.Debug().
+							Bool("runnable", false).
+							Str("fact", inputFactEntry.ID.String()).
+							Msg("Fact does not match")
 						return false, nil, nil
 					}
 					delete(inputs, name)
@@ -190,6 +204,10 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 						return false, nil, err
 					} else if match == input.Not {
 						if !input.Optional || input.Not {
+							inputLogger.Debug().
+								Bool("runnable", false).
+								Str("fact", fact.ID.String()).
+								Msg("Fact does not match")
 							return false, nil, nil
 						}
 						if facts, exists := inputs[name]; exists {
@@ -212,6 +230,9 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 					if len(newFacts) == 0 {
 						if !input.Optional {
+							inputLogger.Debug().
+								Bool("runnable", false).
+								Msg("No facts match")
 							return false, nil, nil
 						}
 						delete(inputs, name)
@@ -364,6 +385,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		}
 	}
 
+	logger.Debug().Bool("runnable", true).Send()
 	return true, inputs, nil
 }
 
