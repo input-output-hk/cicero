@@ -244,7 +244,7 @@ rec {
             })
             {
               config.packages = data-merge.append
-                [ "github:input-output-hk/nomad-driver-nix/wrap-nix#wrap-nix" ];
+                [ "github:input-output-hk/nomad-driver-nix/${self.inputs.driver.rev}#wrap-nix" ];
               env.NIX_CONFIG = ''
                 experimental-features = nix-command flakes
                 ${next.env.NIX_CONFIG or ""}

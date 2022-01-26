@@ -71,11 +71,11 @@
         "utils": "utils"
       },
       "locked": {
-        "lastModified": 1641823070,
-        "narHash": "sha256-Ryo6YjqoOj1gRyW5FGQrSgqfgpctvYk6jmSIu7mT0gY=",
+        "lastModified": 1643189621,
+        "narHash": "sha256-bexGLpcTmI/G5ITN1Dk1+QA/6MDVIyQv33wUHY6xqs4=",
         "owner": "input-output-hk",
         "repo": "nomad-driver-nix",
-        "rev": "91ec060ed6e18e62564f139fab28d8ef9da29a41",
+        "rev": "dbbd2554ad82429c5f132bb7853f39bb7f962df7",
         "type": "github"
       },
       "original": {
@@ -191,16 +191,16 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1634821460,
-        "narHash": "sha256-JYMDrBX4cn1Je5EOEybZEbNH+uibT7bN5DBPjDddD+4=",
-        "owner": "manveru",
+        "lastModified": 1641909823,
+        "narHash": "sha256-Uxo+Wm6c/ijNhaJlYtFLJG9mh75FYZaBreMC2ZE0nEY=",
+        "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "e629023c0742f2726e1b2bb52d3c04fc28f7c00c",
+        "rev": "f0f67400bc49c44f305d6fe17698a2f1ce1c29a0",
         "type": "github"
       },
       "original": {
-        "owner": "manveru",
-        "ref": "use-atomic-bind-mounts",
+        "owner": "nixos",
+        "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
