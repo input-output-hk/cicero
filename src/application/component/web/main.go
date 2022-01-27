@@ -538,7 +538,7 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 	} else {
 		if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
 			self.ClientError(w, errors.WithMessage(err, "Failed to list actions")) //TODO: checking
-			return 
+			return
 		} else {
 			actions := make([]*domain.Action, len(actionNames))
 			for i, actionName := range actionNames {

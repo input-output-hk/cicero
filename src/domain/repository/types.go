@@ -3,18 +3,19 @@ package repository
 type Page struct {
 	Limit  int
 	Offset int
-	Total int
+	Total  int
 }
 
 func (p *Page) Number() int {
 	number := 1
-	for ; number * p.Limit <= p.Offset; number += 1 {}
+	for ; number*p.Limit <= p.Offset; number += 1 {
+	}
 	return number
 }
 
 func (p *Page) Pages() int {
-	pages := p.Total / p.Limit;
-	if p.Total % p.Limit != 0 {
+	pages := p.Total / p.Limit
+	if p.Total%p.Limit != 0 {
 		pages += 1
 	}
 	return pages
@@ -31,9 +32,9 @@ func (p *Page) PrevOffset() *int {
 	return &offset
 }
 
-func(p *Page) NextOffset() *int {
+func (p *Page) NextOffset() *int {
 	offset := p.Offset + p.Limit
-	if offset >= p.Total - 1 {
+	if offset >= p.Total-1 {
 		return nil
 	}
 	return &offset

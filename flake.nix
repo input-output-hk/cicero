@@ -22,41 +22,44 @@
   };
 
   outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, ... }:
-    utils.lib.eachSystem [ "x86_64-linux" ] (system: let
-      pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
-        devshell.overlay
-        poetry2nix.overlay
-        follower.overlay
-        (final: prev: {
-          go = prev.go_1_17;
-          gouml = final.callPackage pkgs/gouml.nix { };
-          gocritic = final.callPackage pkgs/gocritic.nix { };
-          schemathesis = final.callPackage pkgs/schemathesis.nix { };
-          nomad-dev = pkgs.writeShellScriptBin "nomad-dev" ''
-            set -exuo pipefail
+    utils.lib.eachSystem [ "x86_64-linux" ]
+      (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
+            devshell.overlay
+            poetry2nix.overlay
+            follower.overlay
+            (final: prev: {
+              go = prev.go_1_17;
+              gouml = final.callPackage pkgs/gouml.nix { };
+              gocritic = final.callPackage pkgs/gocritic.nix { };
+              schemathesis = final.callPackage pkgs/schemathesis.nix { };
+              nomad-dev = pkgs.writeShellScriptBin "nomad-dev" ''
+                set -exuo pipefail
 
-            # Preserve PATH for systems that
-            # don't have nix in their root's PATH,
-            # like conventional linux distros
-            # with a standalone nix install.
-            sudo --preserve-env=PATH \
-              ${pkgs.nomad}/bin/nomad agent -dev \
-              -plugin-dir ${driver.defaultPackage.${system}}/bin \
-              -config ${pkgs.writeText "nomad.hcl" (builtins.toJSON {
-                log_level = "TRACE";
-                plugin.nix_driver = {};
-                client.cni_path = "${pkgs.cni-plugins}/bin";
-              })}
-          '';
-        })
-        self.overlay
-      ]);
-    in {
-      packages = self.overlay (pkgs // self.packages.${system}) pkgs;
-      defaultPackage = self.packages.${system}.cicero;
-      hydraJobs = self.packages.${system};
-      devShell = pkgs.devshell.fromTOML ./devshell.toml;
-    }) // {
+                # Preserve PATH for systems that
+                # don't have nix in their root's PATH,
+                # like conventional linux distros
+                # with a standalone nix install.
+                sudo --preserve-env=PATH \
+                  ${pkgs.nomad}/bin/nomad agent -dev \
+                  -plugin-dir ${driver.defaultPackage.${system}}/bin \
+                  -config ${pkgs.writeText "nomad.hcl" (builtins.toJSON {
+                    log_level = "TRACE";
+                    plugin.nix_driver = {};
+                    client.cni_path = "${pkgs.cni-plugins}/bin";
+                  })}
+              '';
+            })
+            self.overlay
+          ]);
+        in
+        {
+          packages = self.overlay (pkgs // self.packages.${system}) pkgs;
+          defaultPackage = self.packages.${system}.cicero;
+          hydraJobs = self.packages.${system};
+          devShell = pkgs.devshell.fromTOML ./devshell.toml;
+        }) // {
       overlay = final: prev: {
         cicero = prev.callPackage pkgs/cicero { flake = self; };
         cicero-entrypoint = prev.callPackage pkgs/cicero/entrypoint.nix { };
