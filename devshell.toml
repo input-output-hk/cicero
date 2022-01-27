@@ -21,9 +21,6 @@ package = "go"
 package = "dbmate"
 
 [[commands]]
-package = "golangci-lint"
-
-[[commands]]
 package = "gouml"
 
 [[commands]]
@@ -37,7 +34,7 @@ package = "damon"
 
 [[commands]]
 name = "lint"
-command = "golangci-lint run -E gocritic && nixpkgs-fmt --check ."
+command = "golangci-lint run -E gocritic && treefmt --fail-on-change"
 help = "Run code linters"
 
 [[commands]]
@@ -45,32 +42,42 @@ package = "nomad-dev"
 help = "Run Nomad in development mode with Nix driver"
 
 [[commands]]
-name = "psqlc"
-command = "psql -d \"$DATABASE_URL\" \"$@\""
-help = "psql into Cicero DB"
-
-[[commands]]
 name = "dev-run"
 command = "cue export ./jobs -e jobs.dev | nomad run -"
 help = "run postgres and loki in nomad"
 
+[[commands]]
+name = "psqlc"
+command = "psql -d \"$DATABASE_URL\" \"$@\""
+help = "psql into Cicero DB"
+
 [devshell]
 name = "cicero"
 packages = [
+  # cicero
   "cicero-evaluator-nix",
-  "cue",
-  "diffutils",
-  "gcc",
+
+  # go
   "go",
+  "gcc",
   "gocode",
   "goimports",
   "gopls",
-  "grafana-loki",
+  "go-mockery",
+  "golangci-lint",
+
+  # formatting
+  "treefmt",
   "nixpkgs-fmt",
+
+  # deployment
+  "cue",
   "nomad-follower",
   "postgresql_12",
   "vector",
-  "treefmt",
-  "go-mockery",
+  "grafana-loki",
+
+  # tools
   "httpie",
+  "diffutils",
 ]

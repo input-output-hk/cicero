@@ -1,10 +1,10 @@
-final: prev:
+pkgs:
 
 let
   commonName = "workflow-action-script";
 
   runner = drv:
-    prev.writers.writeBashBin "${drv.name}-runner" ''
+    pkgs.writers.writeBashBin "${drv.name}-runner" ''
       set -euo pipefail
       export CICERO_SCRIPT=$(< "$1")
       exec ${drv}
@@ -12,7 +12,7 @@ let
 in
 
 {
-  run-bash = runner (prev.writers.writeBash "${commonName}-bash" ''
+  bash = runner (pkgs.writers.writeBash "${commonName}-bash" ''
     set -euo pipefail
 
     if [[ -n "''${CICERO_DEBUG:-}" ]]; then
@@ -20,21 +20,21 @@ in
     fi
 
     # not necessary, just convenience
-    export PATH="$PATH:${prev.lib.makeBinPath (with final; [ coreutils ])}"
+    export PATH="$PATH:${pkgs.lib.makeBinPath [ pkgs.coreutils ]}"
 
     eval "$CICERO_SCRIPT"
   '');
 
-  run-python = runner (prev.writers.writePython3 "${commonName}-python" { } ''
+  python = runner (pkgs.writers.writePython3 "${commonName}-python" { } ''
     import os
     eval(os.environ['CICERO_SCRIPT'])
   '');
 
-  run-perl = runner (prev.writers.writePerl "${commonName}-perl" { } ''
+  perl = runner (pkgs.writers.writePerl "${commonName}-perl" { } ''
     eval $ENV{'CICERO_SCRIPT'};
   '');
 
-  run-js = runner (prev.writers.writeJS "${commonName}-js" { } ''
+  js = runner (pkgs.writers.writeJS "${commonName}-js" { } ''
     const process = require('process')
     eval(process.env.CICERO_SCRIPT)
   '');

@@ -5,257 +5,92 @@
     devshell.url = "github:numtide/devshell";
     inclusive.url = "github:input-output-hk/nix-inclusive";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    utils.url = "github:kreisys/flake-utils";
-    driver.url = "github:input-output-hk/nomad-driver-nix";
-    follower.url = "github:input-output-hk/nomad-follower";
+    utils.url = "github:numtide/flake-utils";
+    driver = {
+      url = "github:input-output-hk/nomad-driver-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    follower = {
+      url = "github:input-output-hk/nomad-follower";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     data-merge.url = "github:divnix/data-merge";
-    poetry2nix.url = "github:nix-community/poetry2nix/fetched-projectdir-test";
+    poetry2nix = {
+      url = "github:nix-community/poetry2nix/fetched-projectdir-test";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs =
-    { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, ... }:
-    utils.lib.simpleFlake {
-      systems = [ "x86_64-linux" ];
-      inherit nixpkgs;
-
-      preOverlays = [ devshell.overlay poetry2nix.overlay ];
-
-      overlay = final: prev:
-        {
-          cicero = prev.callPackage ./pkgs/cicero { flake = self; };
-          cicero-std = prev.callPackage ./pkgs/cicero/std { };
-          cicero-evaluator-nix = prev.callPackage ./pkgs/cicero/evaluators/nix { flake = self; };
+  outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, ... }:
+    utils.lib.eachSystem [ "x86_64-linux" ] (system: let
+      pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
+        devshell.overlay
+        poetry2nix.overlay
+        follower.overlay
+        (final: prev: {
           go = prev.go_1_17;
-          gouml = prev.callPackage ./pkgs/gouml.nix { };
-          gocritic = prev.callPackage ./pkgs/gocritic.nix { };
-          webhook-trigger = prev.callPackage ./pkgs/trigger { };
-          nomad-follower = follower.defaultPackage."${prev.system}";
-          schemathesis = final.callPackage ./pkgs/schemathesis.nix { };
+          gouml = final.callPackage pkgs/gouml.nix { };
+          gocritic = final.callPackage pkgs/gocritic.nix { };
+          schemathesis = final.callPackage pkgs/schemathesis.nix { };
+          nomad-dev = pkgs.writeShellScriptBin "nomad-dev" ''
+            set -exuo pipefail
 
-          inherit (driver.legacyPackages.x86_64-linux) nomad-driver-nix;
+            # Preserve PATH for systems that
+            # don't have nix in their root's PATH,
+            # like conventional linux distros
+            # with a standalone nix install.
+            sudo --preserve-env=PATH \
+              ${pkgs.nomad}/bin/nomad agent -dev \
+              -plugin-dir ${driver.defaultPackage.${system}}/bin \
+              -config ${pkgs.writeText "nomad.hcl" (builtins.toJSON {
+                log_level = "TRACE";
+                plugin.nix_driver = {};
+                client.cni_path = "${pkgs.cni-plugins}/bin";
+              })}
+          '';
+        })
+        self.overlay
+      ]);
+    in {
+      packages = self.overlay (pkgs // self.packages.${system}) pkgs;
+      defaultPackage = self.packages.${system}.cicero;
+      hydraJobs = self.packages.${system};
+      devShell = pkgs.devshell.fromTOML ./devshell.toml;
+    }) // {
+      overlay = final: prev: {
+        cicero = prev.callPackage pkgs/cicero { flake = self; };
+        cicero-entrypoint = prev.callPackage pkgs/cicero/entrypoint.nix { };
+        cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix { flake = self; };
+        webhook-trigger = prev.callPackage pkgs/trigger { };
+      } // nixpkgs.lib.mapAttrs'
+        (k: nixpkgs.lib.nameValuePair "cicero-evaluator-nix-run-${k}")
+        (import pkgs/cicero/evaluators/nix/runners.nix prev);
 
-          cicero-entrypoint = final.callPackage ./pkgs/cicero/entrypoint.nix { };
+      nixosModules.cicero = import nixos/modules/cicero.nix;
+      nixosModule = self.nixosModules.cicero;
 
-          nomad-dev =
-            let
-              cfg = prev.writeText "nomad.hcl" ''
-                log_level = "TRACE"
-                plugin "nix_driver" {}
-                client {
-                  cni_path = "${prev.cni-plugins}/bin"
-                }
-              '';
-            in
-            prev.writeShellScriptBin "nomad-dev" ''
-              set -exuo pipefail
-
-              # Preserve PATH for systems that
-              # don't have nix in their root's PATH,
-              # like conventional linux distros
-              # with a standalone nix install.
-              sudo --preserve-env=PATH \
-                ${prev.nomad}/bin/nomad agent -dev \
-                -config ${cfg} \
-                -plugin-dir "${final.nomad-driver-nix}/bin"
-            '';
-        } // (import ./runners.nix final prev);
-
-      packages =
-        { cicero
-        , cicero-std
-        , cicero-evaluator-nix
-        , cicero-entrypoint
-        , gocritic
-        , go
-        , webhook-trigger
-        , nomad-dev
-        , nomad-follower
-        , run-bash
-        , run-python
-        , run-perl
-        , run-js
-        , schemathesis
-        }@pkgs:
-        pkgs // {
-          inherit (nixpkgs) lib;
-          defaultPackage = cicero;
-        };
-
-      extraOutputs.nixosConfigurations = {
+      nixosConfigurations = {
         dev = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           specialArgs = { inherit self; };
-          modules = [
-            ({ pkgs, config, lib, ... }: {
-              imports = [
-                driver.nixosModules.nix-driver-nomad
-                (nixpkgs + /nixos/modules/misc/version.nix)
-                (nixpkgs + /nixos/modules/profiles/headless.nix)
-                (nixpkgs + /nixos/modules/profiles/minimal.nix)
-              ];
-
-              nixpkgs.overlays = [ self.overlay ];
-              networking.hostName = lib.mkDefault "dev";
-
-              # re-enable TTY disabled by minimal profile for `machinectl shell`
-              systemd.services."getty@tty1".enable = lib.mkForce true;
-
-              services.loki = {
-                enable = true;
-                configuration = {
-                  auth_enabled = false;
-
-                  ingester = {
-                    chunk_idle_period = "5m";
-                    chunk_retain_period = "30s";
-                    lifecycler = {
-                      address = "127.0.0.1";
-                      final_sleep = "0s";
-                      ring = {
-                        kvstore.store = "inmemory";
-                        replication_factor = 1;
-                      };
-                    };
-                  };
-
-                  limits_config = {
-                    enforce_metric_name = false;
-                    reject_old_samples = true;
-                    reject_old_samples_max_age = "168h";
-                    ingestion_rate_mb = 160;
-                    ingestion_burst_size_mb = 160;
-                  };
-
-                  schema_config = {
-                    configs = [{
-                      from = "2020-05-15";
-                      index = {
-                        period = "168h";
-                        prefix = "index_";
-                      };
-                      object_store = "filesystem";
-                      schema = "v11";
-                      store = "boltdb";
-                    }];
-                  };
-
-                  server.http_listen_port = 3100;
-
-                  storage_config = {
-                    boltdb.directory = "/var/lib/loki/index";
-                    filesystem.directory = "/var/lib/loki/chunks";
-                  };
-                };
-              };
-
-              services.postgresql = {
-                enable = true;
-                enableTCPIP = true;
-                package = pkgs.postgresql_12;
-
-                settings = {
-                  log_statement = "all";
-                  log_destination = lib.mkForce "syslog";
-                };
-
-                authentication = ''
-                  local all all trust
-                  host all all 127.0.0.1/32 trust
-                  host all all ::1/128 trust
-                '';
-
-                initialScript = pkgs.writeText "init.sql" ''
-                  CREATE DATABASE cicero;
-
-                  CREATE USER cicero;
-                  GRANT ALL PRIVILEGES ON DATABASE cicero TO cicero;
-                  ALTER USER cicero WITH SUPERUSER;
-
-                  CREATE ROLE cicero_api;
-                '';
-              };
-            })
-          ];
+          modules = [ nixos/configs/dev.nix ];
         };
 
         cicero = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           specialArgs = { inherit self; };
-          modules = [
-            (nixpkgs + /nixos/modules/misc/version.nix)
-            (nixpkgs + /nixos/modules/profiles/base.nix)
-            (nixpkgs + /nixos/modules/profiles/headless.nix)
-            (nixpkgs + /nixos/modules/profiles/minimal.nix)
-            (nixpkgs + /nixos/modules/profiles/qemu-guest.nix)
-            ({ pkgs, config, lib, ... }: {
-              # boot.isContainer = true;
-              networking.useDHCP = false;
-              networking.hostName = "cicero";
-              nixpkgs.overlays = [ self.overlay ];
-
-              nix = {
-                package = pkgs.nixUnstable;
-                systemFeatures = [ "recursive-nix" "nixos-test" ];
-                extraOptions = ''
-                  experimental-features = nix-command flakes ca-references recursive-nix
-                '';
-              };
-
-              users.users = {
-                nixos = {
-                  isNormalUser = true;
-                  extraGroups = [ "wheel" ];
-                  initialHashedPassword = "";
-                };
-
-                root.initialHashedPassword = "";
-              };
-
-              security.sudo = {
-                enable = lib.mkDefault true;
-                wheelNeedsPassword = lib.mkForce false;
-              };
-
-              services.getty.autologinUser = "nixos";
-
-              services.openssh = {
-                enable = true;
-                permitRootLogin = "yes";
-              };
-
-              boot.postBootCommands = ''
-                # After booting, register the contents of the Nix store in the container in the Nix database in the tmpfs.
-                ${config.nix.package.out}/bin/nix-store --load-db < /registration
-                # nixos-rebuild also requires a "system" profile and an /etc/NIXOS tag.
-                touch /etc/NIXOS
-                ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
-              '';
-
-              systemd.services.cicero = {
-                wantedBy = [ "multi-user.target" ];
-                after = [ "network.target" ];
-                path = with pkgs; [ cicero ];
-                script = ''
-                  exec cicero start
-                '';
-              };
-            })
-          ];
+          modules = [ nixos/configs/cicero.nix ];
         };
       };
 
-      extraOutputs.lib = import ./lib.nix self;
+      lib = import ./lib.nix self;
 
-      extraOutputs.ciceroActions = self.lib.callActionsWithExtraArgs
+      ciceroActions = self.lib.callActionsWithExtraArgs
         rec {
-          inherit (self.outputs.lib) std;
+          inherit (self.lib) std;
           inherit (self.inputs.nixpkgs) lib;
           actionLib = import ./action-lib.nix { inherit std lib; };
           nixpkgsRev = self.inputs.nixpkgs.rev;
         } ./actions;
-
-      hydraJobs = { cicero }@pkgs: pkgs;
-
-      devShell = { devshell }: devshell.fromTOML ./devshell.toml;
     };
 }

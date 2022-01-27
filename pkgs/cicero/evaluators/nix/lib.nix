@@ -110,7 +110,7 @@ rec {
 
   tasks.script = language: script:
     let
-      runner = "run-${language}";
+      runner = "cicero-evaluator-nix-run-${language}";
       scriptName = builtins.hashString "md5" script;
     in
     {
@@ -120,7 +120,7 @@ rec {
         command = [
           # It is ok to hard-code the system here
           # because we only care about the derivation name.
-          "/bin/${self.outputs.legacyPackages.x86_64-linux.${runner}.name}"
+          "/bin/${self.outputs.packages.x86_64-linux.${runner}.name}"
           "/local/scripts/${language}/${scriptName}"
         ];
       };
