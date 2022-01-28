@@ -88,19 +88,13 @@ and [example actions](https://github.com/input-output-hk/cicero/tree/main/action
 
 First enter the development shell using either direnv or by running `nix develop`.
 
-Start a development instance of Nomad:
+Start a development instance of Nomad, nomad-follower, and Vault:
 
-	nomad-dev
+	dev-cluster
 
 Run the required services in Nomad:
 
-	dev-run
-
-Start the Nomad follower to capture logs:
-
-	sudo nomad-follower
-	# If nomad-follower is not found, use the full path:
-	# sudo $DEVSHELL_DIR/bin/nomad-follower
+	dev-jobs
 
 Migrate the database:
 

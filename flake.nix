@@ -34,21 +34,115 @@
               gouml = final.callPackage pkgs/gouml.nix { };
               gocritic = final.callPackage pkgs/gocritic.nix { };
               schemathesis = final.callPackage pkgs/schemathesis.nix { };
-              nomad-dev = pkgs.writeShellScriptBin "nomad-dev" ''
-                set -exuo pipefail
+              dev-cluster = pkgs.writers.writeBashBin "dev-cluster" ''
+                set -euo pipefail
+
+                export PATH=${with prev; lib.makeBinPath [
+                  netcat
+                  nomad
+                  nomad-follower
+                  vault-bin
+                ]}:"$PATH"
+
+                >&2 echo 'Please authorize sudo (type your password):'
+                >&2 sudo echo 'Thanks! Starting…'
+
+                # basically stolen from https://github.com/chrismytton/shoreman
+                function log {
+                  local index=$1
+                  local name="$2"
+
+                  local color=$((31 + (index % 7)))
+                  while IFS= read; do
+                    >&2 printf "\033[0;''${color}m%s |\033[0m " "$name"
+                    printf "%s\n" "$REPLY"
+                  done
+                }
+
+                function cleanup {
+                  >&2 echo 'Stopping processes… (please provide password again if necessary)'
+                  sudo kill $(jobs -p) 2> /dev/null || :
+
+                  sleep 1
+                  if [[ -n "$(jobs -rp)" ]]; then
+                    >&2 echo 'There are survivors:'
+                    jobs -l
+                    >&2 echo 'Retrying…'
+                    cleanup
+                  fi
+                }
+                trap cleanup EXIT
+
+                export VAULT_DEV_ROOT_TOKEN_ID=root
+                vault server -dev |& log 0 vault &
+
+                export VAULT_ADDR=http://127.0.0.1:8200
+                export VAULT_TOKEN=$VAULT_DEV_ROOT_TOKEN_ID
+
+                while ! nc -z 127.0.0.1 8200 &> /dev/null; do
+                  echo 'Waiting for Vault…' |& log 0 vault
+                  sleep 1
+                done
+
+                cat <<EOF | vault policy write cicero - |& log 0 vault
+                path "auth/token/lookup" {
+                  capabilities = ["update"]
+                }
+                path "auth/token/lookup-self" {
+                  capabilities = ["read"]
+                }
+                path "auth/token/renew-self" {
+                  capabilities = ["update"]
+                }
+                path "kv/data/cicero/*" {
+                  capabilities = ["read", "list"]
+                }
+                path "kv/metadata/cicero/*" {
+                  capabilities = ["read", "list"]
+                }
+                path "nomad/creds/cicero" {
+                  capabilities = ["read", "update"]
+                }
+                EOF
+
+                vault secrets enable -version=2 kv |& log 0 vault
+
+                vault kv put kv/cicero/github \
+                  webhooks=correct-horse-battery-staple \
+                |& log 0 vault
+
+                read -rsp 'Optionally provide a GitHub personal access token: '
+                if [[ -n "$REPLY" ]]; then
+                  vault kv patch kv/cicero/github token="$REPLY" |& log 0 vault
+                fi
 
                 # Preserve PATH for systems that
                 # don't have nix in their root's PATH,
                 # like conventional linux distros
                 # with a standalone nix install.
-                sudo --preserve-env=PATH \
-                  ${pkgs.nomad}/bin/nomad agent -dev \
+                sudo --preserve-env=PATH,VAULT_TOKEN \
+                  nomad agent -dev \
                   -plugin-dir ${driver.defaultPackage.${system}}/bin \
-                  -config ${pkgs.writeText "nomad.hcl" (builtins.toJSON {
+                  -config ${prev.writeText "nomad.hcl" (builtins.toJSON {
                     log_level = "TRACE";
                     plugin.nix_driver = {};
-                    client.cni_path = "${pkgs.cni-plugins}/bin";
-                  })}
+                    client.cni_path = "${prev.cni-plugins}/bin";
+                    vault = {
+                      enabled = true;
+                      address = "http://127.0.0.1:8200";
+                    };
+                  })} \
+                |& log 1 nomad &
+
+                {
+                  while ! nc -z 127.0.0.1 4646 &> /dev/null; do
+                    echo 'Waiting for Nomad…'
+                    sleep 1
+                  done
+                  sudo nomad-follower
+                } |& log 2 follower &
+
+                wait
               '';
             })
             self.overlay
