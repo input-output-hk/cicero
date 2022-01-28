@@ -73,11 +73,11 @@
         "utils": "utils"
       },
       "locked": {
-        "lastModified": 1643196351,
-        "narHash": "sha256-ZLPhExO1WAGTbNeoiw94YnV8VqlVuJX/LbFxMvQMSDg=",
+        "lastModified": 1643382776,
+        "narHash": "sha256-ip0IXXc6fbMNuUSsETJVtpvxwtobYPDo/CAt96DJbYQ=",
         "owner": "input-output-hk",
         "repo": "nomad-driver-nix",
-        "rev": "3f8f78fb39a7811584d33baf8e5d8ce19a3beead",
+        "rev": "60b24f9ea7f2000d9ab351dfaea416717f5303a0",
         "type": "github"
       },
       "original": {
