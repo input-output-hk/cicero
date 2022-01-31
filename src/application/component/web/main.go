@@ -37,7 +37,7 @@ type Web struct {
 }
 
 func (self *Web) Start(ctx context.Context) error {
-	self.Logger.Info().Msg("Starting")
+	self.Logger.Info().Str("listen", self.Listen).Msg("Starting")
 
 	muxRouter := mux.NewRouter().StrictSlash(true).UseEncodedPath()
 	muxRouter.NotFoundHandler = http.NotFoundHandler()

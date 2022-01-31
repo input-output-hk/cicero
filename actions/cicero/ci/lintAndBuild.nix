@@ -1,5 +1,4 @@
 {
-  name,
   std,
   lib,
   actionLib,
@@ -10,6 +9,9 @@
       clone_url: string
       sha: string
       statuses_url?: string
+
+      ref?: "refs/heads/\(default_branch)"
+      default_branch?: string
     }
   '';
 
@@ -19,20 +21,13 @@
     std.chain args [
       actionLib.simpleJob
 
-      (std.networking.addNameservers ["1.1.1.1"])
-
-      (lib.optionalAttrs (cfg ? statuses_url)
-        (std.github.reportStatus cfg.statuses_url))
+      (std.github.reportStatus cfg.statuses_url or null)
 
       (std.git.clone cfg)
 
-      {
-        resources.memory = 1024 * 3;
+      { resources.memory = 1024 * 3; }
 
-        config.packages = std.data-merge.append [
-          "github:input-output-hk/cicero/${cfg.sha}#devShell.x86_64-linux"
-        ];
-      }
+      std.nix.develop
 
       (std.wrapScript "bash" (next: ''
         set -ex

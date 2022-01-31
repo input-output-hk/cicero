@@ -1,25 +1,29 @@
+{ lib, ... }:
+
 {
-  self,
-  pkgs,
-  config,
-  lib,
-  ...
-}: {
-  imports = [
-    self.inputs.driver.nixosModules.nix-driver-nomad
-    "${self.inputs.nixpkgs}/nixos/modules/misc/version.nix"
-    "${self.inputs.nixpkgs}/nixos/modules/profiles/headless.nix"
-    "${self.inputs.nixpkgs}/nixos/modules/profiles/minimal.nix"
-  ];
+  imports = [ ./cicero.nix ];
 
-  nixpkgs.overlays = [self.overlay];
-
-  networking.hostName = lib.mkDefault "dev";
-
-  # re-enable TTY disabled by minimal profile for `machinectl shell`
-  systemd.services."getty@tty1".enable = lib.mkForce true;
+  # for development we want to run cicero outside the container
+  systemd.services.cicero.enable = lib.mkForce false;
 
   services = {
+    postgresql = {
+      enableTCPIP = true;
+
+      settings = {
+        log_statement = "all";
+        log_destination = lib.mkForce "syslog";
+        shared_preload_libraries = "pg_stat_statements";
+        "pg_stat_statements.track" = "all";
+      };
+
+      authentication = ''
+        local all all trust
+        host all all 0.0.0.0/0 trust
+        host all all ::1/0 trust
+      '';
+    };
+
     loki = {
       enable = true;
       configuration = {
@@ -71,34 +75,5 @@
     };
 
     victoriametrics.enable = true;
-
-    postgresql = {
-      enable = true;
-      enableTCPIP = true;
-      package = pkgs.postgresql_12;
-
-      settings = {
-        log_statement = "all";
-        log_destination = lib.mkForce "syslog";
-        shared_preload_libraries = "pg_stat_statements";
-        "pg_stat_statements.track" = "all";
-      };
-
-      authentication = ''
-        local all all trust
-        host all all 127.0.0.1/32 trust
-        host all all ::1/128 trust
-      '';
-
-      initialScript = pkgs.writeText "init.sql" ''
-        CREATE DATABASE cicero;
-
-        CREATE USER cicero;
-        GRANT ALL PRIVILEGES ON DATABASE cicero TO cicero;
-        ALTER USER cicero WITH SUPERUSER;
-
-        CREATE ROLE cicero_api;
-      '';
-    };
   };
 }

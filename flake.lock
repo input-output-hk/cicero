@@ -428,11 +428,11 @@
         "utils": "utils"
       },
       "locked": {
-        "lastModified": 1648029666,
-        "narHash": "sha256-kShItLLtoWLqE+6Uzc8171a+NXST4arZgxEP0SYPp44=",
+        "lastModified": 1649338225,
+        "narHash": "sha256-hET+b7XhDLSuVQwXLI2V5nYCcdvxQQj9BAG8z4ta6CE=",
         "owner": "input-output-hk",
         "repo": "nomad-driver-nix",
-        "rev": "0be4fea24e1b747389b2e79813891805fed521b6",
+        "rev": "010b09c680887d0cade86e8ac136c3a04609e04a",
         "type": "github"
       },
       "original": {
@@ -1272,6 +1272,26 @@
         "type": "github"
       }
     },
+    "nixos-shell": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1646257415,
+        "narHash": "sha256-whHBBcthLhEIy2VTaioRZOSZoZR7pk4Qr4DVxwU0r9Y=",
+        "owner": "Mic92",
+        "repo": "nixos-shell",
+        "rev": "55de7d4d449ff30cdde8b8fe484a86eef477245e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mic92",
+        "repo": "nixos-shell",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1648097358,
@@ -1825,6 +1845,7 @@
         "haskell-nix": "haskell-nix",
         "inclusive": "inclusive_3",
         "nix": "nix_3",
+        "nixos-shell": "nixos-shell",
         "nixpkgs": "nixpkgs_7",
         "poetry2nix": "poetry2nix",
         "spongix": "spongix",
