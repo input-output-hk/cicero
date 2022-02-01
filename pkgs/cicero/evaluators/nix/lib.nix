@@ -298,6 +298,7 @@ rec {
 
                 mkdir -p "$HOME"
 
+                git config --global credential.helper 'netrc -vkf /secrets/netrc'
                 git config --global advice.detachedHead false
                 git clone --quiet ${lib.escapeShellArg clone_url} src
                 cd src
