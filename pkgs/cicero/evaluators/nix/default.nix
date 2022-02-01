@@ -14,11 +14,15 @@ writers.writeBashBin "cicero-evaluator-nix" ''
           echo -e '\t- CICERO_ACTION_NAME'
           echo -e '\t- CICERO_ACTION_ID'
           echo -e '\t- CICERO_ACTION_INPUTS'
+          echo
+          echo    'The following env vars are optional:'
+          echo -e '\t- CICERO_EVALUATOR_NIX_STACKTRACE'
       } >&2
   }
 
   function evaluate {
-      nix eval --json "$CICERO_ACTION_SRC"#ciceroActions "$@"
+      nix eval --json ''${CICERO_EVALUATOR_NIX_STACKTRACE:+--show-trace} \
+        "$CICERO_ACTION_SRC"#ciceroActions "$@"
   }
 
   case "''${1:-}" in
