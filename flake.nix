@@ -120,8 +120,10 @@
                 # don't have nix in their root's PATH,
                 # like conventional linux distros
                 # with a standalone nix install.
+                # Also start Nomad by absolute path because
+                # some systems do not find it through sudo.
                 sudo --preserve-env=PATH,VAULT_TOKEN \
-                  nomad agent -dev \
+                  $(which nomad) agent -dev \
                   -plugin-dir ${driver.defaultPackage.${system}}/bin \
                   -config ${prev.writeText "nomad.hcl" (builtins.toJSON {
                     log_level = "TRACE";
@@ -139,7 +141,9 @@
                     echo 'Waiting for Nomad…'
                     sleep 1
                   done
-                  sudo nomad-follower
+                  # Start nomad-follower by absolute path because
+                  # some systems do not find it through sudo.
+                  sudo $(which nomad-follower)
                 } |& log 2 follower &
 
                 wait
