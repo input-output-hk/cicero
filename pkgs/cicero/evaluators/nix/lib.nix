@@ -230,7 +230,7 @@ rec {
             for nameserver in ${lib.escapeShellArgs nameservers}; do
               echo "nameserver $nameserver" >> /etc/resolv.conf
             done
-            ${lib.escapeShellArgs next}
+            exec ${lib.escapeShellArgs next}
           '');
       };
 
@@ -254,8 +254,9 @@ rec {
         develop = action: next:
           nix.install action (wrapScript "bash"
             (next: ''
-              nix --extra-experimental-features 'nix-command flakes' \
-                develop -c ${lib.escapeShellArgs next}
+              # Force working dir with `env -C` because
+              # sometimes `nix develop -c` changes directory.
+              exec nix develop -c env -C "$PWD" ${lib.escapeShellArgs next}
             '')
             action
             next);
@@ -268,7 +269,7 @@ rec {
               else
                 nix-build
               fi
-              ${lib.escapeShellArgs next}
+              exec ${lib.escapeShellArgs next}
             '')
             action
             next);
@@ -279,7 +280,7 @@ rec {
           (wrapScript "bash"
             (next: ''
               m ${lib.escapeShellArg target}
-              ${lib.escapeShellArgs next}
+              exec ${lib.escapeShellArgs next}
             '')
             action
             next
@@ -304,7 +305,7 @@ rec {
                 cd src
                 git checkout ${lib.escapeShellArg sha}
 
-                ${lib.escapeShellArgs next}
+                exec ${lib.escapeShellArgs next}
               '')
               action
               next)
