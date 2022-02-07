@@ -71,9 +71,31 @@ if #env == "prod" {
 				}]
 			}]
 
-			task: cicero: vault: {
-				policies: ["cicero"]
-				change_mode: "restart"
+			task: cicero: {
+				vault: {
+					policies: ["cicero"]
+					change_mode: "restart"
+				}
+
+				template: [
+					{
+						destination: "secrets/netrc"
+						data: """
+							machine github.com
+							login git
+							password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
+							"""
+					},
+					{
+						destination: "/root/.config/git/config"
+						data: """
+							[credential]
+								helper = netrc -vkf /secrets/netrc
+							"""
+					}
+				]
+
+				env: NETRC: "/secrets/netrc"
 			}
 		}
 	}
