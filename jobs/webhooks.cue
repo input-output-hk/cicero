@@ -21,7 +21,7 @@ job: webhooks: group: webhooks: {
 
 	network: {
 		mode: "host"
-		port: http: static: "4567"
+		port: http: {}
 	}
 
 	service: [{
@@ -78,7 +78,7 @@ job: webhooks: group: webhooks: {
 			data: #"""
 				{
 					"settings": {
-						"host":           "0.0.0.0:4567",
+						"host":           "0.0.0.0:{{env "NOMAD_PORT_http"}}",
 						"print_commands": true,
 						"capture_output": false,
 						"secret":         "{{with secret "kv/data/cicero/github"}}{{.Data.data.webhooks}}{{end}}"
