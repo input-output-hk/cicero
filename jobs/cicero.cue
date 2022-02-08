@@ -24,7 +24,7 @@ job: cicero: group: cicero: {
 		driver: "nix"
 
 		resources: {
-			memory: 1024
+			memory: 4096
 			cpu:    300
 		}
 
