@@ -1,0 +1,21 @@
+-- migrate:up
+
+ALTER TABLE action
+ALTER created_at SET DEFAULT STATEMENT_TIMESTAMP();
+
+ALTER TABLE run
+ALTER created_at SET DEFAULT STATEMENT_TIMESTAMP();
+
+ALTER TABLE fact
+ALTER created_at SET DEFAULT STATEMENT_TIMESTAMP();
+
+-- migrate:down
+
+ALTER TABLE action
+ALTER created_at SET DEFAULT NOW();
+
+ALTER TABLE run
+ALTER created_at SET DEFAULT NOW();
+
+ALTER TABLE fact
+ALTER created_at SET DEFAULT NOW();
