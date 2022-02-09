@@ -265,7 +265,8 @@ rec {
           nix.install action (wrapScript "bash"
             (next: ''
               if [[ -f flake.nix ]]; then
-                nix build
+                # XXX remove flags once all follows bugs have been fixed
+                nix build --no-write-lock-file --impure
               else
                 nix-build
               fi
