@@ -54,7 +54,6 @@ command = "cue export ./jobs -e jobs.dev | nomad run -"
 help = "Run Postgres and Loki in Nomad"
 
 [[commands]]
-name = "dev-cache"
 package = "nix-cache-proxy"
 help = "Run nix-cache-proxy, shares /nix/store between host & nomad tasks"
 
