@@ -19,9 +19,10 @@
       url = "github:nix-community/poetry2nix/fetched-projectdir-test";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-cache-proxy.url = "github:input-output-hk/nix-cache-proxy";
   };
 
-  outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, ... }:
+  outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, nix-cache-proxy, ... }:
     utils.lib.eachSystem [ "x86_64-linux" ]
       (system:
         let
@@ -147,6 +148,17 @@
                 } |& log 2 follower &
 
                 wait
+              '';
+              nix-cache-proxy = pkgs.writers.writeBashBin "nix-cache-proxy" ''
+
+                nix key generate-secret --key-name foo > skey
+
+                ${nix-cache-proxy}/bin/nix-cache-proxy \
+                --substituters "https://cache.nixos.org" "https://hydra.iohk.io" \
+                --secret-key-files ./skey \
+                --trusted-public-keys "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" \
+                --listen :7745 \
+                --dir /tmp/nix-cache-proxy
               '';
             })
             self.overlay
