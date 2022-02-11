@@ -104,6 +104,10 @@ Run the application:
 
 	go run . start
 
+Run nix-cache-proxy(optional):
+
+	nix-cache-proxy
+
 Access WebUI:
 
 	open localhost:8080 in browser
