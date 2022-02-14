@@ -151,7 +151,10 @@
               '';
               nix-cache-proxy = pkgs.writers.writeBashBin "nix-cache-proxy" ''
 
-                nix key generate-secret --key-name foo > skey
+                if ! -s skey
+                  then
+                    nix key generate-secret --key-name nix-cache-proxy > skey
+                fi
 
                 ${nix-cache-proxy.defaultPackage.${system}}/bin/nix-cache-proxy \
                 --substituters "https://cache.nixos.org" "https://hydra.iohk.io" \
