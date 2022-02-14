@@ -6,23 +6,34 @@
 			<tr>
 				<th>Name</th>
 				<th>Created At</th>
+				<th>Active</th>
 			</tr>
 		</thead>
 		<tbody>
-			<tr>
+			<tr style="text-align: center">
 				<td
 					colspan="2"
-					style="
-						text-align: center;
-						font-style: italic;
-					"
+					style="font-style: italic"
 				>
 					<a href="/action/new">
 						Create New Action
 					</a>
 				</td>
+				<td>
+					<form>
+						<input
+							type="checkbox"
+							name="active"
+							{{if .active}}
+								checked
+							{{end}}
+							onChange="this.form.submit()"
+							title="Show only active Actions"
+						/>
+					</form>
+				</td>
 			</tr>
-			{{range .}}
+			{{range .Actions}}
 				<tr>
 					<td>
 						<a href="/action/{{.ID}}">
@@ -30,6 +41,26 @@
 						</a>
 					</td>
 					<td>{{.CreatedAt}}</td>
+					<td>
+						<form
+							method="POST"
+							action="/_dispatch/method/PATCH/action/{{.ID}}"
+							style="text-align: center"
+						>
+							<input
+								type="checkbox"
+								{{if .Active}}
+									checked
+								{{end}}
+								onChange="this.form.submit()"
+							/>
+							<input
+								type="hidden"
+								name="active"
+								value="{{not .Active}}"
+							/>
+						</form>
+					</td>
 				</tr>
 			{{end}}
 		</tbody>

@@ -27,11 +27,13 @@ type ActionService interface {
 	GetLatestByName(string) (domain.Action, error)
 	GetAll() ([]*domain.Action, error)
 	GetCurrent() ([]*domain.Action, error)
+	GetCurrentActive() ([]*domain.Action, error)
 	Save(*domain.Action) error
+	Update(*domain.Action) error
 	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
 	Create(string, string) (*domain.Action, error)
 	Invoke(*domain.Action) (bool, error)
-	InvokeCurrent() error
+	InvokeCurrentActive() error
 }
 
 type actionService struct {
@@ -103,10 +105,26 @@ func (self *actionService) Save(action *domain.Action) error {
 	return nil
 }
 
+func (self *actionService) Update(action *domain.Action) error {
+	self.logger.Debug().Str("id", action.ID.String()).Msg("Updating Action")
+	if err := self.actionRepository.Update(action); err != nil {
+		return errors.WithMessagef(err, "Could not update Action")
+	}
+	self.logger.Debug().Str("id", action.ID.String()).Msg("Updated Action")
+	return nil
+}
+
 func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
 	self.logger.Debug().Msg("Getting current Actions")
 	actions, err = self.actionRepository.GetCurrent()
 	err = errors.WithMessagef(err, "Could not select current Actions")
+	return
+}
+
+func (self *actionService) GetCurrentActive() (actions []*domain.Action, err error) {
+	self.logger.Debug().Msg("Getting current active Actions")
+	actions, err = self.actionRepository.GetCurrentActive()
+	err = errors.WithMessagef(err, "Could not select current active Actions")
 	return
 }
 
@@ -561,11 +579,11 @@ func (self *actionService) Invoke(action *domain.Action) (bool, error) {
 	})
 }
 
-func (self *actionService) InvokeCurrent() error {
+func (self *actionService) InvokeCurrentActive() error {
 	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
-		actions, err := txSelf.GetCurrent()
+		actions, err := txSelf.GetCurrentActive()
 		if err != nil {
 			return err
 		}

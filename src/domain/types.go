@@ -154,6 +154,7 @@ type Action struct {
 	Name      string    `json:"name"`
 	Source    string    `json:"source"`
 	CreatedAt time.Time `json:"created_at"`
+	Active    bool      `json:"active"`
 	ActionDefinition
 }
 

@@ -15,5 +15,7 @@ type ActionRepository interface {
 	GetLatestByName(string) (domain.Action, error)
 	GetAll() ([]*domain.Action, error)
 	GetCurrent() ([]*domain.Action, error)
+	GetCurrentActive() ([]*domain.Action, error)
 	Save(*domain.Action) error
+	Update(*domain.Action) error
 }

@@ -83,10 +83,27 @@ func (a *actionRepository) Save(action *domain.Action) error {
 	}
 }
 
+func (a *actionRepository) Update(action *domain.Action) (err error) {
+	_, err = a.DB.Exec(
+		context.Background(),
+		`UPDATE action SET active = $2 WHERE id = $1`,
+		action.ID, action.Active,
+	)
+	return
+}
+
 func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT DISTINCT ON (name) * FROM action ORDER BY name, created_at DESC`,
+	)
+	return
+}
+
+func (a *actionRepository) GetCurrentActive() (actions []*domain.Action, err error) {
+	err = pgxscan.Select(
+		context.Background(), a.DB, &actions,
+		`SELECT DISTINCT ON (name) * FROM action WHERE active ORDER BY name, created_at DESC`,
 	)
 	return
 }

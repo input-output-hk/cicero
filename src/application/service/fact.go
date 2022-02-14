@@ -80,7 +80,7 @@ func (self *factService) Save(fact *domain.Fact, binary io.Reader) error {
 		}
 		self.logger.Debug().Str("id", fact.ID.String()).Msg("Created Fact")
 
-		return self.actionService.WithQuerier(tx).InvokeCurrent()
+		return self.actionService.WithQuerier(tx).InvokeCurrentActive()
 	})
 }
 

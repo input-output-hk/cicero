@@ -39,6 +39,8 @@ func (self *Web) Start(ctx context.Context) error {
 	self.Logger.Info().Msg("Starting")
 
 	muxRouter := mux.NewRouter().StrictSlash(true).UseEncodedPath()
+	muxRouter.NotFoundHandler = http.NotFoundHandler()
+
 	r, err := apidoc.NewRouterDocumented(apirouter.NewGorillaMuxRouter(muxRouter), "Cicero REST API", "1.0.0", "cicero", ctx)
 	if err != nil {
 		return errors.WithMessage(err, "Failed to create swagger router")
@@ -103,7 +105,7 @@ func (self *Web) Start(ctx context.Context) error {
 		"/api/action/{id}/definition",
 		self.ApiActionIdDefinitionGet,
 		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id to evaluate the action's source with", Value: "UUID"}}),
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of the action", Value: "UUID"}}),
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "Ok")),
 	); err != nil {
@@ -113,7 +115,17 @@ func (self *Web) Start(ctx context.Context) error {
 		"/api/action/{id}",
 		self.ApiActionIdGet,
 		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id to evaluate the action's source with", Value: "UUID"}}),
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of the action", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Action{}, "Ok")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodPatch,
+		"/api/action/{id}",
+		self.ApiActionIdPatch,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of the action", Value: "UUID"}}),
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Action{}, "Ok")),
 	); err != nil {
@@ -218,8 +230,14 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}", self.ActionIdPatch).Methods(http.MethodPatch)
 	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
+
+	muxRouter.PathPrefix("/_dispatch/method/{method}/").HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		req.Method = mux.Vars(req)["method"]
+		http.StripPrefix("/_dispatch/method/"+req.Method, muxRouter).ServeHTTP(w, req)
+	})
 
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
 	err = r.GenerateAndExposeSwagger()
@@ -247,14 +265,29 @@ func (self *Web) Start(ctx context.Context) error {
 }
 
 func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
-	http.Redirect(w, req, "/action/current", http.StatusFound)
+	http.Redirect(w, req, "/action/current?active", http.StatusFound)
 }
 
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	if actions, err := self.ActionService.GetCurrent(); err != nil {
+	var actions []*domain.Action
+	var err error
+
+	_, active := req.URL.Query()["active"]
+	if active {
+		actions, err = self.ActionService.GetCurrentActive()
+	} else {
+		actions, err = self.ActionService.GetCurrent()
+	}
+
+	if err != nil {
 		self.ServerError(w, err)
 		return
-	} else if err := render("action/current.html", w, actions); err != nil {
+	}
+
+	if err := render("action/current.html", w, map[string]interface{}{
+		"Actions": actions,
+		"active":  active,
+	}); err != nil {
 		self.ServerError(w, err)
 		return
 	}
@@ -284,12 +317,23 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+		return
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
 	} else if err := render("action/[id].html", w, action); err != nil {
 		self.ServerError(w, err)
 		return
+	}
+}
+
+func (self *Web) ActionIdPatch(w http.ResponseWriter, req *http.Request) {
+	self.ApiActionIdPatch(NopResponseWriter{w}, req)
+
+	if referer := req.Header.Get("Referer"); referer != "" {
+		http.Redirect(w, req, referer, http.StatusFound)
+	} else {
+		http.Redirect(w, req, "/action/current?active", http.StatusFound)
 	}
 }
 
@@ -471,6 +515,15 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// Use this to call API request handlers from UI request handlers.
+type NopResponseWriter struct{ http.ResponseWriter }
+
+func (w NopResponseWriter) WriteHeader(int) {}
+
+func (w NopResponseWriter) Write(b []byte) (int, error) {
+	return io.Discard.Write(b)
+}
+
 func (self *Web) ApiActionDefinitionSourceGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	source, err := url.PathUnescape(vars["source"])
@@ -612,12 +665,21 @@ func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 
 // XXX respond with map[string]Action instead of []Action?
 func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	if actions, err := self.ActionService.GetCurrent(); err != nil {
+	var actions []*domain.Action
+	var err error
+
+	if _, active := req.URL.Query()["active"]; active {
+		actions, err = self.ActionService.GetCurrentActive()
+	} else {
+		actions, err = self.ActionService.GetCurrent()
+	}
+
+	if err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get current actions"))
 		return
-	} else {
-		self.json(w, actions, http.StatusOK)
 	}
+
+	self.json(w, actions, http.StatusOK)
 }
 
 func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
@@ -653,6 +715,27 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else {
 		self.json(w, action, http.StatusOK)
 	}
+}
+
+func (self *Web) ApiActionIdPatch(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+		return
+	} else if action, err := self.ActionService.GetById(id); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
+		return
+	} else {
+		if active, err := strconv.ParseBool(req.PostFormValue("active")); err == nil {
+			action.Active = active
+		}
+
+		if err := self.ActionService.Update(&action); err != nil {
+			self.ServerError(w, err)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (self *Web) ApiActionIdDefinitionGet(w http.ResponseWriter, req *http.Request) {
