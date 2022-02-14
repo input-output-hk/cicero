@@ -30,11 +30,15 @@
             devshell.overlay
             poetry2nix.overlay
             follower.overlay
-            (final: prev: {
+            (final: prev: rec {
               go = prev.go_1_17;
               gouml = final.callPackage pkgs/gouml.nix { };
               gocritic = final.callPackage pkgs/gocritic.nix { };
               schemathesis = final.callPackage pkgs/schemathesis.nix { };
+              dev-cluster-full = pkgs.writers.writeBashBin "dev-cluster-full" ''
+                ${nix-cache}/bin/nix-cache-proxy
+                ${dev-cluster}/bin/dev-cluster
+              '';
               dev-cluster = pkgs.writers.writeBashBin "dev-cluster" ''
                 set -euo pipefail
 
@@ -149,7 +153,7 @@
 
                 wait
               '';
-              nix-cache-proxy = pkgs.writers.writeBashBin "nix-cache-proxy" ''
+              nix-cache = pkgs.writers.writeBashBin "nix-cache-proxy" ''
 
                 if ! [ -s skey ]
                   then
