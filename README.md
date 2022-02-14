@@ -88,9 +88,9 @@ and [example actions](https://github.com/input-output-hk/cicero/tree/main/action
 
 First enter the development shell using either direnv or by running `nix develop`.
 
-Start a development instance of Nomad, nomad-follower, and Vault:
+Start a development instance of Nomad, nomad-follower, Vault and nix-cache-proxy:
 
-	dev-cluster
+	dev-cluster-full
 
 Run the required services in Nomad:
 
@@ -103,10 +103,6 @@ Migrate the database:
 Run the application:
 
 	go run . start
-
-Run nix-cache-proxy(optional):
-
-	nix-cache-proxy
 
 Access WebUI:
 
