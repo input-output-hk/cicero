@@ -151,7 +151,7 @@
               '';
               nix-cache-proxy = pkgs.writers.writeBashBin "nix-cache-proxy" ''
 
-                if ! -s skey
+                if ! [ -s skey ]
                   then
                     nix key generate-secret --key-name nix-cache-proxy > skey
                 fi
