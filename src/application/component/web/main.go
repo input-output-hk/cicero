@@ -297,6 +297,7 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+		return
 	} else if page, err := getPage(req); err != nil {
 		self.BadRequest(w, err)
 		return
