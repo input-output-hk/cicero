@@ -6,7 +6,6 @@ import (
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -50,26 +49,12 @@ func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err e
 }
 
 func (a *actionRepository) GetByName(name string, page *repository.Page) ([]*domain.Action, error) {
-	batch := &pgx.Batch{}
-	batch.Queue(`SELECT count(*) FROM action WHERE name = $1`, name)
-	batch.Queue(`SELECT * FROM action WHERE name = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, name, page.Limit, page.Offset)
-	br := a.DB.SendBatch(context.Background(), batch)
-	defer br.Close()
-
-	if rows, err := br.Query(); err != nil {
-		return nil, err
-	} else if err := scanNextRow(rows, &page.Total); err != nil {
-		return nil, err
-	}
-
 	actions := make([]*domain.Action, page.Limit)
-	if rows, err := br.Query(); err != nil {
-		return nil, err
-	} else if err := pgxscan.ScanAll(&actions, rows); err != nil {
-		return nil, err
-	}
-
-	return actions, nil
+	return actions, fetchPage(
+		a.DB, page, &actions,
+		`*`, `action WHERE name = $1`, `created_at DESC`,
+		name,
+	)
 }
 
 func (a *actionRepository) GetLatestByName(name string) (action domain.Action, err error) {
