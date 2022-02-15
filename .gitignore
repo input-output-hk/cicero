@@ -9,3 +9,4 @@
 /logs
 .hypothesis/
 /src/mocks/
+/.nix-cache-proxy-key

@@ -154,18 +154,16 @@
                 wait
               '';
               nix-cache = pkgs.writers.writeBashBin "nix-cache-proxy" ''
-
-                if ! [ -s skey ]
-                  then
-                    nix key generate-secret --key-name nix-cache-proxy > skey
+                if ! [ -s .nix-cache-proxy-key ]; then
+                    nix key generate-secret --key-name nix-cache-proxy > .nix-cache-proxy-key
                 fi
 
                 ${nix-cache-proxy.defaultPackage.${system}}/bin/nix-cache-proxy \
-                --substituters "https://cache.nixos.org" "https://hydra.iohk.io" \
-                --secret-key-files ./skey \
-                --trusted-public-keys "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" \
-                --listen :7745 \
-                --dir /tmp/nix-cache-proxy
+                  --substituters 'https://cache.nixos.org' \
+                  --secret-key-files .nix-cache-proxy-key \
+                  --trusted-public-keys 'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' \
+                  --listen :7745 \
+                  --dir /tmp/nix-cache-proxy
               '';
             })
             self.overlay
