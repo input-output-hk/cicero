@@ -36,7 +36,7 @@
               gocritic = final.callPackage pkgs/gocritic.nix { };
               schemathesis = final.callPackage pkgs/schemathesis.nix { };
               dev-cluster-full = pkgs.writers.writeBashBin "dev-cluster-full" ''
-                ${nix-cache}/bin/nix-cache-proxy
+                ${nix-cache}/bin/nix-cache-proxy &
                 ${dev-cluster}/bin/dev-cluster
               '';
               dev-cluster = pkgs.writers.writeBashBin "dev-cluster" ''
