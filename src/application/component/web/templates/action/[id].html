@@ -25,6 +25,28 @@
 						<td>{{.CreatedAt}}</td>
 					</tr>
 					<tr>
+						<td>Active</td>
+						<td>
+							<form
+								method="POST"
+								action="/_dispatch/method/PATCH/action/{{.ID}}"
+							>
+								<input
+									type="checkbox"
+									{{if .Active}}
+										checked
+									{{end}}
+									onChange="this.form.submit()"
+								/>
+								<input
+									type="hidden"
+									name="active"
+									value="{{not .Active}}"
+								/>
+							</form>
+						</td>
+					</tr>
+					<tr>
 						<td>Meta</td>
 						<td>
 							<code>{{toJson .Meta true}}</code>
