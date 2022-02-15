@@ -232,6 +232,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdPatch).Methods(http.MethodPatch)
 	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/{id}/version", self.ActionIdVersionGet).Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
 
 	muxRouter.PathPrefix("/_dispatch/method/{method}/").HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -308,6 +309,33 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 	}{
 		Runs: runs,
 		Page: page,
+	}); err != nil {
+		self.ServerError(w, err)
+		return
+	}
+}
+
+func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+		return
+	} else if action, err := self.ActionService.GetById(id); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
+		return
+	} else if page, err := getPage(req); err != nil {
+		self.BadRequest(w, err)
+		return
+	} else if actions, err := self.ActionService.GetByName(action.Name, page); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by name: %q", action.Name))
+		return
+	} else if err := render("action/version.html", w, struct {
+		ActionID uuid.UUID
+		Actions  []*domain.Action
+		*repository.Page
+	}{
+		ActionID: id,
+		Actions:  actions,
+		Page:     page,
 	}); err != nil {
 		self.ServerError(w, err)
 		return

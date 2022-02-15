@@ -1,0 +1,68 @@
+<html>
+	<head>
+		<link rel="stylesheet" type="text/css" href="/static/style.css"/>
+	</head>
+
+	<body>
+		<table
+			class="table"
+			style="width: 100%"
+		>
+			<thead>
+				<tr>
+					<th>ID</th>
+					<th>Created At</th>
+					<th>Source</th>
+					<th>Active</th>
+				</tr>
+			</thead>
+			<tbody>
+				{{range .Actions}}
+					<tr>
+						<td>
+							{{if eq .ID $.ActionID}}
+								<details>
+									<summary>this version</summary>
+									{{.ID}}
+								</details>
+							{{else}}
+								<a
+									href="/action/{{.ID}}"
+									target="_parent"
+								>
+									{{.ID}}
+								</a>
+							{{end}}
+						</td>
+						<td>{{.CreatedAt}}</td>
+						<td><code>{{.Source}}</code></td>
+						<td>
+							<form
+								method="POST"
+								action="/_dispatch/method/PATCH/action/{{.ID}}"
+								style="text-align: center"
+							>
+								<input
+									type="checkbox"
+									{{if .Active}}
+										checked
+									{{end}}
+									onChange="this.form.submit()"
+								/>
+								<input
+									type="hidden"
+									name="active"
+									value="{{not .Active}}"
+								/>
+							</form>
+						</td>
+					</tr>
+				{{end}}
+			</tbody>
+		</table>
+
+		<nav style="display: flex; justify-content: end">
+			{{template "pagination" .}}
+		</nav>
+	</body>
+</html>

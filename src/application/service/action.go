@@ -24,6 +24,7 @@ type ActionService interface {
 
 	GetById(uuid.UUID) (domain.Action, error)
 	GetByRunId(uuid.UUID) (domain.Action, error)
+	GetByName(string, *repository.Page) ([]*domain.Action, error)
 	GetLatestByName(string) (domain.Action, error)
 	GetAll() ([]*domain.Action, error)
 	GetCurrent() ([]*domain.Action, error)
@@ -81,6 +82,13 @@ func (self *actionService) GetByRunId(id uuid.UUID) (action domain.Action, err e
 	self.logger.Debug().Str("id", id.String()).Msg("Getting Action by Run ID")
 	action, err = self.actionRepository.GetByRunId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Run ID %q", id)
+	return
+}
+
+func (self *actionService) GetByName(name string, page *repository.Page) (actions []*domain.Action, err error) {
+	self.logger.Debug().Str("name", name).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Actions by name")
+	actions, err = self.actionRepository.GetByName(name, page)
+	err = errors.WithMessagef(err, "Could not select Actions for name %q with offset %d and limit %d", name, page.Offset, page.Limit)
 	return
 }
 

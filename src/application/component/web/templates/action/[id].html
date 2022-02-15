@@ -117,13 +117,21 @@
 					{{end}}
 				</tbody>
 			</table>
-
-			<iframe
-				style="width: 100%; min-height: 30rem"
-				class="iframe"
-				src="/action/{{.ID}}/run"
-			></iframe>
 		</div>
+
+		<h2>Runs</h2>
+		<iframe
+			style="width: 100%; min-height: 30rem"
+			class="iframe"
+			src="/action/{{.ID}}/run"
+		></iframe>
+
+		<h2>Versions</h2>
+		<iframe
+			style="width: 100%; min-height: 30rem"
+			class="iframe"
+			src="/action/{{.ID}}/version"
+		></iframe>
 	</div>
 
 	<style>
