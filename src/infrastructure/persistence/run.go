@@ -35,26 +35,12 @@ func (a *runRepository) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error
 }
 
 func (a *runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Run, error) {
-	batch := &pgx.Batch{}
-	batch.Queue(`SELECT count(*) FROM run WHERE action_id = $1`, id)
-	batch.Queue(`SELECT * FROM run WHERE action_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, id, page.Limit, page.Offset)
-	br := a.DB.SendBatch(context.Background(), batch)
-	defer br.Close()
-
-	if rows, err := br.Query(); err != nil {
-		return nil, err
-	} else if err := scanNextRow(rows, &page.Total); err != nil {
-		return nil, err
-	}
-
 	runs := make([]*domain.Run, page.Limit)
-	if rows, err := br.Query(); err != nil {
-		return nil, err
-	} else if err := pgxscan.ScanAll(&runs, rows); err != nil {
-		return nil, err
-	}
-
-	return runs, nil
+	return runs, fetchPage(
+		a.DB, page, &runs,
+		`*`, `run WHERE action_id = $1`, `created_at DESC`,
+		id,
+	)
 }
 
 func (a *runRepository) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
@@ -93,25 +79,11 @@ func (a *runRepository) GetInputFactIdsByNomadJobId(id uuid.UUID) (inputFactIds 
 }
 
 func (a *runRepository) GetAll(page *repository.Page) ([]*domain.Run, error) {
-	batch := &pgx.Batch{}
-	batch.Queue(`SELECT count(*) FROM run`)
-	batch.Queue(`SELECT * FROM run ORDER BY created_at DESC LIMIT $1 OFFSET $2`, page.Limit, page.Offset)
-	br := a.DB.SendBatch(context.Background(), batch)
-	defer br.Close()
-
-	if rows, err := br.Query(); err != nil {
-		return nil, err
-	} else if err := scanNextRow(rows, &page.Total); err != nil {
-		return nil, err
-	}
-
 	runs := make([]*domain.Run, page.Limit)
-	if rows, err := br.Query(); err != nil {
-		return nil, err
-	} else if err := pgxscan.ScanAll(&runs, rows); err != nil {
-		return nil, err
-	}
-	return runs, nil
+	return runs, fetchPage(
+		a.DB, page, &runs,
+		`*`, `run`, `created_at DESC`,
+	)
 }
 
 func (a *runRepository) Save(run *domain.Run, inputs map[string]interface{}) error {

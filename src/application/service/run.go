@@ -102,13 +102,11 @@ func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOu
 	return
 }
 
-func (self *runService) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Run, error) {
-	self.logger.Debug().Msgf("Getting Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
-	if runs, err := self.runRepository.GetByActionId(id, page); err != nil {
-		return nil, errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
-	} else {
-		return runs, nil
-	}
+func (self *runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []*domain.Run, err error) {
+	self.logger.Debug().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Run by Action ID")
+	runs, err = self.runRepository.GetByActionId(id, page)
+	err = errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
+	return
 }
 
 func (self *runService) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
@@ -118,13 +116,11 @@ func (self *runService) GetLatestByActionId(id uuid.UUID) (run domain.Run, err e
 	return
 }
 
-func (self *runService) GetAll(page *repository.Page) ([]*domain.Run, error) {
-	self.logger.Debug().Msgf("Getting all Runs with offset %d and limit %d", page.Offset, page.Limit)
-	if runs, err := self.runRepository.GetAll(page); err != nil {
-		return nil, errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
-	} else {
-		return runs, nil
-	}
+func (self *runService) GetAll(page *repository.Page) (runs []*domain.Run, err error) {
+	self.logger.Debug().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Runs")
+	runs, err = self.runRepository.GetAll(page)
+	err = errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
+	return
 }
 
 func (self *runService) Save(run *domain.Run, inputs map[string]interface{}, output *domain.RunOutput) error {
