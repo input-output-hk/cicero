@@ -107,6 +107,7 @@ packages = [
 
   # tools
   "httpie",
+  "curlie",
   "diffutils",
   "jq",
 ]
