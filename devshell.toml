@@ -76,6 +76,7 @@ jq '
 	.job[]?.group[]?.task[]?.env |= . + {
 		CICERO_WEB_URL: "http://127.0.0.1:8080",
 		CICERO_API_URL: "http://127.0.0.1:8080/api",
+		NIX_CONFIG: "substituters = http://127.0.0.1:7745/cache?compression=none\n\(.NIX_CONFIG)",
 	} |
 	.job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"]
 '
