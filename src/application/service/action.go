@@ -509,6 +509,16 @@ func (self *actionService) Create(source, name string) (*domain.Action, error) {
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
+		// deactivate previous version for convenience
+		if prev, err := txSelf.GetLatestByName(action.Name); err != nil && !pgxscan.NotFound(err) {
+			return err
+		} else if err == nil && prev.Active {
+			prev.Active = false
+			if err := txSelf.Update(&prev); err != nil {
+				return err
+			}
+		}
+
 		if err := txSelf.Save(&action); err != nil {
 			return err
 		}
