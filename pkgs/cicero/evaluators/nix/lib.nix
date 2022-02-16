@@ -256,7 +256,7 @@ rec {
             (next: ''
               # Force working dir with `env -C` because
               # sometimes `nix develop -c` changes directory.
-              exec nix develop -c env -C "$PWD" ${lib.escapeShellArgs next}
+              exec nix develop -L -c env -C "$PWD" ${lib.escapeShellArgs next}
             '')
             action
             next);
@@ -266,7 +266,7 @@ rec {
             (next: ''
               if [[ -f flake.nix ]]; then
                 # XXX remove flags once all follows bugs have been fixed
-                nix build --no-write-lock-file --impure
+                nix build -L --no-write-lock-file --impure
               else
                 nix-build
               fi
