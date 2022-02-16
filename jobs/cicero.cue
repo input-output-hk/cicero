@@ -1,5 +1,8 @@
 package jobs
 
+// arbitrary revision from nixpkgs-unstable
+let nixpkgsRev = "19574af0af3ffaf7c9e359744ed32556f34536bd"
+
 job: cicero: group: cicero: {
 	restart: {
 		attempts: 5
@@ -34,16 +37,25 @@ job: cicero: group: cicero: {
 			VAULT_ADDR:   #vaultAddr
 		}
 
-		config: [{
-			packages: [#ciceroFlake]
+		config: {
+			packages: [
+				#ciceroFlake,
+				// for transformers
+				"github:NixOS/nixpkgs/\(nixpkgsRev)#dash",
+				"github:NixOS/nixpkgs/\(nixpkgsRev)#jq",
+			]
 			command: [
 				"/bin/entrypoint",
 				"--prometheus-addr", #lokiAddr,
-				"--env", "NOMAD_ADDR", "NOMAD_TOKEN",
+				"--transform", for t in _transformers { t.destination },
 				"--web-listen", ":8888",
 			]
-		}]
+		}
 	}
+}
+
+if #env != "prod" {
+	job: cicero: group: cicero: task: cicero: template: _transformers
 }
 
 if #env == "prod" {
@@ -77,7 +89,7 @@ if #env == "prod" {
 					change_mode: "restart"
 				}
 
-				template: [
+				template: _transformers + [
 					{
 						destination: "secrets/netrc"
 						data: """
@@ -99,4 +111,41 @@ if #env == "prod" {
 			}
 		}
 	}
+}
+
+let commonTransformers = [{
+	destination: "local/transformer.sh"
+	perms: "544"
+	data: """
+		#! /bin/dash
+		/bin/jq '
+			.job[]?.datacenters |= . + ["dc1"] |
+			.job[]?.group[]?.restart.attempts = 0 |
+			.job[]?.group[]?.task[]?.env |= . + {
+				NOMAD_ADDR:  env.NOMAD_ADDR,
+				NOMAD_TOKEN: env.NOMAD_TOKEN,
+			} |
+			.job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"]
+		'
+		"""
+}]
+
+_transformers: [...]
+
+if #env != "prod" {
+	_transformers: commonTransformers
+}
+
+if #env == "prod" {
+	_transformers: commonTransformers + [{
+		destination: "local/transformer-prod.sh"
+		perms: "544"
+		data: """
+			#! /bin/dash
+			/bin/jq '
+				.job[]?.datacenters |= . + ["eu-central-1", "us-east-2"] |
+				.job[]?.group[]?.task[]?.env.CICERO_WEB_URL = "https://cicero.infra.aws.iohkdev.io"
+			'
+			"""
+	}]
 }

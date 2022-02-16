@@ -11,15 +11,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-
-	"github.com/rs/zerolog"
 
 	"github.com/adrg/xdg"
 	"github.com/google/uuid"
 	getter "github.com/hashicorp/go-getter/v2"
 	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -46,15 +44,13 @@ func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
 
 type evaluationService struct {
 	Evaluators   []string // Default evaluators. Will be tried in order if none is given for a source.
-	Env          []string // NAME=VALUE or just NAME to inherit from process environment // XXX remove in favor of `Transformers`?
 	Transformers []string
 	logger       zerolog.Logger
 }
 
-func NewEvaluationService(evaluators, env []string, transformers []string, logger *zerolog.Logger) EvaluationService {
+func NewEvaluationService(evaluators, transformers []string, logger *zerolog.Logger) EvaluationService {
 	return &evaluationService{
 		Evaluators:   evaluators,
-		Env:          env,
 		Transformers: transformers,
 		logger:       logger.With().Str("component", "EvaluationService").Logger(),
 	}
@@ -73,12 +69,7 @@ func (e EvaluationError) Unwrap() error {
 	return e.err
 }
 
-type command struct {
-	Command  []string
-	ExtraEnv []string
-}
-
-func (e *evaluationService) evaluate(src string, command command) ([]byte, error) {
+func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byte, error) {
 	fetchUrl, evaluator, err := parseSource(src)
 	if err != nil {
 		return nil, err
@@ -105,13 +96,13 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 	}
 
 	tryEval := func(evaluator string) ([]byte, error) {
-		cmd := exec.Command("cicero-evaluator-"+evaluator, command.Command...)
-		extraEnv := append(command.ExtraEnv, "CICERO_ACTION_SRC="+dst) //nolint:gocritic // false positive
-		cmd.Env = append(os.Environ(), extraEnv...)                    //nolint:gocritic // false positive
+		cmd := exec.Command("cicero-evaluator-"+evaluator, args...)
+		cmdEnv := append(extraEnv, "CICERO_ACTION_SRC="+dst) //nolint:gocritic // false positive
+		cmd.Env = append(os.Environ(), cmdEnv...)            //nolint:gocritic // false positive
 
 		e.logger.Debug().
 			Strs("command", cmd.Args).
-			Strs("environment", extraEnv).
+			Strs("environment", cmdEnv).
 			Msg("Running evaluator")
 
 		if output, err := cmd.Output(); err != nil {
@@ -158,13 +149,13 @@ func (e *evaluationService) evaluate(src string, command command) ([]byte, error
 func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
 	var def domain.ActionDefinition
 
-	if output, err := e.evaluate(src, command{
-		Command: []string{"eval", "meta", "inputs"},
-		ExtraEnv: []string{
+	if output, err := e.evaluate(src,
+		[]string{"eval", "meta", "inputs"},
+		[]string{
 			"CICERO_ACTION_NAME=" + name,
 			"CICERO_ACTION_ID=" + id.String(),
 		},
-	}); err != nil {
+	); err != nil {
 		return def, err
 	} else if err := json.Unmarshal(output, &def); err != nil {
 		e.logger.Err(err).Str("output", string(output)).Send()
@@ -187,10 +178,8 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 		"CICERO_ACTION_ID=" + id.String(),
 		"CICERO_ACTION_INPUTS=" + string(inputsJson),
 	}
-	output, err := e.evaluate(src, command{
-		Command:  []string{"eval", "output", "job"},
-		ExtraEnv: extraEnv,
-	})
+
+	output, err := e.evaluate(src, []string{"eval", "output", "job"}, extraEnv)
 	if err != nil {
 		return def, err
 	}
@@ -229,8 +218,6 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 			}
 		}
 	}
-
-	e.addEnv(&def)
 
 	return def, nil
 }
@@ -275,27 +262,8 @@ func (e *evaluationService) transform(output []byte, extraEnv []string) ([]byte,
 	return output, nil
 }
 
-func (e *evaluationService) addEnv(def *domain.RunDefinition) {
-	if def.Job == nil {
-		return
-	}
-	for _, group := range def.Job.TaskGroups {
-		for _, task := range group.Tasks {
-			for _, envSpec := range e.Env {
-				splits := strings.SplitN(envSpec, "=", 2)
-				name := splits[0]
-				if len(splits) == 2 {
-					task.Env[name] = splits[1]
-				} else if procEnvVar, exists := os.LookupEnv(name); exists {
-					task.Env[name] = procEnvVar
-				}
-			}
-		}
-	}
-}
-
 func (e *evaluationService) ListActions(src string) ([]string, error) {
-	output, err := e.evaluate(src, command{Command: []string{"list"}})
+	output, err := e.evaluate(src, []string{"list"}, nil)
 	if err != nil {
 		return nil, err
 	}

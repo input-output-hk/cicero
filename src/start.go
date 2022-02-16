@@ -23,7 +23,6 @@ type StartCmd struct {
 
 	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
 	Evaluators     []string `arg:"--evaluators"`
-	Env            []string `arg:"--env"`
 	Transformers   []string `arg:"--transform"`
 
 	WebListen string `arg:"--web-listen,env:WEB_LISTEN" default:":8080"`
@@ -87,7 +86,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		return service.NewRunService(db().(config.PgxIface), cmd.PrometheusAddr, nomadClientWrapper().(application.NomadClient), logger)
 	})
 	evaluationService := once(func() interface{} {
-		return service.NewEvaluationService(cmd.Evaluators, cmd.Env, cmd.Transformers, logger)
+		return service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, logger)
 	})
 	actionService := once(func() interface{} {
 		return service.NewActionService(db().(config.PgxIface), nomadClientWrapper().(application.NomadClient), runService().(service.RunService), evaluationService().(service.EvaluationService), logger)
