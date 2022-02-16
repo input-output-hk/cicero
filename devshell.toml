@@ -54,6 +54,34 @@ command = "cue export ./jobs -e jobs.dev | nomad run -"
 help = "Run Postgres and Loki in Nomad"
 
 [[commands]]
+name = "dev-cicero"
+command = "dbmate up; go run . start --debug --transform dev-cicero-transformer"
+help = "Run Cicero from source"
+
+[[commands]]
+name = "dev-cicero-transformer"
+command = '''
+jq '.job[] |= . * {
+	datacenters: ["dc1"],
+	group: .group | map_values(. * {
+		restart: {
+			attempts: 0,
+		},
+		task: .task | map_values(. * {
+			env: {
+				CICERO_WEB_URL: "http://127.0.0.1:8080",
+				CICERO_API_URL: "http://127.0.0.1:8080/api",
+			},
+			vault: {
+				policies: ["cicero"],
+			},
+		}),
+	}),
+}'
+'''
+help = "configures Nomad jobs for local dev environment"
+
+[[commands]]
 name = "psqlc"
 command = "psql -d \"$DATABASE_URL\" \"$@\""
 help = "psql into Cicero DB"
@@ -87,4 +115,5 @@ packages = [
   # tools
   "httpie",
   "diffutils",
+  "jq",
 ]

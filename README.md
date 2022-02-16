@@ -96,22 +96,15 @@ Run the required services in Nomad:
 
 	dev-jobs
 
-Migrate the database:
-
-	dbmate up
-
 Run the application:
 
-	go run . start
+	dev-cicero
 
-Access WebUI:
+Cicero's web UI should now be available on http://localhost:8080.
 
-	open localhost:8080 in browser
-
-Access OpenAPI3 Schema:
-
-	open localhost:8080/documentation/cicero.json in browser // for json
-	open localhost:8080/documentation/cicero.yaml in browser // for yaml
+There is also an OpenAPI v3 schema available at:
+- http://localhost:8080/documentation/cicero.json
+- http://localhost:8080/documentation/cicero.yaml
 
 ## How To …
 
@@ -123,6 +116,10 @@ Format all source code:
 
 	treefmt
 
+Build mocks automatically:
+
+	go generate ./...
+
 Run tests with coverage:
 
 	go test -cover ./...
@@ -131,13 +128,9 @@ Run OpenApi validation tests:
 
 	schemathesis run http://localhost:8080/documentation/cicero.yaml --validate-schema=false
 
-Build mocks automatically:
+See all commands provided by the development shell:
 
-	go generate ./...
-
-See the commands listed by:
-
-	nix develop
+	menu
 
 ## Which ports are in use?
 
