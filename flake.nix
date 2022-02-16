@@ -244,9 +244,9 @@
       ciceroActions = self.lib.callActionsWithExtraArgs
         rec {
           inherit (self.lib) std;
-          inherit (self.inputs.nixpkgs) lib;
+          inherit (nixpkgs) lib;
           actionLib = import ./action-lib.nix { inherit std lib; };
-          nixpkgsRev = self.inputs.nixpkgs.rev;
+          nixpkgsRev = nixpkgs.rev;
         } ./actions;
     };
 }
