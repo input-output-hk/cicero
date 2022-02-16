@@ -45,14 +45,6 @@ command = "golangci-lint run -E gocritic && treefmt --fail-on-change"
 help = "Run code linters"
 
 [[commands]]
-package = "nix-cache"
-help = "Run nix-cache-proxy, shares /nix/store between host & nomad tasks"
-
-[[commands]]
-package = "dev-cluster-full"
-help = "Run nix-cache-proxy & dev-cluster"
-
-[[commands]]
 package = "dev-cluster"
 help = "Run Nomad and Vault in development mode with Nix driver"
 

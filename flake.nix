@@ -19,7 +19,13 @@
       url = "github:nix-community/poetry2nix/fetched-projectdir-test";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix-cache-proxy.url = "github:input-output-hk/nix-cache-proxy";
+    nix-cache-proxy = {
+      url = "github:input-output-hk/nix-cache-proxy";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        inclusive.follows = "inclusive";
+      };
+    };
   };
 
   outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, nix-cache-proxy, ... }:
@@ -30,15 +36,12 @@
             devshell.overlay
             poetry2nix.overlay
             follower.overlay
+            nix-cache-proxy.overlay
             (final: prev: rec {
               go = prev.go_1_17;
               gouml = final.callPackage pkgs/gouml.nix { };
               gocritic = final.callPackage pkgs/gocritic.nix { };
               schemathesis = final.callPackage pkgs/schemathesis.nix { };
-              dev-cluster-full = pkgs.writers.writeBashBin "dev-cluster-full" ''
-                ${nix-cache}/bin/nix-cache-proxy &
-                ${dev-cluster}/bin/dev-cluster
-              '';
               dev-cluster = pkgs.writers.writeBashBin "dev-cluster" ''
                 set -euo pipefail
 
@@ -47,6 +50,7 @@
                   nomad
                   nomad-follower
                   vault-bin
+                  prev.nix-cache-proxy
                 ]}:"$PATH"
 
                 >&2 echo 'Please authorize sudo (type your password):'
@@ -151,19 +155,21 @@
                   sudo $(which nomad-follower)
                 } |& log 2 follower &
 
-                wait
-              '';
-              nix-cache = pkgs.writers.writeBashBin "nix-cache-proxy" ''
-                if ! [ -s .nix-cache-proxy-key ]; then
-                    nix key generate-secret --key-name nix-cache-proxy > .nix-cache-proxy-key
-                fi
+                {
+                  mkdir -p nix-cache-proxy
+                  if [[ ! -f nix-cache-proxy/key ]]; then
+                      nix key generate-secret --key-name nix-cache-proxy > nix-cache-proxy/key
+                  fi
 
-                ${nix-cache-proxy.defaultPackage.${system}}/bin/nix-cache-proxy \
-                  --substituters 'https://cache.nixos.org' \
-                  --secret-key-files .nix-cache-proxy-key \
-                  --trusted-public-keys 'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' \
-                  --listen :7745 \
-                  --dir /tmp/nix-cache-proxy
+                  nix-cache-proxy \
+                    --substituters 'https://cache.nixos.org' \
+                    --secret-key-files nix-cache-proxy/key \
+                    --trusted-public-keys 'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' \
+                    --listen :7745 \
+                    --dir nix-cache-proxy
+                } |& log 3 nix-cache-proxy &
+
+                wait
               '';
             })
             self.overlay

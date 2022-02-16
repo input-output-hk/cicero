@@ -213,24 +213,6 @@
         "type": "github"
       }
     },
-    "inclusive_4": {
-      "inputs": {
-        "stdlib": "stdlib_4"
-      },
-      "locked": {
-        "lastModified": 1628098927,
-        "narHash": "sha256-Ft4sdf7VPL8MQtu18AAPiN2s5pUsbv+3RxqzJSa/yzg=",
-        "owner": "input-output-hk",
-        "repo": "nix-inclusive",
-        "rev": "13123eb7a8c3359738a4756b8d645729e8655b27",
-        "type": "github"
-      },
-      "original": {
-        "owner": "input-output-hk",
-        "repo": "nix-inclusive",
-        "type": "github"
-      }
-    },
     "lowdown-src": {
       "flake": false,
       "locked": {
@@ -271,8 +253,12 @@
     "nix-cache-proxy": {
       "inputs": {
         "devshell": "devshell_4",
-        "inclusive": "inclusive_4",
-        "nixpkgs": "nixpkgs_3",
+        "inclusive": [
+          "inclusive"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
         "utils": "utils_3"
       },
       "locked": {
@@ -352,22 +338,6 @@
     },
     "nixpkgs_3": {
       "locked": {
-        "lastModified": 1643119265,
-        "narHash": "sha256-mmDEctIkHSWcC/HRpeaw6QOe+DbNOSzc0wsXAHOZWwo=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "b05d2077ebe219f6a47825767f8bab5c6211d200",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixpkgs-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_4": {
-      "locked": {
         "lastModified": 1644486793,
         "narHash": "sha256-EeijR4guVHgVv+JpOX3cQO+1XdrkJfGmiJ9XVsVU530=",
         "owner": "NixOS",
@@ -412,7 +382,7 @@
         "follower": "follower",
         "inclusive": "inclusive_3",
         "nix-cache-proxy": "nix-cache-proxy",
-        "nixpkgs": "nixpkgs_4",
+        "nixpkgs": "nixpkgs_3",
         "poetry2nix": "poetry2nix",
         "utils": "utils_4"
       }
@@ -448,21 +418,6 @@
       }
     },
     "stdlib_3": {
-      "locked": {
-        "lastModified": 1590026685,
-        "narHash": "sha256-E5INrVvYX/P/UpcoUFDAsuHem+lsqT+/teBs9O7oc9Q=",
-        "owner": "manveru",
-        "repo": "nix-lib",
-        "rev": "99088cf7febcdb21afd375a335dcafa959bef3ed",
-        "type": "github"
-      },
-      "original": {
-        "owner": "manveru",
-        "repo": "nix-lib",
-        "type": "github"
-      }
-    },
-    "stdlib_4": {
       "locked": {
         "lastModified": 1590026685,
         "narHash": "sha256-E5INrVvYX/P/UpcoUFDAsuHem+lsqT+/teBs9O7oc9Q=",
