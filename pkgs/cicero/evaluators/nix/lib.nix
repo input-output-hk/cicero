@@ -254,8 +254,7 @@ rec {
         develop = action: next:
           nix.install action (wrapScript "bash"
             (next: ''
-              # Force working dir with `env -C` because
-              # sometimes `nix develop -c` changes directory.
+              # https://github.com/NixOS/nix/issues/6083
               exec nix develop -L -c env -C "$PWD" ${lib.escapeShellArgs next}
             '')
             action
