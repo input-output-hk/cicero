@@ -15,10 +15,7 @@ job: cicero: group: cicero: {
 		unlimited:      true
 	}
 
-	network: {
-		mode: "host"
-		port: http: static: "8888"
-	}
+	network: port: http: {}
 
 	task: cicero: {
 		driver: "nix"
@@ -51,7 +48,7 @@ job: cicero: group: cicero: {
 				"/bin/entrypoint",
 				"--prometheus-addr", #lokiAddr,
 				"--transform", for t in _transformers { t.destination },
-				"--web-listen", ":8888",
+				"--web-listen", ":${NOMAD_PORT_http}",
 			]
 		}
 	}
