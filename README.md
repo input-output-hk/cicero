@@ -90,7 +90,7 @@ First enter the development shell using either direnv or by running `nix develop
 
 Start a development instance of Nomad, nomad-follower, Vault and nix-cache-proxy:
 
-	dev-cluster-full
+	dev-cluster
 
 Run the required services in Nomad:
 
