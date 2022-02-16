@@ -32,6 +32,11 @@
     utils.lib.eachSystem [ "x86_64-linux" ]
       (system:
         let
+          nix-cache-proxy-key = {
+            secret = "nix-cache-proxy:J5wXSq2iirA2sksFzfsV1fXoNQZFKh4QUOizy6b46sHI18Hb6kxKauM3IxFahvWgSziKE+dUo+QQJaIPG/Uw0g==";
+            public = "nix-cache-proxy:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=";
+          };
+
           pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
             devshell.overlay
             poetry2nix.overlay
@@ -155,21 +160,48 @@
                   sudo $(which nomad-follower)
                 } |& log 2 follower &
 
-                {
-                  mkdir -p nix-cache-proxy
-                  if [[ ! -f nix-cache-proxy/key ]]; then
-                      nix key generate-secret --key-name nix-cache-proxy > nix-cache-proxy/key
-                  fi
-
-                  nix-cache-proxy \
-                    --substituters 'https://cache.nixos.org' \
-                    --secret-key-files nix-cache-proxy/key \
-                    --trusted-public-keys 'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' \
-                    --listen :7745 \
-                    --dir nix-cache-proxy
-                } |& log 3 nix-cache-proxy &
+                nix-cache-proxy \
+                  --substituters 'https://cache.nixos.org' \
+                  --secret-key-files ${builtins.toFile "nix-cache-proxy.sec" nix-cache-proxy-key.secret} \
+                  --trusted-public-keys 'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' \
+                  --listen :7745 \
+                  --dir nix-cache-proxy \
+                  |& log 3 nix-cache-proxy &
 
                 wait
+              '';
+              dev-cicero-transformer = let
+                post-build-hook = ''
+                  #! /bin/bash
+                  set -euf
+                  export IFS=' '
+                  echo 'Uploading to cache: '"$OUT_PATHS"
+                  exec nix copy --to 'http://127.0.0.1:7745/cache' $OUT_PATHS
+                '';
+
+                filter = ''
+                  .job[]?.datacenters |= . + ["dc1"] |
+                  .job[]?.group[]?.restart.attempts = 0 |
+                  .job[]?.group[]?.task[]?.env |= . + {
+                      CICERO_WEB_URL: "http://127.0.0.1:8080",
+                      NIX_CONFIG: (
+                        "extra-substituters = http://127.0.0.1:7745/cache?compression=none\n" +
+                        "extra-trusted-public-keys = ${nix-cache-proxy-key.public}\n" +
+                        "post-build-hook = /local/post-build-hook\n" +
+                        .NIX_CONFIG
+                      ),
+                  } |
+                  .job[]?.group[]?.task[]?.template |= . + [{
+                    destination: "local/post-build-hook",
+                    perms: "544",
+                    data: env.postBuildHook,
+                  }] |
+                  .job[]?.group[]?.task[]?.config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"] |
+                  .job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"]
+                '';
+              in prev.writers.writeDashBin "dev-cicero-transformer" ''
+                export postBuildHook=${prev.lib.escapeShellArg post-build-hook}
+                jq ${prev.lib.escapeShellArg filter}
               '';
             })
             self.overlay
