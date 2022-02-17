@@ -17,23 +17,24 @@
 		<tbody>
 			{{range .Runs}}
 				<tr>
-					{{with .Action}}
-						<td>
-							{{.Name}}
-							<br/>
+					<td>
+						{{with .Action}}
 							<a href="/action/{{.ID}}">
-								{{.ID}}
+								{{.Name}}
 							</a>
-						</td>
-					{{end}}
+						{{end}}
+					</td>
 					<td>{{.CreatedAt}}</td>
 					<td>
 						{{if .FinishedAt}}
 							{{.FinishedAt}}
 						{{else}}
-							<a href="/run/{{.NomadJobID}}/cancel">
-								Cancel
-							</a>
+							<form
+								method="POST"
+								action="/_dispatch/method/DELETE/run/{{.NomadJobID}}"
+							>
+								<button>Cancel</button>
+							</form>
 						{{end}}
 					</td>
 					<td class="numerical">

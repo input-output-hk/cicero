@@ -24,9 +24,12 @@
 							{{with .FinishedAt}}
 								{{.}}
 							{{else}}
-								<a target="_parent" href="/run/{{.NomadJobID}}/cancel">
-									Cancel
-								</a>
+								<form
+									method="POST"
+									action="/_dispatch/method/DELETE/run/{{.NomadJobID}}"
+								>
+									<button>Cancel</button>
+								</form>
 							{{end}}
 						</td>
 						<td class="numerical">

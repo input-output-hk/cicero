@@ -156,7 +156,7 @@ func (self *Web) Start(ctx context.Context) error {
 		"/api/run/{id}/fact",
 		self.ApiRunIdFactPost,
 		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an action", Value: "UUID"}}),
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			apidoc.BuildBodyRequest(value),
 			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
 	); err != nil {
@@ -166,7 +166,7 @@ func (self *Web) Start(ctx context.Context) error {
 		"/api/run/{id}/logs",
 		self.ApiRunIdLogsGet,
 		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an action", Value: "UUID"}}),
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]*domain.LokiOutput{"logs": {}}, "OK")),
 	); err != nil {
@@ -176,9 +176,19 @@ func (self *Web) Start(ctx context.Context) error {
 		"/api/run/{id}",
 		self.ApiRunIdGet,
 		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an action", Value: "UUID"}}),
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodDelete,
+		"/api/run/{id}",
+		self.ApiRunIdDelete,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusNoContent, domain.Run{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -224,7 +234,7 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/run/{id}/cancel", self.RunIdCancelGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/run/{id}", self.RunIdDelete).Methods(http.MethodDelete)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
@@ -400,20 +410,14 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) RunIdCancelGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) RunIdDelete(w http.ResponseWriter, req *http.Request) {
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
 		return
 	}
 
-	if run, err := self.RunService.GetByNomadJobId(id); err != nil {
-		self.ClientError(w, err)
-		return
-	} else if err := self.RunService.Cancel(&run); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", id))
-		return
-	}
+	self.ApiRunIdDelete(NopResponseWriter{w}, req)
 
 	if referer := req.Header.Get("Referer"); referer != "" {
 		http.Redirect(w, req, referer, http.StatusFound)
@@ -656,6 +660,24 @@ func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
 		self.NotFound(w, errors.WithMessage(err, "Could not find run"))
 	}
 	self.json(w, run, http.StatusOK)
+}
+
+func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
+	id, err := uuid.Parse(mux.Vars(req)["id"])
+	if err != nil {
+		self.ClientError(w, err)
+		return
+	}
+
+	if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.ClientError(w, err)
+		return
+	} else if err := self.RunService.Cancel(&run); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", id))
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
