@@ -334,6 +334,8 @@ rec {
               EOF
 
               function report {
+                echo 'Reporting GitHub commit status: '"$1"
+
                 jq -nc '{
                   state: $state,
                   context: $action_name,
@@ -345,7 +347,8 @@ rec {
                   --arg action_id ${lib.escapeShellArg action.id} \
                   --arg action_name ${lib.escapeShellArg action.name} \
                 | curl ${lib.escapeShellArg statuses_url} \
-                  > /dev/null --no-progress-meter \
+                  --output /dev/null --fail-with-body \
+                  --no-progress-meter \
                   -H 'Accept: application/vnd.github.v3+json' \
                   -H @"$secret_headers" \
                   --data-binary @-
