@@ -166,7 +166,7 @@
                   --trusted-public-keys 'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' \
                   --listen :7745 \
                   --dir nix-cache-proxy \
-                  |& log 3 nix-cache-proxy &
+                |& log 3 nix-cache-proxy &
 
                 wait
               '';
