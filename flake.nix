@@ -172,7 +172,7 @@
               '';
               dev-cicero-transformer = let
                 post-build-hook = ''
-                  #! /bin/bash
+                  #! /bin/dash
                   set -euf
                   export IFS=' '
                   echo 'Uploading to cache: '"$OUT_PATHS"
@@ -196,7 +196,7 @@
                     perms: "544",
                     data: env.postBuildHook,
                   }] |
-                  .job[]?.group[]?.task[]?.config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"] |
+                  .job[]?.group[]?.task[]?.config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#dash"] |
                   .job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"]
                 '';
               in prev.writers.writeDashBin "dev-cicero-transformer" ''
