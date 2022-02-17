@@ -63,6 +63,8 @@ job: webhooks: group: webhooks: {
 				"github:nixos/nixpkgs/nixpkgs-unstable#bash",
 				"github:nixos/nixpkgs/nixpkgs-unstable#jq",
 				"github:nixos/nixpkgs/nixpkgs-unstable#curl",
+				"github:nixos/nixpkgs/nixpkgs-unstable#dig",
+				"github:nixos/nixpkgs/nixpkgs-unstable#coreutils",
 			]
 			command: ["/bin/trigger", "--config", "secrets/trigger.yaml"]
 		}
@@ -91,9 +93,12 @@ job: webhooks: group: webhooks: {
 
 				echo "nameserver \#(#nameserver)" >> /etc/resolv.conf
 
+				ciceroPort=$(dig +short cicero.service.consul SRV | cut -d ' ' -f 3)
+				ciceroApiUrl="http://cicero.service.consul:$ciceroPort/api"
+
 				<<< '{payload}' \
 				jq -r '{"github-event": .}' \
-				| curl "\#(#ciceroApiUrl)/fact" --data-binary @-
+				| curl "$ciceroApiUrl/fact" --data-binary @-
 				"""#
 		}]
 	}
