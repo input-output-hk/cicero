@@ -21,7 +21,8 @@ writers.writeBashBin "cicero-evaluator-nix" ''
   }
 
   function evaluate {
-      nix eval --json ''${CICERO_EVALUATOR_NIX_STACKTRACE:+--show-trace} \
+      nix eval --no-write-lock-file --json \
+        ''${CICERO_EVALUATOR_NIX_STACKTRACE:+--show-trace} \
         "$CICERO_ACTION_SRC"#ciceroActions "$@"
   }
 
