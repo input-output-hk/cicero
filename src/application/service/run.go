@@ -27,7 +27,7 @@ type RunService interface {
 	WithQuerier(config.PgxIface) RunService
 
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
-	GetInputFactIdsByNomadJobId(uuid.UUID) (map[string][]uuid.UUID, error)
+	GetInputFactIdsByNomadJobId(uuid.UUID) (repository.RunInputFactIds, error)
 	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (domain.Run, error)
@@ -88,7 +88,7 @@ func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error
 	return
 }
 
-func (self *runService) GetInputFactIdsByNomadJobId(id uuid.UUID) (inputFactIds map[string][]uuid.UUID, err error) {
+func (self *runService) GetInputFactIdsByNomadJobId(id uuid.UUID) (inputFactIds repository.RunInputFactIds, err error) {
 	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run input fact IDs by Nomad Job ID")
 	inputFactIds, err = self.runRepository.GetInputFactIdsByNomadJobId(id)
 	err = errors.WithMessagef(err, "Could not select Run input fact IDs by Nomad Job ID %q", id)

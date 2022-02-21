@@ -182,6 +182,16 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/run/{id}/inputs",
+		self.ApiRunIdInputsGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	}
 	if _, err := r.AddRoute(http.MethodDelete,
 		"/api/run/{id}",
 		self.ApiRunIdDelete,
@@ -640,40 +650,42 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
-	vars := mux.Vars(req)
-	id, err := uuid.Parse(vars["id"])
-	if err != nil {
-		return nil, err
-	}
-
-	if run, err := self.RunService.GetByNomadJobId(id); err != nil {
-		return nil, err
+func (self *Web) getRun(req *http.Request) (domain.Run, error) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		return domain.Run{}, err
 	} else {
-		return &run, nil
+		return self.RunService.GetByNomadJobId(id)
 	}
 }
 
 func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
-	run, err := self.getRun(req)
-	if err != nil {
-		self.NotFound(w, errors.WithMessage(err, "Could not find run"))
+	if run, err := self.getRun(req); err != nil {
+		self.NotFound(w, errors.WithMessage(err, "Could not find Run"))
+	} else {
+		self.json(w, run, http.StatusOK)
 	}
-	self.json(w, run, http.StatusOK)
+}
+
+func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, err)
+	} else if inputs, err := self.RunService.GetInputFactIdsByNomadJobId(id); err != nil {
+		self.NotFound(w, errors.WithMessage(err, "Could not get Run inputs"))
+	} else if action, err := self.ActionService.GetByRunId(id); err != nil {
+		self.ServerError(w, err)
+	} else if result, err := inputs.MapStringInterface(action.Inputs); err != nil {
+		self.ServerError(w, err)
+	} else {
+		self.json(w, result, http.StatusOK)
+	}
 }
 
 func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
-	id, err := uuid.Parse(mux.Vars(req)["id"])
-	if err != nil {
-		self.ClientError(w, err)
-		return
-	}
-
-	if run, err := self.RunService.GetByNomadJobId(id); err != nil {
-		self.ClientError(w, err)
+	if run, err := self.getRun(req); err != nil {
+		self.NotFound(w, err)
 		return
 	} else if err := self.RunService.Cancel(&run); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", id))
+		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", run.NomadJobID))
 		return
 	}
 

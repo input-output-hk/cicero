@@ -52,7 +52,7 @@ func (a *runRepository) GetLatestByActionId(id uuid.UUID) (run domain.Run, err e
 	return
 }
 
-func (a *runRepository) GetInputFactIdsByNomadJobId(id uuid.UUID) (inputFactIds map[string][]uuid.UUID, err error) {
+func (a *runRepository) GetInputFactIdsByNomadJobId(id uuid.UUID) (inputFactIds repository.RunInputFactIds, err error) {
 	runInputs := []struct {
 		InputName string    `json:"input_name"`
 		FactId    uuid.UUID `json:"fact_id"`
