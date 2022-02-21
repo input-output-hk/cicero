@@ -192,6 +192,16 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/run/{id}/output",
+		self.ApiRunIdOutputGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	}
 	if _, err := r.AddRoute(http.MethodDelete,
 		"/api/run/{id}",
 		self.ApiRunIdDelete,
@@ -677,6 +687,20 @@ func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, err)
 	} else {
 		self.json(w, result, http.StatusOK)
+	}
+}
+
+func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, err)
+	} else if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil {
+		if pgxscan.NotFound(err) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			self.ServerError(w, err)
+		}
+	} else {
+		self.json(w, output, http.StatusOK)
 	}
 }
 
