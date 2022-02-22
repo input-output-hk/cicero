@@ -86,13 +86,13 @@ func (a *runRepository) GetAll(page *repository.Page) ([]*domain.Run, error) {
 	)
 }
 
-func (a *runRepository) GetByInputFactIds(factIds []*uuid.UUID, page *repository.Page) ([]*domain.Run, error) {
-	where := ``
+func (a *runRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, page *repository.Page) ([]*domain.Run, error) {
+	joins := ``
 	for i := range factIds {
-		if i > 0 {
-			where += ` AND `
-		}
-		where += `EXISTS (SELECT NULL FROM run_inputs WHERE run_inputs.run_id = run.nomad_job_id AND run_inputs.fact_id = $` + strconv.Itoa(i+1) + `)`
+		iStr := strconv.Itoa(i+1)
+		joins += ` JOIN run_inputs AS run_inputs_` + iStr + ` ON
+			run_inputs_` + iStr + `.run_id = run.nomad_job_id AND
+			run_inputs_` + iStr + `.fact_id = $` + iStr
 	}
 
 	args := make([]interface{}, len(factIds))
@@ -100,10 +100,37 @@ func (a *runRepository) GetByInputFactIds(factIds []*uuid.UUID, page *repository
 		args[i] = factId
 	}
 
+	var from string
+	if recursive {
+		from = `(
+			WITH RECURSIVE runs AS (
+				SELECT run.*
+				FROM run
+				` + joins + `
+
+				UNION
+
+				SELECT run.*
+				FROM run
+				JOIN runs ON
+					EXISTS (
+						SELECT NULL
+						FROM run_inputs
+						JOIN fact ON
+							fact.id = run_inputs.fact_id AND
+							fact.run_id = runs.nomad_job_id
+						WHERE run_inputs.run_id = run.nomad_job_id
+					)
+			) SELECT * FROM runs
+		) AS run`
+	} else {
+		from = `run ` + joins
+	}
+
 	runs := make([]*domain.Run, page.Limit)
 	return runs, fetchPage(
 		a.DB, page, &runs,
-		`*`, `run WHERE `+where, `created_at DESC`,
+		`run.*`, from, `created_at`,
 		args...,
 	)
 }

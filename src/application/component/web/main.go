@@ -634,6 +634,7 @@ func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 	query := req.URL.Query() 
+	_, recursive := query["recursive"]
 	factIds := make([]*uuid.UUID, len(query["input"]))
 	for i, str := range query["input"] {
 		if id, err := uuid.Parse(str); err != nil {
@@ -646,7 +647,7 @@ func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
-	} else if runs, err := self.RunService.GetByInputFactIds(factIds, page); err != nil {
+	} else if runs, err := self.RunService.GetByInputFactIds(factIds, recursive, page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
 	} else {
 		self.json(w, runs, http.StatusOK)

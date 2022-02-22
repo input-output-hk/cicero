@@ -15,7 +15,7 @@ type RunRepository interface {
 	GetLatestByActionId(uuid.UUID) (domain.Run, error)
 	GetInputFactIdsByNomadJobId(uuid.UUID) (RunInputFactIds, error)
 	GetAll(*Page) ([]*domain.Run, error)
-	GetByInputFactIds([]*uuid.UUID, *Page) ([]*domain.Run, error)
+	GetByInputFactIds([]*uuid.UUID, bool, *Page) ([]*domain.Run, error)
 	Save(*domain.Run, map[string]interface{}) error
 	Update(*domain.Run) error
 }

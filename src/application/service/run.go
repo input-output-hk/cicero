@@ -32,7 +32,7 @@ type RunService interface {
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (domain.Run, error)
 	GetAll(*repository.Page) ([]*domain.Run, error)
-	GetByInputFactIds([]*uuid.UUID, *repository.Page) ([]*domain.Run, error)
+	GetByInputFactIds([]*uuid.UUID, bool, *repository.Page) ([]*domain.Run, error)
 	Save(*domain.Run, map[string]interface{}, *domain.RunOutput) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
@@ -124,10 +124,10 @@ func (self *runService) GetAll(page *repository.Page) (runs []*domain.Run, err e
 	return
 }
 
-func (self *runService) GetByInputFactIds(factIds []*uuid.UUID, page *repository.Page) (runs []*domain.Run, err error) {
-	self.logger.Debug().Int("offset", page.Offset).Int("limit", page.Limit).Interface("input-fact-ids", factIds).Msg("Getting Runs by input Fact IDs")
-	runs, err = self.runRepository.GetByInputFactIds(factIds, page)
-	err = errors.WithMessagef(err, "Could not select Runs by input fact IDs %q with offset %d and limit %d", factIds, page.Offset, page.Limit)
+func (self *runService) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, page *repository.Page) (runs []*domain.Run, err error) {
+	self.logger.Debug().Int("offset", page.Offset).Int("limit", page.Limit).Interface("input-fact-ids", factIds).Bool("recursive", recursive).Msg("Getting Runs by input Fact IDs")
+	runs, err = self.runRepository.GetByInputFactIds(factIds, recursive, page)
+	err = errors.WithMessagef(err, "Could not select Runs by input fact IDs %q (recursively: %t) with offset %d and limit %d", factIds, recursive, page.Offset, page.Limit)
 	return
 }
 
