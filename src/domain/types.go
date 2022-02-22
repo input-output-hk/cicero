@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"time"
 
 	"cuelang.org/go/cue"
@@ -10,6 +11,7 @@ import (
 	cueformat "cuelang.org/go/cue/format"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/pkg/errors"
 )
 
 type InputDefinitionSelect uint
@@ -147,6 +149,16 @@ type Fact struct {
 	Value      interface{} `json:"value"`
 	BinaryHash *string     `json:"binary_hash,omitempty"`
 	// TODO nyi: unique key over (value, binary_hash)?
+}
+
+// Sets the value from JSON and returns the rest of the buffer as binary.
+func (f *Fact) FromReader(reader io.Reader) (io.Reader, error) {
+	factDecoder := json.NewDecoder(reader)
+	if err := factDecoder.Decode(&f.Value); err != nil {
+		return nil, errors.WithMessage(err, "Could not unmarshal json body")
+	} else {
+		return io.MultiReader(factDecoder.Buffered(), reader), nil
+	}
 }
 
 type Action struct {

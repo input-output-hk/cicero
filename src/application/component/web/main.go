@@ -775,9 +775,13 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 		RunId: &run.NomadJobID,
 	}
 
-	self.parseFact(w, req, &fact)
-
-	self.json(w, fact, http.StatusOK)
+	if binary, err := fact.FromReader(req.Body); err != nil {
+		self.ClientError(w, err)
+	} else if err := self.FactService.Save(&fact, binary); err != nil {
+		self.ServerError(w, err)
+	} else {
+		self.json(w, fact, http.StatusOK)
+	}
 }
 
 func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
@@ -937,20 +941,11 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	fact := domain.Fact{}
-	self.parseFact(w, req, &fact)
-	self.json(w, fact, http.StatusOK)
-}
-
-func (self *Web) parseFact(w http.ResponseWriter, req *http.Request, fact *domain.Fact) {
-	factDecoder := json.NewDecoder(req.Body)
-
-	if err := factDecoder.Decode(&fact.Value); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
-		return
-	}
-
-	if err := self.FactService.Save(fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
+	if binary, err := fact.FromReader(req.Body); err != nil {
+		self.ClientError(w, err)
+	} else if err := self.FactService.Save(&fact, binary); err != nil {
 		self.ServerError(w, err)
-		return
+	} else {
+		self.json(w, fact, http.StatusOK)
 	}
 }
