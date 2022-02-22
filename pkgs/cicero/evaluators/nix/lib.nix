@@ -245,7 +245,10 @@ rec {
                 < $base/fact \
                 jq --compact-output --join-output \
                 | "''${concat[@]}" \
-                | http --check-status POST "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact
+                | curl "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact \
+                  --output /dev/null --fail \
+                  --no-progress-meter \
+                  --data-binary @-
 
                 rm -rf /local/cicero/post-fact
               fi
@@ -257,7 +260,7 @@ rec {
           {
             config.packages = data-merge.append [
               "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
-              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#httpie"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
             ];
           };
 
