@@ -760,20 +760,6 @@ func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (self *Web) ParseFact(w http.ResponseWriter, req *http.Request, fact *domain.Fact) {
-	factDecoder := json.NewDecoder(req.Body)
-
-	if err := factDecoder.Decode(&fact.Value); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
-		return
-	}
-
-	if err := self.FactService.Save(fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
-		self.ServerError(w, err)
-		return
-	}
-}
-
 func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	run, err := self.getRun(req)
 	if err != nil {
@@ -789,7 +775,7 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 		RunId: &run.NomadJobID,
 	}
 
-	self.ParseFact(w, req, &fact)
+	self.parseFact(w, req, &fact)
 
 	self.json(w, fact, http.StatusOK)
 }
@@ -951,8 +937,20 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	fact := domain.Fact{}
-
-	self.ParseFact(w, req, &fact)
-
+	self.parseFact(w, req, &fact)
 	self.json(w, fact, http.StatusOK)
+}
+
+func (self *Web) parseFact(w http.ResponseWriter, req *http.Request, fact *domain.Fact) {
+	factDecoder := json.NewDecoder(req.Body)
+
+	if err := factDecoder.Decode(&fact.Value); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
+		return
+	}
+
+	if err := self.FactService.Save(fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
+		self.ServerError(w, err)
+		return
+	}
 }
