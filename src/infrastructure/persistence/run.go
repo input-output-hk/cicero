@@ -86,6 +86,28 @@ func (a *runRepository) GetAll(page *repository.Page) ([]*domain.Run, error) {
 	)
 }
 
+func (a *runRepository) GetByInputFactIds(factIds []*uuid.UUID, page *repository.Page) ([]*domain.Run, error) {
+	where := ``
+	for i := range factIds {
+		if i > 0 {
+			where += ` AND `
+		}
+		where += `EXISTS (SELECT NULL FROM run_inputs WHERE run_inputs.run_id = run.nomad_job_id AND run_inputs.fact_id = $` + strconv.Itoa(i+1) + `)`
+	}
+
+	args := make([]interface{}, len(factIds))
+	for i, factId := range factIds {
+		args[i] = factId
+	}
+
+	runs := make([]*domain.Run, page.Limit)
+	return runs, fetchPage(
+		a.DB, page, &runs,
+		`*`, `run WHERE `+where, `created_at DESC`,
+		args...,
+	)
+}
+
 func (a *runRepository) Save(run *domain.Run, inputs map[string]interface{}) error {
 	ctx := context.Background()
 

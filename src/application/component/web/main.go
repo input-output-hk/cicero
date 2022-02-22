@@ -212,6 +212,18 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if route, err := r.AddRoute(http.MethodGet,
+		"/api/run",
+		self.ApiRunByInputGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	} else {
+		route.(*mux.Route).Queries("input", "")
+	}
 	if _, err := r.AddRoute(http.MethodGet,
 		"/api/run",
 		self.ApiRunGet,
@@ -613,12 +625,31 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
+	} else if runs, err := self.RunService.GetAll(page); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
 	} else {
-		if runs, err := self.RunService.GetAll(page); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
+		self.json(w, runs, http.StatusOK)
+	}
+}
+
+func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
+	query := req.URL.Query() 
+	factIds := make([]*uuid.UUID, len(query["input"]))
+	for i, str := range query["input"] {
+		if id, err := uuid.Parse(str); err != nil {
+			self.ClientError(w, err)
+			return
 		} else {
-			self.json(w, runs, http.StatusOK)
+			factIds[i] = &id
 		}
+	}
+
+	if page, err := getPage(req); err != nil {
+		self.ServerError(w, err)
+	} else if runs, err := self.RunService.GetByInputFactIds(factIds, page); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
+	} else {
+		self.json(w, runs, http.StatusOK)
 	}
 }
 

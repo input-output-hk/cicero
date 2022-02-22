@@ -32,6 +32,7 @@ type RunService interface {
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (domain.Run, error)
 	GetAll(*repository.Page) ([]*domain.Run, error)
+	GetByInputFactIds([]*uuid.UUID, *repository.Page) ([]*domain.Run, error)
 	Save(*domain.Run, map[string]interface{}, *domain.RunOutput) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
@@ -120,6 +121,13 @@ func (self *runService) GetAll(page *repository.Page) (runs []*domain.Run, err e
 	self.logger.Debug().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Runs")
 	runs, err = self.runRepository.GetAll(page)
 	err = errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
+	return
+}
+
+func (self *runService) GetByInputFactIds(factIds []*uuid.UUID, page *repository.Page) (runs []*domain.Run, err error) {
+	self.logger.Debug().Int("offset", page.Offset).Int("limit", page.Limit).Interface("input-fact-ids", factIds).Msg("Getting Runs by input Fact IDs")
+	runs, err = self.runRepository.GetByInputFactIds(factIds, page)
+	err = errors.WithMessagef(err, "Could not select Runs by input fact IDs %q with offset %d and limit %d", factIds, page.Offset, page.Limit)
 	return
 }
 
