@@ -763,22 +763,25 @@ func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	run, err := self.getRun(req)
 	if err != nil {
-		self.ClientError(w, err) //TODO: review 5XX error in openAPi documentation
-		return
-	}
-
-	var value interface{}
-	if err := json.NewDecoder(req.Body).Decode(&value); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal fact value from request body"))
+		if pgxscan.NotFound(err) {
+			self.NotFound(w, err)
+		} else {
+			self.ClientError(w, err) //TODO: review 5XX error in openAPi documentation
+		}
 		return
 	}
 
 	fact := domain.Fact{
 		RunId: &run.NomadJobID,
-		Value: value,
 	}
 
-	if err := self.FactService.Save(&fact, nil); err != nil {
+	factDecoder := json.NewDecoder(req.Body)
+	if err := factDecoder.Decode(&fact.Value); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
+		return
+	}
+
+	if err := self.FactService.Save(&fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
 		self.ServerError(w, err)
 		return
 	}
