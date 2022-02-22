@@ -209,26 +209,23 @@ rec {
 
       /* Allow a script to dynamically generate a result fact.
 
-         If the script defined below dynamicFact creates /local/cicero-outputs/success/fact
-         and exits successfully, that fact will be created (with
-         /local/cicero-outputs/success/artifact as the artifact if it exists).
+        If the inner program writes a JSON file to `/local/cicero/post-fact/success/fact`
+        and exits successfully, a fact with that value will be created via the API
+        (with `/local/cicero/post-fact/success/artifact` as the artifact if it exists).
 
-         Same for failure and /local/cicero-outputs/failure.
+        Same for the failure case and `/local/cicero/post-fact/failure/{fact,artifact}`.
 
-         Assumes CICERO_API_URL is set pointing to cicero accessible from inside the cluster
+        Assumes `CICERO_API_URL` is set pointing to Cicero accessible from inside the cluster.
       */
-      dynamicFact = action: inner:
+      postFact = action: inner:
         data-merge.merge
-          (wrapScript
-            "bash"
+          (wrapScript "bash"
             (inner: ''
               set -eEuo pipefail
 
-              mkdir -p /local/cicero-outputs/success
-              mkdir -p /local/cicero-outputs/failure
+              mkdir -p /local/cicero/post-fact/{success,failure}
 
-              if ${lib.escapeShellArgs inner}
-              then
+              if ${lib.escapeShellArgs inner}; then
                 ec=$?
                 state=success
               else
@@ -236,18 +233,21 @@ rec {
                 state=failure
               fi
 
-              base="/local/cicero-outputs/''${state}"
+              base=/local/cicero/post-fact/"$state"
 
-              if [ -f "''${base}/fact" ]
-              then
-                if [ -f "''${base}/artifact" ]
-                then
-                  cat="cat - ''${base}/artifact"
+              if [[ -e "$base"/fact ]]; then
+                if [[ -e "$base"/artifact ]]; then
+                  concat=(cat - "$base"/artifact)
                 else
-                  cat="cat"
+                  concat=cat
                 fi
 
-                jq --compact-output --join-output < ''${base}/fact | $cat | http --check-status POST "''${CICERO_API_URL}/api/run/''${NOMAD_JOB_ID}/fact"
+                < $base/fact \
+                jq --compact-output --join-output \
+                | "''${concat[@]}" \
+                | http --check-status POST "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact
+
+                rm -rf /local/cicero/post-fact
               fi
 
               exit $ec
@@ -260,6 +260,7 @@ rec {
               "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#httpie"
             ];
           };
+
       networking = {
         nameservers = nameservers: action: next:
           data-merge.merge
@@ -443,6 +444,6 @@ rec {
   inherit (tasks) script;
   inherit (chains) chain;
   inherit (chains.jobs) escapeNames singleTask;
-  inherit (chains.tasks) wrapScript networking nix makes git github dynamicFact;
+  inherit (chains.tasks) wrapScript networking nix makes git github postFact;
   inherit data-merge;
 }
