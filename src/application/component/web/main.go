@@ -255,6 +255,18 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if route, err := r.AddRoute(http.MethodGet,
+		"/api/fact",
+		self.ApiFactByRunGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
+	); err != nil {
+		return err
+	} else {
+		route.(*mux.Route).Queries("run", "")
+	}
 	if _, err := r.AddRoute(http.MethodPost,
 		"/api/fact",
 		self.ApiFactPost,
@@ -916,6 +928,16 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 		return nil
 	}); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "While fetching and writing binary"))
+	}
+}
+
+func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(req.URL.Query().Get("run")); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to parse Run ID"))
+	} else if fact, err := self.FactService.GetByRunId(id); err != nil {
+		self.ServerError(w, err)
+	} else {
+		self.json(w, fact, http.StatusOK)
 	}
 }
 
