@@ -89,7 +89,7 @@ func (a *runRepository) GetAll(page *repository.Page) ([]*domain.Run, error) {
 func (a *runRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, page *repository.Page) ([]*domain.Run, error) {
 	joins := ``
 	for i := range factIds {
-		iStr := strconv.Itoa(i+1)
+		iStr := strconv.Itoa(i + 1)
 		joins += ` JOIN run_inputs AS run_inputs_` + iStr + ` ON
 			run_inputs_` + iStr + `.run_id = run.nomad_job_id AND
 			run_inputs_` + iStr + `.fact_id = $` + iStr

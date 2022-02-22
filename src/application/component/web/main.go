@@ -645,7 +645,7 @@ func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
-	query := req.URL.Query() 
+	query := req.URL.Query()
 	_, recursive := query["recursive"]
 	factIds := make([]*uuid.UUID, len(query["input"]))
 	for i, str := range query["input"] {
@@ -769,7 +769,7 @@ func (self *Web) ParseFact(w http.ResponseWriter, req *http.Request, fact *domai
 	}
 
 	if err := self.FactService.Save(fact, io.MultiReader(factDecoder.Buffered(), req.Body)); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to save Fact"))
+		self.ServerError(w, err)
 		return
 	}
 }
@@ -777,7 +777,11 @@ func (self *Web) ParseFact(w http.ResponseWriter, req *http.Request, fact *domai
 func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	run, err := self.getRun(req)
 	if err != nil {
-		self.ClientError(w, err) //TODO: review 5XX error in openAPi documentation
+		if pgxscan.NotFound(err) {
+			self.NotFound(w, err)
+		} else {
+			self.ClientError(w, err) //TODO: review 5XX error in openAPi documentation
+		}
 		return
 	}
 
