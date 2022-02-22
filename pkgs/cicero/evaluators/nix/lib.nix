@@ -207,6 +207,63 @@ rec {
             template = data-merge.append outer.template;
           };
 
+      /* Allow a script to dynamically generate a result fact.
+
+        If the inner program writes a JSON file to `/local/cicero/post-fact/success/fact`
+        and exits successfully, a fact with that value will be created via the API
+        (with `/local/cicero/post-fact/success/artifact` as the artifact if it exists).
+
+        Same for the failure case and `/local/cicero/post-fact/failure/{fact,artifact}`.
+
+        Assumes `CICERO_API_URL` is set pointing to Cicero accessible from inside the cluster.
+      */
+      postFact = action: inner:
+        data-merge.merge
+          (wrapScript "bash"
+            (inner: ''
+              set -eEuo pipefail
+
+              mkdir -p /local/cicero/post-fact/{success,failure}
+
+              if ${lib.escapeShellArgs inner}; then
+                ec=$?
+                state=success
+              else
+                ec=$?
+                state=failure
+              fi
+
+              base=/local/cicero/post-fact/"$state"
+
+              if [[ -e "$base"/fact ]]; then
+                if [[ -e "$base"/artifact ]]; then
+                  concat=(cat - "$base"/artifact)
+                else
+                  concat=cat
+                fi
+
+                < $base/fact \
+                jq --compact-output --join-output \
+                | "''${concat[@]}" \
+                | curl "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact \
+                  --output /dev/null --fail \
+                  --no-progress-meter \
+                  --data-binary @-
+
+                rm -rf /local/cicero/post-fact
+              fi
+
+              exit $ec
+            '')
+            action
+            inner)
+          {
+            config.packages = data-merge.append [
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
+            ];
+          };
+
       networking = {
         nameservers = nameservers: action: next:
           data-merge.merge
@@ -390,6 +447,6 @@ rec {
   inherit (tasks) script;
   inherit (chains) chain;
   inherit (chains.jobs) escapeNames singleTask;
-  inherit (chains.tasks) wrapScript networking nix makes git github;
+  inherit (chains.tasks) wrapScript networking nix makes git github postFact;
   inherit data-merge;
 }
