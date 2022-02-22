@@ -645,7 +645,7 @@ func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
-	query := req.URL.Query() 
+	query := req.URL.Query()
 	_, recursive := query["recursive"]
 	factIds := make([]*uuid.UUID, len(query["input"]))
 	for i, str := range query["input"] {
