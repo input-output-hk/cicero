@@ -207,6 +207,59 @@ rec {
             template = data-merge.append outer.template;
           };
 
+      /* Allow a script to dynamically generate a result fact.
+
+         If the script defined below dynamicFact creates /local/cicero-outputs/success/fact
+         and exits successfully, that fact will be created (with
+         /local/cicero-outputs/success/artifact as the artifact if it exists).
+
+         Same for failure and /local/cicero-outputs/failure.
+
+         Assumes CICERO_API_URL is set pointing to cicero accessible from inside the cluster
+      */
+      dynamicFact = action: inner:
+        data-merge.merge
+          (wrapScript
+            "bash"
+            (inner: ''
+              set -eEuo pipefail
+
+              mkdir -p /local/cicero-outputs/success
+              mkdir -p /local/cicero-outputs/failure
+
+              if ${lib.escapeShellArgs inner}
+              then
+                ec=$?
+                state=success
+              else
+                ec=$?
+                state=failure
+              fi
+
+              base="/local/cicero-outputs/''${state}"
+
+              if [ -f "''${base}/fact" ]
+              then
+                if [ -f "''${base}/artifact" ]
+                then
+                  cat="cat - ''${base}/artifact"
+                else
+                  cat="cat"
+                fi
+
+                jq --compact-output --join-output < ''${base}/fact | $cat | http --check-status POST "''${CICERO_API_URL}/api/run/''${NOMAD_JOB_ID}/fact"
+              fi
+
+              exit $ec
+            '')
+            action
+            inner)
+          {
+            config.packages = data-merge.append [
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#httpie"
+            ];
+          };
       networking = {
         nameservers = nameservers: action: next:
           data-merge.merge
@@ -390,6 +443,6 @@ rec {
   inherit (tasks) script;
   inherit (chains) chain;
   inherit (chains.jobs) escapeNames singleTask;
-  inherit (chains.tasks) wrapScript networking nix makes git github;
+  inherit (chains.tasks) wrapScript networking nix makes git github dynamicFact;
   inherit data-merge;
 }

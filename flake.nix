@@ -184,6 +184,7 @@
                   .job[]?.group[]?.restart.attempts = 0 |
                   .job[]?.group[]?.task[]?.env |= . + {
                       CICERO_WEB_URL: "http://127.0.0.1:8080",
+                      CICERO_API_URL: "http://127.0.0.1:8080",
                       NIX_CONFIG: (
                         "extra-substituters = http://127.0.0.1:7745/cache?compression=none\n" +
                         "extra-trusted-public-keys = ${nix-cache-proxy-key.public}\n" +
