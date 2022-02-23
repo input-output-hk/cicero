@@ -125,3 +125,15 @@ ul.pagination > li > a {
 	align-items: center;
 	justify-content: center;
 }
+
+dl.concise {
+	margin: 0;
+}
+dl.concise > dt {
+	float: left;
+	clear: left;
+}
+dl.concise > dt::after {
+	content: ': ';
+	white-space: pre;
+}

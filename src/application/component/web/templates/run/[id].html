@@ -82,7 +82,7 @@
 											<li>
 												<details class="collapse">
 													<summary>{{.ID}}</summary>
-													<dl class="panel">
+													<dl class="fact">
 														<dt>Created At</dt>
 														<dd>{{.CreatedAt}}</dd>
 
@@ -368,76 +368,127 @@
 									<table class="panel log">
 										{{range $task.Events}}
 											<tr>
-												<td class="time">{{(timeUnixNano .Time).Format "2006-01-02 15:04:05"}}</td>
+												<td>{{(timeUnixNano .Time).Format "2006-01-02 15:04:05"}}</td>
 												{{if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting"}}
-													<td class="line">{{.DisplayMessage}}</td>
+													<td><samp>{{.DisplayMessage}}</samp></td>
 												{{else if eq .Type "Not Restarting"}}
-													<td class="line">{{.Type}}: {{.DisplayMessage}}</td>
+													<td>
+														<dl class="concise">
+															<dt><samp>{{.Type}}</samp></dt>
+															<dd><samp>{{.DisplayMessage}}</samp></dd>
+														</dl>
+													</td>
 												{{else if eq .Type "Terminated"}}
-													<td class="line">
-														{{.Type}}:
-														{{range $key, $value := .Details -}}
-															{{$key}}: {{$value}},
-														{{end}}
+													<td>
+														<samp>{{.Type}}</samp>
+														<dl class="concise">
+															{{range $key, $value := .Details}}
+																<dt><samp>{{$key}}</samp></dt>
+																<dd><samp>{{$value}}</samp></dd>
+															{{end}}
+														</dl>
 													</td>
 												{{else}}
 													<td>
-														<table class="table">
-															<tr>
-																<td>type</td>
-																<td>details</td>
-																<td>disk_limit</td>
-																<td>display_message</td>
-																<td>download_error</td>
-																<td>driver_error</td>
-																<td>driver_message</td>
-																<td>exit_code</td>
-																<td>failed_sibling</td>
-																<td>fails_task</td>
-																<td>generic_source</td>
-																<td>kill_error</td>
-																<td>kill_reason</td>
-																<td>kill_timeout</td>
-																<td>message</td>
-																<td>restart_reason</td>
-																<td>setup_error</td>
-																<td>signal</td>
-																<td>start_delay</td>
-																<td>task_signal</td>
-																<td>task_signal_reason</td>
-																<td>validation_error</td>
-																<td>vault_error</td>
-															</tr>
-															<tr>
-																<td>{{.Type}}</td>
-																<td>
-																	{{range $key, $value := .Details}}
-																		{{$key}}: {{$value}}<br/>
-																	{{end}}
-																</td>
-																<td>{{.DiskLimit}}</td>
-																<td>{{.DisplayMessage}}</td>
-																<td>{{.DownloadError}}</td>
-																<td>{{.DriverError}}</td>
-																<td>{{.DriverMessage}}</td>
-																<td>{{.ExitCode}}</td>
-																<td>{{.FailedSibling}}</td>
-																<td>{{.FailsTask}}</td>
-																<td>{{.GenericSource}}</td>
-																<td>{{.KillError}}</td>
-																<td>{{.KillReason}}</td>
-																<td>{{.KillTimeout}}</td>
-																<td>{{.Message}}</td>
-																<td>{{.RestartReason}}</td>
-																<td>{{.SetupError}}</td>
-																<td>{{.Signal}}</td>
-																<td>{{.StartDelay}}</td>
-																<td>{{.TaskSignal}}</td>
-																<td>{{.TaskSignalReason}}</td>
-																<td>{{.ValidationError}}</td>
-																<td>{{.VaultError}}</td>
-															</tr>
-														</table>
+														<details>
+															<summary><samp>{{.DisplayMessage}}</samp></summary>
+															<dl class="concise">
+																<dt>Type</dt>
+																<dd><samp>{{.Type}}</samp></dd>
+																{{with .Details}}
+																	<dt>Details</dt>
+																	<dd>
+																		<br/>
+																		<dl class="concise">
+																			{{range $key, $value := .}}
+																				<dt>{{$key}}</dt>
+																				<dd><samp>{{$value}}</samp></dd>
+																			{{end}}
+																		</dl>
+																	</dd>
+																{{end}}
+																{{with .DiskLimit}}
+																	<dt>Disk Limit</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .DownloadError}}
+																	<dt>Download Error</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .DriverError}}
+																	<dt>Driver Error</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .DriverMessage}}
+																	<dt>Driver Message</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .ExitCode}}
+																	<dt>Exit Code</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .FailedSibling}}
+																	<dt>Failed Sibling</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .FailsTask}}
+																	<dt>Fails Task</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .GenericSource}}
+																	<dt>Generic Source</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .KillError}}
+																	<dt>Kill Error</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .KillReason}}
+																	<dt>Kill Reason</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .KillTimeout}}
+																	<dt>Kill Timeout</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .Message}}
+																	<dt>Message</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .RestartReason}}
+																	<dt>Restart Reason</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .SetupError}}
+																	<dt>Setup Error</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .Signal}}
+																	<dt>Signal</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .StartDelay}}
+																	<dt>Start Delay</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .TaskSignal}}
+																	<dt>Task Signal</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .TaskSignalReason}}
+																	<dt>Task Signal Reason</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .ValidationError}}
+																	<dt>Validation Error</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+																{{with .VaultError}}
+																	<dt>Vault Error</dt>
+																	<dd><samp>{{.}}</samp></dd>
+																{{end}}
+															</dl>
+														</details>
 													</td>
 												{{end}}
 											</tr>
@@ -445,12 +496,12 @@
 									</table>
 
 									<h3>Task Logs</h3>
-                  {{if (index $wrapper.Logs $taskName).Stdout}}
+									{{if (index $wrapper.Logs $taskName).Stdout}}
 										<table class="panel log">
 											{{range (index $wrapper.Logs $taskName).Stdout}}
 												<tr>
-													<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
-													<td class="line">{{.Text}}</td>
+													<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+													<td><samp>{{.Text}}</samp></td>
 												</tr>
 											{{end}}
 										</table>
@@ -459,8 +510,8 @@
 										<table class="panel log">
 											{{range (index $wrapper.Logs $taskName).Stderr}}
 												<tr class="stderr">
-													<td class="time">{{.Time.Format "2006-01-02 15:04:05"}}</td>
-													<td class="line">{{.Text}}</td>
+													<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+													<td><samp>{{.Text}}</samp></td>
 												</tr>
 											{{end}}
 										</table>
@@ -475,34 +526,33 @@
 	</div>
 
 	<style>
+	#{{$scope}} .fact {
+		border: 2px outset black;
+		padding: .3em;
+	}
+
+	#{{$scope}} table.log,
+	#{{$scope}} table.log dl {
+		width: 100%;
+		font-size: .8rem;
+		font-family: "SFMono-Regular", Monaco, Menlo, Consolas, "Liberation Mono", Courier, monospace;
+	}
+
 	#{{$scope}} table.log > tbody > tr > td:first-child {
 		border-right: 2px solid var(--border);
 		padding-right: .5em;
+		width: 0; /* forced to correct width by `white-space: nowrap` below */
+
+		white-space: nowrap;
+		user-select: none;
+		vertical-align: baseline;
 	}
 
 	#{{$scope}} table.log > tbody > tr > td:nth-child(2) {
 		padding-left: .5em;
 	}
 
-	#{{$scope}} th.time, td.time, td.line {
-		font-size: 0.7em;
-	}
-
-	#{{$scope}} th.time, td.time {
-		white-space: nowrap;
-		user-select: none;
-		width: 7em;
-	}
-
-	#{{$scope}} td.line {
-		font-family: "SFMono-Regular", Monaco, Menlo, Consolas, "Liberation Mono", Courier, monospace;
-		white-space: pre-wrap;
-		vertical-align: middle;
-		word-break: break-word;
-		overflow-wrap: break-word;
-	}
-
-	#{{$scope}} .stderr {
+	#{{$scope}} table.log .stderr {
 		color: red;
 	}
 	</style>
