@@ -69,14 +69,13 @@ job: webhooks: group: webhooks: {
 			command: ["/bin/trigger", "--config", "secrets/trigger.yaml"]
 		}
 
-		if #env == "prod" {
-			vault: {
-				policies: ["cicero"]
-			}
+		vault: {
+			policies: ["cicero"]
 		}
 
 		template: [{
 			destination: "secrets/trigger.yaml"
+
 			data: #"""
 				{
 					"settings": {
@@ -88,18 +87,29 @@ job: webhooks: group: webhooks: {
 					"events": \#(json.Marshal(_data_events))
 				}
 				"""#
+
 			_data_events: all: #"""
 				set -exuo pipefail
 
 				echo "nameserver \#(#nameserver)" >> /etc/resolv.conf
 
-				ciceroPort=$(dig +short cicero.service.consul SRV | cut -d ' ' -f 3)
-				ciceroApiUrl="http://cicero.service.consul:$ciceroPort/api"
+				\#(_data_events_all_ciceroApiUrl)
 
 				<<< '{payload}' \
 				jq -r '{"github-event": .}' \
 				| curl "$ciceroApiUrl/fact" --data-binary @-
 				"""#
+
+			_data_events_all_ciceroApiUrl: string
+			if #env == "dev" {
+				_data_events_all_ciceroApiUrl: "ciceroApiUrl=http://127.0.0.1:8080/api"
+			}
+			if #env == "prod" {
+				_data_events_all_ciceroApiUrl: #"""
+					ciceroPort=$(dig +short cicero.service.consul SRV | cut -d ' ' -f 3)
+					ciceroApiUrl="http://cicero.service.consul:$ciceroPort/api"
+					"""#
+			}
 		}]
 	}
 }
