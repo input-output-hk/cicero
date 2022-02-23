@@ -12,8 +12,6 @@
   job = { start }:
     let cfg = start.value."cicero/ci".start; in
     std.chain args [
-      actionLib.jobDefaults
-
       (std.escapeNames [ ] [ ])
 
       {
