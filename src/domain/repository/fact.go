@@ -3,6 +3,7 @@ package repository
 import (
 	"io"
 
+	"cuelang.org/go/cue"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 
@@ -16,7 +17,7 @@ type FactRepository interface {
 	GetById(uuid.UUID) (domain.Fact, error)
 	GetByRunId(uuid.UUID) ([]*domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
-	GetLatestByFields([][]string) (domain.Fact, error)
-	GetByFields([][]string) ([]*domain.Fact, error)
+	GetLatestByCue(cue.Value) (domain.Fact, error)
+	GetByCue(cue.Value) ([]*domain.Fact, error)
 	Save(*domain.Fact, io.Reader) error
 }

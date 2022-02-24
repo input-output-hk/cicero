@@ -437,7 +437,7 @@ func filterFields(factValue *interface{}, filter cue.Value) {
 }
 
 func (self *actionService) getInputFactLatest(value cue.Value) (*domain.Fact, error) {
-	fact, err := self.factRepository.GetLatestByFields(collectFieldPaths(value))
+	fact, err := self.factRepository.GetLatestByCue(value)
 	if err != nil && errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -445,7 +445,7 @@ func (self *actionService) getInputFactLatest(value cue.Value) (*domain.Fact, er
 }
 
 func (self *actionService) getInputFacts(value cue.Value) ([]*domain.Fact, error) {
-	facts, err := self.factRepository.GetByFields(collectFieldPaths(value))
+	facts, err := self.factRepository.GetByCue(value)
 	if err != nil && errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -459,33 +459,6 @@ func matchFact(match cue.Value, fact *domain.Fact) (bool, error) {
 	}
 
 	return match.Subsume(factCue, cue.Final()) == nil, nil
-}
-
-func collectFieldPaths(value cue.Value) (paths [][]string) {
-	if strukt, err := value.Struct(); err != nil {
-		return
-	} else {
-		iter := strukt.Fields()
-		for iter.Next() {
-			selector := iter.Selector()
-
-			if iter.IsOptional() || selector.IsDefinition() || selector.PkgPath() != "" || !selector.IsString() {
-				continue
-			}
-
-			path := []string{iter.Label()}
-
-			if _, err := iter.Value().Struct(); err != nil {
-				paths = append(paths, path)
-			} else {
-				value := iter.Value()
-				for _, fieldPath := range collectFieldPaths(value) {
-					paths = append(paths, append(path, fieldPath...))
-				}
-			}
-		}
-	}
-	return
 }
 
 func (self *actionService) Create(source, name string) (*domain.Action, error) {

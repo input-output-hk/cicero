@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 
+	"cuelang.org/go/cue"
 	"github.com/direnv/direnv/v2/sri"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
@@ -67,52 +68,117 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	return
 }
 
-func (a *factRepository) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
+func (a *factRepository) GetLatestByCue(value cue.Value) (fact domain.Fact, err error) {
+	where, args := sqlWhereCue(value, []string{}, 0)
 	err = pgxscan.Get(
 		context.Background(), a.DB, &fact,
-		`SELECT id, run_id, value, created_at, binary_hash FROM fact `+sqlWhereHasPaths(fields)+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
-		pathsToQueryArgs(fields)...,
+		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
+		args...,
 	)
 	return
 }
 
-func (a *factRepository) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
+func (a *factRepository) GetByCue(value cue.Value) (facts []*domain.Fact, err error) {
+	where, args := sqlWhereCue(value, []string{}, 0)
 	err = pgxscan.Select(
 		context.Background(), a.DB, &facts,
-		`SELECT id, run_id, value, created_at, binary_hash FROM fact `+sqlWhereHasPaths(fields),
-		pathsToQueryArgs(fields)...,
+		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where,
+		args...,
 	)
 	return
 }
 
-func sqlWhereHasPaths(paths [][]string) (where string) {
-	if len(paths) == 0 {
+func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, args []interface{}) {
+	appendPath := func() {
+		clause += `value`
+		for _, part := range path {
+			argNum += 1
+			clause += `, $` + strconv.Itoa(argNum)
+			args = append(args, part)
+		}
 		return
 	}
 
-	where += ` WHERE `
-	n := 1
-	for i, path := range paths {
-		if i > 0 {
-			where += ` AND `
-		}
-		where += ` jsonb_extract_path(value `
-		for range path {
-			where += ` , $` + strconv.Itoa(n)
-			n += 1
-		}
-		where += ` ) IS NOT NULL `
+	appendTextEquals := func(arg string) {
+		clause = `jsonb_extract_path_text(`
+		appendPath()
+		argNum += 1
+		clause += `) = $` + strconv.Itoa(argNum)
+		args = append(args, arg)
 	}
 
-	return
-}
+	appendEquals := func(arg interface{}, cast string) {
+		clause = `jsonb_extract_path(`
+		appendPath()
+		argNum += 1
+		clause += `) = to_jsonb($` + strconv.Itoa(argNum) + `::` + cast + `)`
+		args = append(args, arg)
+	}
 
-func pathsToQueryArgs(paths [][]string) (args []interface{}) {
-	for _, path := range paths {
-		for _, field := range path {
-			args = append(args, field)
+	var and func() string
+	{
+		first := true
+		and = func() string {
+			if first {
+				first = false
+				return ``
+			}
+			return ` AND `
 		}
 	}
+
+	switch value.Kind() {
+	case cue.StructKind:
+		strukt, _ := value.Struct()
+		iter := strukt.Fields()
+		for iter.Next() {
+			selector := iter.Selector()
+
+			if iter.IsOptional() || selector.IsDefinition() || selector.PkgPath() != "" || !selector.IsString() {
+				continue
+			}
+
+			fieldClause, fieldArgs := sqlWhereCue(iter.Value(), append(path, iter.Label()), argNum)
+			clause += and() + fieldClause
+			args = append(args, fieldArgs...)
+			argNum += len(fieldArgs)
+		}
+	case cue.ListKind:
+		list, _ := value.List()
+		i := 0
+		for list.Next() {
+			itemClause, itemArgs := sqlWhereCue(list.Value(), append(path, strconv.Itoa(i)), argNum)
+			i += 1
+
+			clause += and() + itemClause
+			args = append(args, itemArgs...)
+			argNum += len(itemArgs)
+		}
+	case cue.StringKind:
+		str, _ := value.String()
+		appendTextEquals(str)
+	case cue.BytesKind:
+		bytes, _ := value.Bytes()
+		appendEquals(bytes, "bytea")
+	case cue.IntKind:
+		num, _ := value.Int64()
+		appendEquals(num, "integer")
+	case cue.FloatKind:
+		num, _ := value.Float64()
+		appendEquals(num, "real")
+	case cue.NumberKind:
+		panic("we should handle all number kinds specifically")
+	case cue.BoolKind:
+		b, _ := value.Bool()
+		appendEquals(b, "boolean")
+	case cue.NullKind:
+		appendEquals("null", "jsonb")
+	default:
+		clause = `jsonb_extract_path(`
+		appendPath()
+		clause += `) IS NOT NULL`
+	}
+
 	return
 }
 

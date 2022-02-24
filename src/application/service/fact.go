@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"cuelang.org/go/cue"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
@@ -21,8 +22,8 @@ type FactService interface {
 	GetById(uuid.UUID) (domain.Fact, error)
 	GetByRunId(uuid.UUID) ([]*domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
-	GetLatestByFields([][]string) (domain.Fact, error)
-	GetByFields([][]string) ([]*domain.Fact, error)
+	GetLatestByCue(cue.Value) (domain.Fact, error)
+	GetByCue(cue.Value) ([]*domain.Fact, error)
 	Save(*domain.Fact, io.Reader) error
 }
 
@@ -84,16 +85,16 @@ func (self *factService) Save(fact *domain.Fact, binary io.Reader) error {
 	})
 }
 
-func (self *factService) GetLatestByFields(fields [][]string) (fact domain.Fact, err error) {
-	self.logger.Debug().Interface("fields", fields).Msg("Getting latest Facts by fields")
-	fact, err = self.factRepository.GetLatestByFields(fields)
-	err = errors.WithMessagef(err, "Could not select latest Facts by fields %q", fields)
+func (self *factService) GetLatestByCue(value cue.Value) (fact domain.Fact, err error) {
+	self.logger.Debug().Interface("cue", value).Msg("Getting latest Facts by CUE")
+	fact, err = self.factRepository.GetLatestByCue(value)
+	err = errors.WithMessagef(err, "Could not select latest Facts by CUE %q", value)
 	return
 }
 
-func (self *factService) GetByFields(fields [][]string) (facts []*domain.Fact, err error) {
-	self.logger.Debug().Interface("fields", fields).Msg("Getting Facts by fields")
-	facts, err = self.factRepository.GetByFields(fields)
-	err = errors.WithMessagef(err, "Could not select Facts by fields %q", fields)
+func (self *factService) GetByCue(value cue.Value) (facts []*domain.Fact, err error) {
+	self.logger.Debug().Interface("cue", value).Msg("Getting Facts by CUE")
+	facts, err = self.factRepository.GetByCue(value)
+	err = errors.WithMessagef(err, "Could not select Facts by CUE %q", value)
 	return
 }
