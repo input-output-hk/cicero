@@ -1,0 +1,10 @@
+index-state: 2022-02-23T23:59:40Z
+packages: cicero-api
+
+write-ghc-environment-files: never
+tests: true
+test-show-details: streaming
+
+allow-newer:
+  servant:base,
+  servant:base-compat

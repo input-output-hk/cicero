@@ -10,3 +10,4 @@
 .hypothesis/
 /src/mocks/
 /nix-cache-proxy
+dist-newstyle
