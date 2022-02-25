@@ -210,13 +210,14 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		switch input.Select {
 		case domain.InputDefinitionSelectLatest:
 			if inputFactEntry, exists := inputFact[name]; exists {
-				if match, err := matchFact(input.Match.WithInputs(inputs), inputFactEntry); err != nil {
+				if matchErr, err := matchFact(input.Match.WithInputs(inputs), inputFactEntry); err != nil {
 					return false, nil, err
-				} else if match == input.Not {
+				} else if (matchErr == nil) == input.Not {
 					if !input.Optional || input.Not {
 						inputLogger.Debug().
 							Bool("runnable", false).
 							Str("fact", inputFactEntry.ID.String()).
+							AnErr("mismatch", matchErr).
 							Msg("Fact does not match")
 						return false, nil, nil
 					}
@@ -226,13 +227,14 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		case domain.InputDefinitionSelectAll:
 			if inputFactsEntry, exists := inputFacts[name]; exists {
 				for i, fact := range inputFactsEntry {
-					if match, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
+					if matchErr, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
 						return false, nil, err
-					} else if match == input.Not {
+					} else if (matchErr == nil) == input.Not {
 						if !input.Optional || input.Not {
 							inputLogger.Debug().
 								Bool("runnable", false).
 								Str("fact", fact.ID.String()).
+								AnErr("mismatch", matchErr).
 								Msg("Fact does not match")
 							return false, nil, nil
 						}
@@ -452,13 +454,13 @@ func (self *actionService) getInputFacts(value cue.Value) ([]*domain.Fact, error
 	return facts, err
 }
 
-func matchFact(match cue.Value, fact *domain.Fact) (bool, error) {
+func matchFact(match cue.Value, fact *domain.Fact) (error, error) {
 	factCue := match.Context().Encode(fact.Value)
 	if err := factCue.Err(); err != nil {
-		return false, err
+		return nil, err
 	}
 
-	return match.Subsume(factCue, cue.Final()) == nil, nil
+	return match.Subsume(factCue, cue.Final()), nil
 }
 
 func (self *actionService) Create(source, name string) (*domain.Action, error) {
