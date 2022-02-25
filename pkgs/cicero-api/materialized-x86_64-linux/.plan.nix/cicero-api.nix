@@ -34,6 +34,8 @@
       "library" = {
         depends = [
           (hsPkgs."base" or (errorHandler.buildDepError "base"))
+          (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+          (hsPkgs."binary" or (errorHandler.buildDepError "binary"))
           (hsPkgs."text" or (errorHandler.buildDepError "text"))
           (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
           (hsPkgs."containers" or (errorHandler.buildDepError "containers"))
@@ -42,7 +44,11 @@
           (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
           ];
         buildable = true;
-        modules = [ "IOHK/Cicero/API" "IOHK/Cicero/API/Action" ];
+        modules = [
+          "IOHK/Cicero/API"
+          "IOHK/Cicero/API/Action"
+          "IOHK/Cicero/API/Fact"
+          ];
         hsSourceDirs = [ "src" ];
         };
       };
