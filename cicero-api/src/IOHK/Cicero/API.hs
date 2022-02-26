@@ -56,6 +56,13 @@ instance FromJSON CreateActionResponseV1 where
     Array _ -> CreateActionAll <$> parseJSON v
     _ -> typeMismatch "Object or Array" v
 
+instance ToJSON CreateActionResponseV1 where
+  toJSON (CreateActionOnly act) = toJSON act
+  toJSON (CreateActionAll acts) = toJSON acts
+
+  toEncoding (CreateActionOnly act) = toEncoding act
+  toEncoding (CreateActionAll acts) = toEncoding acts
+
 data CreateFactV1 = CreateFact
   { -- | The data of the fact
     fact :: !Value

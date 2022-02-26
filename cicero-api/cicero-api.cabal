@@ -24,7 +24,7 @@ library
 
 executable cicero-cli
   main-is: Main.hs
-  other-modules: Fact
+  other-modules: Fact, Action
   hs-source-dirs: cli
   build-depends:
     base ^>= 4.16.0.0,

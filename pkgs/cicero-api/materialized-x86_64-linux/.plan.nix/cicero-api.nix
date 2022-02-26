@@ -67,7 +67,7 @@
             (hsPkgs."cicero-api" or (errorHandler.buildDepError "cicero-api"))
             ];
           buildable = true;
-          modules = [ "Fact" ];
+          modules = [ "Fact" "Action" ];
           hsSourceDirs = [ "cli" ];
           mainPath = [ "Main.hs" ];
           };

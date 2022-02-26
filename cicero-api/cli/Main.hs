@@ -11,13 +11,17 @@ import Network.HTTP.Client.TLS
 import Options.Applicative
 import Control.Exception
 
+import Action
 import Fact
 
-data Command = CmdFact !FactCommand
+data Command
+  = CmdFact !FactCommand
+  | CmdAction !ActionCommand
 
 commandParser :: Parser Command
 commandParser = hsubparser
   ( command "fact" (CmdFact <$> factCommandInfo)
+ <> command "action" (CmdAction <$> actionCommandInfo)
   )
 
 data Args = Args
@@ -52,6 +56,7 @@ argsInfo = info (argsParser <**> helper)
   )
 
 getHandler :: Command -> Client ClientM API -> ClientEnv -> IO ()
+getHandler (CmdAction acmd) = Action.handler acmd
 getHandler (CmdFact fcmd) = Fact.handler fcmd
 
 main :: IO ()

@@ -117,5 +117,4 @@ handler (CmdCreateFact createArgs) apiClient cEnv = do
     Just f -> Just <$> consume f
   runClientM (apiClient.createFact (CreateFact { .. })) cEnv >>= \case
     Left e -> throw e
-    Right res -> do
-      hPutStrLn stdout $ encode res.fact
+    Right res -> hPutStrLn stdout $ encode res.fact
