@@ -228,6 +228,7 @@
         cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix { flake = self; };
         webhook-trigger = prev.callPackage pkgs/trigger { };
         cicero-api = final.callPackage pkgs/cicero-api { inherit supportedSystems; src = ./.; };
+        inherit (final.cicero-api) cicero-cli;
       } // nixpkgs.lib.mapAttrs'
         (k: nixpkgs.lib.nameValuePair "cicero-evaluator-nix-run-${k}")
         (import pkgs/cicero/evaluators/nix/runners.nix prev);

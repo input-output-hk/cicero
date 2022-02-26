@@ -7,4 +7,32 @@ test-show-details: streaming
 
 allow-newer:
   servant:base,
-  servant:base-compat
+  servant:base-compat,
+  servant-client:base,
+  servant-client:base-compat,
+  servant-client:time,
+  servant-client-core:base,
+  servant-client-core:base-compat,
+  servant-client-core:template-haskell
+
+source-repository-package
+  type: git
+  location: https://github.com/TomMD/foundation.git
+  -- fix/ghc-9.2 branch, applies https://gitlab.haskell.org/ghc/head.hackage/-/blob/master/patches/basement-0.0.12.patch
+  tag: 0bb195e1fea06d144dafc5af9a0ff79af0a5f4a0
+  --sha256: 1rwy3qxrf8zxycfksidwrffqbazacchqx19w5q1rvdvh7ab6wd75
+  subdir: basement
+
+source-repository-package
+  type: git
+  location: https://github.com/tfausak/hs-memory.git
+  -- gh-86-ghc-9.2.1 branch, applies https://gitlab.haskell.org/ghc/head.hackage/-/blob/c50d7587a23ef1260721e84f8bcc1450d73177db/patches/memory-0.16.0.patch
+  tag: 3cf661a8a9a8ac028df77daa88e8d65c55a3347a
+  --sha256: 06y4xyigajhdcd59dgwasv49yr95869q3p74a441yls5vb86v28c
+
+source-repository-package
+  type: git
+  location: https://github.com/circuithub/cryptonite.git
+  -- ghc-9.2 branch
+  tag: cec291d988f0f17828384f3358214ab9bf724a13
+  --sha256: 19vs1fshsa8ksdjpfarjk5nn73rr0l4in572mczqgbzx8x5vd97w

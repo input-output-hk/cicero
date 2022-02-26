@@ -51,5 +51,26 @@
           ];
         hsSourceDirs = [ "src" ];
         };
+      exes = {
+        "cicero-cli" = {
+          depends = [
+            (hsPkgs."base" or (errorHandler.buildDepError "base"))
+            (hsPkgs."bytestring" or (errorHandler.buildDepError "bytestring"))
+            (hsPkgs."attoparsec" or (errorHandler.buildDepError "attoparsec"))
+            (hsPkgs."servant-client-core" or (errorHandler.buildDepError "servant-client-core"))
+            (hsPkgs."servant-client" or (errorHandler.buildDepError "servant-client"))
+            (hsPkgs."optparse-applicative" or (errorHandler.buildDepError "optparse-applicative"))
+            (hsPkgs."http-client-tls" or (errorHandler.buildDepError "http-client-tls"))
+            (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
+            (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
+            (hsPkgs."unix" or (errorHandler.buildDepError "unix"))
+            (hsPkgs."cicero-api" or (errorHandler.buildDepError "cicero-api"))
+            ];
+          buildable = true;
+          modules = [ "Fact" ];
+          hsSourceDirs = [ "cli" ];
+          mainPath = [ "Main.hs" ];
+          };
+        };
       };
     } // rec { src = (pkgs.lib).mkDefault ../cicero-api; }

@@ -21,3 +21,20 @@ library
     uuid ^>= 1.3.15,
     servant ^>=0.19
   hs-source-dirs:   src
+
+executable cicero-cli
+  main-is: Main.hs
+  other-modules: Fact
+  hs-source-dirs: cli
+  build-depends:
+    base ^>= 4.16.0.0,
+    bytestring ^>= 0.11.1.0,
+    attoparsec ^>= 0.14.4,
+    servant-client-core ^>= 0.19,
+    servant-client ^>= 0.19,
+    optparse-applicative ^>= 0.17.0.0,
+    http-client-tls ^>= 0.3.6.1,
+    aeson ^>= 2.0.3.0,
+    http-client ^>= 0.7.11,
+    unix ^>= 2.7.2.2,
+    cicero-api

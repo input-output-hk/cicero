@@ -3,6 +3,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 module IOHK.Cicero.API where
 
 import Servant.API
@@ -23,7 +25,7 @@ type API = "api" :> NamedRoutes APIRoutes
 data APIRoutes mode = APIRoutes
   { createAction :: !(mode :- "action" :> ReqBody '[JSON] CreateActionV1 :> Post '[JSON] CreateActionResponseV1)
   , createFact :: !(mode :- "fact" :> ReqBody '[OctetStream] CreateFactV1 :> Post '[JSON] CreateFactResponseV1)
-  }
+  } deriving Generic
 
 data CreateActionV1 = CreateAction
   { names :: !ActionNamesV1
@@ -70,7 +72,7 @@ instance MimeRender OctetStream CreateFactV1 where
         Just a -> fromLazyByteString a
         Nothing -> mempty
 
-newtype CreateFactResponseV1 = CreateFactResponse { getFact :: FactV1 }
+newtype CreateFactResponseV1 = CreateFactResponse { fact :: FactV1 }
 
 instance FromJSON CreateFactResponseV1 where
   parseJSON v = CreateFactResponse <$> parseJSON v

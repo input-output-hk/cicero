@@ -6,6 +6,8 @@
     materialized = let materialized = ./. + "/materialized-${system}"; in if builtins.pathExists materialized then materialized else null;
   };
 
+  inherit (project.hsPkgs.cicero-api.components.exes) cicero-cli;
+
   updateAllMaterialized = {
     type = "app";
     program = (writeShellScript "updateAllMaterialized" ''
