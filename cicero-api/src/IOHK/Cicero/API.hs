@@ -4,6 +4,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 module IOHK.Cicero.API where
 
@@ -14,9 +16,12 @@ import Data.Aeson
 import Data.Aeson.Types
 import Data.ByteString.Lazy
 import Data.Binary.Builder
+import Data.UUID
+import Numeric.Natural
 
 import IOHK.Cicero.API.Action
 import IOHK.Cicero.API.Fact
+import IOHK.Cicero.API.Run
 
 -- | The Cicero API
 type API = "api" :> NamedRoutes APIRoutes
@@ -25,6 +30,7 @@ type API = "api" :> NamedRoutes APIRoutes
 data APIRoutes mode = APIRoutes
   { createAction :: !(mode :- "action" :> ReqBody '[JSON] CreateActionV1 :> Post '[JSON] CreateActionResponseV1)
   , createFact :: !(mode :- "fact" :> ReqBody '[OctetStream] CreateFactV1 :> Post '[JSON] CreateFactResponseV1)
+  , getRuns :: !(mode :- "run" :> QueryFlag "recursive" :> QueryParams "input" UUID :> QueryParam "offset" Natural :> QueryParam "limit" Natural :> Get '[JSON] GetRunsResponseV1)
   } deriving Generic
 
 data CreateActionV1 = CreateAction
@@ -79,7 +85,6 @@ instance MimeRender OctetStream CreateFactV1 where
         Just a -> fromLazyByteString a
         Nothing -> mempty
 
-newtype CreateFactResponseV1 = CreateFactResponse { fact :: FactV1 }
+newtype CreateFactResponseV1 = CreateFactResponse { fact :: FactV1 } deriving newtype FromJSON
 
-instance FromJSON CreateFactResponseV1 where
-  parseJSON v = CreateFactResponse <$> parseJSON v
+newtype GetRunsResponseV1 = GetRunsResponse { runs :: [ RunV1 ] } deriving newtype FromJSON
