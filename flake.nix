@@ -220,7 +220,7 @@
           hydraJobs = selfPkgs;
           devShell = pkgs.devshell.fromTOML ./devshell.toml;
           devShells.cicero-api = selfPkgs.cicero-api.project.shell;
-          apps.updateAllMaterialized = selfPkgs.cicero-api.updateAllMaterialized;
+          inherit (selfPkgs.cicero-api) apps;
         }) // {
       overlay = final: prev: {
         cicero = prev.callPackage pkgs/cicero { flake = self; };

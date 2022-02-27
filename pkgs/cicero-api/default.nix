@@ -8,7 +8,7 @@
 
   inherit (project.hsPkgs.cicero-api.components.exes) cicero-cli;
 
-  updateAllMaterialized = {
+  apps.updateAllMaterialized = {
     type = "app";
     program = (writeShellScript "updateAllMaterialized" ''
       set -eEuo pipefail
@@ -23,5 +23,10 @@
         "$script" "./pkgs/cicero-api/materialized-${system}"
       '') supportedSystems)}
     '').outPath;
+  };
+
+  apps.cicero-cli = {
+    type = "app";
+    program = "${cicero-cli}/bin/cicero-cli";
   };
 }
