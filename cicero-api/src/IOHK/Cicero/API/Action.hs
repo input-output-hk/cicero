@@ -1,20 +1,71 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE DeriveGeneric #-}
 module IOHK.Cicero.API.Action where
 
 import Data.Text
 import Data.Aeson
 import Data.Aeson.Encoding
+import Data.Aeson.Types
 import Data.Map
 import Data.Time.LocalTime
 import Data.UUID
 import Data.String
+import Servant.API
+import Servant.API.Generic
+import Servant.API.NamedRoutes
 
+type API = NamedRoutes ActionRoutes
+
+-- | Action routes in the Cicero API
+data ActionRoutes mode = ActionRoutes
+  { create :: mode :- ReqBody '[JSON] CreateActionV1 :> Post '[JSON] CreateActionResponseV1
+  } deriving stock Generic
+
+data CreateActionV1 = CreateAction
+  { names :: !ActionNamesV1
+  , source :: !ActionSourceV1
+  }
+
+instance ToJSON CreateActionV1 where
+  toJSON ca = object $ "source" .= ca.source : case ca.names of
+    Only n -> [ "name" .= n ]
+    AllNames -> []
+  toEncoding ca = pairs $ "source" .= ca.source <> case ca.names of
+    Only n -> "name" .= n
+    AllNames -> mempty
+
+data CreateActionResponseV1
+  = -- | The specific action created
+    --
+    -- Returned if an 'Only' was set in 'names'
+    CreateActionOnly !ActionV1
+  | -- | All actions created
+    --
+    -- Returned if 'AllNames' was set in 'names'
+    CreateActionAll !([ ActionV1 ])
+
+instance FromJSON CreateActionResponseV1 where
+  parseJSON v = prependFailure "parsing CreateActionResponseV1 failed, " $ case v of
+    Object _ -> CreateActionOnly <$> parseJSON v
+    Array _ -> CreateActionAll <$> parseJSON v
+    _ -> typeMismatch "Object or Array" v
+
+instance ToJSON CreateActionResponseV1 where
+  toJSON (CreateActionOnly act) = toJSON act
+  toJSON (CreateActionAll acts) = toJSON acts
+
+  toEncoding (CreateActionOnly act) = toEncoding act
+  toEncoding (CreateActionAll acts) = toEncoding acts
 
 -- | The source of an action, as a [go-getter URL](https://github.com/hashicorp/go-getter#url-format)
-newtype ActionSourceV1 = ActionSource { unActionSource :: Text } deriving (IsString)
+newtype ActionSourceV1 = ActionSource { unActionSource :: Text } deriving newtype IsString
 
 instance FromJSON ActionSourceV1 where
   parseJSON v = ActionSource <$> parseJSON v

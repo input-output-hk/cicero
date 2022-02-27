@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Run where
 
-import IOHK.Cicero.API
+import IOHK.Cicero.API.Run
 import Data.UUID as UUID
 import Numeric.Natural
 import Servant.Client
@@ -61,6 +61,6 @@ runCommandInfo = info runCommandParser
   )
 
 handler :: RunCommand -> Client ClientM API -> ClientEnv -> IO ()
-handler (CmdGetRuns gra) apiClient cEnv = runClientM (apiClient.getRuns gra.recursive gra.inputs gra.offset gra.limit) cEnv >>= \case
+handler (CmdGetRuns gra) runClient cEnv = runClientM (runClient.getAll gra.recursive gra.inputs gra.offset gra.limit) cEnv >>= \case
   Left e -> throw e
-  Right res -> hPutStrLn stdout $ encode res.runs
+  Right res -> hPutStrLn stdout $ encode res

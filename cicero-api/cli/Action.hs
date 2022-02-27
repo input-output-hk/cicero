@@ -2,7 +2,6 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 module Action where
 
-import IOHK.Cicero.API
 import IOHK.Cicero.API.Action
 import Options.Applicative
 import Servant.Client
@@ -48,6 +47,6 @@ actionCommandInfo = info actionCommandParser
   )
 
 handler :: ActionCommand -> Client ClientM API -> ClientEnv -> IO ()
-handler (CmdCreateAction ca) apiClient cEnv = runClientM (apiClient.createAction ca) cEnv >>= \case
+handler (CmdCreateAction ca) actionClient cEnv = runClientM (actionClient.create ca) cEnv >>= \case
   Left e -> throw e
   Right res -> hPutStrLn stdout $ encode res

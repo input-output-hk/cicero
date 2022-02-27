@@ -4,7 +4,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module Fact where
 
-import IOHK.Cicero.API
+import IOHK.Cicero.API.Fact
 import Servant.Client
 import Options.Applicative
 import Control.Exception
@@ -102,7 +102,7 @@ data FactParseException = FactParseException
 instance Exception FactParseException
 
 handler :: FactCommand -> Client ClientM API -> ClientEnv -> IO ()
-handler (CmdCreateFact createArgs) apiClient cEnv = do
+handler (CmdCreateFact createArgs) factClient cEnv = do
   fact <- case createArgs.factSource of
     LiteralFact v -> pure v
     ReadableFact f -> do
@@ -115,6 +115,6 @@ handler (CmdCreateFact createArgs) apiClient cEnv = do
   artifact <- case createArgs.artifactSource of
     Nothing -> pure Nothing
     Just f -> Just <$> consume f
-  runClientM (apiClient.createFact (CreateFact { .. })) cEnv >>= \case
+  runClientM (factClient.create (CreateFact { .. })) cEnv >>= \case
     Left e -> throw e
-    Right res -> hPutStrLn stdout $ encode res.fact
+    Right res -> hPutStrLn stdout $ encode res

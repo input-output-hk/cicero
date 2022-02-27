@@ -1,11 +1,31 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
 module IOHK.Cicero.API.Run where
 
 import Data.Aeson
 import Data.Time.LocalTime
 import Data.UUID
+import Numeric.Natural
+import Servant.API
+import Servant.API.Generic
+import Servant.API.NamedRoutes
+
+type API = NamedRoutes RunRoutes
+
+-- | Run routes in the Cicero API
+data RunRoutes mode = RunRoutes
+  { getAll :: mode
+           :- QueryFlag "recursive"
+           :> QueryParams "input" UUID
+           :> QueryParam "offset" Natural
+           :> QueryParam "limit" Natural
+           :> Get '[JSON] [RunV1]
+  } deriving stock Generic
 
 data RunV1 = Run
   { nomadJobId :: !UUID

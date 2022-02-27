@@ -1,12 +1,45 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module IOHK.Cicero.API.Fact where
 
 import Data.Text
 import Data.Aeson
 import Data.Time.LocalTime
 import Data.UUID
+import Data.ByteString.Lazy
+import Data.Binary.Builder
+import Servant.API
+import Servant.API.Generic
+import Servant.API.NamedRoutes
+
+type API = NamedRoutes FactRoutes
+
+-- | Fact routes in the Cicero API
+data FactRoutes mode = FactRoutes
+  { create :: mode :- ReqBody '[OctetStream] CreateFactV1 :> Post '[JSON] FactV1
+  } deriving stock Generic
+
+data CreateFactV1 = CreateFact
+  { -- | The data of the fact
+    fact :: !Value
+  , -- | Binary blob attached to the fact
+    artifact :: !(Maybe ByteString)
+  }
+
+-- | This instance assumes that @'toEncoding' \@'Value'@ has no trailing whitespace!
+instance MimeRender OctetStream CreateFactV1 where
+  mimeRender _ cf = toLazyByteString $ factBuilt <> artifactBuilt
+    where
+      factBuilt = fromEncoding $ toEncoding cf.fact
+      artifactBuilt = case cf.artifact of
+        Just a -> fromLazyByteString a
+        Nothing -> mempty
 
 -- | A Cicero fact
 data FactV1 = Fact
@@ -18,7 +51,7 @@ data FactV1 = Fact
     --
     -- This should be a proper hash type
     binaryHash :: !(Maybe Text)
-  } deriving Show
+  } deriving stock Show
 
 instance FromJSON FactV1 where
   parseJSON = withObject "FactV1" \o -> Fact

@@ -59,9 +59,9 @@ argsInfo = info (argsParser <**> helper)
   )
 
 getHandler :: Command -> Client ClientM API -> ClientEnv -> IO ()
-getHandler (CmdAction acmd) = Action.handler acmd
-getHandler (CmdFact fcmd) = Fact.handler fcmd
-getHandler (CmdRun rcmd) = Run.handler rcmd
+getHandler (CmdAction acmd) apiClient = Action.handler acmd apiClient.action
+getHandler (CmdFact fcmd) apiClient = Fact.handler fcmd apiClient.fact
+getHandler (CmdRun rcmd) apiClient = Run.handler rcmd apiClient.run
 
 main :: IO ()
 main = do
