@@ -23,6 +23,7 @@ type API = NamedRoutes FactRoutes
 -- | Fact routes in the Cicero API
 data FactRoutes mode = FactRoutes
   { create :: mode :- ReqBody '[OctetStream] CreateFactV1 :> Post '[JSON] FactV1
+  , getAll :: mode :- QueryParam' '[Required, Strict] "run" UUID :> Get '[JSON] [FactV1]
   } deriving stock Generic
 
 data CreateFactV1 = CreateFact

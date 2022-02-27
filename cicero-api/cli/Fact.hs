@@ -16,6 +16,7 @@ import System.IO (stdout)
 import Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Char8
 import Data.Attoparsec.ByteString (feed, eitherResult, parse, IResult(Partial))
+import Data.UUID
 
 data Readable
   = File !FilePath
@@ -82,11 +83,27 @@ createFactArgsInfo = info createFactArgsParser
  <> header "cicero-cli fact create — Create a new fact"
   )
 
-data FactCommand = CmdCreateFact !CreateFactArgs
+getFactsParser :: Parser UUID
+getFactsParser = option (maybeReader fromString)
+  ( long "run-id"
+ <> metavar "RUN_ID"
+ <> help "the ID of the run which produced the facts"
+  )
+
+getFactsInfo :: ParserInfo UUID
+getFactsInfo = info getFactsParser
+  ( fullDesc
+ <> header "cicero-cli fact get-all — Get information about facts"
+  )
+
+data FactCommand
+  = CmdCreateFact !CreateFactArgs
+  | CmdGetFacts !UUID
 
 factCommandParser :: Parser FactCommand
 factCommandParser = hsubparser
   ( command "create" (CmdCreateFact <$> createFactArgsInfo)
+ <> command "get-all" (CmdGetFacts <$> getFactsInfo)
   )
 
 factCommandInfo :: ParserInfo FactCommand
@@ -118,3 +135,6 @@ handler (CmdCreateFact createArgs) factClient cEnv = do
   runClientM (factClient.create (CreateFact { .. })) cEnv >>= \case
     Left e -> throw e
     Right res -> hPutStrLn stdout $ encode res
+handler (CmdGetFacts rid) factClient cEnv = runClientM (factClient.getAll rid) cEnv >>= \case
+  Left e -> throw e
+  Right res -> hPutStrLn stdout $ encode res
