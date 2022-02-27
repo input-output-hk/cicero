@@ -26,6 +26,7 @@ type API = NamedRoutes ActionRoutes
 -- | Action routes in the Cicero API
 data ActionRoutes mode = ActionRoutes
   { create :: mode :- ReqBody '[JSON] CreateActionV1 :> Post '[JSON] CreateActionResponseV1
+  , get :: mode :- Capture "id" UUID :> Get '[JSON] ActionV1
   } deriving stock Generic
 
 data CreateActionV1 = CreateAction

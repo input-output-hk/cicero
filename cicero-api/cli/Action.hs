@@ -3,6 +3,7 @@
 module Action where
 
 import IOHK.Cicero.API.Action
+import Data.UUID
 import Options.Applicative
 import Servant.Client
 import Data.Aeson
@@ -33,11 +34,26 @@ createActionInfo = info createActionParser
  <> header "cicero-cli action create — Create a new action"
   )
 
-data ActionCommand = CmdCreateAction !CreateActionV1
+getActionParser :: Parser UUID
+getActionParser = argument (maybeReader fromString)
+  ( metavar "ACTION_ID"
+ <> help "the ID of the action to get"
+  )
+
+getActionInfo :: ParserInfo UUID
+getActionInfo = info getActionParser
+  ( fullDesc
+ <> header "cicero-cli action get — Get information about an action"
+  )
+
+data ActionCommand
+  = CmdCreateAction !CreateActionV1
+  | CmdGetAction !UUID
 
 actionCommandParser :: Parser ActionCommand
 actionCommandParser = hsubparser
   ( command "create" (CmdCreateAction <$> createActionInfo)
+ <> command "get" (CmdGetAction <$> getActionInfo)
   )
 
 actionCommandInfo :: ParserInfo ActionCommand
@@ -48,5 +64,8 @@ actionCommandInfo = info actionCommandParser
 
 handler :: ActionCommand -> Client ClientM API -> ClientEnv -> IO ()
 handler (CmdCreateAction ca) actionClient cEnv = runClientM (actionClient.create ca) cEnv >>= \case
+  Left e -> throw e
+  Right res -> hPutStrLn stdout $ encode res
+handler (CmdGetAction id) actionClient cEnv = runClientM (actionClient.get id) cEnv >>= \case
   Left e -> throw e
   Right res -> hPutStrLn stdout $ encode res
