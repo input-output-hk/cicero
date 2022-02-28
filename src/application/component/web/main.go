@@ -935,6 +935,9 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 	} else if fact, err := self.FactService.GetByRunId(id); err != nil {
 		self.ServerError(w, err)
 	} else {
+		if fact == nil {
+			fact = []*domain.Fact{}
+		}
 		self.json(w, fact, http.StatusOK)
 	}
 }
