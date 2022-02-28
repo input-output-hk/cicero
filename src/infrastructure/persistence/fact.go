@@ -69,7 +69,7 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 }
 
 func (a *factRepository) GetLatestByCue(value cue.Value) (fact domain.Fact, err error) {
-	where, args := sqlWhereCue(value, []string{}, 0)
+	where, args := sqlWhereCue(value, nil, 0)
 	err = pgxscan.Get(
 		context.Background(), a.DB, &fact,
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
@@ -79,7 +79,7 @@ func (a *factRepository) GetLatestByCue(value cue.Value) (fact domain.Fact, err 
 }
 
 func (a *factRepository) GetByCue(value cue.Value) (facts []*domain.Fact, err error) {
-	where, args := sqlWhereCue(value, []string{}, 0)
+	where, args := sqlWhereCue(value, nil, 0)
 	err = pgxscan.Select(
 		context.Background(), a.DB, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where,
