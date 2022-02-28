@@ -107,12 +107,51 @@ func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, arg
 		args = append(args, arg)
 	}
 
-	appendEquals := func(arg interface{}, cast string) {
+	appendArg := func(arg cue.Value) {
+		var v interface{}
+		var cast string
+
+		switch arg.Kind() {
+		case cue.BytesKind:
+			v, _ = arg.Bytes()
+			cast = "bytea"
+		case cue.IntKind:
+			v, _ = arg.Int64()
+			cast = "integer"
+		case cue.FloatKind:
+			v, _ = arg.Float64()
+			cast = "real"
+		case cue.NumberKind:
+			panic("we should handle all number kinds specifically")
+		case cue.BoolKind:
+			v, _ = arg.Bool()
+			cast = "boolean"
+		case cue.NullKind:
+			v = "null"
+			cast = "jsonb"
+		case cue.StringKind:
+			panic("you likely want to use appendTextEquals instead")
+		default:
+			panic("arg must be concrete scalar")
+		}
+
+		argNum += 1
+		clause += `$` + strconv.Itoa(argNum) + `::` + cast
+		args = append(args, v)
+	}
+
+	appendComparision := func(cmp string, arg cue.Value) {
 		clause = `jsonb_extract_path(`
 		appendPath()
-		argNum += 1
-		clause += `) = to_jsonb($` + strconv.Itoa(argNum) + `::` + cast + `)`
-		args = append(args, arg)
+		clause += `) ` + cmp + ` to_jsonb(`
+		appendArg(arg)
+		clause += `)`
+	}
+
+	appendClause := func(subClause string, subArgs []interface{}) {
+		clause += subClause
+		args = append(args, subArgs...)
+		argNum += len(subArgs)
 	}
 
 	var and func() string
@@ -127,11 +166,10 @@ func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, arg
 		}
 	}
 
+Kind:
 	switch value.Kind() {
 	case cue.StructKind:
-		strukt, _ := value.Struct()
-		iter := strukt.Fields()
-		for iter.Next() {
+		for iter, _ := value.Fields(); iter.Next(); {
 			selector := iter.Selector()
 
 			if iter.IsOptional() || selector.IsDefinition() || selector.PkgPath() != "" || !selector.IsString() {
@@ -139,44 +177,62 @@ func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, arg
 			}
 
 			fieldClause, fieldArgs := sqlWhereCue(iter.Value(), append(path, iter.Label()), argNum)
-			clause += and() + fieldClause
-			args = append(args, fieldArgs...)
-			argNum += len(fieldArgs)
+			appendClause(and()+fieldClause, fieldArgs)
 		}
 	case cue.ListKind:
 		list, _ := value.List()
-		i := 0
-		for list.Next() {
+		for i := 0; list.Next(); i += 1 {
 			itemClause, itemArgs := sqlWhereCue(list.Value(), append(path, strconv.Itoa(i)), argNum)
-			i += 1
-
-			clause += and() + itemClause
-			args = append(args, itemArgs...)
-			argNum += len(itemArgs)
+			appendClause(and()+itemClause, itemArgs)
 		}
 	case cue.StringKind:
 		str, _ := value.String()
 		appendTextEquals(str)
-	case cue.BytesKind:
-		bytes, _ := value.Bytes()
-		appendEquals(bytes, "bytea")
-	case cue.IntKind:
-		num, _ := value.Int64()
-		appendEquals(num, "integer")
-	case cue.FloatKind:
-		num, _ := value.Float64()
-		appendEquals(num, "real")
-	case cue.NumberKind:
-		panic("we should handle all number kinds specifically")
-	case cue.BoolKind:
-		b, _ := value.Bool()
-		appendEquals(b, "boolean")
-	case cue.NullKind:
-		appendEquals("null", "jsonb")
-	default:
+	case cue.BytesKind, cue.IntKind, cue.FloatKind, cue.NumberKind, cue.BoolKind, cue.NullKind:
+		appendComparision("=", value)
+	case cue.BottomKind, cue.TopKind:
+		switch op, vals := value.Expr(); op {
+		case cue.OrOp:
+			clause = `(`
+			lhsClause, lhsArgs := sqlWhereCue(vals[0], path, argNum)
+			appendClause(lhsClause, lhsArgs)
+			clause += ` OR `
+			rhsClause, rhsArgs := sqlWhereCue(vals[1], path, argNum)
+			appendClause(rhsClause, rhsArgs)
+			clause += `)`
+			break Kind
+		case cue.GreaterThanOp:
+			if val := vals[0]; val.IsConcrete() {
+				appendComparision(">", val)
+				break Kind
+			}
+		case cue.LessThanOp:
+			if val := vals[0]; val.IsConcrete() {
+				appendComparision("<", val)
+				break Kind
+			}
+		case cue.LessThanEqualOp:
+			if val := vals[0]; val.IsConcrete() {
+				appendComparision("<=", val)
+				break Kind
+			}
+		case cue.GreaterThanEqualOp:
+			if val := vals[0]; val.IsConcrete() {
+				appendComparision(">=", val)
+				break Kind
+			}
+		case cue.NotEqualOp:
+			if val := vals[0]; val.IsConcrete() {
+				appendComparision("<>", val)
+				break Kind
+			}
+		}
+
 		clause = `jsonb_extract_path(`
 		appendPath()
 		clause += `) IS NOT NULL`
+	default:
+		panic("switch should be exhaustive")
 	}
 
 	return
