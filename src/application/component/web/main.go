@@ -771,8 +771,9 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	fact, binary, binaryCloser, ok := self.getFact(w, req)
-	if !ok {
+	fact, binary, binaryCloser, err := self.getFact(w, req)
+	if err != nil {
+		self.Error(w, err)
 		return
 	}
 
@@ -948,8 +949,9 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
-	fact, binary, binaryCloser, ok := self.getFact(w, req)
-	if !ok {
+	fact, binary, binaryCloser, err := self.getFact(w, req)
+	if err != nil {
+		self.Error(w, err)
 		return
 	}
 
@@ -967,25 +969,31 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.Fact, binary io.Reader, binaryCloser io.Closer, ok bool) {
+func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.Fact, binary io.Reader, binaryCloser io.Closer, fErr error) {
 	if reader, err := req.MultipartReader(); err == nil {
 		for i := 0; i < 2; i++ {
 			if part, err := reader.NextPart(); err != nil {
 				if err == io.EOF {
 					if i == 0 {
-						self.ClientError(w, errors.New("No part for the Fact value received"))
+						fErr = HandlerError{
+							errors.New("No part for the Fact value received"),
+							http.StatusPreconditionFailed,
+						}
 						return
 					}
 					break
 				}
-				self.ServerError(w, err)
+				fErr = HandlerError{err, http.StatusInternalServerError}
 				return
 			} else {
 				switch i {
 				case 0:
 					factDecoder := json.NewDecoder(part)
 					if err := factDecoder.Decode(&fact.Value); err != nil {
-						self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
+						fErr = HandlerError{
+							errors.WithMessage(err, "Could not unmarshal json body"),
+							http.StatusPreconditionFailed,
+						}
 						return
 					}
 				case 1:
@@ -995,8 +1003,52 @@ func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.
 			}
 		}
 	} else if binary, err = fact.FromReader(req.Body); err != nil {
-		self.ClientError(w, err)
+		fErr = HandlerError{err, http.StatusPreconditionFailed}
 	}
-	ok = true
 	return
+}
+
+type HandlerError struct {
+	error
+	StatusCode int
+}
+
+func (self *Web) ServerError(w http.ResponseWriter, err error) {
+	self.Error(w, HandlerError{err, http.StatusInternalServerError})
+}
+
+func (self *Web) ClientError(w http.ResponseWriter, err error) {
+	self.Error(w, HandlerError{err, http.StatusPreconditionFailed})
+}
+
+func (self *Web) NotFound(w http.ResponseWriter, err error) {
+	self.Error(w, HandlerError{err, http.StatusNotFound})
+}
+
+func (self *Web) BadRequest(w http.ResponseWriter, err error) {
+	self.Error(w, HandlerError{err, http.StatusBadRequest})
+}
+
+func (self *Web) Error(w http.ResponseWriter, err error) {
+	status := 500
+	switch err.(type) {
+	case HandlerError:
+		status = err.(HandlerError).StatusCode
+	}
+
+	self.Logger.
+		Err(err).
+		Int("status", status).
+		Msg("Handler error")
+
+	http.Error(w, err.Error(), status)
+}
+
+func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(obj); err != nil {
+		self.ServerError(w, err)
+		return
+	}
 }

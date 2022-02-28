@@ -19,36 +19,6 @@ var templatesFs embed.FS
 //go:embed static
 var staticFs embed.FS
 
-func (self *Web) ServerError(w http.ResponseWriter, err error) {
-	self.Error(w, err, http.StatusInternalServerError)
-}
-
-func (self *Web) ClientError(w http.ResponseWriter, err error) {
-	self.Error(w, err, http.StatusPreconditionFailed)
-}
-
-func (self *Web) NotFound(w http.ResponseWriter, err error) {
-	self.Error(w, err, http.StatusNotFound)
-}
-
-func (self *Web) BadRequest(w http.ResponseWriter, err error) {
-	self.Error(w, err, http.StatusBadRequest)
-}
-
-func (self *Web) Error(w http.ResponseWriter, err error, status int) {
-	self.Logger.Err(err).Msg("Handler error")
-	http.Error(w, err.Error(), status)
-}
-
-func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(obj); err != nil {
-		self.ServerError(w, err)
-		return
-	}
-}
-
 var layout *template.Template
 var templates = map[string]*template.Template{}
 
