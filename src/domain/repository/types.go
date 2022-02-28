@@ -34,7 +34,7 @@ func (p *Page) PrevOffset() *int {
 
 func (p *Page) NextOffset() *int {
 	offset := p.Offset + p.Limit
-	if offset >= p.Total-1 {
+	if offset >= p.Total {
 		return nil
 	}
 	return &offset
