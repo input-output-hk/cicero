@@ -771,15 +771,23 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	fact := domain.Fact{
-		RunId: &run.NomadJobID,
+	fact, binary, binaryCloser, ok := self.getFact(w, req)
+	if !ok {
+		return
 	}
 
-	if binary, err := fact.FromReader(req.Body); err != nil {
-		self.ClientError(w, err)
-	} else if err := self.FactService.Save(&fact, binary); err != nil {
+	fact.RunId = &run.NomadJobID
+
+	if err := self.FactService.Save(&fact, binary); err != nil {
 		self.ServerError(w, err)
 	} else {
+		if binaryCloser != nil {
+			if err := binaryCloser.Close(); err != nil {
+				self.ServerError(w, err)
+				return
+			}
+		}
+
 		self.json(w, fact, http.StatusOK)
 	}
 }
@@ -940,12 +948,55 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
-	fact := domain.Fact{}
-	if binary, err := fact.FromReader(req.Body); err != nil {
-		self.ClientError(w, err)
-	} else if err := self.FactService.Save(&fact, binary); err != nil {
+	fact, binary, binaryCloser, ok := self.getFact(w, req)
+	if !ok {
+		return
+	}
+
+	if err := self.FactService.Save(&fact, binary); err != nil {
 		self.ServerError(w, err)
 	} else {
+		if binaryCloser != nil {
+			if err := binaryCloser.Close(); err != nil {
+				self.ServerError(w, err)
+				return
+			}
+		}
+
 		self.json(w, fact, http.StatusOK)
 	}
+}
+
+func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.Fact, binary io.Reader, binaryCloser io.Closer, ok bool) {
+	if reader, err := req.MultipartReader(); err == nil {
+		for i := 0; i < 2; i++ {
+			if part, err := reader.NextPart(); err != nil {
+				if err == io.EOF {
+					if i == 0 {
+						self.ClientError(w, errors.New("No part for the Fact value received"))
+						return
+					}
+					break
+				}
+				self.ServerError(w, err)
+				return
+			} else {
+				switch i {
+				case 0:
+					factDecoder := json.NewDecoder(part)
+					if err := factDecoder.Decode(&fact.Value); err != nil {
+						self.ClientError(w, errors.WithMessage(err, "Could not unmarshal json body"))
+						return
+					}
+				case 1:
+					binary = part
+					binaryCloser = part
+				}
+			}
+		}
+	} else if binary, err = fact.FromReader(req.Body); err != nil {
+		self.ClientError(w, err)
+	}
+	ok = true
+	return
 }
