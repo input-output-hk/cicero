@@ -194,11 +194,11 @@ Kind:
 		switch op, vals := value.Expr(); op {
 		case cue.OrOp:
 			clause = `(`
-			lhsClause, lhsArgs := sqlWhereCue(vals[0], path, argNum)
-			appendClause(lhsClause, lhsArgs)
+			subClause, subArgs := sqlWhereCue(vals[0], path, argNum)
+			appendClause(subClause, subArgs)
 			clause += ` OR `
-			rhsClause, rhsArgs := sqlWhereCue(vals[1], path, argNum)
-			appendClause(rhsClause, rhsArgs)
+			subClause, subArgs = sqlWhereCue(vals[1], path, argNum)
+			appendClause(subClause, subArgs)
 			clause += `)`
 			break Kind
 		case cue.GreaterThanOp:
