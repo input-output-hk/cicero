@@ -229,7 +229,12 @@ in rec {
                  memory = 1024 * 3;
                }
              }:
-    { name, std, lib, actionLib, ... } @ args:
+    { name
+    , id
+    , std ? std
+    , lib ? lib
+    , actionLib ? import ./action-lib.nix { inherit std lib; }
+    , ... } @ args:
     {
       inputs.start = ''
         "${name}": start: {
