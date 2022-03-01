@@ -4,10 +4,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE DerivingStrategies #-}
 module IOHK.Cicero.API.Run where
 
 import Data.Aeson
+import Data.Coerce
 import Data.Time.LocalTime
 import Data.UUID
 import Numeric.Natural
@@ -15,21 +17,30 @@ import Servant.API
 import Servant.API.Generic
 import Servant.API.NamedRoutes
 
+import IOHK.Cicero.API.Action
+import IOHK.Cicero.API.Fact
+
+newtype RunID = RunID { uuid :: UUID } deriving newtype (ToJSON, FromJSON, ToHttpApiData, Eq, Ord)
+
+runIdFromString :: String -> Maybe RunID
+runIdFromString = coerce . fromString
+
+
 type API = NamedRoutes RunRoutes
 
 -- | Run routes in the Cicero API
 data RunRoutes mode = RunRoutes
   { getAll :: mode
            :- QueryFlag "recursive"
-           :> QueryParams "input" UUID
+           :> QueryParams "input" FactID
            :> QueryParam "offset" Natural
            :> QueryParam "limit" Natural
            :> Get '[JSON] [RunV1]
   } deriving stock Generic
 
 data RunV1 = Run
-  { nomadJobId :: !UUID
-  , actionId :: !UUID
+  { nomadJobId :: !RunID
+  , actionId :: !ActionID
   , createdAt :: !ZonedTime
   , finishedAt :: !(Maybe ZonedTime)
   }

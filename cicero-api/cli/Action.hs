@@ -3,7 +3,6 @@
 module Action where
 
 import IOHK.Cicero.API.Action
-import Data.UUID
 import Options.Applicative
 import Servant.Client
 import Data.Aeson
@@ -34,13 +33,13 @@ createActionInfo = info createActionParser
  <> header "cicero-cli action create — Create a new action"
   )
 
-getActionParser :: Parser UUID
-getActionParser = argument (maybeReader fromString)
+getActionParser :: Parser ActionID
+getActionParser = argument (maybeReader actionIdFromString)
   ( metavar "ACTION_ID"
  <> help "the ID of the action to get"
   )
 
-getActionInfo :: ParserInfo UUID
+getActionInfo :: ParserInfo ActionID
 getActionInfo = info getActionParser
   ( fullDesc
  <> header "cicero-cli action get — Get information about an action"
@@ -48,7 +47,7 @@ getActionInfo = info getActionParser
 
 data ActionCommand
   = CmdCreateAction !CreateActionV1
-  | CmdGetAction !UUID
+  | CmdGetAction !ActionID
 
 actionCommandParser :: Parser ActionCommand
 actionCommandParser = hsubparser

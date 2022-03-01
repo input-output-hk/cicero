@@ -2,8 +2,9 @@
 {-# LANGUAGE LambdaCase #-}
 module Run where
 
+import IOHK.Cicero.API.Fact hiding (API)
 import IOHK.Cicero.API.Run
-import Data.UUID as UUID
+import Data.UUID
 import Numeric.Natural
 import Servant.Client
 import Data.Aeson
@@ -14,7 +15,7 @@ import Options.Applicative
 
 data GetRunsArgs = GetRunsArgs
   { recursive :: !Bool
-  , inputs :: ![ UUID ]
+  , inputs :: ![ FactID ]
   , offset :: !(Maybe Natural)
   , limit :: !(Maybe Natural)
   }
@@ -25,7 +26,7 @@ getRunsArgsParser = GetRunsArgs
         ( long "recursive"
        <> help "get the transitive closure of runs started by facts at FACT_IDs"
         )
-  <*> many (option (maybeReader UUID.fromString)
+  <*> many (option (maybeReader factIdFromString)
              ( long "fact-id"
             <> metavar "FACT_ID"
             <> help "only get runs started by this fact (multiple instances are ANDed together)"

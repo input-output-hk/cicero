@@ -4,10 +4,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module IOHK.Cicero.API.Fact where
 
+import Data.Coerce
 import Data.Text
 import Data.Aeson
 import Data.Time.LocalTime
@@ -18,12 +20,19 @@ import Servant.API
 import Servant.API.Generic
 import Servant.API.NamedRoutes
 
+import {-# SOURCE #-} IOHK.Cicero.API.Run (RunID)
+
+newtype FactID = FactID { uuid :: UUID } deriving newtype (ToJSON, FromJSON, ToHttpApiData, Eq, Ord)
+
+factIdFromString :: String -> Maybe FactID
+factIdFromString = coerce . fromString
+
 type API = NamedRoutes FactRoutes
 
 -- | Fact routes in the Cicero API
 data FactRoutes mode = FactRoutes
   { create :: mode :- ReqBody '[OctetStream] CreateFactV1 :> Post '[JSON] FactV1
-  , getAll :: mode :- QueryParam' '[Required, Strict] "run" UUID :> Get '[JSON] [FactV1]
+  , getAll :: mode :- QueryParam' '[Required, Strict] "run" RunID :> Get '[JSON] [FactV1]
   } deriving stock Generic
 
 data CreateFactV1 = CreateFact
@@ -44,15 +53,15 @@ instance MimeRender OctetStream CreateFactV1 where
 
 -- | A Cicero fact
 data FactV1 = Fact
-  { id :: !UUID
-  , runId :: !(Maybe UUID)
+  { id :: !FactID
+  , runId :: !(Maybe RunID)
   , createdAt :: !ZonedTime
   , value :: !Value
   , -- | The hash of the artifact, if any
     --
     -- This should be a proper hash type
     binaryHash :: !(Maybe Text)
-  } deriving stock Show
+  }
 
 instance FromJSON FactV1 where
   parseJSON = withObject "FactV1" \o -> Fact

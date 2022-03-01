@@ -5,6 +5,7 @@
 module Fact where
 
 import IOHK.Cicero.API.Fact
+import IOHK.Cicero.API.Run hiding (API)
 import Servant.Client
 import Options.Applicative
 import Control.Exception
@@ -83,14 +84,14 @@ createFactArgsInfo = info createFactArgsParser
  <> header "cicero-cli fact create — Create a new fact"
   )
 
-getFactsParser :: Parser UUID
-getFactsParser = option (maybeReader fromString)
+getFactsParser :: Parser RunID
+getFactsParser = option (maybeReader runIdFromString)
   ( long "run-id"
  <> metavar "RUN_ID"
  <> help "the ID of the run which produced the facts"
   )
 
-getFactsInfo :: ParserInfo UUID
+getFactsInfo :: ParserInfo RunID
 getFactsInfo = info getFactsParser
   ( fullDesc
  <> header "cicero-cli fact get-all — Get information about facts"
@@ -98,7 +99,7 @@ getFactsInfo = info getFactsParser
 
 data FactCommand
   = CmdCreateFact !CreateFactArgs
-  | CmdGetFacts !UUID
+  | CmdGetFacts !RunID
 
 factCommandParser :: Parser FactCommand
 factCommandParser = hsubparser

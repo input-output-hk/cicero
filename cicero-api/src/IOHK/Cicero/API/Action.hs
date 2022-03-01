@@ -9,13 +9,14 @@
 {-# LANGUAGE DeriveGeneric #-}
 module IOHK.Cicero.API.Action where
 
+import Data.Coerce
 import Data.Text
 import Data.Aeson
 import Data.Aeson.Encoding
 import Data.Aeson.Types
 import Data.Map
 import Data.Time.LocalTime
-import Data.UUID
+import Data.UUID as UUID
 import Data.String
 import Servant.API
 import Servant.API.Generic
@@ -23,10 +24,15 @@ import Servant.API.NamedRoutes
 
 type API = NamedRoutes ActionRoutes
 
+newtype ActionID = ActionID { uuid :: UUID } deriving newtype (ToHttpApiData, FromJSON, ToJSON, Eq, Ord)
+
+actionIdFromString :: String -> Maybe ActionID
+actionIdFromString = coerce . UUID.fromString
+
 -- | Action routes in the Cicero API
 data ActionRoutes mode = ActionRoutes
   { create :: mode :- ReqBody '[JSON] CreateActionV1 :> Post '[JSON] CreateActionResponseV1
-  , get :: mode :- Capture "id" UUID :> Get '[JSON] ActionV1
+  , get :: mode :- Capture "id" ActionID :> Get '[JSON] ActionV1
   } deriving stock Generic
 
 data CreateActionV1 = CreateAction
@@ -66,14 +72,7 @@ instance ToJSON CreateActionResponseV1 where
   toEncoding (CreateActionAll acts) = toEncoding acts
 
 -- | The source of an action, as a [go-getter URL](https://github.com/hashicorp/go-getter#url-format)
-newtype ActionSourceV1 = ActionSource { unActionSource :: Text } deriving newtype IsString
-
-instance FromJSON ActionSourceV1 where
-  parseJSON v = ActionSource <$> parseJSON v
-
-instance ToJSON ActionSourceV1 where
-  toJSON = toJSON . unActionSource
-  toEncoding = toEncoding . unActionSource
+newtype ActionSourceV1 = ActionSource { unActionSource :: Text } deriving newtype (IsString, FromJSON, ToJSON)
 
 -- | The action names to add from a given 'ActionSourceV1'
 data ActionNamesV1
@@ -106,14 +105,7 @@ instance ToJSON InputDefinitionSelectV1 where
 -- | A [CUE lang](https://cuelang.org/) value
 --
 -- For now just a wrapper around 'Text' that we hope parses
-newtype CUE = CUE { unCUE :: Text }
-
-instance FromJSON CUE where
-  parseJSON v = CUE <$> parseJSON v
-
-instance ToJSON CUE where
-  toJSON = toJSON . unCUE
-  toEncoding = toEncoding . unCUE
+newtype CUE = CUE { expr :: Text } deriving newtype (FromJSON, ToJSON)
 
 -- | An input to a job
 data InputV1 = Input
@@ -149,7 +141,7 @@ instance ToJSON InputV1 where
 
 -- | An action
 data ActionV1 = Action
-  { id :: !UUID
+  { id :: !ActionID
   , name :: !Text
   , source :: !ActionSourceV1
   , createdAt :: !ZonedTime
