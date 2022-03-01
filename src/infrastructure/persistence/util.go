@@ -2,26 +2,15 @@ package persistence
 
 import (
 	"context"
-	"errors"
 	"strconv"
 
 	"github.com/georgysavva/scany/pgxscan"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/jackc/pgx/v4"
-)
 
-func scanNextRow(rows pgx.Rows, dst ...interface{}) error {
-	defer rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
-	} else if !rows.Next() {
-		return errors.New("no row")
-	} else if err := rows.Scan(dst...); err != nil {
-		return err
-	}
-	return nil
-}
+	"github.com/input-output-hk/cicero/src/config"
+	"github.com/input-output-hk/cicero/src/util"
+	"github.com/input-output-hk/cicero/src/domain/repository"
+)
 
 func fetchPage(
 	db config.PgxIface,
@@ -46,7 +35,7 @@ func fetchPage(
 
 	if rows, err := br.Query(); err != nil {
 		return err
-	} else if err := scanNextRow(rows, &page.Total); err != nil {
+	} else if err := util.ScanNextRow(rows, &page.Total); err != nil {
 		return err
 	}
 

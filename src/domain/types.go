@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/pkg/errors"
+
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type InputDefinitionSelect uint
@@ -152,12 +154,16 @@ type Fact struct {
 }
 
 // Sets the value from JSON and returns the rest of the buffer as binary.
-func (f *Fact) FromReader(reader io.Reader) (io.Reader, error) {
+func (f *Fact) FromReader(reader io.Reader, trimWhitespace bool) (io.Reader, error) {
 	factDecoder := json.NewDecoder(reader)
 	if err := factDecoder.Decode(&f.Value); err != nil {
 		return nil, errors.WithMessage(err, "Could not unmarshal json body")
 	} else {
-		return io.MultiReader(factDecoder.Buffered(), reader), nil
+		binary := io.MultiReader(factDecoder.Buffered(), reader)
+		if trimWhitespace {
+			binary = util.SkipLeadingWhitespaceReader(binary)
+		}
+		return binary, nil
 	}
 }
 

@@ -998,7 +998,7 @@ func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.
 				}
 			}
 		}
-	} else if binaryReader, err := fact.FromReader(req.Body); err != nil {
+	} else if binaryReader, err := fact.FromReader(req.Body, true); err != nil {
 		fErr = HandlerError{err, http.StatusPreconditionFailed}
 	} else {
 		binary = io.NopCloser(binaryReader)
