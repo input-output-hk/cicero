@@ -771,12 +771,10 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	fact, binary, binaryCloser, err := self.getFact(w, req)
+	fact, binary, err := self.getFact(w, req)
 	defer func() {
-		if binaryCloser != nil {
-			if err := binaryCloser.Close(); err != nil {
-				self.ServerError(w, err)
-			}
+		if err := binary.Close(); err != nil {
+			self.ServerError(w, err)
 		}
 	}()
 	if err != nil {
@@ -949,12 +947,10 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
-	fact, binary, binaryCloser, err := self.getFact(w, req)
+	fact, binary, err := self.getFact(w, req)
 	defer func() {
-		if binaryCloser != nil {
-			if err := binaryCloser.Close(); err != nil {
-				self.ServerError(w, err)
-			}
+		if err := binary.Close(); err != nil {
+			self.ServerError(w, err)
 		}
 	}()
 	if err != nil {
@@ -969,7 +965,8 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.Fact, binary io.Reader, binaryCloser io.Closer, fErr error) {
+func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.Fact, binary io.ReadCloser, fErr error) {
+	binary = io.NopCloser(io.LimitReader(nil, 0))
 	if reader, err := req.MultipartReader(); err == nil {
 		for i := 0; i < 2; i++ {
 			if part, err := reader.NextPart(); err != nil {
@@ -998,12 +995,13 @@ func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.
 					}
 				case 1:
 					binary = part
-					binaryCloser = part
 				}
 			}
 		}
-	} else if binary, err = fact.FromReader(req.Body); err != nil {
+	} else if binaryReader, err := fact.FromReader(req.Body); err != nil {
 		fErr = HandlerError{err, http.StatusPreconditionFailed}
+	} else {
+		binary = io.NopCloser(binaryReader)
 	}
 	return
 }
