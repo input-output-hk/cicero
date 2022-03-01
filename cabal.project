@@ -1,4 +1,4 @@
-index-state: 2022-02-23T23:59:40Z
+index-state: 2022-03-01T00:00:00Z
 packages: cicero-api
 
 write-ghc-environment-files: never
@@ -14,14 +14,6 @@ allow-newer:
   servant-client-core:base,
   servant-client-core:base-compat,
   servant-client-core:template-haskell
-
-source-repository-package
-  type: git
-  location: https://github.com/TomMD/foundation.git
-  -- fix/ghc-9.2 branch, applies https://gitlab.haskell.org/ghc/head.hackage/-/blob/master/patches/basement-0.0.12.patch
-  tag: 0bb195e1fea06d144dafc5af9a0ff79af0a5f4a0
-  --sha256: 1rwy3qxrf8zxycfksidwrffqbazacchqx19w5q1rvdvh7ab6wd75
-  subdir: basement
 
 source-repository-package
   type: git

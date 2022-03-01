@@ -61,6 +61,7 @@
         "tls".flags.hans = false;
         "tls".flags.compat = true;
         "http-client-tls".revision = (((hackage."http-client-tls")."0.3.6.1").revisions).default;
+        "basement".revision = (((hackage."basement")."0.0.13").revisions).default;
         "mtl".revision = (((hackage."mtl")."2.2.2").revisions).default;
         "OneTuple".revision = (((hackage."OneTuple")."0.3.1").revisions).default;
         "mime-types".revision = (((hackage."mime-types")."0.1.0.9").revisions).default;
@@ -254,7 +255,6 @@
         cryptonite = ./.plan.nix/cryptonite.nix;
         memory = ./.plan.nix/memory.nix;
         cicero-api = ./.plan.nix/cicero-api.nix;
-        basement = ./.plan.nix/basement.nix;
         };
       };
   modules = [
@@ -283,7 +283,6 @@
               };
             };
           "cicero-api" = { flags = {}; };
-          "basement" = { flags = {}; };
           };
         })
     ({ lib, ... }:
