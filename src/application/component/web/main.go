@@ -772,6 +772,13 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	fact, binary, binaryCloser, err := self.getFact(w, req)
+	defer func() {
+		if binaryCloser != nil {
+			if err := binaryCloser.Close(); err != nil {
+				self.ServerError(w, err)
+			}
+		}
+	}()
 	if err != nil {
 		self.Error(w, err)
 		return
@@ -782,13 +789,6 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	if err := self.FactService.Save(&fact, binary); err != nil {
 		self.ServerError(w, err)
 	} else {
-		if binaryCloser != nil {
-			if err := binaryCloser.Close(); err != nil {
-				self.ServerError(w, err)
-				return
-			}
-		}
-
 		self.json(w, fact, http.StatusOK)
 	}
 }
@@ -950,6 +950,13 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	fact, binary, binaryCloser, err := self.getFact(w, req)
+	defer func() {
+		if binaryCloser != nil {
+			if err := binaryCloser.Close(); err != nil {
+				self.ServerError(w, err)
+			}
+		}
+	}()
 	if err != nil {
 		self.Error(w, err)
 		return
@@ -958,13 +965,6 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	if err := self.FactService.Save(&fact, binary); err != nil {
 		self.ServerError(w, err)
 	} else {
-		if binaryCloser != nil {
-			if err := binaryCloser.Close(); err != nil {
-				self.ServerError(w, err)
-				return
-			}
-		}
-
 		self.json(w, fact, http.StatusOK)
 	}
 }
