@@ -231,7 +231,7 @@ in rec {
              }:
     { name
     , id
-    , std ? std
+    , std ? import ./pkgs/cicero/evaluators/nix/lib.nix self
     , lib ? lib
     , actionLib ? import ./action-lib.nix { inherit std lib; }
     , ... } @ args:
