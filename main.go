@@ -1,15 +1,15 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/domain"
-	"github.com/rs/zerolog"
 	"os"
 
 	"github.com/alexflint/go-arg"
+	"github.com/rs/zerolog"
+
 	cicero "github.com/input-output-hk/cicero/src"
+	"github.com/input-output-hk/cicero/src/config"
+	"github.com/input-output-hk/cicero/src/domain"
 )
 
 var buildVersion = "dev"
@@ -20,8 +20,12 @@ func main() {
 	parser, err := parseArgs(args)
 	abort(parser, err)
 
-	debug := flag.Bool("debug", args.Debug, "sets log level to debug")
-	logger := config.ConfigureLogger(*debug)
+	level, err := zerolog.ParseLevel(args.LogLevel)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	logger := config.ConfigureLogger(level)
 
 	domain.Build.Version = buildVersion
 	domain.Build.Commit = buildCommit
@@ -30,8 +34,8 @@ func main() {
 }
 
 type CLI struct {
-	Debug bool             `arg:"--debug" help:"debugging output"`
-	Start *cicero.StartCmd `arg:"subcommand:start"`
+	LogLevel string           `arg:"--log-level" default:"info"`
+	Start    *cicero.StartCmd `arg:"subcommand:start"`
 }
 
 func Version() string {
@@ -53,7 +57,7 @@ func abort(parser *arg.Parser, err error) {
 		fmt.Fprintln(os.Stdout, Version())
 		os.Exit(0)
 	default:
-		fmt.Fprint(os.Stderr, err, "\n")
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

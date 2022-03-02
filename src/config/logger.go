@@ -26,9 +26,6 @@ type LoggerConfig struct {
 	// Print human-readable output to console
 	ConsoleLoggingEnabled bool
 
-	// Enable Debug mode
-	DebugModeEnabled bool
-
 	// FileLoggingEnabled makes the framework log to a file
 	// the fields below can be skipped if this value is false!
 	FileLoggingEnabled bool
@@ -44,10 +41,8 @@ type LoggerConfig struct {
 	MaxAge int
 }
 
-func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
-	conf := LoggerConfig{
-		DebugModeEnabled: debugModeEnabled,
-	}
+func buildLoggerConfig(level zerolog.Level) (*LoggerConfig, error) {
+	var conf LoggerConfig
 
 	if v, err := GetenvBool("CONSOLE_LOGGING_ENABLED"); err != nil {
 		return nil, err
@@ -101,8 +96,8 @@ func buildLoggerConfig(debugModeEnabled bool) (*LoggerConfig, error) {
 	return &conf, nil
 }
 
-func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
-	config, err := buildLoggerConfig(debugModeEnabled)
+func ConfigureLogger(level zerolog.Level) *zerolog.Logger {
+	config, err := buildLoggerConfig(level)
 	if err != nil {
 		log.Fatal().Err(err).Msg("can't get logger config")
 		return nil
@@ -124,15 +119,11 @@ func ConfigureLogger(debugModeEnabled bool) *zerolog.Logger {
 	logger := zerolog.New(zerolog.MultiLevelWriter(writers...)).
 		With().Timestamp().Logger()
 
-	if debugModeEnabled {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	} else {
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	}
+	zerolog.SetGlobalLevel(level)
 
 	logger.Info().
+		Str("logLevel", zerolog.GlobalLevel().String()).
 		Bool("consoleLogging", config.ConsoleLoggingEnabled).
-		Bool("debugMode", config.DebugModeEnabled).
 		Bool("fileLogging", config.FileLoggingEnabled).
 		Str("logDirectory", config.Directory).
 		Str("fileName", config.Filename).
