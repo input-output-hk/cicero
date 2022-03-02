@@ -127,13 +127,16 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return err
 	} else {
 		var factValue *interface{}
-		for _, state := range allocation.TaskStates {
-			if state.Failed {
-				factValue = output.Failure
-			} else {
-				factValue = output.Success
-			}
+
+		switch allocation.ClientStatus {
+		case nomad.AllocClientStatusComplete:
+			factValue = output.Success
+		case nomad.AllocClientStatusFailed, nomad.AllocClientStatusLost:
+			factValue = output.Failure
+		default:
+			panic("should have caught non-terminal client status earlier")
 		}
+
 		if factValue != nil {
 			fact := domain.Fact{
 				RunId: &run.NomadJobID,
