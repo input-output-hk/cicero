@@ -9,6 +9,7 @@ type NomadClient interface {
 	EventStream(ctx context.Context, index uint64) (<-chan *nomad.Events, error)
 	JobsRegister(job *nomad.Job, q *nomad.WriteOptions) (*nomad.JobRegisterResponse, *nomad.WriteMeta, error)
 	JobsDeregister(jobID string, purge bool, q *nomad.WriteOptions) (string, *nomad.WriteMeta, error)
+	JobsAllocations(jobID string, allAllocs bool, q *nomad.QueryOptions) ([]*nomad.AllocationListStub, *nomad.QueryMeta, error)
 }
 
 type nomadClient struct {
@@ -42,4 +43,8 @@ func (self *nomadClient) JobsRegister(job *nomad.Job, q *nomad.WriteOptions) (*n
 
 func (self *nomadClient) JobsDeregister(jobID string, purge bool, q *nomad.WriteOptions) (string, *nomad.WriteMeta, error) {
 	return self.nClient.Jobs().Deregister(jobID, purge, q)
+}
+
+func (self *nomadClient) JobsAllocations(jobID string, allAllocs bool, q *nomad.QueryOptions) ([]*nomad.AllocationListStub, *nomad.QueryMeta, error) {
+	return self.nClient.Jobs().Allocations(jobID, allAllocs, q)
 }

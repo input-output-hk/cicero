@@ -90,22 +90,46 @@ func (self *NomadEventConsumer) processNomadEvent(event *nomad.Event) error {
 }
 
 func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event) error {
-	if event.Topic == "Allocation" && event.Type == "AllocationUpdated" {
-		allocation, err := event.Allocation()
-		if err != nil {
+	switch {
+	case event.Topic == "Allocation" && event.Type == "AllocationUpdated":
+		if allocation, err := event.Allocation(); err != nil {
 			return errors.WithMessage(err, "Error getting Nomad event's allocation")
+		} else {
+			return self.handleNomadAllocationEvent(allocation)
 		}
-		return self.handleNomadAllocationEvent(allocation)
+	case event.Topic == "Job" && event.Type == "AllocationUpdated":
+		if job, err := event.Job(); err != nil {
+			return errors.WithMessage(err, "Error getting Nomad event's job")
+		} else {
+			return self.handleNomadJobEvent(job)
+		}
+	default:
+		self.Logger.Trace().
+			Str("topic", string(event.Topic)).
+			Str("type", string(event.Type)).
+			Msg("Ignoring event")
 	}
 	return nil
 }
 
 func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation) error {
-	if !allocation.ClientTerminalStatus() || allocation.NextAllocation != "" {
-		self.Logger.Debug().
-			Str("ClientStatus", allocation.ClientStatus).
-			Str("NextAllocation", allocation.NextAllocation).
-			Msg("Ignoring non-terminal allocation event")
+	logger := self.Logger.With().
+		Str("nomad-job-id", allocation.JobID).
+		Logger()
+
+	switch allocation.ClientStatus {
+	case nomad.AllocClientStatusFailed, nomad.AllocClientStatusLost:
+	default:
+		logger.Trace().
+			Str("client-status", allocation.ClientStatus).
+			Msg("Ignoring allocation event (client status is not failure)")
+		return nil
+	}
+
+	if allocation.NextAllocation != "" {
+		self.Logger.Trace().
+			Str("next-allocation", allocation.NextAllocation).
+			Msg("Ignoring allocation event (rescheduled)")
 		return nil
 	}
 
@@ -117,7 +141,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 	run, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
 		if pgxscan.NotFound(err) {
-			self.Logger.Debug().Str("nomad-job-id", allocation.JobID).Msg("Ignoring Nomad event for Job (no such Run)")
+			logger.Debug().Msg("Ignoring event (no such Run)")
 			return nil
 		}
 		return err
@@ -125,36 +149,82 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 
 	if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil && !pgxscan.NotFound(err) {
 		return err
-	} else {
-		var factValue *interface{}
-
-		switch allocation.ClientStatus {
-		case nomad.AllocClientStatusComplete:
-			factValue = output.Success
-		case nomad.AllocClientStatusFailed, nomad.AllocClientStatusLost:
-			factValue = output.Failure
-		default:
-			panic("should have caught non-terminal client status earlier")
+	} else if output.Failure != nil {
+		fact := domain.Fact{
+			RunId: &run.NomadJobID,
+			Value: output.Failure,
 		}
-
-		if factValue != nil {
-			fact := domain.Fact{
-				RunId: &run.NomadJobID,
-				Value: factValue,
-			}
-			if err := self.FactService.Save(&fact, nil); err != nil {
-				return errors.WithMessage(err, "Could not publish Fact")
-			}
+		if err := self.FactService.Save(&fact, nil); err != nil {
+			return errors.WithMessage(err, "Could not publish Fact")
 		}
 	}
 
+	return self.endRunAt(&run, allocation.ModifyTime)
+}
+
+func (self *NomadEventConsumer) handleNomadJobEvent(job *nomad.Job) error {
+	logger := self.Logger.With().
+		Str("nomad-job-id", *job.ID).
+		Logger()
+
+	if *job.Status != "dead" {
+		logger.Trace().Msg("Ignoring job event (status is not dead)")
+		return nil
+	}
+
+	id, err := uuid.Parse(*job.ID)
+	if err != nil {
+		return err
+	}
+
+	run, err := self.RunService.GetByNomadJobId(id)
+	if err != nil {
+		if pgxscan.NotFound(err) {
+			logger.Debug().Msg("Ignoring job event (no such Run)")
+			return nil
+		}
+		return err
+	}
+
+	if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil && !pgxscan.NotFound(err) {
+		return err
+	} else if output.Success != nil {
+		fact := domain.Fact{
+			RunId: &run.NomadJobID,
+			Value: output.Success,
+		}
+		if err := self.FactService.Save(&fact, nil); err != nil {
+			return errors.WithMessage(err, "Could not publish Fact")
+		}
+	}
+
+	allocs, _, err := self.NomadClient.JobsAllocations(*job.ID, false, &nomad.QueryOptions{})
+	if err != nil {
+		return err
+	}
+
+	if len(allocs) == 0 {
+		panic("Found no allocations for this job")
+	}
+
+	modifyTime := allocs[0].ModifyTime
+	for _, alloc := range allocs[1:] {
+		if alloc.ModifyTime > modifyTime {
+			modifyTime = alloc.ModifyTime
+		}
+	}
+
+	return self.endRunAt(&run, modifyTime)
+}
+
+func (self *NomadEventConsumer) endRunAt(run *domain.Run, timestamp int64) error {
 	modifyTime := time.Unix(
-		allocation.ModifyTime/int64(time.Second),
-		allocation.ModifyTime%int64(time.Second),
+		timestamp/int64(time.Second),
+		timestamp%int64(time.Second),
 	).UTC()
 	run.FinishedAt = &modifyTime
 
-	if err := self.RunService.End(&run); err != nil {
+	if err := self.RunService.End(run); err != nil {
 		return errors.WithMessagef(err, "Failed to end Run with ID %q", run.NomadJobID)
 	}
 
