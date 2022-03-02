@@ -158,9 +158,5 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return errors.WithMessagef(err, "Failed to end Run with ID %q", run.NomadJobID)
 	}
 
-	if _, _, err := self.NomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
-		return errors.WithMessagef(err, "Failed to deregister Nomad job with ID %q", run.NomadJobID)
-	}
-
 	return nil
 }

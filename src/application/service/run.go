@@ -166,6 +166,9 @@ func (self *runService) End(run *domain.Run) error {
 		if err := self.runOutputRepository.WithQuerier(tx).Delete(run.NomadJobID); err != nil {
 			return errors.WithMessagef(err, "Could not update Run Output with ID %q", run.NomadJobID)
 		}
+		if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
+			return errors.WithMessagef(err, "Failed to deregister Nomad job with ID %q", run.NomadJobID)
+		}
 		return nil
 	}); err != nil {
 		return err
