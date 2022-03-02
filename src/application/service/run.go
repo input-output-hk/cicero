@@ -83,56 +83,56 @@ func (self *runService) WithQuerier(querier config.PgxIface) RunService {
 }
 
 func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
-	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
+	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
 	return
 }
 
 func (self *runService) GetInputFactIdsByNomadJobId(id uuid.UUID) (inputFactIds repository.RunInputFactIds, err error) {
-	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run input fact IDs by Nomad Job ID")
+	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run input fact IDs by Nomad Job ID")
 	inputFactIds, err = self.runRepository.GetInputFactIdsByNomadJobId(id)
 	err = errors.WithMessagef(err, "Could not select Run input fact IDs by Nomad Job ID %q", id)
 	return
 }
 
 func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOutput, err error) {
-	self.logger.Debug().Str("nomad-job-id", id.String()).Msg("Getting Run Output by Nomad Job ID")
+	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run Output by Nomad Job ID")
 	output, err = self.runOutputRepository.GetByRunId(id)
 	err = errors.WithMessagef(err, "Could not select existing Run Output by Nomad Job ID %q", id)
 	return
 }
 
 func (self *runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []*domain.Run, err error) {
-	self.logger.Debug().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Run by Action ID")
+	self.logger.Trace().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Run by Action ID")
 	runs, err = self.runRepository.GetByActionId(id, page)
 	err = errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
 	return
 }
 
 func (self *runService) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
-	self.logger.Debug().Str("action-id", id.String()).Msg("Getting latest Run by Action ID")
+	self.logger.Trace().Str("action-id", id.String()).Msg("Getting latest Run by Action ID")
 	run, err = self.runRepository.GetLatestByActionId(id)
 	err = errors.WithMessagef(err, "Could not select latest Run by Action ID %q", id)
 	return
 }
 
 func (self *runService) GetAll(page *repository.Page) (runs []*domain.Run, err error) {
-	self.logger.Debug().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Runs")
+	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Runs")
 	runs, err = self.runRepository.GetAll(page)
 	err = errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
 	return
 }
 
 func (self *runService) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, page *repository.Page) (runs []*domain.Run, err error) {
-	self.logger.Debug().Int("offset", page.Offset).Int("limit", page.Limit).Interface("input-fact-ids", factIds).Bool("recursive", recursive).Msg("Getting Runs by input Fact IDs")
+	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Interface("input-fact-ids", factIds).Bool("recursive", recursive).Msg("Getting Runs by input Fact IDs")
 	runs, err = self.runRepository.GetByInputFactIds(factIds, recursive, page)
 	err = errors.WithMessagef(err, "Could not select Runs by input fact IDs %q (recursively: %t) with offset %d and limit %d", factIds, recursive, page.Offset, page.Limit)
 	return
 }
 
 func (self *runService) Save(run *domain.Run, inputs map[string]interface{}, output *domain.RunOutput) error {
-	self.logger.Debug().Msg("Saving new Run")
+	self.logger.Trace().Msg("Saving new Run")
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if err := self.runRepository.WithQuerier(tx).Save(run, inputs); err != nil {
 			return errors.WithMessagef(err, "Could not insert Run")
@@ -144,16 +144,16 @@ func (self *runService) Save(run *domain.Run, inputs map[string]interface{}, out
 	}); err != nil {
 		return err
 	}
-	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Created Run")
+	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Created Run")
 	return nil
 }
 
 func (self *runService) Update(run *domain.Run) error {
-	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Updating Run")
+	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Updating Run")
 	if err := self.runRepository.Update(run); err != nil {
 		return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
 	}
-	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Updated Run")
+	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Updated Run")
 	return nil
 }
 

@@ -72,65 +72,65 @@ func (self *actionService) WithQuerier(querier config.PgxIface) ActionService {
 }
 
 func (self *actionService) GetById(id uuid.UUID) (action domain.Action, err error) {
-	self.logger.Debug().Str("id", id.String()).Msg("Getting Action by ID")
+	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by ID")
 	action, err = self.actionRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for ID %q", id)
 	return
 }
 
 func (self *actionService) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
-	self.logger.Debug().Str("id", id.String()).Msg("Getting Action by Run ID")
+	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Run ID")
 	action, err = self.actionRepository.GetByRunId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Run ID %q", id)
 	return
 }
 
 func (self *actionService) GetByName(name string, page *repository.Page) (actions []*domain.Action, err error) {
-	self.logger.Debug().Str("name", name).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Actions by name")
+	self.logger.Trace().Str("name", name).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Actions by name")
 	actions, err = self.actionRepository.GetByName(name, page)
 	err = errors.WithMessagef(err, "Could not select Actions for name %q with offset %d and limit %d", name, page.Offset, page.Limit)
 	return
 }
 
 func (self *actionService) GetLatestByName(name string) (action domain.Action, err error) {
-	self.logger.Debug().Str("name", name).Msg("Getting latest Action by name")
+	self.logger.Trace().Str("name", name).Msg("Getting latest Action by name")
 	action, err = self.actionRepository.GetLatestByName(name)
 	err = errors.WithMessagef(err, "Could not select latest Action for name %q", name)
 	return
 }
 
 func (self *actionService) GetAll() ([]*domain.Action, error) {
-	self.logger.Debug().Msg("Getting all Actions")
+	self.logger.Trace().Msg("Getting all Actions")
 	return self.actionRepository.GetAll()
 }
 
 func (self *actionService) Save(action *domain.Action) error {
-	self.logger.Debug().Str("name", action.Name).Msg("Saving new Action")
+	self.logger.Trace().Str("name", action.Name).Msg("Saving new Action")
 	if err := self.actionRepository.Save(action); err != nil {
 		return errors.WithMessagef(err, "Could not insert Action")
 	}
-	self.logger.Debug().Str("id", action.ID.String()).Msg("Created Action")
+	self.logger.Trace().Str("id", action.ID.String()).Msg("Created Action")
 	return nil
 }
 
 func (self *actionService) Update(action *domain.Action) error {
-	self.logger.Debug().Str("id", action.ID.String()).Msg("Updating Action")
+	self.logger.Trace().Str("id", action.ID.String()).Msg("Updating Action")
 	if err := self.actionRepository.Update(action); err != nil {
 		return errors.WithMessagef(err, "Could not update Action")
 	}
-	self.logger.Debug().Str("id", action.ID.String()).Msg("Updated Action")
+	self.logger.Trace().Str("id", action.ID.String()).Msg("Updated Action")
 	return nil
 }
 
 func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
-	self.logger.Debug().Msg("Getting current Actions")
+	self.logger.Trace().Msg("Getting current Actions")
 	actions, err = self.actionRepository.GetCurrent()
 	err = errors.WithMessagef(err, "Could not select current Actions")
 	return
 }
 
 func (self *actionService) GetCurrentActive() (actions []*domain.Action, err error) {
-	self.logger.Debug().Msg("Getting current active Actions")
+	self.logger.Trace().Msg("Getting current active Actions")
 	actions, err = self.actionRepository.GetCurrentActive()
 	err = errors.WithMessagef(err, "Could not select current active Actions")
 	return
