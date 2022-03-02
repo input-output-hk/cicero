@@ -101,8 +101,11 @@ func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event) error {
 }
 
 func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation) error {
-	if !allocation.ClientTerminalStatus() {
-		self.Logger.Debug().Str("ClientStatus", allocation.ClientStatus).Msg("Ignoring allocation event with non-terminal client status")
+	if !allocation.ClientTerminalStatus() || allocation.NextAllocation != "" {
+		self.Logger.Debug().
+			Str("ClientStatus", allocation.ClientStatus).
+			Str("NextAllocation", allocation.NextAllocation).
+			Msg("Ignoring non-terminal allocation event")
 		return nil
 	}
 
