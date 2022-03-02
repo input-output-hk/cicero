@@ -541,7 +541,11 @@ func (self *actionService) Invoke(action *domain.Action) (bool, error) {
 
 		if runDef.IsDecision() {
 			if runDef.Output.Success != nil {
-				if err := self.factRepository.WithQuerier(tx).Save(&domain.Fact{Value: runDef.Output.Success}, nil); err != nil {
+				fact := domain.Fact{
+					RunId: &run.NomadJobID,
+					Value: runDef.Output.Success,
+				}
+				if err := self.factRepository.WithQuerier(tx).Save(&fact, nil); err != nil {
 					return errors.WithMessage(err, "Could not publish fact")
 				}
 			}
