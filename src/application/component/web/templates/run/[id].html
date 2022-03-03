@@ -327,232 +327,230 @@
 									<h3>Tasks</h3>
 									<div class="tabs border" style="--num-tabs: {{len .TaskStates}}">
 										{{range $taskName, $task := .TaskStates}}
-											<input id="tab-task-{{$taskName}}" type="radio" name="tab-task" checked/>
+											<input id="tab-task-{{$taskName}}" type="radio" name="tab-task-{{$alloc.ID}}" checked/>
 											<label for="tab-task-{{$taskName}}"><h3>{{$taskName}}</h3></label>
 											<div style="padding: 1em">
-												{{with $task}}
-													<table class="table vertical">
-														<thead>
+												<table class="table vertical">
+													<thead>
+														<tr>
+															<th colspan="2">
+																General Information
+															</th>
+														</tr>
+													</thead>
+													<tbody>
+														<tr>
+															<th>Failed</th>
+															<td>{{.Failed}}</td>
+														</tr>
+														<tr>
+															<th>State</th>
+															<td>{{.State}}</td>
+														</tr>
+														{{with .StartedAt}}
 															<tr>
-																<th colspan="2">
-																	General Information
-																</th>
+																<th>Started</th>
+																<td>{{.}}</td>
 															</tr>
-														</thead>
-														<tbody>
+														{{end}}
+														{{if not .FinishedAt.IsZero}}
 															<tr>
-																<th>Failed</th>
-																<td>{{.Failed}}</td>
+																<th>Finished</th>
+																<td>{{.FinishedAt}}</td>
+															</tr>
+														{{end}}
+														{{if .StartedAt}}
+															<tr>
+																<th>Duration</th>
+																<td>
+																	{{if not .FinishedAt.IsZero}}
+																		{{.FinishedAt.Sub .StartedAt}}
+																	{{else}}
+																		{{timeNow.Sub .StartedAt}}
+																	{{end}}
+																</td>
+															</tr>
+														{{end}}
+														{{if gt .Restarts 0}}
+															<tr>
+																<th>Restarts</th>
+																<td>{{.Restarts}}</td>
 															</tr>
 															<tr>
-																<th>State</th>
-																<td>{{.State}}</td>
+																<th>Last Restart</th>
+																<td>{{.LastRestart}}</td>
 															</tr>
-															{{with .StartedAt}}
+														{{end}}
+														{{with index $alloc.AllocatedResources.Tasks $taskName}}
+															<tr>
+																<th>CPU Shares</th>
+																<td>{{.Cpu.CpuShares}} Mhz</td>
+															</tr>
+															<tr>
+																<th>Memory</th>
+																<td>{{.Memory.MemoryMB}} MB</td>
+															</tr>
+															{{if gt .Memory.MemoryMaxMB 0}}
 																<tr>
-																	<th>Started</th>
-																	<td>{{.}}</td>
+																	<th>Memory Max</th>
+																	<td>{{.Memory.MemoryMaxMB}} MB</td>
 																</tr>
 															{{end}}
-															{{if not .FinishedAt.IsZero}}
-																<tr>
-																	<th>Finished</th>
-																	<td>{{.FinishedAt}}</td>
-																</tr>
-															{{end}}
-															{{if .StartedAt}}
-																<tr>
-																	<th>Duration</th>
-																	<td>
-																		{{if not .FinishedAt.IsZero}}
-																			{{.FinishedAt.Sub .StartedAt}}
-																		{{else}}
-																			{{timeNow.Sub .StartedAt}}
-																		{{end}}
-																	</td>
-																</tr>
-															{{end}}
-															{{if gt .Restarts 0}}
-																<tr>
-																	<th>Restarts</th>
-																	<td>{{.Restarts}}</td>
-																</tr>
-																<tr>
-																	<th>Last Restart</th>
-																	<td>{{.LastRestart}}</td>
-																</tr>
-															{{end}}
-															{{with index $alloc.AllocatedResources.Tasks $taskName}}
-																<tr>
-																	<th>CPU Shares</th>
-																	<td>{{.Cpu.CpuShares}} Mhz</td>
-																</tr>
-																<tr>
-																	<th>Memory</th>
-																	<td>{{.Memory.MemoryMB}} MB</td>
-																</tr>
-																{{if gt .Memory.MemoryMaxMB 0}}
-																	<tr>
-																		<th>Memory Max</th>
-																		<td>{{.Memory.MemoryMaxMB}} MB</td>
-																	</tr>
-																{{end}}
-															{{end}}
-														</tbody>
-													</table>
+														{{end}}
+													</tbody>
+												</table>
 
-													<h3>Event Logs</h3>
-													<table class="panel log">
-														{{range $task.Events}}
-															<tr>
-																<td>{{(timeUnixNano .Time).Format "2006-01-02 15:04:05"}}</td>
-																{{if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting"}}
-																	<td><samp>{{.DisplayMessage}}</samp></td>
-																{{else if eq .Type "Not Restarting"}}
-																	<td>
+												<h3>Event Logs</h3>
+												<table class="panel log">
+													{{range .Events}}
+														<tr>
+															<td>{{(timeUnixNano .Time).Format "2006-01-02 15:04:05"}}</td>
+															{{if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting"}}
+																<td><samp>{{.DisplayMessage}}</samp></td>
+															{{else if eq .Type "Not Restarting"}}
+																<td>
+																	<dl class="concise">
+																		<dt><samp>{{.Type}}</samp></dt>
+																		<dd><samp>{{.DisplayMessage}}</samp></dd>
+																	</dl>
+																</td>
+															{{else if eq .Type "Terminated"}}
+																<td>
+																	<samp>{{.Type}}</samp>
+																	<dl class="concise">
+																		{{range $key, $value := .Details}}
+																			<dt><samp>{{$key}}</samp></dt>
+																			<dd><samp>{{$value}}</samp></dd>
+																		{{end}}
+																	</dl>
+																</td>
+															{{else}}
+																<td>
+																	<details>
+																		<summary><samp>{{.DisplayMessage}}</samp></summary>
 																		<dl class="concise">
-																			<dt><samp>{{.Type}}</samp></dt>
-																			<dd><samp>{{.DisplayMessage}}</samp></dd>
-																		</dl>
-																	</td>
-																{{else if eq .Type "Terminated"}}
-																	<td>
-																		<samp>{{.Type}}</samp>
-																		<dl class="concise">
-																			{{range $key, $value := .Details}}
-																				<dt><samp>{{$key}}</samp></dt>
-																				<dd><samp>{{$value}}</samp></dd>
+																			<dt>Type</dt>
+																			<dd><samp>{{.Type}}</samp></dd>
+																			{{with .Details}}
+																				<dt>Details</dt>
+																				<dd>
+																					<br/>
+																					<dl class="concise">
+																						{{range $key, $value := .}}
+																							<dt>{{$key}}</dt>
+																							<dd><samp>{{$value}}</samp></dd>
+																						{{end}}
+																					</dl>
+																				</dd>
+																			{{end}}
+																			{{with .DiskLimit}}
+																				<dt>Disk Limit</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .DownloadError}}
+																				<dt>Download Error</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .DriverError}}
+																				<dt>Driver Error</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .DriverMessage}}
+																				<dt>Driver Message</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .ExitCode}}
+																				<dt>Exit Code</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .FailedSibling}}
+																				<dt>Failed Sibling</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .FailsTask}}
+																				<dt>Fails Task</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .GenericSource}}
+																				<dt>Generic Source</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .KillError}}
+																				<dt>Kill Error</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .KillReason}}
+																				<dt>Kill Reason</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .KillTimeout}}
+																				<dt>Kill Timeout</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .Message}}
+																				<dt>Message</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .RestartReason}}
+																				<dt>Restart Reason</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .SetupError}}
+																				<dt>Setup Error</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .Signal}}
+																				<dt>Signal</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .StartDelay}}
+																				<dt>Start Delay</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .TaskSignal}}
+																				<dt>Task Signal</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .TaskSignalReason}}
+																				<dt>Task Signal Reason</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .ValidationError}}
+																				<dt>Validation Error</dt>
+																				<dd><samp>{{.}}</samp></dd>
+																			{{end}}
+																			{{with .VaultError}}
+																				<dt>Vault Error</dt>
+																				<dd><samp>{{.}}</samp></dd>
 																			{{end}}
 																		</dl>
-																	</td>
-																{{else}}
-																	<td>
-																		<details>
-																			<summary><samp>{{.DisplayMessage}}</samp></summary>
-																			<dl class="concise">
-																				<dt>Type</dt>
-																				<dd><samp>{{.Type}}</samp></dd>
-																				{{with .Details}}
-																					<dt>Details</dt>
-																					<dd>
-																						<br/>
-																						<dl class="concise">
-																							{{range $key, $value := .}}
-																								<dt>{{$key}}</dt>
-																								<dd><samp>{{$value}}</samp></dd>
-																							{{end}}
-																						</dl>
-																					</dd>
-																				{{end}}
-																				{{with .DiskLimit}}
-																					<dt>Disk Limit</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .DownloadError}}
-																					<dt>Download Error</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .DriverError}}
-																					<dt>Driver Error</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .DriverMessage}}
-																					<dt>Driver Message</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .ExitCode}}
-																					<dt>Exit Code</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .FailedSibling}}
-																					<dt>Failed Sibling</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .FailsTask}}
-																					<dt>Fails Task</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .GenericSource}}
-																					<dt>Generic Source</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .KillError}}
-																					<dt>Kill Error</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .KillReason}}
-																					<dt>Kill Reason</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .KillTimeout}}
-																					<dt>Kill Timeout</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .Message}}
-																					<dt>Message</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .RestartReason}}
-																					<dt>Restart Reason</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .SetupError}}
-																					<dt>Setup Error</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .Signal}}
-																					<dt>Signal</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .StartDelay}}
-																					<dt>Start Delay</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .TaskSignal}}
-																					<dt>Task Signal</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .TaskSignalReason}}
-																					<dt>Task Signal Reason</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .ValidationError}}
-																					<dt>Validation Error</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																				{{with .VaultError}}
-																					<dt>Vault Error</dt>
-																					<dd><samp>{{.}}</samp></dd>
-																				{{end}}
-																			</dl>
-																		</details>
-																	</td>
-																{{end}}
+																	</details>
+																</td>
+															{{end}}
+														</tr>
+													{{end}}
+												</table>
+
+												<h3>Task Logs</h3>
+												{{if (index $alloc.Logs $taskName).Stdout}}
+													<table class="panel log">
+														{{range (index $alloc.Logs $taskName).Stdout}}
+															<tr>
+																<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+																<td><samp>{{.Text}}</samp></td>
 															</tr>
 														{{end}}
 													</table>
-
-													<h3>Task Logs</h3>
-													{{if (index $alloc.Logs $taskName).Stdout}}
-														<table class="panel log">
-															{{range (index $alloc.Logs $taskName).Stdout}}
-																<tr>
-																	<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-																	<td><samp>{{.Text}}</samp></td>
-																</tr>
-															{{end}}
-														</table>
-													{{end}}
-													{{if (index $alloc.Logs $taskName).Stderr}}
-														<table class="panel log">
-															{{range (index $alloc.Logs $taskName).Stderr}}
-																<tr class="stderr">
-																	<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-																	<td><samp>{{.Text}}</samp></td>
-																</tr>
-															{{end}}
-														</table>
-													{{end}}
+												{{end}}
+												{{if (index $alloc.Logs $taskName).Stderr}}
+													<table class="panel log">
+														{{range (index $alloc.Logs $taskName).Stderr}}
+															<tr class="stderr">
+																<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+																<td><samp>{{.Text}}</samp></td>
+															</tr>
+														{{end}}
+													</table>
 												{{end}}
 											</div>
 										{{end}}
