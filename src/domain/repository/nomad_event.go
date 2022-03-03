@@ -10,6 +10,6 @@ type NomadEventRepository interface {
 	WithQuerier(config.PgxIface) NomadEventRepository
 
 	Save(*nomad.Event) error
-	GetLastNomadEvent() (uint64, error)
+	GetLastNomadEventIndex() (uint64, error)
 	GetEventAllocByNomadJobId(uuid.UUID) ([]map[string]interface{}, error)
 }

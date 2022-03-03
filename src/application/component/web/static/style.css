@@ -84,10 +84,14 @@ details.collapse > summary {
 .tabs > div {
 	grid-row: 2;
 	grid-column: 1 / calc(var(--num-tabs) + 1);
-	display: none;
 }
-.tabs > input:checked + label + div {
-	display: block;
+.tabs.border > div {
+	border-left:   2px solid var(--border);
+	border-right:  2px solid var(--border);
+	border-bottom: 2px solid var(--border);
+}
+.tabs > input:not(:checked) + label + div {
+	display: none;
 }
 
 ul.pagination {

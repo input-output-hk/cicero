@@ -82,6 +82,9 @@ var templateFuncs = template.FuncMap{
 			ns%int64(time.Second),
 		)
 	},
+	"derefInt": func(ptr *int) int {
+		return *ptr
+	},
 	"InputDefinitionSelectString": func(inputDefinitionSelect domain.InputDefinitionSelect) (string, error) {
 		return inputDefinitionSelect.String()
 	},

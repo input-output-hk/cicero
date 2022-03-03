@@ -168,7 +168,7 @@ func (self *Web) Start(ctx context.Context) error {
 		apidoc.BuildSwaggerDef(
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]*domain.LokiOutput{"logs": {}}, "OK")),
+			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]*domain.LokiLog{"logs": {}}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -489,6 +489,11 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	allocsByGroup := map[string][]domain.AllocationWithLogs{}
+	for _, alloc := range allocs {
+		allocsByGroup[alloc.TaskGroup] = append(allocsByGroup[alloc.TaskGroup], alloc)
+	}
+
 	inputs := map[string][]domain.Fact{}
 	if inputFactIds, err := self.RunService.GetInputFactIdsByNomadJobId(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
@@ -524,7 +529,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		"inputs": inputs,
 		"output": output,
 		"facts":  facts,
-		"allocs": allocs,
+		"allocs": allocsByGroup,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -901,7 +906,7 @@ func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
 		if logs, err := self.RunService.JobLogs(id, run.CreatedAt, run.FinishedAt); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 		} else {
-			self.json(w, map[string]*domain.LokiOutput{"logs": logs}, http.StatusOK)
+			self.json(w, map[string]*domain.LokiLog{"logs": logs}, http.StatusOK)
 		}
 	}
 }

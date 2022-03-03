@@ -32,7 +32,7 @@ func (n nomadEventRepository) Save(event *nomad.Event) (err error) {
 	return
 }
 
-func (n nomadEventRepository) GetLastNomadEvent() (index uint64, err error) {
+func (n nomadEventRepository) GetLastNomadEventIndex() (index uint64, err error) {
 	err = pgxscan.Get(
 		context.Background(), n.DB, &index,
 		`SELECT COALESCE(MAX("index"), 0) FROM nomad_event`,

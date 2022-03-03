@@ -37,8 +37,8 @@ type RunService interface {
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (*domain.LokiOutput, error)
-	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiOutput, error)
+	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (*domain.LokiLog, error)
+	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiLog, error)
 }
 
 type runService struct {
@@ -190,24 +190,25 @@ func (self *runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (*domain.LokiOutput, error) {
+func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (*domain.LokiLog, error) {
 	return self.LokiQueryRange(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
-		start, end)
+		start, end,
+	)
 }
 
-func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiOutput, error) {
+func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiLog, error) {
 	return self.LokiQueryRange(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
-		start, end)
+		start, end,
+	)
 }
 
-func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (*domain.LokiOutput, error) {
+func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (*domain.LokiLog, error) {
 	linesToFetch := 10000
-	// TODO: figure out the correct value for our infra, 5000 is the default
-	// configuration in loki
+	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
 	var limit int64 = 5000
-	output := &domain.LokiOutput{
+	output := &domain.LokiLog{
 		Stdout: []domain.LokiLine{},
 		Stderr: []domain.LokiLine{},
 	}

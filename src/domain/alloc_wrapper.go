@@ -11,12 +11,12 @@ type LokiLine struct {
 	Text string
 }
 
-type LokiOutput struct {
+type LokiLog struct {
 	Stderr []LokiLine
 	Stdout []LokiLine
 }
 
-type AllocWrapper struct {
-	Alloc *nomad.Allocation
-	Logs  map[string]*LokiOutput
+type AllocationWithLogs struct {
+	*nomad.Allocation
+	Logs map[string]*LokiLog
 }

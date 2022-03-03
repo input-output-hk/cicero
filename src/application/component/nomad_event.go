@@ -40,7 +40,7 @@ func (self *NomadEventConsumer) WithQuerier(querier config.PgxIface) *NomadEvent
 func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	self.Logger.Info().Msg("Starting")
 
-	index, err := self.NomadEventService.GetLastNomadEvent()
+	index, err := self.NomadEventService.GetLastNomadEventIndex()
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return errors.WithMessage(err, "Could not get last Nomad event index")
 	}
