@@ -40,6 +40,8 @@
 					<td class="numerical">
 						{{if .FinishedAt}}
 							{{.FinishedAt.Sub .CreatedAt}}
+						{{else}}
+							{{timeNow.Sub .CreatedAt}}
 						{{end}}
 					</td>
 					<td>

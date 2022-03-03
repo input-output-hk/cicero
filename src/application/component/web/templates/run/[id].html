@@ -51,6 +51,8 @@
 							<td>
 								{{if .FinishedAt}}
 									{{.FinishedAt.Sub .CreatedAt}}
+								{{else}}
+									{{timeNow.Sub .CreatedAt}}
 								{{end}}
 							</td>
 						</tr>
@@ -346,18 +348,28 @@
 																<th>State</th>
 																<td>{{.State}}</td>
 															</tr>
-															<tr>
-																<th>Started</th>
-																<td>{{.StartedAt}}</td>
-															</tr>
-															{{if and .FinishedAt .StartedAt}}
+															{{with .StartedAt}}
+																<tr>
+																	<th>Started</th>
+																	<td>{{.}}</td>
+																</tr>
+															{{end}}
+															{{if not .FinishedAt.IsZero}}
 																<tr>
 																	<th>Finished</th>
 																	<td>{{.FinishedAt}}</td>
 																</tr>
+															{{end}}
+															{{if .StartedAt}}
 																<tr>
 																	<th>Duration</th>
-																	<td>{{.FinishedAt.Sub .StartedAt}}</td>
+																	<td>
+																		{{if not .FinishedAt.IsZero}}
+																			{{.FinishedAt.Sub .StartedAt}}
+																		{{else}}
+																			{{timeNow.Sub .StartedAt}}
+																		{{end}}
+																	</td>
 																</tr>
 															{{end}}
 															{{if gt .Restarts 0}}
