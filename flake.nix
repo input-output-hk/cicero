@@ -26,10 +26,14 @@
         inclusive.follows = "inclusive";
       };
     };
+    haskell-nix = {
+      url = "github:input-output-hk/haskell.nix";
+      inputs.nixpkgs-unstable.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, nix-cache-proxy, ... }:
-    utils.lib.eachSystem [ "x86_64-linux" ]
+  outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, nix-cache-proxy, haskell-nix, ... }:
+    let supportedSystems = [ "x86_64-linux" ]; in utils.lib.eachSystem supportedSystems
       (system:
         let
           nix-cache-proxy-key = {
@@ -42,6 +46,7 @@
             poetry2nix.overlay
             follower.overlay
             nix-cache-proxy.overlay
+            haskell-nix.overlay
             (final: prev: rec {
               go = prev.go_1_17;
               gouml = final.callPackage pkgs/gouml.nix { };
@@ -207,18 +212,23 @@
             })
             self.overlay
           ]);
+          selfPkgs = self.packages.${system};
         in
         {
-          packages = self.overlay (pkgs // self.packages.${system}) pkgs;
-          defaultPackage = self.packages.${system}.cicero;
-          hydraJobs = self.packages.${system};
+          packages = self.overlay (pkgs // selfPkgs) pkgs;
+          defaultPackage = selfPkgs.cicero;
+          hydraJobs = selfPkgs;
           devShell = pkgs.devshell.fromTOML ./devshell.toml;
+          devShells.cicero-api = selfPkgs.cicero-api.project.shell;
+          inherit (selfPkgs.cicero-api) apps;
         }) // {
       overlay = final: prev: {
         cicero = prev.callPackage pkgs/cicero { flake = self; };
         cicero-entrypoint = prev.callPackage pkgs/cicero/entrypoint.nix { };
         cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix { flake = self; };
         webhook-trigger = prev.callPackage pkgs/trigger { };
+        cicero-api = final.callPackage pkgs/cicero-api { inherit supportedSystems; src = ./.; };
+        inherit (final.cicero-api) cicero-cli;
       } // nixpkgs.lib.mapAttrs'
         (k: nixpkgs.lib.nameValuePair "cicero-evaluator-nix-run-${k}")
         (import pkgs/cicero/evaluators/nix/runners.nix prev);
