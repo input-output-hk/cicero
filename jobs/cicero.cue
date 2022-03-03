@@ -47,7 +47,7 @@ job: cicero: group: cicero: {
 			command: [
 				"/bin/entrypoint",
 				"--prometheus-addr", #lokiAddr,
-				"--transform", for t in _transformers { t.destination },
+				"--transform", for t in _transformers {t.destination},
 				"--web-listen", ":${NOMAD_PORT_http}",
 			]
 		}
@@ -56,7 +56,7 @@ job: cicero: group: cicero: {
 
 let commonTransformers = [{
 	destination: "local/transformer.sh"
-	perms: "544"
+	perms:       "544"
 	data: """
 		#! /bin/dash
 		/bin/jq '
@@ -74,7 +74,7 @@ let commonTransformers = [{
 if #env != "prod" {
 	job: cicero: group: cicero: task: cicero: {
 		_transformers: commonTransformers
-		template: _transformers
+		template:      _transformers
 	}
 }
 
@@ -94,6 +94,7 @@ if #env == "prod" {
 					"traefik.http.routers.cicero.middlewares=oauth-auth-redirect@file",
 					"traefik.http.routers.cicero.entrypoints=https",
 					"traefik.http.routers.cicero.tls=true",
+					"traefik.http.routers.cicero.tls.certresolver=acme",
 				]
 				check: [{
 					type:     "tcp"
@@ -111,8 +112,8 @@ if #env == "prod" {
 
 				_transformers: commonTransformers + [{
 					destination: "local/transformer-prod.sh"
-					perms: "544"
-					data: """
+					perms:       "544"
+					data:        """
 						#! /bin/dash
 						/bin/jq '
 							.job[]?.datacenters |= . + ["eu-central-1", "us-east-2"] |
@@ -145,7 +146,7 @@ if #env == "prod" {
 				}]
 
 				template: _transformers + [
-					{
+						{
 						destination: "secrets/netrc"
 						data: """
 							machine github.com
@@ -159,7 +160,7 @@ if #env == "prod" {
 							[credential]
 								helper = netrc -vkf /secrets/netrc
 							"""
-					}
+					},
 				]
 
 				env: NETRC: "/secrets/netrc"

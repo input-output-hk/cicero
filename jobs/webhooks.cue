@@ -35,6 +35,7 @@ job: webhooks: group: webhooks: {
 			"traefik.http.routers.webhooks.rule=Host(`webhooks.infra.aws.iohkdev.io`) && PathPrefix(`/`)",
 			"traefik.http.routers.webhooks.entrypoints=https",
 			"traefik.http.routers.webhooks.tls=true",
+			"traefik.http.routers.webhooks.tls.certresolver=acme",
 		]
 		check: [{
 			type:     "tcp"
