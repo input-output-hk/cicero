@@ -39,7 +39,7 @@ package jobs
 
 job: [string]: {
 	id?:  string
-	type: "service"
+	type: *"service" | "batch"
 	datacenters: ["dc1", "eu-central-1", "us-east-2"]
 
 	namespace: #namespace
