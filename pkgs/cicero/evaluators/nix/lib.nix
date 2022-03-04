@@ -374,6 +374,7 @@ rec {
             };
 
       github.reportStatus = statuses_url: action: next:
+        if statuses_url == null then next else
         data-merge.merge
           (wrapScript "bash"
             (inner: ''
