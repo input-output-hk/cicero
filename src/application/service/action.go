@@ -459,8 +459,7 @@ func matchFact(match cue.Value, fact *domain.Fact) (error, error) {
 	if err := factCue.Err(); err != nil {
 		return nil, err
 	}
-
-	return match.Subsume(factCue, cue.Final()), nil
+	return match.Unify(factCue).Validate(cue.Final()), nil
 }
 
 func (self *actionService) Create(source, name string) (*domain.Action, error) {
