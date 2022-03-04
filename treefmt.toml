@@ -6,3 +6,8 @@ includes = ["*.go"]
 [formatter.nix]
 command = "nixpkgs-fmt"
 includes = ["*.nix"]
+
+[formatter.cue]
+command = "cue"
+options = ["fmt"]
+includes = ["*.cue"]
