@@ -2,7 +2,7 @@
 , cicero
 , cicero-evaluator-nix
 , writeShellScriptBin
-, nixUnstable
+, nix
 , bashInteractive
 , coreutils
 , shadow
@@ -22,7 +22,7 @@ writeShellScriptBin "entrypoint" ''
       gitMinimal
       cicero
       cicero-evaluator-nix
-      nixUnstable
+      nix
       bashInteractive
       coreutils
       dbmate

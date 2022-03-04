@@ -5,6 +5,7 @@
     devshell.url = "github:numtide/devshell";
     inclusive.url = "github:input-output-hk/nix-inclusive";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nix.url = "github:NixOS/nix/f22b9e72f51f97f8f2d334748d3e97123940a146";
     utils.url = "github:numtide/flake-utils";
     driver = {
       url = "github:input-output-hk/nomad-driver-nix";
@@ -32,7 +33,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, nix-cache-proxy, haskell-nix, ... }:
+  outputs = { self, nixpkgs, utils, devshell, driver, follower, poetry2nix, nix-cache-proxy, haskell-nix, nix, ... }:
     let supportedSystems = [ "x86_64-linux" ]; in utils.lib.eachSystem supportedSystems
       (system:
         let
@@ -46,6 +47,7 @@
             poetry2nix.overlay
             follower.overlay
             nix-cache-proxy.overlay
+            nix.overlay
             (final: prev: rec {
               go = prev.go_1_17;
               gouml = final.callPackage pkgs/gouml.nix { };
