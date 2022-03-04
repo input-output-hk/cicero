@@ -176,8 +176,9 @@ Kind:
 				continue
 			}
 
-			fieldClause, fieldArgs := sqlWhereCue(iter.Value(), append(path, iter.Label()), argNum)
-			appendClause(and()+fieldClause, fieldArgs)
+			if fieldClause, fieldArgs := sqlWhereCue(iter.Value(), append(path, iter.Label()), argNum); fieldClause != "" {
+				appendClause(and()+fieldClause, fieldArgs)
+			}
 		}
 	case cue.ListKind:
 		list, _ := value.List()
