@@ -46,7 +46,6 @@
             poetry2nix.overlay
             follower.overlay
             nix-cache-proxy.overlay
-            haskell-nix.overlay
             (final: prev: rec {
               go = prev.go_1_17;
               gouml = final.callPackage pkgs/gouml.nix { };
@@ -227,7 +226,7 @@
         cicero-entrypoint = prev.callPackage pkgs/cicero/entrypoint.nix { };
         cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix { flake = self; };
         webhook-trigger = prev.callPackage pkgs/trigger { };
-        cicero-api = final.callPackage pkgs/cicero-api { inherit supportedSystems; src = ./.; };
+        cicero-api = (final.extend haskell-nix.overlay).callPackage pkgs/cicero-api { inherit supportedSystems; src = ./.; };
         inherit (final.cicero-api) cicero-cli;
       } // nixpkgs.lib.mapAttrs'
         (k: nixpkgs.lib.nameValuePair "cicero-evaluator-nix-run-${k}")
