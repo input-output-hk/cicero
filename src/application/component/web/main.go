@@ -1037,8 +1037,7 @@ func (self *Web) BadRequest(w http.ResponseWriter, err error) {
 
 func (self *Web) Error(w http.ResponseWriter, err error) {
 	status := 500
-	switch err.(type) {
-	case HandlerError:
+	if _, ok := err.(HandlerError); ok {
 		status = err.(HandlerError).StatusCode
 	}
 

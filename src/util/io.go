@@ -40,8 +40,6 @@ func (f *skipLeadingWhitespaceReader) Read(p []byte) (int, error) {
 		buf = buf[rs:]
 	}
 
-	for i, b := range buf {
-		p[i] = b
-	}
+	copy(p, buf)
 	return len(buf), nil
 }

@@ -96,7 +96,6 @@ func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, arg
 			clause += `, $` + strconv.Itoa(argNum)
 			args = append(args, part)
 		}
-		return
 	}
 
 	appendTextEquals := func(arg string) {

@@ -82,9 +82,7 @@ var templateFuncs = template.FuncMap{
 			ns%int64(time.Second),
 		)
 	},
-	"timeNow": func() time.Time {
-		return time.Now()
-	},
+	"timeNow": time.Now,
 	"derefInt": func(ptr *int) int {
 		return *ptr
 	},
