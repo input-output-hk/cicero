@@ -1,6 +1,10 @@
-{ self, pkgs, config, lib, ... }:
-
 {
+  self,
+  pkgs,
+  config,
+  lib,
+  ...
+}: {
   imports = [
     self.nixosModule
     self.inputs.driver.nixosModules.nix-driver-nomad
@@ -13,10 +17,10 @@
 
   networking.hostName = "cicero";
 
-  nixpkgs.overlays = [ self.overlay ];
+  nixpkgs.overlays = [self.overlay];
 
   nix = {
-    systemFeatures = [ "recursive-nix" "nixos-test" ];
+    systemFeatures = ["recursive-nix" "nixos-test"];
     extraOptions = ''
       experimental-features = nix-command flakes ca-references recursive-nix
     '';
@@ -25,7 +29,7 @@
   users.users = {
     nixos = {
       isNormalUser = true;
-      extraGroups = [ "wheel" ];
+      extraGroups = ["wheel"];
       initialHashedPassword = "";
     };
 

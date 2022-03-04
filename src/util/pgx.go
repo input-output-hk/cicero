@@ -16,4 +16,3 @@ func ScanNextRow(rows pgx.Rows, dst ...interface{}) error {
 	}
 	return nil
 }
-

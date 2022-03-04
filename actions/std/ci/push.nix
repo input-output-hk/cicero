@@ -1,6 +1,4 @@
-{ ... }:
-
-{
+{...}: {
   inputs.github-event = ''
     "github-event": {
       pusher: {}
@@ -19,13 +17,13 @@
     }
   '';
 
-  output = { github-event }:
-    let inherit (github-event.value.github-event) repository head_commit; in
-    {
-      success."${repository.name}/ci".start = {
-        inherit (repository) clone_url;
-        sha = head_commit.id;
-        statuses_url = "https://api.github.com/repos/${repository.owner.login}/${repository.name}/statuses/${head_commit.id}";
-      };
+  output = {github-event}: let
+    inherit (github-event.value.github-event) repository head_commit;
+  in {
+    success."${repository.name}/ci".start = {
+      inherit (repository) clone_url;
+      sha = head_commit.id;
+      statuses_url = "https://api.github.com/repos/${repository.owner.login}/${repository.name}/statuses/${head_commit.id}";
     };
+  };
 }

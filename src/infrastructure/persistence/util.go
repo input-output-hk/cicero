@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v4"
 
 	"github.com/input-output-hk/cicero/src/config"
-	"github.com/input-output-hk/cicero/src/util"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 func fetchPage(

@@ -1,10 +1,11 @@
-{ config, lib, pkgs, ... }:
-
-let
-  cfg = config.services.cicero;
-in
-
 {
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
+  cfg = config.services.cicero;
+in {
   options.services.cicero = with lib; {
     enable = mkEnableOption "cicero";
 
@@ -21,8 +22,8 @@ in
 
   config = lib.mkIf cfg.enable {
     systemd.services.cicero = {
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ];
+      wantedBy = ["multi-user.target"];
+      after = ["network.target"];
       serviceConfig.ExecStart = "${cfg.package}/bin/cicero start";
       environment.DATABASE_URL = lib.mkIf (cfg.postgres != null) cfg.postgres;
     };

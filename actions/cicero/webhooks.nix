@@ -1,10 +1,13 @@
-{ name, std, lib, actionLib, nixpkgsRev, ... } @ args:
-
-let
-  pkg = pkg: "github:NixOS/nixpkgs/${nixpkgsRev}#${pkg}";
-in
-
 {
+  name,
+  std,
+  lib,
+  actionLib,
+  nixpkgsRev,
+  ...
+} @ args: let
+  pkg = pkg: "github:NixOS/nixpkgs/${nixpkgsRev}#${pkg}";
+in {
   inputs.start = ''
     "${name}": {
       sha: string
@@ -13,8 +16,9 @@ in
     }
   '';
 
-  job = { start }:
-    let cfg = start.value.${name}; in
+  job = {start}: let
+    cfg = start.value.${name};
+  in
     std.chain args [
       actionLib.simpleJob
 
@@ -25,15 +29,15 @@ in
 
       {
         resources.memory = 1024;
-        config.packages = std.data-merge.append (map pkg [ "cue" "nomad" ]);
+        config.packages = std.data-merge.append (map pkg ["cue" "nomad"]);
       }
 
       (std.script "bash" ''
         cue export ./jobs -e jobs.webhooks \
           ${
-            lib.optionalString (cfg ? environment)
-            "-t env=${lib.escapeShellArg cfg.environment}"
-          } \
+          lib.optionalString (cfg ? environment)
+          "-t env=${lib.escapeShellArg cfg.environment}"
+        } \
           -t sha=${lib.escapeShellArg cfg.sha} \
           > job.json
 

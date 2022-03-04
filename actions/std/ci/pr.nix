@@ -1,6 +1,4 @@
-{ ... }:
-
-{
+{...}: {
   inputs.github-event = ''
     "github-event": {
       repository: {
@@ -18,13 +16,13 @@
     }
   '';
 
-  output = { github-event }:
-    let inherit (github-event.value.github-event) pull_request repository; in
-    {
-      success."${repository.name}/ci".start = {
-        inherit (pull_request.head.repo) clone_url;
-        inherit (pull_request.head) sha;
-        statuses_url = pull_request._links.statuses.href;
-      };
+  output = {github-event}: let
+    inherit (github-event.value.github-event) pull_request repository;
+  in {
+    success."${repository.name}/ci".start = {
+      inherit (pull_request.head.repo) clone_url;
+      inherit (pull_request.head) sha;
+      statuses_url = pull_request._links.statuses.href;
     };
+  };
 }

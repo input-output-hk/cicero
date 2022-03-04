@@ -1,14 +1,13 @@
-{ std, lib }:
-
-let
+{
+  std,
+  lib,
+}: let
   inherit (std.data-merge) merge;
   inherit (lib) mapAttrs;
-in
-
-rec {
+in rec {
   simpleJob = action: job:
     std.chain action [
-      (std.escapeNames [ ] [ ])
+      (std.escapeNames [] [])
 
       std.singleTask
 

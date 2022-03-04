@@ -1,5 +1,8 @@
-{ flake, writers, coreutils }:
-
+{
+  flake,
+  writers,
+  coreutils,
+}:
 writers.writeBashBin "cicero-evaluator-nix" ''
   PATH="$PATH:"${coreutils}/bin
 

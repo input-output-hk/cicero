@@ -1,5 +1,8 @@
-{ lib, buildGoModule, fetchFromGitHub }:
-
+{
+  lib,
+  buildGoModule,
+  fetchFromGitHub,
+}:
 buildGoModule rec {
   pname = "gouml";
   version = "0.2.3";
@@ -19,6 +22,6 @@ buildGoModule rec {
     description = "plantUml generator for go";
     homepage = "https://github.com/kazukousen/gouml";
     license = licenses.asl20;
-    maintainers = with maintainers; [ rschardt ];
+    maintainers = with maintainers; [rschardt];
   };
 }

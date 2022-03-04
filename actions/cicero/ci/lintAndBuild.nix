@@ -1,6 +1,10 @@
-{ name, std, lib, actionLib, ... }@args:
-
 {
+  name,
+  std,
+  lib,
+  actionLib,
+  ...
+} @ args: {
   inputs.start = ''
     "cicero/ci": start: {
       clone_url: string
@@ -9,12 +13,13 @@
     }
   '';
 
-  job = { start }:
-    let cfg = start.value."cicero/ci".start; in
+  job = {start}: let
+    cfg = start.value."cicero/ci".start;
+  in
     std.chain args [
       actionLib.simpleJob
 
-      (std.networking.addNameservers [ "1.1.1.1" ])
+      (std.networking.addNameservers ["1.1.1.1"])
 
       (lib.optionalAttrs (cfg ? statuses_url)
         (std.github.reportStatus cfg.statuses_url))

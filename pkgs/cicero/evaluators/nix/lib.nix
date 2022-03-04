@@ -1,22 +1,21 @@
-self:
-
-let
+self: let
   inherit (self.inputs.nixpkgs) lib;
   inherit (self.inputs) data-merge;
-in
-
-rec {
+in rec {
   actions = {
     apply = part: base:
-      base // part // {
+      base
+      // part
+      // {
         inputs =
-          base.inputs or { } //
-          part.inputs or { };
+          base.inputs
+          or {}
+          // part.inputs or {};
 
         output = inputs:
           lib.recursiveUpdate
-            (base.output or (_: { }) inputs)
-            (part.output or (_: { }) inputs);
+          (base.output or (_: {}) inputs)
+          (part.output or (_: {}) inputs);
       };
 
     behavior = {
@@ -25,7 +24,8 @@ rec {
       # Same as `stopOnSuccess` and `stopOnFailure` combined
       # but more efficient (just one input so only one DB query).
       # TODO this is actually not significantly more efficient
-      once = key: _: next: actions.apply
+      once = key: _: next:
+        actions.apply
         {
           inputs."behavior: run only once for \"${key}\"" = {
             not = true;
@@ -34,42 +34,46 @@ rec {
             '';
           };
 
-          output = _:
-            let fact._behavior.once.${key} = null; in
-            { success = fact; } //
-            lib.optionalAttrs (next ? job) {
+          output = _: let
+            fact._behavior.once.${key} = null;
+          in
+            {success = fact;}
+            // lib.optionalAttrs (next ? job) {
               failure = fact;
             };
         }
         next;
 
-      stopOnSuccess = key: _: actions.apply {
-        inputs."behavior: stop on success for \"${key}\"" = {
-          not = true;
-          match = ''
-            "_behavior": stopOnSuccess: "${key}": _
-          '';
+      stopOnSuccess = key: _:
+        actions.apply {
+          inputs."behavior: stop on success for \"${key}\"" = {
+            not = true;
+            match = ''
+              "_behavior": stopOnSuccess: "${key}": _
+            '';
+          };
+
+          output = _: {
+            success._behavior.stopOnSuccess.${key} = null;
+          };
         };
 
-        output = _: {
-          success._behavior.stopOnSuccess.${key} = null;
-        };
-      };
+      stopOnFailure = key: _:
+        actions.apply {
+          inputs."behavior: stop on failure for \"${key}\"" = {
+            not = true;
+            match = ''
+              "_behavior": stopOnFailure: "${key}": _
+            '';
+          };
 
-      stopOnFailure = key: _: actions.apply {
-        inputs."behavior: stop on failure for \"${key}\"" = {
-          not = true;
-          match = ''
-            "_behavior": stopOnFailure: "${key}": _
-          '';
+          output = _: {
+            failure._behavior.stopOnFailure.${key} = null;
+          };
         };
 
-        output = _: {
-          failure._behavior.stopOnFailure.${key} = null;
-        };
-      };
-
-      onInputChange = input: key: _: next: actions.apply
+      onInputChange = input: key: _: next:
+        actions.apply
         {
           inputs."behavior: input \"${input}\" changed for \"${key}\"" = {
             not = true;
@@ -78,10 +82,11 @@ rec {
             '';
           };
 
-          output = inputs:
-            let fact._behavior.onInputChange.${key}.${input} = inputs.${input}.id; in
-            { success = fact; } //
-            lib.optionalAttrs (next ? job) {
+          output = inputs: let
+            fact._behavior.onInputChange.${key}.${input} = inputs.${input}.id;
+          in
+            {success = fact;}
+            // lib.optionalAttrs (next ? job) {
               failure = fact;
             };
         }
@@ -90,196 +95,210 @@ rec {
   };
 
   jobs = {
-    escapeNames = from: to: job:
-      let
-        escape = builtins.replaceStrings
-          (from ++ [ "/" ])
-          (to ++ [ "-" ]);
-      in
+    escapeNames = from: to: job: let
+      escape =
+        builtins.replaceStrings
+        (from ++ ["/"])
+        (to ++ ["-"]);
+    in
       lib.mapAttrs'
-        (k: v: lib.nameValuePair (escape k) (v // {
-          group = builtins.mapAttrs
-            (k: v: v // {
-              task = lib.mapAttrs' (k: lib.nameValuePair (escape k)) v.task or { };
-            }) v.group or { };
-        }))
-        job;
+      (k: v:
+        lib.nameValuePair (escape k) (v
+          // {
+            group =
+              builtins.mapAttrs
+              (k: v:
+                v
+                // {
+                  task = lib.mapAttrs' (k: lib.nameValuePair (escape k)) v.task or {};
+                })
+              v.group or {};
+          }))
+      job;
 
-    singleTask = name: task: { ${name}.group.${name}.task.${name} = task; };
+    singleTask = name: task: {${name}.group.${name}.task.${name} = task;};
   };
 
-  tasks.script = language: script:
-    let
-      runner = "cicero-evaluator-nix-run-${language}";
-      scriptName = builtins.hashString "md5" script;
-    in
-    {
-      config = {
-        packages =
-          [ "github:input-output-hk/cicero/${self.rev or ""}#${runner}" ];
-        command = [
-          # It is ok to hard-code the system here
-          # because we only care about the derivation name.
-          "/bin/${self.outputs.packages.x86_64-linux.${runner}.name}"
-          "/local/scripts/${language}/${scriptName}"
-        ];
-      };
+  tasks.script = language: script: let
+    runner = "cicero-evaluator-nix-run-${language}";
+    scriptName = builtins.hashString "md5" script;
+  in {
+    config = {
+      packages = ["github:input-output-hk/cicero/${self.rev or ""}#${runner}"];
+      command = [
+        # It is ok to hard-code the system here
+        # because we only care about the derivation name.
+        "/bin/${self.outputs.packages.x86_64-linux.${runner}.name}"
+        "/local/scripts/${language}/${scriptName}"
+      ];
+    };
 
-      template = [{
+    template = [
+      {
         destination = "local/scripts/${language}/${scriptName}";
         left_delimiter = "";
         right_delimiter = "";
         data = script;
-      }];
-    };
+      }
+    ];
+  };
 
-  /* Chains are a concise way to write jobs.
-    Put simply chains are a fold-right of wrappers.
-
-    Each "step/link/part" (no name defined) of a chain
-    is a function that takes the action that this job
-    is being defined for as its first argument
-    and the next "step/link/part" as its second argument.
-    These argument are supplied automatically when called
-    by the `chain` function.
-    It returns the job as an attribute set.
-
-    Most "steps/links/parts" are created from a builder function
-    that takes some specific arguments which are usually given
-    directly in the action definition.
-
-    This simple contract sometimes allows to use other functions
-    that are not primarily meant to be used in a chain, or use
-    functions that are meant for chains by themselves.
-  */
+  /*
+    Chains are a concise way to write jobs.
+   Put simply chains are a fold-right of wrappers.
+   
+   Each "step/link/part" (no name defined) of a chain
+   is a function that takes the action that this job
+   is being defined for as its first argument
+   and the next "step/link/part" as its second argument.
+   These argument are supplied automatically when called
+   by the `chain` function.
+   It returns the job as an attribute set.
+   
+   Most "steps/links/parts" are created from a builder function
+   that takes some specific arguments which are usually given
+   directly in the action definition.
+   
+   This simple contract sometimes allows to use other functions
+   that are not primarily meant to be used in a chain, or use
+   functions that are meant for chains by themselves.
+   */
   chains = {
-    /* The main entrypoint to chains.
-
-      For simplicity, plain attribute sets
-      are also allowed. They will simply be merged
-      with the next (if any) "step/link/part"
-      using `data-merge.merge`.
-    */
+    /*
+      The main entrypoint to chains.
+     
+     For simplicity, plain attribute sets
+     are also allowed. They will simply be merged
+     with the next (if any) "step/link/part"
+     using `data-merge.merge`.
+     */
     chain = action: steps:
       lib.foldr
-        (a: b:
+      (
+        a: b:
           if builtins.typeOf a == "set"
           then data-merge.merge b a
           else (a action) b
-        )
-        { }
-        steps;
+      )
+      {}
+      steps;
 
     jobs = {
       escapeNames = from: to: actions: jobs.escapeNames from to;
 
-      singleTask = { name, ... }: jobs.singleTask name;
+      singleTask = {name, ...}: jobs.singleTask name;
     };
 
     tasks = {
-      /* Like `tasks.script` but the second argument is
-        a function that takes the command of the
-        next script and returns the new script.
-
-        Example:
-
-        ```nix
-        wrapScript "bash" (inner: ''
-        echo 'Running …'
-        time ${lib.escapeShellArgs inner}
-        echo '… finished.'
-        '')
-        ```
-      */
-      wrapScript = language: outerFn: action: inner:
-        let outer = script language (outerFn inner.config.command or [ ]); in
+      /*
+        Like `tasks.script` but the second argument is
+       a function that takes the command of the
+       next script and returns the new script.
+       
+       Example:
+       
+       ```nix
+       wrapScript "bash" (inner: ''
+       echo 'Running …'
+       time ${lib.escapeShellArgs inner}
+       echo '… finished.'
+       '')
+       ```
+       */
+      wrapScript = language: outerFn: action: inner: let
+        outer = script language (outerFn inner.config.command or []);
+      in
         data-merge.merge
-          (lib.recursiveUpdate inner {
-            config.command = outer.config.command;
+        (lib.recursiveUpdate inner {
+          config.command = outer.config.command;
 
-            # XXX we have to pre-create these keys because they may not be present
-            # see https://github.com/divnix/data-merge/issues/1
-            config.packages = inner.config.packages or [ ];
-            template = inner.template or [ ];
-          })
-          {
-            config.packages = data-merge.append outer.config.packages;
-            template = data-merge.append outer.template;
-          };
+          # XXX we have to pre-create these keys because they may not be present
+          # see https://github.com/divnix/data-merge/issues/1
+          config.packages = inner.config.packages or [];
+          template = inner.template or [];
+        })
+        {
+          config.packages = data-merge.append outer.config.packages;
+          template = data-merge.append outer.template;
+        };
 
-      /* Allow a script to dynamically generate a result fact.
-
-        If the inner program writes a JSON file to `/local/cicero/post-fact/success/fact`
-        and exits successfully, a fact with that value will be created via the API
-        (with `/local/cicero/post-fact/success/artifact` as the artifact if it exists).
-
-        Same for the failure case and `/local/cicero/post-fact/failure/{fact,artifact}`.
-
-        Assumes `CICERO_API_URL` is set pointing to Cicero accessible from inside the cluster.
-      */
+      /*
+        Allow a script to dynamically generate a result fact.
+       
+       If the inner program writes a JSON file to `/local/cicero/post-fact/success/fact`
+       and exits successfully, a fact with that value will be created via the API
+       (with `/local/cicero/post-fact/success/artifact` as the artifact if it exists).
+       
+       Same for the failure case and `/local/cicero/post-fact/failure/{fact,artifact}`.
+       
+       Assumes `CICERO_API_URL` is set pointing to Cicero accessible from inside the cluster.
+       */
       postFact = action: inner:
         data-merge.merge
-          (wrapScript "bash"
-            (inner: ''
-              set -eEuo pipefail
+        (wrapScript "bash"
+          (inner: ''
+            set -eEuo pipefail
 
-              mkdir -p /local/cicero/post-fact/{success,failure}
+            mkdir -p /local/cicero/post-fact/{success,failure}
 
-              if ${lib.escapeShellArgs inner}; then
-                ec=$?
-                state=success
+            if ${lib.escapeShellArgs inner}; then
+              ec=$?
+              state=success
+            else
+              ec=$?
+              state=failure
+            fi
+
+            base=/local/cicero/post-fact/"$state"
+
+            if [[ -e "$base"/fact ]]; then
+              if [[ -e "$base"/artifact ]]; then
+                concat=(cat - "$base"/artifact)
               else
-                ec=$?
-                state=failure
+                concat=cat
               fi
 
-              base=/local/cicero/post-fact/"$state"
+              < $base/fact \
+              jq --compact-output --join-output \
+              | "''${concat[@]}" \
+              | curl "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact \
+                --output /dev/null --fail \
+                --no-progress-meter \
+                --data-binary @-
 
-              if [[ -e "$base"/fact ]]; then
-                if [[ -e "$base"/artifact ]]; then
-                  concat=(cat - "$base"/artifact)
-                else
-                  concat=cat
-                fi
+              rm -rf /local/cicero/post-fact
+            fi
 
-                < $base/fact \
-                jq --compact-output --join-output \
-                | "''${concat[@]}" \
-                | curl "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact \
-                  --output /dev/null --fail \
-                  --no-progress-meter \
-                  --data-binary @-
-
-                rm -rf /local/cicero/post-fact
-              fi
-
-              exit $ec
-            '')
-            action
-            inner)
-          {
-            config.packages = data-merge.append [
-              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
-              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
-            ];
-          };
+            exit $ec
+          '')
+          action
+          inner)
+        {
+          config.packages = data-merge.append [
+            "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
+            "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
+          ];
+        };
 
       networking = {
         nameservers = nameservers: action: next:
           data-merge.merge
-            (next // {
+          (next
+            // {
               # XXX we have to pre-create `template` because it may not be present
               # see https://github.com/divnix/data-merge/issues/1
-              template = next.template or [ ];
+              template = next.template or [];
             })
-            {
-              template = data-merge.append [{
+          {
+            template = data-merge.append [
+              {
                 destination = "/etc/resolv.conf";
                 left_delimiter = "";
                 right_delimiter = "";
                 data = lib.concatStringsSep "\n" (map (ns: "nameserver " + ns) nameservers);
-              }];
-            };
+              }
+            ];
+          };
 
         addNameservers = nameservers:
           wrapScript "bash" (next: ''
@@ -294,19 +313,20 @@ rec {
       nix = {
         install = action: next:
           data-merge.merge
-            (lib.recursiveUpdate next {
-              # XXX we have to pre-create `config.packages` because it may not be present
-              # see https://github.com/divnix/data-merge/issues/1
-              config.packages = next.config.packages or [ ];
-            })
-            {
-              config.packages = data-merge.append
-                [ "github:input-output-hk/nomad-driver-nix/${self.inputs.driver.rev}#wrap-nix" ];
-              env.NIX_CONFIG = ''
-                experimental-features = nix-command flakes
-                ${next.env.NIX_CONFIG or ""}
-              '';
-            };
+          (lib.recursiveUpdate next {
+            # XXX we have to pre-create `config.packages` because it may not be present
+            # see https://github.com/divnix/data-merge/issues/1
+            config.packages = next.config.packages or [];
+          })
+          {
+            config.packages =
+              data-merge.append
+              ["github:input-output-hk/nomad-driver-nix/${self.inputs.driver.rev}#wrap-nix"];
+            env.NIX_CONFIG = ''
+              experimental-features = nix-command flakes
+              ${next.env.NIX_CONFIG or ""}
+            '';
+          };
 
         develop = action: next:
           nix.install action (wrapScript "bash"
@@ -334,48 +354,54 @@ rec {
 
       makes = target: action: next:
         data-merge.merge
-          (wrapScript "bash"
-            (next: ''
-              m ${lib.escapeShellArg target}
-              exec ${lib.escapeShellArgs next}
-            '')
-            action
-            next
-          )
-          {
-            config.packages = data-merge.append [ "github:fluidattacks/makes" ];
-          };
+        (
+          wrapScript "bash"
+          (next: ''
+            m ${lib.escapeShellArg target}
+            exec ${lib.escapeShellArgs next}
+          '')
+          action
+          next
+        )
+        {
+          config.packages = data-merge.append ["github:fluidattacks/makes"];
+        };
 
-      git.clone = { clone_url, sha, ... }:
-        action: next:
-          data-merge.merge
-            (wrapScript "bash"
-              (next: ''
-                export SSL_CERT_FILE=/current-profile/etc/ssl/certs/ca-bundle.crt
-                export HOME="$PWD/.home"
+      git.clone = {
+        clone_url,
+        sha,
+        ...
+      }: action: next:
+        data-merge.merge
+        (wrapScript "bash"
+          (next: ''
+            export SSL_CERT_FILE=/current-profile/etc/ssl/certs/ca-bundle.crt
+            export HOME="$PWD/.home"
 
-                mkdir -p "$HOME"
+            mkdir -p "$HOME"
 
-                git config --global credential.helper 'netrc -vkf /secrets/netrc'
-                git config --global advice.detachedHead false
-                git clone --quiet ${lib.escapeShellArg clone_url} src
-                cd src
-                git checkout ${lib.escapeShellArg sha}
+            git config --global credential.helper 'netrc -vkf /secrets/netrc'
+            git config --global advice.detachedHead false
+            git clone --quiet ${lib.escapeShellArg clone_url} src
+            cd src
+            git checkout ${lib.escapeShellArg sha}
 
-                exec ${lib.escapeShellArgs next}
-              '')
-              action
-              next)
-            {
-              config.packages = data-merge.append [
-                "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#gitMinimal"
-                "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
-              ];
-            };
+            exec ${lib.escapeShellArgs next}
+          '')
+          action
+          next)
+        {
+          config.packages = data-merge.append [
+            "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#gitMinimal"
+            "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
+          ];
+        };
 
       github.reportStatus = statuses_url: action: next:
-        if statuses_url == null then next else
-        data-merge.merge
+        if statuses_url == null
+        then next
+        else
+          data-merge.merge
           (wrapScript "bash"
             (inner: ''
               export SSL_CERT_FILE=/current-profile/etc/ssl/certs/ca-bundle.crt
@@ -436,10 +462,12 @@ rec {
               "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
             ];
 
-            template = data-merge.append [{
-              destination = "secrets/cicero/github/token";
-              data = ''{{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}'';
-            }];
+            template = data-merge.append [
+              {
+                destination = "secrets/cicero/github/token";
+                data = ''{{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}'';
+              }
+            ];
           };
     };
   };

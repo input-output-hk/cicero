@@ -1,5 +1,9 @@
-{ lib, fetchFromGitHub, poetry2nix, python39 }:
-
+{
+  lib,
+  fetchFromGitHub,
+  poetry2nix,
+  python39,
+}:
 poetry2nix.mkPoetryApplication {
   projectDir = fetchFromGitHub {
     owner = "schemathesis";
@@ -8,5 +12,4 @@ poetry2nix.mkPoetryApplication {
     sha256 = "sha256-iU1tsA9MKKH/zjuBxD5yExJOPoL2V/OG3WYc9w0do9I=";
   };
   python = python39;
-
 }

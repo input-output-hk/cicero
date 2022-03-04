@@ -1,11 +1,15 @@
-{ name, std, lib, actionLib, ... } @ args:
-
 {
+  name,
+  std,
+  lib,
+  actionLib,
+  ...
+} @ args: {
   inputs.start = ''
     "${name}": exit: _ // TODO make `uint` work
   '';
 
-  job = { start }:
+  job = {start}:
     std.chain args [
       actionLib.simpleJob
       std.postFact

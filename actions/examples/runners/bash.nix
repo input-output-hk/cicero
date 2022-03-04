@@ -1,7 +1,11 @@
-{ std, actionLib, ... } @ args:
-
+{
+  std,
+  actionLib,
+  ...
+} @ args:
 std.behavior.onUpdate args {
-  job = _: actionLib.simpleJob args (std.script "bash" ''
-    echo 'Hello Bash'
-  '');
+  job = _:
+    actionLib.simpleJob args (std.script "bash" ''
+      echo 'Hello Bash'
+    '');
 }

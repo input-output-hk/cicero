@@ -81,7 +81,7 @@ packages = [
 
   # formatting
   "treefmt",
-  "nixpkgs-fmt",
+  "alejandra",
 
   # deployment
   "cue",

@@ -1,6 +1,10 @@
-{ name, std, lib, actionLib, ... }@args:
-
 {
+  name,
+  std,
+  lib,
+  actionLib,
+  ...
+} @ args: {
   inputs.start = ''
     "cicero/ci": start: {
       clone_url: string
@@ -9,10 +13,11 @@
     }
   '';
 
-  job = { start }:
-    let cfg = start.value."cicero/ci".start; in
+  job = {start}: let
+    cfg = start.value."cicero/ci".start;
+  in
     std.chain args [
-      (std.escapeNames [ ] [ ])
+      (std.escapeNames [] [])
 
       {
         ${name}.group.schemathesis = {
@@ -38,20 +43,20 @@
               lifecycle.sidecar = true;
 
               config = {
-                packages = [ "github:input-output-hk/cicero/${cfg.sha}#cicero-entrypoint" ];
-                command = [ "/bin/entrypoint" "--web-listen" ":\${NOMAD_PORT_http}" ];
+                packages = ["github:input-output-hk/cicero/${cfg.sha}#cicero-entrypoint"];
+                command = ["/bin/entrypoint" "--web-listen" ":\${NOMAD_PORT_http}"];
               };
 
               env.DATABASE_URL = "postgres://cicero:@127.0.0.1:\${NOMAD_PORT_db}/cicero?sslmode=disable";
             };
 
             schemathesis = std.chain args [
-              { lifecycle.hook = "poststart"; }
+              {lifecycle.hook = "poststart";}
 
               (lib.optionalAttrs (cfg ? statuses_url)
                 (std.github.reportStatus cfg.statuses_url))
 
-              (std.networking.addNameservers [ "1.1.1.1" ])
+              (std.networking.addNameservers ["1.1.1.1"])
 
               (std.git.clone cfg)
 

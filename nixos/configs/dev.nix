@@ -1,6 +1,10 @@
-{ self, pkgs, config, lib, ... }:
-
 {
+  self,
+  pkgs,
+  config,
+  lib,
+  ...
+}: {
   imports = [
     self.inputs.driver.nixosModules.nix-driver-nomad
     "${self.inputs.nixpkgs}/nixos/modules/misc/version.nix"
@@ -8,7 +12,7 @@
     "${self.inputs.nixpkgs}/nixos/modules/profiles/minimal.nix"
   ];
 
-  nixpkgs.overlays = [ self.overlay ];
+  nixpkgs.overlays = [self.overlay];
 
   networking.hostName = lib.mkDefault "dev";
 
@@ -43,16 +47,18 @@
         };
 
         schema_config = {
-          configs = [{
-            from = "2020-05-15";
-            index = {
-              period = "168h";
-              prefix = "index_";
-            };
-            object_store = "filesystem";
-            schema = "v11";
-            store = "boltdb";
-          }];
+          configs = [
+            {
+              from = "2020-05-15";
+              index = {
+                period = "168h";
+                prefix = "index_";
+              };
+              object_store = "filesystem";
+              schema = "v11";
+              store = "boltdb";
+            }
+          ];
         };
 
         server.http_listen_port = 3100;

@@ -4,7 +4,7 @@ options = ["-w"]
 includes = ["*.go"]
 
 [formatter.nix]
-command = "nixpkgs-fmt"
+command = "alejandra"
 includes = ["*.nix"]
 
 [formatter.cue]

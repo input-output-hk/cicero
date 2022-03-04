@@ -1,5 +1,8 @@
-{ flake, buildGoModule, go-mockery }:
-
+{
+  flake,
+  buildGoModule,
+  go-mockery,
+}:
 buildGoModule rec {
   pname = "cicero";
   version = "2022.02.17.001";
@@ -13,7 +16,7 @@ buildGoModule rec {
     ../../src
   ];
 
-  nativeBuildInputs = [ go-mockery ];
+  nativeBuildInputs = [go-mockery];
 
   preBuild = ''
     go generate ./...
