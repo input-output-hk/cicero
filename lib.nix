@@ -266,9 +266,29 @@ in rec {
   fromHydraJob = args: hydraName: _:
     callAction hydraName (hydraJob args);
 
+  # taken from flake-utils and adjusted
+  flattenJobs = jobs:
+    let
+      op = sum: path: val:
+        let pathStr = builtins.concatStringsSep "/" path; in
+        if (builtins.typeOf val) != "set" then
+          sum
+        else if val ? type && val.type == "derivation" then
+          (sum // { "${pathStr}" = val; })
+        else
+          (recurse sum path val)
+        ;
+      recurse = sum: path: val:
+        builtins.foldl'
+          (sum: key: op sum (path ++ [ key ]) val.${key})
+          sum
+          (builtins.attrNames val)
+      ;
+    in recurse { } [ ] jobs;
+
   # Convert hydraJobs to ciceroActions
-  fromHydraJobs = args:
-    mapAttrs (fromHydraJob args);
+  fromHydraJobs = args: jobs:
+    mapAttrs (fromHydraJob args) (flattenJobs jobs);
 
   # Recurses through a directory, considering every file an action.
   # The path of the file from the starting directory is used as name.
