@@ -40,6 +40,17 @@ func (self *NomadEventConsumer) WithQuerier(querier config.PgxIface) *NomadEvent
 func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	self.Logger.Info().Msg("Starting")
 
+	if events, err := self.NomadEventService.GetByHandled(false); err != nil {
+		return err
+	} else {
+		self.Logger.Debug().Int("num-unhandled", len(events)).Msg("Handling unhandled events")
+		for _, event := range events {
+			if err := self.processNomadEvent(ctx, event); err != nil {
+				return err
+			}
+		}
+	}
+
 	index, err := self.NomadEventService.GetLastNomadEventIndex()
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return errors.WithMessage(err, "Could not get last Nomad event index")
@@ -66,12 +77,9 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 			continue
 		}
 
-		for _, event := range events.Events {
-			if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-				self.Logger.Trace().Uint64("index", event.Index).Msg("Processing Nomad Event")
-				return self.WithQuerier(tx).processNomadEvent(&event)
-			}); err != nil {
-				return errors.WithMessagef(err, "Error processing Nomad event with index: %d", event.Index)
+		for _, rawEvent := range events.Events {
+			if err := self.processNomadEvent(ctx, &domain.NomadEvent{Event: rawEvent}); err != nil {
+				return err
 			}
 		}
 
@@ -79,17 +87,83 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	}
 }
 
-func (self *NomadEventConsumer) processNomadEvent(event *nomad.Event) error {
-	if err := self.handleNomadEvent(event); err != nil {
-		return errors.WithMessage(err, "Error handling Nomad event")
+func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *domain.NomadEvent) error {
+	logger := self.Logger.With().
+		Bytes("uid", event.Uid[:]).
+		Uint64("index", event.Index).
+		Str("topic", string(event.Topic)).
+		Str("type", event.Type).
+		Logger()
+
+	logger.Trace().Msg("Processing nomad event")
+
+	abort := false
+
+	// Save the event if it's not already in the DB.
+	if event.Uid == [16]byte{} {
+		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+			txSelf := self.WithQuerier(tx)
+
+			if err := txSelf.NomadEventService.Save(event); err != nil {
+				return err
+			}
+
+			if !event.Handled {
+				// Immediately flag handled to prevent others from processing it.
+				event.Handled = true
+				if err := txSelf.NomadEventService.Update(event); err != nil {
+					return err
+				}
+			} else {
+				// The event was already put in the DB by another process.
+				abort = true
+			}
+
+			return nil
+		}); err != nil {
+			return err
+		}
+	} else if event.Handled {
+		// No need to handle an event that's already in the DB and flagged as handled.
+		abort = true
+	} else {
+		event.Handled = true
+		if err := self.NomadEventService.Update(event); err != nil {
+			return err
+		}
 	}
-	if err := self.NomadEventService.Save(event); err != nil {
-		return errors.WithMessage(err, "Error to save Nomad event")
+
+	if abort {
+		logger.Trace().Msg("Abort processing nomad event (already handled)")
+		return nil
 	}
+
+	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
+
+		if err := txSelf.handleNomadEvent(ctx, &event.Event); err != nil {
+			// FIXME if we crash before unflagging the event will never be handled
+			// save a timestamp and consider it unflagged after a while?
+
+			event.Handled = false
+			if err := txSelf.NomadEventService.Update(event); err != nil {
+				return err
+			}
+
+			return errors.WithMessage(err, "Error handling nomad event")
+		}
+
+		return nil
+	}); err != nil {
+		return errors.WithMessagef(err, "Error processing nomad event with index %d and uid %q", event.Index, event.Uid)
+	}
+
+	logger.Trace().Msg("Processed nomad event")
+
 	return nil
 }
 
-func (self *NomadEventConsumer) handleNomadEvent(event *nomad.Event) error {
+func (self *NomadEventConsumer) handleNomadEvent(ctx context.Context, event *nomad.Event) error {
 	switch {
 	case event.Topic == "Allocation" && event.Type == "AllocationUpdated":
 		if allocation, err := event.Allocation(); err != nil {
