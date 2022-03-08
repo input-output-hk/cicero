@@ -96,9 +96,10 @@ job: webhooks: group: webhooks: {
 
 				\#(_data_events_all_ciceroApiUrl)
 
-				<<< '{payload}' \
-				jq -r '{"github-event": .}' \
+				jq -r '{"github-event": .}' <<'EOF' \
 				| curl "$ciceroApiUrl/fact" --data-binary @-
+				{payload}
+				EOF
 				"""#
 
 			_data_events_all_ciceroApiUrl: string
