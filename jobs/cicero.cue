@@ -3,57 +3,6 @@ package jobs
 // arbitrary revision from nixpkgs-unstable
 let nixpkgsRev = "19574af0af3ffaf7c9e359744ed32556f34536bd"
 
-job: cicero: group: cicero: {
-	restart: {
-		attempts: 5
-		delay:    "10s"
-		interval: "1m"
-		mode:     "delay"
-	}
-
-	reschedule: {
-		delay:          "10s"
-		delay_function: "exponential"
-		max_delay:      "1m"
-		unlimited:      true
-	}
-
-	network: port: http: {}
-
-	task: cicero: {
-		driver: "nix"
-
-		resources: {
-			memory: 4096
-			cpu:    300
-		}
-
-		env: {
-			DATABASE_URL: #databaseUrl
-			NOMAD_ADDR:   #nomadAddr
-			VAULT_ADDR:   #vaultAddr
-		}
-
-		_transformers: [...]
-
-		config: {
-			packages: [
-				#ciceroFlake,
-				// for transformers
-				"github:NixOS/nixpkgs/\(nixpkgsRev)#dash",
-				"github:NixOS/nixpkgs/\(nixpkgsRev)#jq",
-			]
-
-			command: [
-				"/bin/entrypoint",
-				"--prometheus-addr", #lokiAddr,
-				"--transform", for t in _transformers {t.destination},
-				"--web-listen", ":${NOMAD_PORT_http}",
-			]
-		}
-	}
-}
-
 let commonTransformers = [{
 	destination: "local/transformer.sh"
 	perms:       "544"
@@ -71,8 +20,76 @@ let commonTransformers = [{
 		"""
 }]
 
+job: cicero: group: {
+	[string]: {
+		restart: {
+			attempts: 5
+			delay:    "10s"
+			interval: "1m"
+			mode:     "delay"
+		}
+
+		reschedule: {
+			delay:          "10s"
+			delay_function: "exponential"
+			max_delay:      "1m"
+			unlimited:      true
+		}
+
+		task: [string]: {
+			driver: "nix"
+
+			resources: {
+				memory: 4096
+				cpu:    300
+			}
+
+			env: {
+				DATABASE_URL: #databaseUrl
+				NOMAD_ADDR:   #nomadAddr
+				VAULT_ADDR:   #vaultAddr
+			}
+
+			config: packages: [
+				#ciceroFlake,
+				// for transformers
+				"github:NixOS/nixpkgs/\(nixpkgsRev)#dash",
+				"github:NixOS/nixpkgs/\(nixpkgsRev)#jq",
+			]
+		}
+	}
+
+	cicero: {
+		network: port: http: {}
+
+		task: cicero: {
+			_transformers: [...]
+
+			config: command: [
+				"/bin/entrypoint",
+				"--prometheus-addr", #lokiAddr,
+				"--transform", for t in _transformers {t.destination},
+				"--web-listen", ":${NOMAD_PORT_http}",
+			]
+		}
+	}
+
+	"cicero-nomad": {
+		count: 3
+
+		task: "cicero-nomad": {
+			_transformers: [...]
+
+			config: command: [
+				"/bin/entrypoint", "nomad",
+				"--transform", for t in _transformers {t.destination},
+			]
+		}
+	}
+}
+
 if #env != "prod" {
-	job: cicero: group: cicero: task: cicero: {
+	job: cicero: group: [string]: task: [string]: {
 		_transformers: commonTransformers
 		template:      _transformers
 	}
@@ -81,8 +98,9 @@ if #env != "prod" {
 if #env == "prod" {
 	job: cicero: {
 		namespace: "cicero"
-		group: cicero: {
-			service: [{
+
+		group: {
+			cicero: service: [{
 				name:         "cicero"
 				address_mode: "auto"
 				port:         "http"
@@ -104,7 +122,7 @@ if #env == "prod" {
 				}]
 			}]
 
-			task: cicero: {
+			[string]: task: [string]: {
 				vault: {
 					policies: ["cicero"]
 					change_mode: "restart"
@@ -163,6 +181,8 @@ if #env == "prod" {
 					},
 				]
 
+				// go-getter reads from the NETRC env var or $HOME/.netrc
+				// https://github.com/hashicorp/go-getter/blob/4553965d9c4a8d99bd0d381c1180c08e07eff5fd/netrc.go#L24
 				env: NETRC: "/secrets/netrc"
 			}
 		}
