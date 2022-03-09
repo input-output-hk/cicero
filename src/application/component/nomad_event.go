@@ -241,8 +241,11 @@ func (self *NomadEventConsumer) handleNomadJobEvent(job *nomad.Job) error {
 		Str("nomad-job-id", *job.ID).
 		Logger()
 
-	if *job.Status != "dead" {
-		logger.Trace().Msg("Ignoring job event (status is not dead)")
+	if *job.Status != "dead" && !*job.Stop {
+		logger.Trace().
+			Str("status", *job.Status).
+			Bool("stop", *job.Stop).
+			Msg("Ignoring job event (status not dead and not stopping)")
 		return nil
 	}
 
