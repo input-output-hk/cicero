@@ -171,7 +171,7 @@ func (self *NomadEventConsumer) handleNomadEvent(ctx context.Context, event *nom
 		} else {
 			return self.handleNomadAllocationEvent(allocation)
 		}
-	case event.Topic == "Job" && event.Type == "AllocationUpdated":
+	case event.Topic == "Job" && (event.Type == "AllocationUpdated" || event.Type == "JobDeregistered"):
 		if job, err := event.Job(); err != nil {
 			return errors.WithMessage(err, "Error getting Nomad event's job")
 		} else {
@@ -258,6 +258,11 @@ func (self *NomadEventConsumer) handleNomadJobEvent(job *nomad.Job) error {
 			return nil
 		}
 		return err
+	}
+
+	if run.FinishedAt != nil {
+		logger.Trace().Msg("Ignoring job event (Run already finished)")
+		return nil
 	}
 
 	if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil && !pgxscan.NotFound(err) {
