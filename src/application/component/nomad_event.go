@@ -77,15 +77,32 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 			continue
 		}
 
+		var numConsecutiveAlreadyHandled uint8 = 0
 		for _, rawEvent := range events.Events {
 			if err := self.processNomadEvent(ctx, &domain.NomadEvent{Event: rawEvent}); err != nil {
-				return err
+				if errors.Is(err, errAlreadyHandled) {
+					numConsecutiveAlreadyHandled++
+					if numConsecutiveAlreadyHandled == 25 {
+						self.Logger.Debug().Msgf(
+							"Restarting (%d consecutive events were already handled, I might be too slow to catch up)",
+							numConsecutiveAlreadyHandled,
+						)
+						time.Sleep(1 * time.Second)
+						return nil
+					}
+				} else {
+					return err
+				}
+			} else {
+				numConsecutiveAlreadyHandled = 0
 			}
 		}
 
 		index = events.Index
 	}
 }
+
+var errAlreadyHandled = errors.New("Event has already been handled")
 
 func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *domain.NomadEvent) error {
 	logger := self.Logger.With().
@@ -134,8 +151,8 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 	}
 
 	if abort {
-		logger.Trace().Msg("Abort processing nomad event (already handled)")
-		return nil
+		logger.Trace().AnErr("reason", errAlreadyHandled).Msg("Abort processing nomad event")
+		return errAlreadyHandled
 	}
 
 	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
