@@ -26,9 +26,14 @@ func (a *runRepository) WithQuerier(querier config.PgxIface) repository.RunRepos
 }
 
 func (a *runRepository) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
+	run, err = a.GetByNomadJobIdWithLock(id, "")
+	return
+}
+
+func (a *runRepository) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run domain.Run, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &run,
-		`SELECT * FROM run WHERE nomad_job_id = $1`,
+		`SELECT * FROM run WHERE nomad_job_id = $1 ` + lock,
 		id,
 	)
 	return

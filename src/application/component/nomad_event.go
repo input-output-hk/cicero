@@ -181,29 +181,36 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 }
 
 func (self *NomadEventConsumer) handleNomadEvent(ctx context.Context, event *nomad.Event) error {
-	switch {
-	case event.Topic == "Allocation" && event.Type == "AllocationUpdated":
-		if allocation, err := event.Allocation(); err != nil {
-			return errors.WithMessage(err, "Error getting Nomad event's allocation")
-		} else {
-			return self.handleNomadAllocationEvent(allocation)
-		}
-	case event.Topic == "Job" && (event.Type == "AllocationUpdated" || event.Type == "JobDeregistered"):
-		if job, err := event.Job(); err != nil {
-			return errors.WithMessage(err, "Error getting Nomad event's job")
-		} else {
-			return self.handleNomadJobEvent(job)
-		}
+	switch event.Topic {
+	case "Allocation":
+		return self.handleNomadAllocationEvent(ctx, event)
+	case "Job":
+		return self.handleNomadJobEvent(ctx, event)
 	default:
 		self.Logger.Trace().
 			Str("topic", string(event.Topic)).
 			Str("type", string(event.Type)).
 			Msg("Ignoring event")
+		return nil
 	}
-	return nil
 }
 
-func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.Allocation) error {
+func (self *NomadEventConsumer) handleNomadAllocationEvent(ctx context.Context, event *nomad.Event) error {
+	switch event.Type {
+	case "AllocationUpdated":
+	default:
+		self.Logger.Trace().
+			Str("topic", string(event.Topic)).
+			Str("type", string(event.Type)).
+			Msg("Ignoring event")
+		return nil
+	}
+
+	allocation, err := event.Allocation()
+	if err != nil {
+		return errors.WithMessage(err, "Error getting Nomad event's allocation")
+	}
+
 	logger := self.Logger.With().
 		Str("nomad-job-id", allocation.JobID).
 		Logger()
@@ -224,77 +231,58 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(allocation *nomad.All
 		return nil
 	}
 
-	id, err := uuid.Parse(allocation.JobID)
-	if err != nil {
+	run, err := self.getRun(logger, allocation.JobID)
+	if run == nil || err != nil {
+		return err
+	}
+
+	return self.endRun(ctx, run, allocation.ModifyTime, false)
+}
+
+func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *nomad.Event) error {
+	switch event.Type {
+	case "AllocationUpdated", "JobDeregistered":
+	default:
+		self.Logger.Trace().
+			Str("topic", string(event.Topic)).
+			Str("type", string(event.Type)).
+			Msg("Ignoring event")
 		return nil
 	}
 
-	run, err := self.RunService.GetByNomadJobId(id)
+	job, err := event.Job()
 	if err != nil {
-		if pgxscan.NotFound(err) {
-			logger.Debug().Msg("Ignoring event (no such Run)")
-			return nil
-		}
-		return err
+		return errors.WithMessage(err, "Error getting Nomad event's job")
 	}
 
-	if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil && !pgxscan.NotFound(err) {
-		return err
-	} else if output.Failure != nil {
-		fact := domain.Fact{
-			RunId: &run.NomadJobID,
-			Value: output.Failure,
-		}
-		if err := self.FactService.Save(&fact, nil); err != nil {
-			return errors.WithMessage(err, "Could not publish Fact")
-		}
-	}
-
-	return self.endRunAt(&run, allocation.ModifyTime)
-}
-
-func (self *NomadEventConsumer) handleNomadJobEvent(job *nomad.Job) error {
 	logger := self.Logger.With().
 		Str("nomad-job-id", *job.ID).
 		Logger()
 
-	if *job.Status != "dead" && !*job.Stop {
-		logger.Trace().
-			Str("status", *job.Status).
-			Bool("stop", *job.Stop).
-			Msg("Ignoring job event (status not dead and not stopping)")
-		return nil
-	}
-
-	id, err := uuid.Parse(*job.ID)
-	if err != nil {
-		return err
-	}
-
-	run, err := self.RunService.GetByNomadJobId(id)
-	if err != nil {
-		if pgxscan.NotFound(err) {
-			logger.Debug().Msg("Ignoring job event (no such Run)")
+	switch event.Type {
+	case "AllocationUpdated":
+		if *job.Status != "dead" {
+			logger.Trace().
+				Str("nomad-job-id", *job.ID).
+				Str("status", *job.Status).
+				Msg("Ignoring job event (status not dead)")
 			return nil
 		}
-		return err
+	case "JobDeregistered":
+		if !*job.Stop {
+			logger.Trace().
+				Str("nomad-job-id", *job.ID).
+				Bool("stop", *job.Stop).
+				Msg("Ignoring job event (not stopping)")
+			return nil
+		}
+	default:
+		panic("should have been caught by switch above")
 	}
 
-	if run.FinishedAt != nil {
-		logger.Trace().Msg("Ignoring job event (Run already finished)")
-		return nil
-	}
-
-	if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil && !pgxscan.NotFound(err) {
+	run, err := self.getRun(logger, *job.ID)
+	if run == nil || err != nil {
 		return err
-	} else if output.Success != nil {
-		fact := domain.Fact{
-			RunId: &run.NomadJobID,
-			Value: output.Success,
-		}
-		if err := self.FactService.Save(&fact, nil); err != nil {
-			return errors.WithMessage(err, "Could not publish Fact")
-		}
 	}
 
 	allocs, _, err := self.NomadClient.JobsAllocations(*job.ID, false, &nomad.QueryOptions{})
@@ -313,18 +301,71 @@ func (self *NomadEventConsumer) handleNomadJobEvent(job *nomad.Job) error {
 		}
 	}
 
-	return self.endRunAt(&run, modifyTime)
+	return self.endRun(ctx, run, modifyTime, true)
 }
 
-func (self *NomadEventConsumer) endRunAt(run *domain.Run, timestamp int64) error {
+func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*domain.Run, error) {
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return nil, err
+	}
+
+	run, err := self.RunService.GetByNomadJobIdWithLock(id, "FOR UPDATE")
+	if err != nil {
+		if pgxscan.NotFound(err) {
+			logger.Debug().Msg("Ignoring event (no such Run)")
+			return nil, nil
+		}
+		return &run, err
+	}
+
+	if run.FinishedAt != nil {
+		logger.Trace().Msg("Ignoring event (Run already finished)")
+		return nil, nil
+	}
+
+	return &run, nil
+}
+
+func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, success bool) error {
 	modifyTime := time.Unix(
 		timestamp/int64(time.Second),
 		timestamp%int64(time.Second),
 	).UTC()
 	run.FinishedAt = &modifyTime
 
-	if err := self.RunService.End(run); err != nil {
-		return errors.WithMessagef(err, "Failed to end Run with ID %q", run.NomadJobID)
+	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		if output, err := self.RunService.GetOutputByNomadJobId(run.NomadJobID); err != nil && !pgxscan.NotFound(err) {
+			return err
+		} else {
+			fact := domain.Fact{
+				RunId: &run.NomadJobID,
+			}
+
+			if success {
+				if output.Success != nil {
+					fact.Value = output.Success
+				}
+			} else {
+				if output.Failure != nil {
+					fact.Value = output.Failure
+				}
+			}
+
+			if fact.Value != nil {
+				if err := self.FactService.Save(&fact, nil); err != nil {
+					return err
+				}
+			}
+		}
+
+		return errors.WithMessagef(
+			self.RunService.End(run),
+			"Failed to end Run with ID %q",
+			run.NomadJobID,
+		)
+	}); err != nil {
+		return err
 	}
 
 	return nil

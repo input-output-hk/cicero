@@ -11,6 +11,7 @@ type RunRepository interface {
 	WithQuerier(config.PgxIface) RunRepository
 
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
+	GetByNomadJobIdWithLock(uuid.UUID, string) (domain.Run, error)
 	GetByActionId(uuid.UUID, *Page) ([]*domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (domain.Run, error)
 	GetInputFactIdsByNomadJobId(uuid.UUID) (RunInputFactIds, error)

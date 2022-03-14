@@ -27,6 +27,7 @@ type RunService interface {
 	WithQuerier(config.PgxIface) RunService
 
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
+	GetByNomadJobIdWithLock(uuid.UUID, string) (domain.Run, error)
 	GetInputFactIdsByNomadJobId(uuid.UUID) (repository.RunInputFactIds, error)
 	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
@@ -86,6 +87,13 @@ func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error
 	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
+	return
+}
+
+func (self *runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run domain.Run, err error) {
+	self.logger.Trace().Str("nomad-job-id", id.String()).Str("lock", lock).Msg("Getting Run by Nomad Job ID with lock")
+	run, err = self.runRepository.GetByNomadJobIdWithLock(id, lock)
+	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q with lock %q", id, lock)
 	return
 }
 
@@ -164,10 +172,10 @@ func (self *runService) End(run *domain.Run) error {
 			return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
 		}
 		if err := self.runOutputRepository.WithQuerier(tx).Delete(run.NomadJobID); err != nil {
-			return errors.WithMessagef(err, "Could not update Run Output with ID %q", run.NomadJobID)
+			return errors.WithMessagef(err, "Could not delete Run Output with ID %q", run.NomadJobID)
 		}
 		if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
-			return errors.WithMessagef(err, "Failed to deregister Nomad job with ID %q", run.NomadJobID)
+			return errors.WithMessagef(err, "Could not deregister Nomad job with ID %q", run.NomadJobID)
 		}
 		return nil
 	}); err != nil {
@@ -183,7 +191,8 @@ func (self *runService) Cancel(run *domain.Run) error {
 	// or was stopped manually. Delete output to avoid publishing it.
 	if err := self.runOutputRepository.Delete(run.NomadJobID); err != nil {
 		return err
-	} else if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
+	}
+	if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
 		return errors.WithMessagef(err, "Failed to deregister job %q", run.NomadJobID)
 	}
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopped Run")
