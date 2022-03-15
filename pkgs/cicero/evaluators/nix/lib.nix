@@ -282,14 +282,13 @@ in rec {
 
       base = {
         createRoot ? true,
-        HOME ? "/local"
+        HOME ? "/local",
       }: action: next:
         chain action (
           [
-            { env = { inherit HOME; }; }
-          ] ++
-
-          (lib.optionals createRoot [
+            {env = {inherit HOME;};}
+          ]
+          ++ (lib.optionals createRoot [
             {
               config.packages = data-merge.append ["github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#shadow"];
             }
@@ -305,9 +304,8 @@ in rec {
               } &> /dev/null
               exec ${lib.escapeShellArgs next}
             ''))
-          ]) ++
-
-          [ next ]
+          ])
+          ++ [next]
         );
 
       networking = {
@@ -343,28 +341,30 @@ in rec {
       nix = {
         install = action: next:
           chain action [
-            (_: next: data-merge.merge
-              (lib.recursiveUpdate next {
-                # XXX we have to pre-create `config.packages` because it may not be present
-                # see https://github.com/divnix/data-merge/issues/1
-                config.packages = next.config.packages or [];
-              })
-              {
-                env = {
-                  NIX_CONFIG = ''
-                    experimental-features = nix-command flakes
-                    ${next.env.NIX_CONFIG or ""}
-                  '';
-                  SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
-                };
+            (
+              _: next:
+                data-merge.merge
+                (lib.recursiveUpdate next {
+                  # XXX we have to pre-create `config.packages` because it may not be present
+                  # see https://github.com/divnix/data-merge/issues/1
+                  config.packages = next.config.packages or [];
+                })
+                {
+                  env = {
+                    NIX_CONFIG = ''
+                      experimental-features = nix-command flakes
+                      ${next.env.NIX_CONFIG or ""}
+                    '';
+                    SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
+                  };
 
-                config.packages = data-merge.append [
-                  "github:NixOS/nix/${self.inputs.nix.rev}#nix"
-                  "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#shadow"
-                  "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
-                  "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#gitMinimal"
-                ];
-              }
+                  config.packages = data-merge.append [
+                    "github:NixOS/nix/${self.inputs.nix.rev}#nix"
+                    "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#shadow"
+                    "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
+                    "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#gitMinimal"
+                  ];
+                }
             )
 
             (wrapScript "bash" (next: ''
