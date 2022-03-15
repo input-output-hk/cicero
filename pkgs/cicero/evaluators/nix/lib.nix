@@ -295,12 +295,14 @@ in rec {
             }
 
             (wrapScript "bash" (next: ''
-              groupadd --gid 0 root
-              useradd --uid 0 --gid 0 \
-                --no-user-group \
-                --no-create-home \
-                --home-dir ${lib.escapeShellArg HOME} \
-                root
+              {
+                groupadd --gid 0 root
+                useradd --uid 0 --gid 0 \
+                  --no-user-group \
+                  --no-create-home \
+                  --home-dir ${lib.escapeShellArg HOME} \
+                  root
+              } &> /dev/null
               exec ${lib.escapeShellArgs next}
             ''))
           ]) ++
@@ -340,21 +342,50 @@ in rec {
 
       nix = {
         install = action: next:
-          data-merge.merge
-          (lib.recursiveUpdate next {
-            # XXX we have to pre-create `config.packages` because it may not be present
-            # see https://github.com/divnix/data-merge/issues/1
-            config.packages = next.config.packages or [];
-          })
-          {
-            config.packages =
-              data-merge.append
-              ["github:input-output-hk/nomad-driver-nix/${self.inputs.driver.rev}#wrap-nix"];
-            env.NIX_CONFIG = ''
-              experimental-features = nix-command flakes
-              ${next.env.NIX_CONFIG or ""}
-            '';
-          };
+          chain action [
+            (_: next: data-merge.merge
+              (lib.recursiveUpdate next {
+                # XXX we have to pre-create `config.packages` because it may not be present
+                # see https://github.com/divnix/data-merge/issues/1
+                config.packages = next.config.packages or [];
+              })
+              {
+                env = {
+                  NIX_CONFIG = ''
+                    experimental-features = nix-command flakes
+                    ${next.env.NIX_CONFIG or ""}
+                  '';
+                  SSL_CERT_FILE = "/etc/ssl/certs/ca-bundle.crt";
+                };
+
+                config.packages = data-merge.append [
+                  "github:NixOS/nix/${self.inputs.nix.rev}#nix"
+                  "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#shadow"
+                  "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
+                  "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#gitMinimal"
+                ];
+              }
+            )
+
+            (wrapScript "bash" (next: ''
+              if ! id nixbld1 &> /dev/null; then
+                {
+                  groupadd --gid 30000 nixbld
+                  useradd --uid 30001 --gid 30000 \
+                    --comment 'Nix build user 1' \
+                    --home-dir /var/empty \
+                    --shell /bin/nologin \
+                    nixbld1
+                } &> /dev/null
+
+                nix-store --load-db < /registration
+              fi
+
+              exec ${lib.escapeShellArgs next}
+            ''))
+
+            next
+          ];
 
         develop = action: next:
           nix.install action (wrapScript "bash"
