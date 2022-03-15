@@ -280,6 +280,34 @@ in rec {
           ];
         };
 
+      base = {
+        createRoot ? true,
+        HOME ? "/local"
+      }: action: next:
+        chain action (
+          [
+            { env = { inherit HOME; }; }
+          ] ++
+
+          (lib.optionals createRoot [
+            {
+              config.packages = data-merge.append ["github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#shadow"];
+            }
+
+            (wrapScript "bash" (next: ''
+              groupadd --gid 0 root
+              useradd --uid 0 --gid 0 \
+                --no-user-group \
+                --no-create-home \
+                --home-dir ${lib.escapeShellArg HOME} \
+                root
+              exec ${lib.escapeShellArgs next}
+            ''))
+          ]) ++
+
+          [ next ]
+        );
+
       networking = {
         nameservers = nameservers: action: next:
           data-merge.merge
@@ -476,6 +504,6 @@ in rec {
   inherit (tasks) script;
   inherit (chains) chain;
   inherit (chains.jobs) escapeNames singleTask;
-  inherit (chains.tasks) wrapScript networking nix makes git github postFact;
+  inherit (chains.tasks) wrapScript base networking nix makes git github postFact;
   inherit data-merge;
 }
