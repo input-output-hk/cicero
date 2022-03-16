@@ -307,13 +307,14 @@ func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *
 func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*domain.Run, error) {
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return nil, err
+		logger.Trace().Msg("Ignoring event (ID is not a UUID)")
+		return nil, nil
 	}
 
 	run, err := self.RunService.GetByNomadJobIdWithLock(id, "FOR UPDATE")
 	if err != nil {
 		if pgxscan.NotFound(err) {
-			logger.Debug().Msg("Ignoring event (no such Run)")
+			logger.Trace().Msg("Ignoring event (no such Run)")
 			return nil, nil
 		}
 		return &run, err
