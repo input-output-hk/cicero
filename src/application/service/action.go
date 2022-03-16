@@ -493,13 +493,7 @@ func (self *actionService) Create(source, name string) (*domain.Action, error) {
 			}
 		}
 
-		if err := txSelf.Save(&action); err != nil {
-			return err
-		}
-
-		_, err := txSelf.Invoke(&action)
-
-		return err
+		return txSelf.Save(&action)
 	}); err != nil {
 		return nil, err
 	}
