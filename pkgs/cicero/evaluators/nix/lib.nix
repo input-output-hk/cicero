@@ -371,7 +371,8 @@ in rec {
               if ! id nixbld1 &> /dev/null; then
                 {
                   groupadd --gid 30000 nixbld
-                  useradd --uid 30001 --gid 30000 \
+                  useradd --uid 30001 --gid nixbld \
+                    --groups nixbld \
                     --comment 'Nix build user 1' \
                     --home-dir /var/empty \
                     --shell /bin/nologin \
