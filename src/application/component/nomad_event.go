@@ -311,7 +311,7 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 		return nil, nil
 	}
 
-	run, err := self.RunService.GetByNomadJobIdWithLock(id, "FOR UPDATE")
+	run, err := self.RunService.GetByNomadJobIdWithLock(id, "FOR NO KEY UPDATE")
 	if err != nil {
 		if pgxscan.NotFound(err) {
 			logger.Trace().Msg("Ignoring event (no such Run)")
