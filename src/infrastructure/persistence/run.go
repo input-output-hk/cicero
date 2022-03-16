@@ -18,11 +18,11 @@ type runRepository struct {
 }
 
 func NewRunRepository(db config.PgxIface) repository.RunRepository {
-	return &runRepository{DB: db}
+	return &runRepository{db}
 }
 
 func (a *runRepository) WithQuerier(querier config.PgxIface) repository.RunRepository {
-	return &runRepository{DB: querier}
+	return &runRepository{querier}
 }
 
 func (a *runRepository) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
