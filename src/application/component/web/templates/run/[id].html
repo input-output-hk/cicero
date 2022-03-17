@@ -96,52 +96,18 @@
 					</tbody>
 				</table>
 
-				<table class="table vertical">
-					<thead>
-						<tr>
-							<th
-								colspan="2"
-								title="Facts that this Run published"
-							>
-								Facts
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{{range $.facts}}
-							<tr>
-								<td>Created at</td>
-								<td>
-									{{.CreatedAt}}
-								</td>
-							</tr>
-							<tr>
-								<td>Value</td>
-								<td>
-									<textarea
-										readonly
-										rows="10"
-										cols="50"
-									>{{toJson .Value true}}</textarea>
-								</td>
-							</tr>
-							{{if .BinaryHash}}
-								<tr>
-									<td>Binary</td>
-									<td>
-										<a href="/api/fact/{{.ID}}/binary"><code>{{.BinaryHash}}</code></a>
-									</td>
-								</tr>
-							{{end}}
+				<article class="window">
+					<header title="Facts that this Run published">
+						Facts
+					</header>
+					<div>
+						{{with $.facts}}
+							{{template "facts" .}}
 						{{else}}
-							<tr>
-								<td colspan="2">
-									<em>This Run has not published any facts.</em>
-								</td>
-							</tr>
+							<em>This Run has not published any facts.</em>
 						{{end}}
-					</tbody>
-				</table>
+					</div>
+				</article>
 
 				{{if not .FinishedAt}}
 					<table class="table vertical">
