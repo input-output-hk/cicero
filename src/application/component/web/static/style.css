@@ -33,12 +33,12 @@ table td.numerical {
 	text-align: end;
 }
 
-.tables {
+.content-flex {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: flex-start;
 }
-.tables > * {
+.content-flex > * {
 	margin: 1em;
 }
 
