@@ -58,62 +58,61 @@
 			<table class="table">
 				<thead>
 					<tr>
-						<th colspan="2">
+						<th colspan="3">
 							Inputs
 						</th>
+					</tr>
+					<tr>
+						<th>Name</th>
+						<th>Details</th>
 					</tr>
 				</thead>
 				<tbody>
 					{{range $name, $input := .Inputs}}
 						<tr>
-							<th
-								colspan="2"
-								class="input-header"
-							>
-								{{$name}}
-							</th>
-						</tr>
-						{{with $input}}
-							<tr>
-								<td>Select</td>
-								<td>{{InputDefinitionSelectString .Select}}</td>
-							</tr>
-							<tr>
-								<td>Not</td>
-								<td>
-									<input
-										type="checkbox"
-										disabled
-										{{if .Not}}
-											checked
-										{{end}}
-									/>
-								</td>
-							</tr>
-							<tr>
-								<td>Optional</td>
-								<td>
-									<input
-										type="checkbox"
-										disabled
-										{{if .Optional}}
-											checked
-										{{end}}
-									/>
-								</td>
-							</tr>
-							<tr>
-								<td>Match</td>
-								<td>
+							<td>{{$name}}</td>
+							<td>
+								<details class="collapse">
+									<summary>
+										<dl class="inline">
+											<dt style="display: none">
+												<!-- We keep this invisible element for semantics. -->
+												Select
+											</dt>
+											<dd>{{InputDefinitionSelectString .Select}}</dd>
+											{{with .Not}}
+												<dt>Not</dt>
+												<dd>
+													<input
+														type="checkbox"
+														disabled
+														checked
+													/>
+												</dd>
+											{{end}}
+											{{with .Optional}}
+												<dt>Optional</dt>
+												<dd>
+													<input
+														type="checkbox"
+														disabled
+														checked
+													/>
+												</dd>
+											{{end}}
+										</dl>
+									</summary>
 									<div style="display: flex">
 										<textarea
 											readonly
 											style="flex-grow: 1"
+											rows="10"
+											cols="50"
 										>{{.Match}}</textarea>
 									</div>
-								</td>
-							</tr>
-						{{end}}
+								</details>
+							</td>
+						</tr>
 					{{end}}
 				</tbody>
 			</table>
@@ -133,11 +132,4 @@
 			src="/action/{{.ID}}/version"
 		></iframe>
 	</div>
-
-	<style>
-	#{{$scope}} .input-header {
-		text-align: center;
-		font-style: italic;
-	}
-	</style>
 {{end}}

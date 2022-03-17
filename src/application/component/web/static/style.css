@@ -137,7 +137,22 @@ dl.concise > dt {
 	float: left;
 	clear: left;
 }
-dl.concise > dt::after {
+dl.concise > dt::after,
+dl.inline > dt::after {
 	content: ': ';
+	white-space: pre;
+}
+dl.inline {
+	margin: 0;
+	display: inline-flex;
+}
+dl.inline > dt:not(:first-child) {
+	margin-inline-start: .5em;
+}
+dl.inline > dd {
+	margin-inline-start: 0;
+}
+dl.inline > dd:not(:last-child)::after {
+	content: ', ';
 	white-space: pre;
 }
