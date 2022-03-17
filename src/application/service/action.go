@@ -149,16 +149,6 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 	inputs := map[string]interface{}{}
 
-	// XXX We only check that the required paths are present.
-	// In the future we could extend this to also check some values.
-	// For that we would have to convert CUE constraints to SQL clauses
-	// which sounds non-trivial and it would only help improve performance,
-	// except we define a subset of constraints as the only conditions we support
-	// and no longer run the CUE filter over the selected facts afterwards.
-	// But heads up! This would mean that inputs' `select: "latest"` behavior
-	// would be changed, as what is latest currently means "latest with these paths"
-	// but would then mean "latest with these paths AND matching values", so beware!
-
 	// Select candidate facts.
 	for name, input := range action.Inputs {
 		inputLogger := logger.With().Str("input", name).Logger()
