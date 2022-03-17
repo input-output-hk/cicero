@@ -118,9 +118,13 @@
 								</td>
 								<td>
 									{{if eq (InputDefinitionSelectString .Select) "latest"}}
-										{{template "fact" (index $.inputs $name)}}
+										{{with (index $.inputs $name)}}
+											{{template "fact" .}}
+										{{end}}
 									{{else}}
-										{{template "facts" (index $.inputs $name)}}
+										{{with (index $.inputs $name)}}
+											{{template "facts" .}}
+										{{end}}
 									{{end}}
 								</td>
 							</tr>
