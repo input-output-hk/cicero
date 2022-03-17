@@ -77,6 +77,40 @@
 		</ul>
 	{{end}}
 
+	{{define "fact"}}
+		<details class="collapse">
+			<summary>{{.ID}}</summary>
+			<dl>
+				<dt>Created At</dt>
+				<dd>{{.CreatedAt}}</dd>
+
+				<dt>Value</dt>
+				<dd>
+					<textarea
+						readonly
+						rows="10"
+						cols="50"
+					>{{toJson .Value true}}</textarea>
+				</dd>
+
+				{{if .BinaryHash}}
+					<dt>Binary</dt>
+					<dd>
+						<a href="/api/fact/{{.ID}}/binary"><code>{{.BinaryHash}}</code></a>
+					</dd>
+				{{end}}
+			</dl>
+		</details>
+	{{end}}
+
+	{{define "facts"}}
+		<ul style="list-style: none; padding: 0; margin: 0">
+			{{range .}}
+				<li>{{template "fact" .}}</li>
+			{{end}}
+		</ul>
+	{{end}}
+
 	<body>
 		<nav>
 			<ul>

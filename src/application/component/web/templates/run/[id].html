@@ -78,37 +78,7 @@
 						{{range $name, $facts := $.inputs}}
 							<tr>
 								<td>{{$name}}</td>
-								<td>
-									<ul style="list-style: none; padding: 0; margin: 0">
-										{{range $facts}}
-											<li>
-												<details class="collapse">
-													<summary>{{.ID}}</summary>
-													<dl class="fact">
-														<dt>Created At</dt>
-														<dd>{{.CreatedAt}}</dd>
-
-														<dt>Value</dt>
-														<dd>
-															<textarea
-																readonly
-																rows="10"
-																cols="50"
-															>{{toJson .Value true}}</textarea>
-														</dd>
-
-														{{if .BinaryHash}}
-															<dt>Binary</dt>
-															<dd>
-																<a href="/api/fact/{{.ID}}/binary"><code>{{.BinaryHash}}</code></a>
-															</dd>
-														{{end}}
-													</dl>
-												</details>
-											</li>
-										{{end}}
-									</ul>
-								</td>
+								<td>{{template "facts" .}}</td>
 							</tr>
 						{{else}}
 							<tr>
@@ -561,11 +531,6 @@
 	</div>
 
 	<style>
-	#{{$scope}} .fact {
-		border: 2px outset black;
-		padding: .3em;
-	}
-
 	#{{$scope}} table.log,
 	#{{$scope}} table.log dl {
 		width: 100%;
