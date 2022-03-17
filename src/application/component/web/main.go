@@ -404,7 +404,13 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
-	} else if err := render("action/[id].html", w, action); err != nil {
+	} else if _, inputs, err := self.ActionService.IsRunnable(&action); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
+		return
+	} else if err := render("action/[id].html", w, map[string]interface{}{
+		"Action": action,
+		"inputs": inputs,
+	}); err != nil {
 		self.ServerError(w, err)
 		return
 	}

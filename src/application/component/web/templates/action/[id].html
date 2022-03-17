@@ -4,132 +4,144 @@
 	{{$scope := "ebef16070ef045af9d217e6cc6a0d9d3"}}
 
 	<div id="{{$scope}}">
-		<h1>{{.Name}}</h1>
+		{{with .Action}}
+			<h1>{{.Name}}</h1>
 
-		<div class="tables">
-			<table class="table">
-				<thead>
-					<tr>
-						<th colspan="2">
-							General Information
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr>
-						<td>Source</td>
-						<td><code>{{.Source}}</code></td>
-					</tr>
-					<tr>
-						<td>Created at</td>
-						<td>{{.CreatedAt}}</td>
-					</tr>
-					<tr>
-						<td>Active</td>
-						<td>
-							<form
-								method="POST"
-								action="/_dispatch/method/PATCH/action/{{.ID}}"
-							>
-								<input
-									type="checkbox"
-									{{if .Active}}
-										checked
-									{{end}}
-									onChange="this.form.submit()"
-								/>
-								<input
-									type="hidden"
-									name="active"
-									value="{{not .Active}}"
-								/>
-							</form>
-						</td>
-					</tr>
-					<tr>
-						<td>Meta</td>
-						<td>
-							<code>{{toJson .Meta true}}</code>
-						</td>
-					</tr>
-				</tbody>
-			</table>
-
-			<table class="table">
-				<thead>
-					<tr>
-						<th colspan="3">
-							Inputs
-						</th>
-					</tr>
-					<tr>
-						<th>Name</th>
-						<th>Details</th>
-					</tr>
-				</thead>
-				<tbody>
-					{{range $name, $input := .Inputs}}
+			<div class="tables">
+				<table class="table">
+					<thead>
 						<tr>
-							<td>{{$name}}</td>
+							<th colspan="2">
+								General Information
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Source</td>
+							<td><code>{{.Source}}</code></td>
+						</tr>
+						<tr>
+							<td>Created at</td>
+							<td>{{.CreatedAt}}</td>
+						</tr>
+						<tr>
+							<td>Active</td>
 							<td>
-								<details class="collapse">
-									<summary>
-										<dl class="inline">
-											<dt style="display: none">
-												<!-- We keep this invisible element for semantics. -->
-												Select
-											</dt>
-											<dd>{{InputDefinitionSelectString .Select}}</dd>
-											{{with .Not}}
-												<dt>Not</dt>
-												<dd>
-													<input
-														type="checkbox"
-														disabled
-														checked
-													/>
-												</dd>
-											{{end}}
-											{{with .Optional}}
-												<dt>Optional</dt>
-												<dd>
-													<input
-														type="checkbox"
-														disabled
-														checked
-													/>
-												</dd>
-											{{end}}
-										</dl>
-									</summary>
-									<div style="display: flex">
-										<textarea
-											readonly
-											style="flex-grow: 1"
-											rows="10"
-											cols="50"
-										>{{.Match}}</textarea>
-									</div>
-								</details>
+								<form
+									method="POST"
+									action="/_dispatch/method/PATCH/action/{{.ID}}"
+								>
+									<input
+										type="checkbox"
+										{{if .Active}}
+											checked
+										{{end}}
+										onChange="this.form.submit()"
+									/>
+									<input
+										type="hidden"
+										name="active"
+										value="{{not .Active}}"
+									/>
+								</form>
 							</td>
 						</tr>
-					{{end}}
-				</tbody>
-			</table>
-		</div>
+						<tr>
+							<td>Meta</td>
+							<td>
+								<code>{{toJson .Meta true}}</code>
+							</td>
+						</tr>
+					</tbody>
+				</table>
 
-		<h2>Runs</h2>
-		<iframe
-			style="width: 100%; min-height: 30rem"
-			class="iframe"
-			src="/action/{{.ID}}/run"
-		></iframe>
+				<table class="table">
+					<thead>
+						<tr>
+							<th colspan="3">
+								Inputs
+							</th>
+						</tr>
+						<tr>
+							<th>Name</th>
+							<th>Details</th>
+							<th title="Facts that currently satisfy this input">
+								Satisfied by
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						{{range $name, $input := .Inputs}}
+							<tr>
+								<td>{{$name}}</td>
+								<td>
+									<details class="collapse">
+										<summary>
+											<dl class="inline">
+												<dt style="display: none">
+													<!-- We keep this invisible element for semantics. -->
+													Select
+												</dt>
+												<dd>{{InputDefinitionSelectString .Select}}</dd>
+												{{with .Not}}
+													<dt>Not</dt>
+													<dd>
+														<input
+															type="checkbox"
+															disabled
+															checked
+														/>
+													</dd>
+												{{end}}
+												{{with .Optional}}
+													<dt>Optional</dt>
+													<dd>
+														<input
+															type="checkbox"
+															disabled
+															checked
+														/>
+													</dd>
+												{{end}}
+											</dl>
+										</summary>
+										<div style="display: flex">
+											<textarea
+												readonly
+												style="flex-grow: 1"
+												rows="10"
+												cols="50"
+											>{{.Match}}</textarea>
+										</div>
+									</details>
+								</td>
+								<td>
+									{{if eq (InputDefinitionSelectString .Select) "latest"}}
+										{{template "fact" (index $.inputs $name)}}
+									{{else}}
+										{{template "facts" (index $.inputs $name)}}
+									{{end}}
+								</td>
+							</tr>
+						{{end}}
+					</tbody>
+				</table>
+			</div>
 
-		<h2>Versions</h2>
-		<iframe
-			style="width: 100%; min-height: 30rem"
-			class="iframe"
-			src="/action/{{.ID}}/version"
-		></iframe>
+			<h2>Runs</h2>
+			<iframe
+				style="width: 100%; min-height: 30rem"
+				class="iframe"
+				src="/action/{{.ID}}/run"
+			></iframe>
+
+			<h2>Versions</h2>
+			<iframe
+				style="width: 100%; min-height: 30rem"
+				class="iframe"
+				src="/action/{{.ID}}/version"
+			></iframe>
+		{{end}}
 	</div>
 {{end}}
