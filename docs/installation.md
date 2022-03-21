@@ -28,6 +28,31 @@ EOF
 nix develop
 ```
 
-### Which route to go? Actual install cicero as Nixos Module? Or just the development
+### Start a development instance of Nomad, nomad-follower, Vault and nix-cache-proxy:
+
+```
+dev-cluster
+```
+
+### Run the required services in Nomad:
+
+```
+dev-jobs
+```
+
+### Run the application:
+
+```
+dev-cicero
+```
+
+### Cicero's web UI should now be available on http://localhost:8080.
+
+### There is also an OpenAPI v3 schema available at:
+
+    http://localhost:8080/documentation/cicero.json
+    http://localhost:8080/documentation/cicero.yaml
 
 ## How to deploy Cicero remotely
+
+### TODO
