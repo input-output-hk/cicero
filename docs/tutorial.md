@@ -29,3 +29,11 @@ See [How to include external actions](./how-to-include-external-actions.md) for 
 
 
 ![Cicero WebUI New Localpath](./cicero_webui_new_action_localpath.png "Cicero WebUI New Localpath")
+
+### Click on "List Actions"
+
+Clicking "List Actions" will start the cicero-evaluator, so the Actions are semantically evaluated and listed:
+
+![Cicero WebUI List Localpath](./cicero_webui_list_actions_localpath.png "Cicero WebUI List Localpath")
+
+If an error occurs while evaluating Cicero will print the error in it's logs but also will show an error in the WebUI.
