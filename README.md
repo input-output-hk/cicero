@@ -128,6 +128,10 @@ Run OpenApi validation tests:
 
 	schemathesis run http://localhost:8080/documentation/cicero.yaml --validate-schema=false
 
+Serve Cicero book locally on port 3000
+
+	mdbook serve --open
+
 See all commands provided by the development shell:
 
 	menu

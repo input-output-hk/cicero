@@ -40,6 +40,9 @@ package = "vault"
 package = "damon"
 
 [[commands]]
+package = "mdbook"
+
+[[commands]]
 name = "lint"
 command = "golangci-lint run -E gocritic && treefmt --fail-on-change"
 help = "Run code linters"
