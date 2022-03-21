@@ -1,4 +1,3 @@
- 
 # Cicero
 
 Cicero the action execution engine.
