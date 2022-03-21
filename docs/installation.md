@@ -28,4 +28,6 @@ EOF
 nix develop
 ```
 
+### Which route to go? Actual install cicero as Nixos Module? Or just the development
+
 ## How to deploy Cicero remotely

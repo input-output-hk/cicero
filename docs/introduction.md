@@ -4,6 +4,6 @@ Cicero the action execution engine.
 
 ## Topics
 
-- Installation
+- [Installation](./installation.md)
 - Tutorial -- How to write a Cicero Action
 - The Evaluation and Execution of Cicero Actions explained
