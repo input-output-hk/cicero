@@ -24,3 +24,8 @@ or a local path like [/home/developer/IOHK/cicero](/home/developer/IOHK/cicero)
 
 Cicero Actions can also be part of a repository, which isn't Cicero.
 See [How to include external actions](./how-to-include-external-actions.md) for more information.
+
+### Assume the following path was entered:
+
+
+![Cicero WebUI New Localpath](./cicero_webui_new_action_localpath.png "Cicero WebUI New Localpath")
