@@ -1,4 +1,4 @@
-# Tutorial -- How to write a Cicero Action
+# Tutorial -- How to create a Cicero Action
 
 ## A first visit
 
