@@ -134,11 +134,14 @@ in rec {
     };
 
     template = [
-      {
+      rec {
         destination = "local/scripts/${language}/${scriptName}";
-        left_delimiter = "";
-        right_delimiter = "";
         data = script;
+
+        # We cannot disable interpolation entirely
+        # so instead we hope nobody uses this UUID.
+        left_delimiter = "8c637f52-4827-4e3b-84ff-2114cb34cfcf";
+        right_delimiter = left_delimiter;
       }
     ];
   };
