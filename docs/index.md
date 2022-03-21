@@ -1,5 +1,5 @@
- Cicero
- Cicero the action execution engine.
+ 
+Cicero the action execution engine.
 
 ## Topics
 
