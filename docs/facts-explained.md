@@ -61,5 +61,4 @@ http --multipart :8080/api/fact first='{"foo": 1}' second@/tmp/testfile
 
 The intended way of storing a resulting binary artifact is to create it in an Action with the help of the **std.postFact** library.
 
-### Deeper look at the post-fact example action
-TODO
+### Have a deeper look at the [post-fact](https://github.com/input-output-hk/cicero/blob/main/actions/examples/post-fact.nix) example action.
