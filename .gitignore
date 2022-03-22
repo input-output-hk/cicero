@@ -11,3 +11,4 @@
 /src/mocks/
 /nix-cache-proxy
 dist-newstyle
+/book
