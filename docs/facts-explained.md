@@ -18,9 +18,9 @@ cicero=# \d fact
  created_at  | timestamp without time zone |           | not null | statement_timestamp()
 ```
 
-The **value** field is the actual input which contains some valid json, which could look like:
+## The <span style="color:blue">value</span> field is the actual input which contains some valid json, which could look like:
 
-# A: empty, just for triggering a run once behaviour
+### A: empty, just for triggering a run once behaviour
 ```
 {
 	"examples/runners/bash":
@@ -29,7 +29,7 @@ The **value** field is the actual input which contains some valid json, which co
 }
 ```
 
-# B: json description for external Actions
+### B: json description for external Actions
 ```
 {
 	"examples/runners/bash":
@@ -43,3 +43,23 @@ The **value** field is the actual input which contains some valid json, which co
 	}
 }
 ```
+
+## There are currently only two ways of storing binary artifacts while creating/updating a fact
+
+### Json of fact piped with binary data
+```
+echo -n '{"foo": 1}' | cat - /tmp/testfile | http :8080/api/fact
+```
+
+### Multipart Request: first part json of fact, second part binary artifact:
+```
+http --multipart :8080/api/fact first='{"foo": 1}' second@/tmp/testfile
+
+```
+
+## Use std.postFact to store output of an Action as binary artifact:
+
+The intended way of storing a resulting binary artifact is to create it in an Action with the help of the **std.postFact** library.
+
+### Deeper look at the post-fact example action
+TODO
