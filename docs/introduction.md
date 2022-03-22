@@ -8,6 +8,7 @@ Cicero the action execution engine.
 - [Installation](./installation.md)
 - [Tutorial 1 -- How to create an Action](./tutorial-1.md)
 - [Tutorial 2 -- How to start an Action](./tutorial-2.md)
+- [Facts explained](./facts-explained.md)
 - [Debugging Evaluations with cicero-evaluator-nix ](./cicero-evaluator-nix.md)
 - Evaluation and Execution of Cicero Actions explained
 - [How to include external Actions](./how-to-include-external-actions.md)
