@@ -52,7 +52,3 @@ dev-cicero
 
     http://localhost:8080/documentation/cicero.json
     http://localhost:8080/documentation/cicero.yaml
-
-## How to deploy Cicero remotely
-
-### TODO
