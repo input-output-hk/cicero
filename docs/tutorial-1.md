@@ -1,4 +1,4 @@
-# Tutorial -- How to create a Cicero Action
+# Tutorial 1 -- How to create a Cicero Action
 
 ## A first visit
 
@@ -37,3 +37,11 @@ Clicking "List Actions" will start the cicero-evaluator, so the Actions are sema
 ![Cicero WebUI List Localpath](./cicero_webui_list_actions_localpath.png "Cicero WebUI List Localpath")
 
 If an error occurs while evaluating Cicero will print the error in it's logs but also will show an error in the WebUI.
+
+### Click on the "examples/runners/bash" Action
+
+Clicking on "examples/runners/bash" will create the corresponding Action in Cicero:
+
+![Cicero WebUI Create Localpath](./cicero_webui_create_action_localpath.png "Cicero WebUI Create Localpath")
+
+Please note that this Action hasn't run yet, which is also indicated by the "Runs" table at the bottom.
