@@ -17,11 +17,6 @@ But in fact the examples/runners/bash doesn't really need any of those inputs fo
 ```
 cat > /tmp/bash-fact.json << EOF
 {
-    "start": {
-	"clone_url":   "https://github.com/input-output-hk/cicero/tree/main",
-	"sha":         "9ceba66ef56c1d6b5a9e366f384f3fe4fe6c2576",
-	"target_branch": "main"
-    }
 }
 EOF
 ```
