@@ -78,7 +78,7 @@ However, there is also cmdline Tool called cicero-evaluator-nix, which just help
 
 ## Execution
 
-An Action is only invoked and passed to Nomad as new job when a corresponding fact is saved.
+An Action is only invoked and passed to Nomad as new job when a corresponding fact is saved([Tutorial 2](./tutorial-2.md)).
 
 The [fact.go](https://github.com/input-output-hk/cicero/blob/main/src/application/service/fact.go) code saves a fact, which results in InvokeCurrentActive getting called.
 
