@@ -18,7 +18,11 @@ cicero=# \d fact
  created_at  | timestamp without time zone |           | not null | statement_timestamp()
 ```
 
-## The <span style="color:blue">value</span> field is the actual input which contains some valid json, which could look like:
+## The <span style="color:blue">value</span> field is the actual input provided to Actions:
+
+The json can consist of an arbitrary number of fields, which can later be accessed when running an Action.
+
+In contrary the binary_hash/binary fields of the db table represent the output which was generated for a specific Fact.
 
 ### A: empty, just for triggering a run once behaviour
 ```
@@ -44,7 +48,9 @@ cicero=# \d fact
 }
 ```
 
-## There are currently only two ways of storing binary artifacts while creating/updating a fact
+## There are currently two ways of storing binary artifacts while creating/updating a fact
+
+**Note:** It's not ideal to do this if you want to generate output use **std.postFact** in an Action instead.
 
 ### Json of fact piped with binary data
 ```
