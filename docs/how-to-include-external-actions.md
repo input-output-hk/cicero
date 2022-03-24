@@ -78,8 +78,9 @@ The Action itself is written as nix expression.
   '';
 
   // The output describes the published state of a Fact
-  // A published fact can either be successful or failed
-  // This will also be stored in the run_output table in Cicero db
+  // A published Fact can either be successful or failed
+  // and distinguishes from a normal Fact by having a run_id
+  // It will also be stored in the Fact table in Cicero db
   // after a Run has completed
   output = { start }:
     let cfg = start.value.${name}.start; in
@@ -91,6 +92,81 @@ The Action itself is written as nix expression.
         inherit (cfg) ref default_branch;
       };
     };
+
+  // The job describes, what is executed
+  // when the Nomad task is created and run
+  job = { start }:
+    let cfg = start.value.${name}.start; in
+
+	// A chain allows to chain multiple functions
+	// into one array.
+	// The functions in the array a called consecutively
+    std.chain args [
+
+	  // simpleJob just escapes the provided name
+	  // stores a set of {${name}.group.${name}.task.${name} = task;};
+	  // and calls the next job
+      actionLib.simpleJob
+
+	  // reportStatus tries to report to the github status api
+	  // if a statuses_url is available
+      (std.github.reportStatus cfg.statuses_url or null)
+
+      // the template set creates a netrc file
+	  // inside the Nomad Task
+      {
+        template = std.data-merge.append [{
+          destination = "secrets/netrc";
+          data = ''
+            machine github.com
+            login git
+            password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
+          '';
+        }];
+      }
+
+	  // git.clone actually starts to clone
+	  // the url provided by the input Fact
+      (std.git.clone cfg)
+
+	  // the resources set is used
+	  // for configuring the Nomad Task
+      {
+        resources = {
+          cpu = 3000;
+          memory = 1024 * 3;
+        };
+      }
+
+      // nix.build actually runs the nix build of the flake.nix
+      std.nix.build
+
+
+      // another template set, which is used for storing
+	  // docker credentials in the Nomad Task
+      {
+        env.REGISTRY_AUTH_FILE = "/secrets/auth.json";
+
+        template = std.data-merge.append [{
+          destination = "secrets/auth.json";
+          data = ''{
+            "auths": {
+              "docker.infra.aws.iohkdev.io": {
+                "auth": "{{with secret "kv/data/cicero/docker"}}{{with .Data.data}}{{base64Encode (print .user ":" .password)}}{{end}}{{end}}"
+              }
+            }
+          }'';
+        }];
+      }
+
+      // this bash script will actually execute
+	  // a specific flake output, which
+	  // creates and pushes a docker image to a registry
+      (std.script "bash" ''
+        set -x
+        nix run .#laresImage.copyToRegistry
+      '')
+    ];
 
 ```
 
