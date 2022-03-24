@@ -49,7 +49,7 @@ Now it's required to write the corresponding Action for Cicero to execute later 
 
 The ciceroActions already hints that it does a recursive lookup in the ./cicero folder, so therefore it's possible to place our Action under the ./cicero/lares directory.
 
-# ci.nix
+### ci.nix
 The Action itself is written as nix expression.
 
 ```
@@ -98,22 +98,22 @@ The Action itself is written as nix expression.
   job = { start }:
     let cfg = start.value.${name}.start; in
 
-	// A chain allows to chain multiple functions
-	// into one array.
-	// The functions in the array a called consecutively
+    // A chain allows to chain multiple functions
+    // into one array.
+    // The functions in the array a called consecutively
     std.chain args [
 
-	  // simpleJob just escapes the provided name
-	  // stores a set of {${name}.group.${name}.task.${name} = task;};
-	  // and calls the next job
+      // simpleJob just escapes the provided name
+      // stores a set of {${name}.group.${name}.task.${name} = task;};
+      // and calls the next job
       actionLib.simpleJob
 
-	  // reportStatus tries to report to the github status api
-	  // if a statuses_url is available
+      // reportStatus tries to report to the github status api
+      // if a statuses_url is available
       (std.github.reportStatus cfg.statuses_url or null)
 
       // the template set creates a netrc file
-	  // inside the Nomad Task
+      // inside the Nomad Task
       {
         template = std.data-merge.append [{
           destination = "secrets/netrc";
@@ -125,12 +125,12 @@ The Action itself is written as nix expression.
         }];
       }
 
-	  // git.clone actually starts to clone
-	  // the url provided by the input Fact
+      // git.clone actually starts to clone
+      // the url provided by the input Fact
       (std.git.clone cfg)
 
-	  // the resources set is used
-	  // for configuring the Nomad Task
+      // the resources set is used
+      // for configuring the Nomad Task
       {
         resources = {
           cpu = 3000;
@@ -143,7 +143,7 @@ The Action itself is written as nix expression.
 
 
       // another template set, which is used for storing
-	  // docker credentials in the Nomad Task
+      // docker credentials in the Nomad Task
       {
         env.REGISTRY_AUTH_FILE = "/secrets/auth.json";
 
@@ -160,8 +160,8 @@ The Action itself is written as nix expression.
       }
 
       // this bash script will actually execute
-	  // a specific flake output, which
-	  // creates and pushes a docker image to a registry
+      // a specific flake output, which
+      // creates and pushes a docker image to a registry
       (std.script "bash" ''
         set -x
         nix run .#laresImage.copyToRegistry
@@ -170,3 +170,32 @@ The Action itself is written as nix expression.
 
 ```
 
+## Create Action in WebUI
+
+Click on "List Actions"
+
+![Cicero WebUI List lares](./cicero_webui_list_actions_lares.png "Cicero WebUI List lares")
+
+Click on "lares/ci"
+
+![Cicero WebUI Create lares](./cicero_webui_create_action_lares.png "Cicero WebUI Create lares")
+
+## Create "lares/ci" Fact
+
+This will trigger the run of the "lares/ci" Action.
+
+Pick the commit hash a docker image should be created for.
+
+```
+cat > /tmp/lares-fact.json <<EOF
+{
+    "start": {
+	"clone_url":   "https://github.com/input-output-hk/lares",
+	"sha":         "desiredCommitHash"
+    }
+}
+EOF
+
+nix develop
+http -v post :8080/api/fact "lares/ci":=@/tmp/lares-fact.json
+```

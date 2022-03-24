@@ -12,4 +12,3 @@ Cicero the action execution engine.
 - [Facts explained](./facts-explained.md)
 - [Debugging Evaluations with cicero-evaluator-nix ](./cicero-evaluator-nix.md)
 - [How to include external Actions](./how-to-include-external-actions.md)
-- [How to deploy Cicero remotely](./how-to-deploy-cicero-remotely.md)
