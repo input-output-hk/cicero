@@ -17,9 +17,11 @@ require (
 	github.com/hashicorp/go-getter/v2 v2.0.0
 	github.com/hashicorp/nomad v1.2.0
 	github.com/hashicorp/nomad/api v0.0.0-20211119134719-5a43a1af285d
+	github.com/jackc/pgconn v1.10.1
 	github.com/jackc/pgtype v1.9.0
 	github.com/jackc/pgx/v4 v4.14.0
 	github.com/pashagolub/pgxmock v1.4.2
+	github.com/pborman/ansi v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.7.1
 	github.com/rs/zerolog v1.18.0
@@ -69,7 +71,6 @@ require (
 	github.com/hashicorp/hcl/v2 v2.9.2-0.20210407182552-eb14f8319bdc // indirect
 	github.com/iancoleman/orderedmap v0.2.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgconn v1.10.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.2.0 // indirect

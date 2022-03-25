@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/loki/pkg/loghttp"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
+	"github.com/pborman/ansi"
 	"github.com/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/api"
 	"github.com/rs/zerolog"
@@ -279,7 +280,12 @@ done:
 			}
 
 			for _, entry := range stream.Entries {
-				output = append(output, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line, Source: source})
+				line := domain.LokiLine{Time: entry.Timestamp, Source: source, Text: entry.Line}
+				if sane, err := ansi.Strip([]byte(entry.Line)); err == nil {
+					line.Text = string(sane)
+				}
+
+				output = append(output, line)
 
 				if (len(output)) >= linesToFetch {
 					break done
