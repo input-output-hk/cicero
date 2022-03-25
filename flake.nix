@@ -180,7 +180,7 @@
               done
               # Start nomad-follower by absolute path because
               # some systems do not find it through sudo.
-              sudo $(which nomad-follower)
+              sudo $(command -v nomad-follower)
             } |& log 2 follower &
 
             spongix \
