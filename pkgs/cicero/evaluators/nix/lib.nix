@@ -225,6 +225,20 @@ in rec {
           template = data-merge.append outer.template;
         };
 
+      # Set the CICERO_API_URL environment variable to point to the internal Cicero.
+      #
+      # Also creates /secrets/cicero_api_url.env to re-source if the template was re-trigerred
+      setAPIUrl = action: inner: {
+        template = data-merge.append (inner.template or []) [
+          {
+            destination = "/secrets/cicero_api_url.env";
+            data = ''{{ with service "cicero" }}{{ with index . 0 }}CICERO_API_URL=http://{{ .Address }}:{{ .Port }}{{ end }}{{ end }}'';
+            env = true;
+            change_mode = "noop";
+          }
+        ];
+      };
+
       /*
         Allow a script to dynamically generate a result fact.
        
@@ -233,55 +247,57 @@ in rec {
        (with `/local/cicero/post-fact/success/artifact` as the artifact if it exists).
        
        Same for the failure case and `/local/cicero/post-fact/failure/{fact,artifact}`.
-       
-       Assumes `CICERO_API_URL` is set pointing to Cicero accessible from inside the cluster.
        */
       postFact = action: inner:
-        data-merge.merge
-        (wrapScript "bash"
-          (inner: ''
-            set -eEuo pipefail
+        chain action [
+          setAPIUrl
 
-            mkdir -p /local/cicero/post-fact/{success,failure}
+          {
+            config.packages = data-merge.append [
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
+              "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
+            ];
+          }
+          (wrapScript "bash"
+            (inner: ''
+              set -eEuo pipefail
 
-            if ${lib.escapeShellArgs inner}; then
-              ec=$?
-              state=success
-            else
-              ec=$?
-              state=failure
-            fi
+              mkdir -p /local/cicero/post-fact/{success,failure}
 
-            base=/local/cicero/post-fact/"$state"
-
-            if [[ -e "$base"/fact ]]; then
-              if [[ -e "$base"/artifact ]]; then
-                concat=(cat - "$base"/artifact)
+              if ${lib.escapeShellArgs inner}; then
+                ec=$?
+                state=success
               else
-                concat=cat
+                ec=$?
+                state=failure
               fi
 
-              < $base/fact \
-              jq --compact-output --join-output \
-              | "''${concat[@]}" \
-              | curl "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact \
-                --output /dev/null --fail \
-                --no-progress-meter \
-                --data-binary @-
+              base=/local/cicero/post-fact/"$state"
 
-              rm -rf /local/cicero/post-fact
-            fi
+              if [[ -e "$base"/fact ]]; then
+                if [[ -e "$base"/artifact ]]; then
+                  concat=(cat - "$base"/artifact)
+                else
+                  concat=cat
+                fi
 
-            exit $ec
-          '')
-          action
-          inner)
-        {
-          config.packages = data-merge.append [
-            "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#jq"
-            "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#curl"
-          ];
-        };
+                source /secrets/cicero_api_url.env
+
+                < $base/fact \
+                jq --compact-output --join-output \
+                | "''${concat[@]}" \
+                | curl "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact \
+                  --output /dev/null --fail \
+                  --no-progress-meter \
+                  --data-binary @-
+
+                rm -rf /local/cicero/post-fact
+              fi
+
+              exit $ec
+            ''))
+          inner
+        ];
 
       base = {
         createRoot ? true,
@@ -539,6 +555,6 @@ in rec {
   inherit (tasks) script;
   inherit (chains) chain;
   inherit (chains.jobs) escapeNames singleTask;
-  inherit (chains.tasks) wrapScript base networking nix makes git github postFact;
+  inherit (chains.tasks) wrapScript base networking nix makes git github postFact setAPIUrl;
   inherit data-merge;
 }
