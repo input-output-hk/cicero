@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -273,6 +274,7 @@ done:
 			break done
 		}
 
+		entryCount := int64(0)
 		for _, stream := range streams {
 			source, ok := stream.Labels.Map()["source"]
 			if !ok {
@@ -281,22 +283,28 @@ done:
 
 			for _, entry := range stream.Entries {
 				line := domain.LokiLine{Time: entry.Timestamp, Source: source, Text: entry.Line}
-				if sane, err := ansi.Strip([]byte(entry.Line)); err == nil {
-					line.Text = string(sane)
+				lines := strings.Split(entry.Line, "\r")
+				for _, l := range lines {
+					if sane, err := ansi.Strip([]byte(l)); err == nil {
+						line.Text = string(sane)
+					} else {
+						line.Text = l
+					}
+					output = append(output, line)
 				}
-
-				output = append(output, line)
 
 				if (len(output)) >= linesToFetch {
 					break done
 				}
 			}
 
-			if int64(len(stream.Entries)) >= limit {
-				start = stream.Entries[len(stream.Entries)-1].Timestamp
-			} else if int64(len(stream.Entries)) < limit {
-				break done
-			}
+			entryCount += int64(len(stream.Entries))
+		}
+
+		if entryCount >= limit {
+			start = output[len(output)-1].Time
+		} else {
+			break done
 		}
 	}
 
