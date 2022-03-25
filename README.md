@@ -88,7 +88,7 @@ and [example actions](https://github.com/input-output-hk/cicero/tree/main/action
 
 First enter the development shell using either direnv or by running `nix develop`.
 
-Start a development instance of Nomad, nomad-follower, Vault and nix-cache-proxy:
+Start a development instance of Nomad, nomad-follower, Vault and Spongix:
 
 	dev-cluster
 

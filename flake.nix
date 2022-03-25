@@ -21,8 +21,8 @@
       url = "github:nix-community/poetry2nix/fetched-projectdir-test";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix-cache-proxy = {
-      url = "github:input-output-hk/nix-cache-proxy";
+    spongix = {
+      url = "github:input-output-hk/spongix";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         inclusive.follows = "inclusive";
@@ -42,7 +42,7 @@
     driver,
     follower,
     poetry2nix,
-    nix-cache-proxy,
+    spongix,
     haskell-nix,
     nix,
     alejandra,
@@ -52,16 +52,16 @@
   in
     utils.lib.eachSystem supportedSystems
     (system: let
-      nix-cache-proxy-key = {
-        secret = "nix-cache-proxy:J5wXSq2iirA2sksFzfsV1fXoNQZFKh4QUOizy6b46sHI18Hb6kxKauM3IxFahvWgSziKE+dUo+QQJaIPG/Uw0g==";
-        public = "nix-cache-proxy:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=";
+      spongix-key = {
+        secret = "spongix:J5wXSq2iirA2sksFzfsV1fXoNQZFKh4QUOizy6b46sHI18Hb6kxKauM3IxFahvWgSziKE+dUo+QQJaIPG/Uw0g==";
+        public = "spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=";
       };
 
       pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
         devshell.overlay
         poetry2nix.overlay
         follower.overlay
-        nix-cache-proxy.overlay
+        spongix.overlay
         nix.overlay
         (final: prev: {
           alejandra = alejandra.defaultPackage.${prev.system};
@@ -78,7 +78,7 @@
                 nomad
                 nomad-follower
                 vault-bin
-                prev.nix-cache-proxy
+                prev.spongix
               ]}:"$PATH"
 
             >&2 echo 'Please authorize sudo (type your password):'
@@ -183,13 +183,13 @@
               sudo $(which nomad-follower)
             } |& log 2 follower &
 
-            nix-cache-proxy \
+            spongix \
               --substituters 'https://cache.nixos.org' \
-              --secret-key-files ${builtins.toFile "nix-cache-proxy.sec" nix-cache-proxy-key.secret} \
+              --secret-key-files ${builtins.toFile "spongix.sec" spongix-key.secret} \
               --trusted-public-keys 'cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=' \
               --listen :7745 \
-              --dir nix-cache-proxy \
-            |& log 3 nix-cache-proxy &
+              --dir spongix \
+            |& log 3 spongix &
 
             wait
           '';
@@ -210,7 +210,7 @@
                   CICERO_API_URL: "http://127.0.0.1:8080",
                   NIX_CONFIG: (
                     "extra-substituters = http://127.0.0.1:7745/cache?compression=none\n" +
-                    "extra-trusted-public-keys = ${nix-cache-proxy-key.public}\n" +
+                    "extra-trusted-public-keys = ${spongix-key.public}\n" +
                     "post-build-hook = /local/post-build-hook\n" +
                     .NIX_CONFIG
                   ),
