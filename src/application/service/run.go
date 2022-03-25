@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -38,8 +39,8 @@ type RunService interface {
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (*domain.LokiLog, error)
-	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiLog, error)
+	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error)
+	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error)
 }
 
 type runService struct {
@@ -199,28 +200,25 @@ func (self *runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (*domain.LokiLog, error) {
+func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	return self.LokiQueryRange(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
 		start, end,
 	)
 }
 
-func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiLog, error) {
+func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	return self.LokiQueryRange(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
 		start, end,
 	)
 }
 
-func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (*domain.LokiLog, error) {
+func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	linesToFetch := 10000
 	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
 	var limit int64 = 5000
-	output := &domain.LokiLog{
-		Stdout: []domain.LokiLine{},
-		Stderr: []domain.LokiLine{},
-	}
+	output := domain.LokiLog{}
 
 	if end == nil {
 		now := time.Now().UTC()
@@ -230,6 +228,7 @@ func (self *runService) LokiQueryRange(query string, start time.Time, end *time.
 	endLater := end.Add(1 * time.Minute)
 	end = &endLater
 
+done:
 	for {
 		req, err := http.NewRequest(
 			"GET",
@@ -237,7 +236,7 @@ func (self *runService) LokiQueryRange(query string, start time.Time, end *time.
 			http.NoBody,
 		)
 		if err != nil {
-			return output, err
+			return nil, err
 		}
 
 		q := req.URL.Query()
@@ -250,49 +249,54 @@ func (self *runService) LokiQueryRange(query string, start time.Time, end *time.
 
 		done, body, err := self.prometheus.Do(context.Background(), req)
 		if err != nil {
-			return output, errors.WithMessage(err, "Failed to talk with loki")
+			return nil, errors.WithMessage(err, "Failed to talk with loki")
 		}
 
 		if done.StatusCode/100 != 2 {
-			return output, fmt.Errorf("Error response %d from Loki: %s", done.StatusCode, string(body))
+			return nil, fmt.Errorf("Error response %d from Loki: %s", done.StatusCode, string(body))
 		}
 
 		response := loghttp.QueryResponse{}
 
 		err = json.Unmarshal(body, &response)
 		if err != nil {
-			return output, err
+			return nil, err
 		}
 
 		streams, ok := response.Data.Result.(loghttp.Streams)
 		if !ok {
-			return output, fmt.Errorf("Unexpected loki result type: %s", response.Data.Result.Type())
+			return nil, fmt.Errorf("Unexpected loki result type: %s", response.Data.Result.Type())
 		}
 
 		if len(streams) == 0 {
-			return output, nil
+			break done
 		}
 
 		for _, stream := range streams {
 			source, ok := stream.Labels.Map()["source"]
+			if !ok {
+				continue
+			}
 
 			for _, entry := range stream.Entries {
-				if ok && source == "stderr" {
-					output.Stderr = append(output.Stderr, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line})
-				} else {
-					output.Stdout = append(output.Stdout, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line})
-				}
+				output = append(output, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line, Source: source})
 
-				if (len(output.Stdout) + len(output.Stderr)) >= linesToFetch {
-					return output, nil
+				if (len(output)) >= linesToFetch {
+					break done
 				}
 			}
 
 			if int64(len(stream.Entries)) >= limit {
 				start = stream.Entries[len(stream.Entries)-1].Timestamp
 			} else if int64(len(stream.Entries)) < limit {
-				return output, nil
+				break done
 			}
 		}
 	}
+
+	sort.Slice(output, func(i, j int) bool {
+		return output[i].Time.Before(output[j].Time)
+	})
+
+	return output, nil
 }

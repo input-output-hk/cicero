@@ -102,7 +102,7 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 			return nil, err
 		}
 
-		logs := map[string]*domain.LokiLog{}
+		logs := map[string]domain.LokiLog{}
 
 		for taskName := range alloc.TaskResources {
 			taskLogs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)

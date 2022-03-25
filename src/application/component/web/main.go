@@ -168,7 +168,7 @@ func (self *Web) Start(ctx context.Context) error {
 		apidoc.BuildSwaggerDef(
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]*domain.LokiLog{"logs": {}}, "OK")),
+			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]domain.LokiLog{"logs": {}}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -912,7 +912,7 @@ func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
 		if logs, err := self.RunService.JobLogs(id, run.CreatedAt, run.FinishedAt); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 		} else {
-			self.json(w, map[string]*domain.LokiLog{"logs": logs}, http.StatusOK)
+			self.json(w, map[string]domain.LokiLog{"logs": logs}, http.StatusOK)
 		}
 	}
 }

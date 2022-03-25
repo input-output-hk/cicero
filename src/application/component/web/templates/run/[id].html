@@ -465,20 +465,10 @@
 											</table>
 
 											<h3>Task Logs</h3>
-											{{if (index $alloc.Logs $taskName).Stdout}}
+											{{if (index $alloc.Logs $taskName)}}
 												<table class="panel log">
-													{{range (index $alloc.Logs $taskName).Stdout}}
-														<tr>
-															<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-															<td><samp>{{.Text}}</samp></td>
-														</tr>
-													{{end}}
-												</table>
-											{{end}}
-											{{if (index $alloc.Logs $taskName).Stderr}}
-												<table class="panel log">
-													{{range (index $alloc.Logs $taskName).Stderr}}
-														<tr class="stderr">
+													{{range (index $alloc.Logs $taskName)}}
+                            <tr class="{{.Source}}">
 															<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
 															<td><samp>{{.Text}}</samp></td>
 														</tr>
