@@ -100,27 +100,52 @@ if #env == "prod" {
 		namespace: "cicero"
 
 		group: {
-			cicero: service: [{
-				name:         "cicero"
-				address_mode: "auto"
-				port:         "http"
-				tags: [
-					"cicero",
-					"ingress",
-					"traefik.enable=true",
-					"traefik.http.routers.cicero.rule=Host(`cicero.infra.aws.iohkdev.io`)",
-					"traefik.http.routers.cicero.middlewares=oauth-auth-redirect@file",
-					"traefik.http.routers.cicero.entrypoints=https",
-					"traefik.http.routers.cicero.tls=true",
-					"traefik.http.routers.cicero.tls.certresolver=acme",
-				]
-				check: [{
-					type:     "tcp"
-					port:     "http"
-					interval: "10s"
-					timeout:  "2s"
-				}]
-			}]
+			cicero: service: [
+				{
+					name:         "cicero-internal"
+					address_mode: "auto"
+					port:         "http"
+					tags: [
+						"cicero",
+						"ingress",
+						"traefik.enable=true",
+						"traefik.http.routers.cicero-internal.rule=Host(`cicero.infra.aws.iohkdev.io`) && HeadersRegexp(`Authorization`, `Basic`)",
+						"traefik.http.routers.cicero-internal.middlewares=cicero-auth@consulcatalog",
+						"traefik.http.middlewares.cicero-auth.basicauth.users=cicero:$2y$05$lcwzbToms.S83xjBFlHSvO.Lt3Y37b8SLd/9aYuqoSxBOxR9693.2",
+						"traefik.http.middlewares.cicero-auth.basicauth.realm=Cicero",
+						"traefik.http.routers.cicero-internal.entrypoints=https",
+						"traefik.http.routers.cicero-internal.tls=true",
+						"traefik.http.routers.cicero-internal.tls.certresolver=acme",
+					]
+					check: [{
+						type:     "tcp"
+						port:     "http"
+						interval: "10s"
+						timeout:  "2s"
+					}]
+				},
+				{
+					name:         "cicero"
+					address_mode: "auto"
+					port:         "http"
+					tags: [
+						"cicero",
+						"ingress",
+						"traefik.enable=true",
+						"traefik.http.routers.cicero.rule=Host(`cicero.infra.aws.iohkdev.io`)",
+						"traefik.http.routers.cicero.middlewares=oauth-auth-redirect@file",
+						"traefik.http.routers.cicero.entrypoints=https",
+						"traefik.http.routers.cicero.tls=true",
+						"traefik.http.routers.cicero.tls.certresolver=acme",
+					]
+					check: [{
+						type:     "tcp"
+						port:     "http"
+						interval: "10s"
+						timeout:  "2s"
+					}]
+				},
+			]
 
 			[string]: task: [string]: {
 				vault: {
