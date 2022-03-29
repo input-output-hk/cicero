@@ -1,8 +1,8 @@
 {
   writeShellScriptBin,
   darkhttpd,
-  handbook-entrypoint,
+  handbook,
 }:
 writeShellScriptBin "serve-cicero-handbook" ''
-  exec darkhttpd ${handbook-entrypoint} --port "''${NOMAD_PORT_http:-8080}"
+  exec darkhttpd ${handbook} --port "''${NOMAD_PORT_http:-8080}"
 ''
