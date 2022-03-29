@@ -261,6 +261,18 @@ in rec {
                 concat=cat
               fi
 
+              # Give Cicero time to be aware of this job
+              for ((i=0;i<8;i++))
+              do
+                if curl --fail --output /dev/null --no-progress-meter "''${CICERO_API_URL}/api/run/''${NOMAD_JOB_ID}"
+                then
+                  break
+                fi
+                let delay=2**i
+                echo "Cicero doesn't yet know about ''${NOMAD_JOB_ID}, sleeping for ''${delay} seconds" >&2
+                sleep "''${delay}"
+              done
+
               < $base/fact \
               jq --compact-output --join-output \
               | "''${concat[@]}" \
