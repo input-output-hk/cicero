@@ -217,6 +217,11 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 			} else {
 				for _, tg := range job.TaskGroups {
 					for _, t := range tg.Tasks {
+						_, found := t.Config["console"]
+						if !found {
+							t.Config["console"] = "pipe"
+						}
+
 						if pkgsI, found := t.Config["packages"]; found {
 							keys := map[string]bool{}
 							for _, pkg := range pkgsI.([]interface{}) {
