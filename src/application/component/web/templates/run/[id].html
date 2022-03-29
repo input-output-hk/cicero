@@ -182,7 +182,7 @@
 						</thead>
 						<tbody>
 							{{range $wrapper}}
-								<tr style="cursor: pointer">
+								<tr>
 									<td class="allocation-label">
 										<label for="allocation-{{.ID}}">
 											{{.ID}}
@@ -210,7 +210,7 @@
 
 					<div id="allocation">
 						{{range $alloc := $wrapper}}
-							<input id="allocation-{{.ID}}" type="radio" name="allocation"/>
+							<input id="allocation-{{.ID}}" type="radio" name="allocation" checked/>
 							<div>
 								<h3>Allocation {{.ID}}</h3>
 								{{with .Resources}}
@@ -510,6 +510,10 @@
 
 	#{{$scope}} table.log .stderr {
 		color: red;
+	}
+
+	#{{$scope}} label {
+		cursor: pointer;
 	}
 
 	#{{$scope}} #allocation > input,
