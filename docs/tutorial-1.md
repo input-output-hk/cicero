@@ -1,4 +1,4 @@
-# Tutorial 1 -- How to create an Action
+# How to create an Action
 
 ## A first visit
 
