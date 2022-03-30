@@ -1,8 +1,9 @@
 # Cicero Handbook
 
 [Introduction](./introduction.md)
-- [Prerequisites](./prerequisites.md)
 - [Installation](./installation.md)
+  - [Prerequisites](./prerequisites.md)
+  - [Install Cicero](./install-cicero.md)
 - [Evaluation and Execution of Cicero Actions](./evaluation-and-execution-of-actions.md)
 - [Facts explained](./facts-explained.md)
 - [Debugging Evaluations with cicero-evaluator-nix ](./cicero-evaluator-nix.md)
