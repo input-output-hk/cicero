@@ -47,8 +47,3 @@ dev-cicero
 ```
 
 ### Cicero's web UI should now be available on http://localhost:8080.
-
-### There is also an OpenAPI v3 schema available at:
-
-    http://localhost:8080/documentation/cicero.json
-    http://localhost:8080/documentation/cicero.yaml
