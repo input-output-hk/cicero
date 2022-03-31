@@ -70,9 +70,8 @@ Cicero currently only ships a Nix evaluator but others are planned.
 For actions written in Nix, Cicero provides a standard library of functions
 that help writing actions' inputs, output, and Nomad jobs in a concise way.
 
-Documentation is currently only available in the form of source code
-[comments](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix)
-and [example actions](https://github.com/input-output-hk/cicero/tree/main/actions/examples).
+Documentation is currently available in the form of source code
+[comments](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix), [example actions](https://github.com/input-output-hk/cicero/tree/main/actions/examples) and the [Cicero Handbook](https://cicero-handbook.infra.aws.iohkdev.io/).
 
 # Development
 

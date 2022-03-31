@@ -32,7 +32,7 @@ See [How to include external actions](./how-to-include-external-actions.md) for 
 
 ### Click on "List Actions"
 
-Clicking "List Actions" will start the cicero-evaluator, so the Actions are semantically evaluated and listed:
+Clicking "List Actions" will start the cicero-evaluator, so the Actions are syntactically evaluated and listed:
 
 ![Cicero WebUI List Localpath](./cicero_webui_list_actions_localpath.png "Cicero WebUI List Localpath")
 

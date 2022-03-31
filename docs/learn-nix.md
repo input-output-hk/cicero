@@ -30,7 +30,7 @@ The actual OpenAPI v3 schema of the API can viewed at:
 
 In case of Cicero the Nix Expression Language was extended to make it possible to express executable Actions in it.
 
-Those Action expressions can be used like functions, which are semantically evaluated by Cicero.
+Those Action expressions can be used like functions, which are syntactically evaluated by Cicero.
 
 When provided with a corresponding Input, which we will call Fact from now on, an Action can be started.
 

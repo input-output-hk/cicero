@@ -46,4 +46,4 @@ dev-jobs
 dev-cicero
 ```
 
-### Cicero's web UI should now be available on http://localhost:8080.
+### Cicero's WebUI should now be available on http://localhost:8080.
