@@ -181,7 +181,7 @@ if #env == "prod" {
 									"set -euf\\n" +
 									"export IFS=\\\" \\\"\\n" +
 									"echo \\\"Uploading to cache: $OUT_PATHS\\\"\\n" +
-									"exec nix copy --to \\\"http://spongix.service.consul.consul:7745?compression=none\\\" $OUT_PATHS"
+									"exec nix copy --to \\\"http://spongix.service.consul:7745?compression=none\\\" $OUT_PATHS"
 								),
 							}]
 						'
