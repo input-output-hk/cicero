@@ -570,17 +570,21 @@ func (self *actionService) InvokeCurrentActive() error {
 
 		for {
 			anyRunnable := false
+			var anyErr error
 
 			for _, action := range actions {
 				runnable, err := txSelf.Invoke(action)
 				if err != nil {
-					return err
+					anyErr = err
 				}
 
 				anyRunnable = anyRunnable || runnable
 			}
 
 			if !anyRunnable {
+				if anyErr != nil {
+					return anyErr
+				}
 				break
 			}
 		}
