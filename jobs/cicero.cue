@@ -163,7 +163,7 @@ if #env == "prod" {
 							.job[]?.group[]?.task[]?.env |= . + {
 								CICERO_WEB_URL: "https://cicero.infra.aws.iohkdev.io",
 								NIX_CONFIG: (
-									"extra-substituters = http://storage-0.node.consul:7745?compression=none\n" +
+									"extra-substituters = http://spongix.service.consul:7745?compression=none\n" +
 									"extra-trusted-public-keys =" +
 										" infra-production-0:T7ZxFWDaNjyEiiYDe6uZn0eq+77gORGkdec+kYwaB1M=" +
 										" hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" +
@@ -181,7 +181,7 @@ if #env == "prod" {
 									"set -euf\\n" +
 									"export IFS=\\\" \\\"\\n" +
 									"echo \\\"Uploading to cache: $OUT_PATHS\\\"\\n" +
-									"exec nix copy --to \\\"http://storage-0.node.consul:7745?compression=none\\\" $OUT_PATHS"
+									"exec nix copy --to \\\"http://spongix.service.consul.consul:7745?compression=none\\\" $OUT_PATHS"
 								),
 							}]
 						'
