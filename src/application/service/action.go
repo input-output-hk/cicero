@@ -576,9 +576,9 @@ func (self *actionService) InvokeCurrentActive() error {
 				runnable, err := txSelf.Invoke(action)
 				if err != nil {
 					anyErr = err
+				} else {
+					anyRunnable = anyRunnable || runnable
 				}
-
-				anyRunnable = anyRunnable || runnable
 			}
 
 			if !anyRunnable {
