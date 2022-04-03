@@ -62,7 +62,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	}
 
 	db := once(func() interface{} {
-		if db, err := config.DBConnection(); err != nil {
+		if db, err := config.DBConnection(logger); err != nil {
 			logger.Fatal().Err(err).Send()
 			return nil
 		} else {

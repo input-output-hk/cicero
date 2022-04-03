@@ -78,6 +78,8 @@
       settings = {
         log_statement = "all";
         log_destination = lib.mkForce "syslog";
+        shared_preload_libraries = "pg_stat_statements";
+        "pg_stat_statements.track" = "all";
       };
 
       authentication = ''
