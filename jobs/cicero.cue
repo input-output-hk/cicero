@@ -29,6 +29,12 @@ job: cicero: group: {
 			mode:     "delay"
 		}
 
+		update: {
+			canary:       1
+			auto_promote: true
+			auto_revert:  true
+		}
+
 		reschedule: {
 			delay:          "10s"
 			delay_function: "exponential"
@@ -117,6 +123,7 @@ if #env == "prod" {
 						"traefik.http.routers.cicero-internal.tls=true",
 						"traefik.http.routers.cicero-internal.tls.certresolver=acme",
 					]
+					canary_tags: ["cicero"]
 					check: [{
 						type:     "tcp"
 						port:     "http"
@@ -138,6 +145,7 @@ if #env == "prod" {
 						"traefik.http.routers.cicero.tls=true",
 						"traefik.http.routers.cicero.tls.certresolver=acme",
 					]
+					canary_tags: ["cicero"]
 					check: [{
 						type:     "tcp"
 						port:     "http"
