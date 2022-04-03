@@ -90,6 +90,10 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 		return nil, err
 	}
 
+	runs := map[uuid.UUID]domain.Run{}
+	var run domain.Run
+	var found bool
+
 	for _, result := range results {
 		alloc := &nomad.Allocation{}
 		err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
@@ -97,9 +101,13 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 			return nil, err
 		}
 
-		run, err := n.runService.GetByNomadJobId(nomadJobId)
-		if err != nil {
-			return nil, err
+		if run, found = runs[nomadJobId]; found {
+		} else {
+			run, err = n.runService.GetByNomadJobId(nomadJobId)
+			if err != nil {
+				return nil, err
+			}
+			runs[nomadJobId] = run
 		}
 
 		logs := map[string]domain.LokiLog{}
