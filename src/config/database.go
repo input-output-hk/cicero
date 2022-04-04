@@ -36,7 +36,7 @@ func DBConnection(logger *zerolog.Logger) (PgxIface, error) {
 	if err != nil {
 		return nil, err
 	}
-	dbconfig.ConnConfig.Logger = wrapLogger(logger)
+	// dbconfig.ConnConfig.Logger = wrapLogger(logger)
 
 	//TODO: log configuration
 	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
