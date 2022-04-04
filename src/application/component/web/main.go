@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/davidebianchi/gswagger/apirouter"
@@ -505,15 +506,50 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
 		return
 	} else {
+		count := 0
+
+		for _, ids := range inputFactIds {
+			count += len(ids)
+		}
+
+		wg := &sync.WaitGroup{}
+		type Res struct {
+			input string
+			i     int
+			fact  domain.Fact
+			err   error
+		}
+		res := make(chan *Res, count)
+
 		for input, ids := range inputFactIds {
 			inputs[input] = make([]domain.Fact, len(ids))
+
 			for i, id := range ids {
-				if fact, err := self.FactService.GetById(id); err != nil {
-					self.ServerError(w, err)
+				wg.Add(1)
+
+				go func(input string, i int, id uuid.UUID) {
+					defer wg.Done()
+					if fact, err := self.FactService.GetById(id); err != nil {
+						res <- &Res{err: err}
+					} else {
+						res <- &Res{input: input, i: i, fact: fact}
+					}
+				}(input, i, id)
+			}
+		}
+
+		wg.Wait()
+
+		for j := 0; j < count; j++ {
+			select {
+			case result := <-res:
+				if result.err != nil {
+					self.ServerError(w, result.err)
 					return
 				} else {
-					inputs[input][i] = fact
+					inputs[result.input][result.i] = result.fact
 				}
+			default:
 			}
 		}
 	}

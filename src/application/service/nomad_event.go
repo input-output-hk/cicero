@@ -140,6 +140,7 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 			} else {
 				allocs[result.ID] = result
 			}
+		default:
 		}
 	}
 
