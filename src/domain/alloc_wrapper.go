@@ -17,4 +17,5 @@ type LokiLog []LokiLine
 type AllocationWithLogs struct {
 	*nomad.Allocation
 	Logs map[string]LokiLog
+	Err  error
 }

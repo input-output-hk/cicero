@@ -64,8 +64,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 		return errors.WithMessage(err, "Could not listen to Nomad events")
 	}
 
-	for {
-		events := <-stream
+	for events := range stream {
 		if events.Err != nil {
 			return errors.WithMessage(events.Err, "Error getting next events from Nomad event stream")
 		}
@@ -100,6 +99,8 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 
 		index = events.Index
 	}
+
+	return errors.New("Nomad event service finished")
 }
 
 var errAlreadyHandled = errors.New("Event has already been handled")
