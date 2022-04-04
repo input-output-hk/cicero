@@ -91,6 +91,11 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 		return nil, err
 	}
 
+	run, err := n.runService.GetByNomadJobId(nomadJobId)
+	if err != nil {
+		return nil, err
+	}
+
 	wg := &sync.WaitGroup{}
 	res := make(chan domain.AllocationWithLogs, len(results))
 
@@ -100,12 +105,6 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 			defer wg.Done()
 			alloc := &nomad.Allocation{}
 			err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
-			if err != nil {
-				res <- domain.AllocationWithLogs{Err: err}
-				return
-			}
-
-			run, err := n.runService.GetByNomadJobId(nomadJobId)
 			if err != nil {
 				res <- domain.AllocationWithLogs{Err: err}
 				return
