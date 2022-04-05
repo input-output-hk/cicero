@@ -70,6 +70,8 @@
       };
     };
 
+    victoriametrics.enable = true;
+
     postgresql = {
       enable = true;
       enableTCPIP = true;

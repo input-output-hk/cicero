@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"math"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -43,6 +46,9 @@ type RunService interface {
 	Cancel(*domain.Run) error
 	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error)
 	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error)
+	CPUMetrics(map[string]domain.AllocationWithLogs) (map[string][]*vmMetric, error)
+	MemMetrics(map[string]domain.AllocationWithLogs) (map[string][]*vmMetric, error)
+	GrafanaUrls(map[string]domain.AllocationWithLogs) (map[string]*url.URL, error)
 }
 
 type runService struct {
@@ -313,4 +319,138 @@ done:
 	})
 
 	return output, nil
+}
+
+func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs) (map[string]*url.URL, error) {
+	grafanaUrls := map[string]*url.URL{}
+
+	for allocName, alloc := range allocs {
+		from := time.UnixMicro(alloc.CreateTime / 1000) // there's no UnixNano
+		to := time.UnixMicro(alloc.ModifyTime / 1000)
+
+		grafanaUrl, err := url.Parse("https://monitoring.infra.aws.iohkdev.io/d/SxGmPry7k/cgroups")
+		if err != nil {
+			return nil, err
+		}
+		guQuery := grafanaUrl.Query()
+
+		guQuery.Set("orgId", "1")
+		guQuery.Set("var-pattern", alloc.ID)
+		guQuery.Set("from", strconv.FormatInt(from.UnixMilli(), 10))
+		guQuery.Set("to", strconv.FormatInt(to.UnixMilli(), 10))
+		grafanaUrl.RawQuery = guQuery.Encode()
+		grafanaUrls[allocName] = grafanaUrl
+	}
+	return grafanaUrls, nil
+}
+
+func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*vmMetric, error) {
+	vmUrl, err := url.Parse("http://127.0.0.1:8428/api/v1/query_range")
+	if err != nil {
+		return nil, err
+	}
+	query := vmUrl.Query()
+
+	metrics := map[string][]*vmMetric{}
+	for allocName, alloc := range allocs {
+		from := time.UnixMicro(alloc.CreateTime / 1000)
+		to := time.UnixMicro(alloc.ModifyTime / 1000)
+
+		step := math.Max(float64(from.Sub(to).Seconds())/30, 10)
+		query.Set("step", strconv.FormatFloat(step, 'f', 0, 64))
+		query.Set("start", strconv.FormatInt(from.Unix()-60, 10))
+		query.Set("end", strconv.FormatInt(to.Unix()+60, 10))
+		query.Set("query", fmt.Sprintf(queryPattern, alloc.ID))
+		vmUrl.RawQuery = query.Encode()
+		res, err := http.Get(vmUrl.String())
+		if err != nil {
+			return nil, err
+		}
+
+		metric := vmResponse{}
+		json.NewDecoder(res.Body).Decode(&metric)
+		if metric.Status != "success" {
+			continue
+		}
+
+		max := float64(0)
+		for _, r := range metric.Data.Result {
+			for _, v := range r.Values {
+				t := time.Unix(int64(v[0].(float64)), 0)
+				f, err := strconv.ParseFloat(v[1].(string), 64)
+				if err != nil {
+					return nil, err
+				}
+
+				if f > max {
+					max = f
+				}
+
+				vm := &vmMetric{Time: t, Size: f, Label: labelFunc(f)}
+				metrics[allocName] = append(metrics[allocName], vm)
+			}
+		}
+
+		for i, vm := range metrics[allocName] {
+			vm.Size = ((100 / max) * vm.Size) / 100
+			if i > 0 {
+				vm.Start = metrics[allocName][i-1].Size
+			} else {
+				vm.Start = vm.Size
+			}
+		}
+	}
+
+	return metrics, nil
+}
+
+func (self *runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs) (map[string][]*vmMetric, error) {
+	return self.metrics(allocs, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
+		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
+	})
+}
+
+const (
+	kib = 1024
+	mib = kib * 1024
+	gib = mib * 1024
+	tib = gib * 1024
+)
+
+func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs) (map[string][]*vmMetric, error) {
+	return self.metrics(allocs, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
+		if f >= tib {
+			return template.HTML(strconv.FormatFloat(f/tib, 'f', 1, 64) + " TiB")
+		} else if f >= gib {
+			return template.HTML(strconv.FormatFloat(f/gib, 'f', 1, 64) + " GiB")
+		} else if f >= mib {
+			return template.HTML(strconv.FormatFloat(f/mib, 'f', 1, 64) + " MiB")
+		} else if f >= kib {
+			return template.HTML(strconv.FormatFloat(f/kib, 'f', 1, 64) + " KiB")
+		} else {
+			return template.HTML(strconv.FormatFloat(f, 'f', 1, 64) + " B")
+		}
+	})
+}
+
+type vmResponse struct {
+	Status string       `json:"status"`
+	Data   vmResultData `json:"data"`
+}
+
+type vmResultData struct {
+	ResultType string `json:"resultType"`
+	Result     []vmResult
+}
+
+type vmResult struct {
+	Metric map[string]string `json:"metric"`
+	Values [][]interface{}   `json:"values"`
+}
+
+type vmMetric struct {
+	Time  time.Time
+	Start float64
+	Size  float64
+	Label template.HTML
 }

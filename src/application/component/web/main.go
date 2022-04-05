@@ -566,12 +566,33 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	grafanaUrls, err := self.RunService.GrafanaUrls(allocs)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	cpuMetrics, err := self.RunService.CPUMetrics(allocs)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	memMetrics, err := self.RunService.MemMetrics(allocs)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
 	if err := render("run/[id].html", w, map[string]interface{}{
-		"Run":    run,
-		"inputs": inputs,
-		"output": output,
-		"facts":  facts,
-		"allocs": allocsByGroup,
+		"Run":        run,
+		"inputs":     inputs,
+		"output":     output,
+		"facts":      facts,
+		"allocs":     allocsByGroup,
+		"MemMetrics": memMetrics,
+		"CpuMetrics": cpuMetrics,
+		"Grafanas":   grafanaUrls,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
