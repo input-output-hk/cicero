@@ -566,19 +566,19 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	grafanaUrls, err := self.RunService.GrafanaUrls(allocs)
+	grafanaUrls, err := self.RunService.GrafanaUrls(allocs, run.FinishedAt)
 	if err != nil {
 		self.ServerError(w, err)
 		return
 	}
 
-	cpuMetrics, err := self.RunService.CPUMetrics(allocs)
+	cpuMetrics, err := self.RunService.CPUMetrics(allocs, run.FinishedAt)
 	if err != nil {
 		self.ServerError(w, err)
 		return
 	}
 
-	memMetrics, err := self.RunService.MemMetrics(allocs)
+	memMetrics, err := self.RunService.MemMetrics(allocs, run.FinishedAt)
 	if err != nil {
 		self.ServerError(w, err)
 		return

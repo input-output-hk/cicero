@@ -46,9 +46,9 @@ type RunService interface {
 	Cancel(*domain.Run) error
 	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error)
 	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error)
-	CPUMetrics(map[string]domain.AllocationWithLogs) (map[string][]*VMMetric, error)
-	MemMetrics(map[string]domain.AllocationWithLogs) (map[string][]*VMMetric, error)
-	GrafanaUrls(map[string]domain.AllocationWithLogs) (map[string]*url.URL, error)
+	CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
+	MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
+	GrafanaUrls(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string]*url.URL, error)
 }
 
 type runService struct {
@@ -323,12 +323,15 @@ done:
 	return output, nil
 }
 
-func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs) (map[string]*url.URL, error) {
+func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs, to *time.Time) (map[string]*url.URL, error) {
 	grafanaUrls := map[string]*url.URL{}
 
 	for allocName, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000) // there's no UnixNano
-		to := time.UnixMicro(alloc.ModifyTime / 1000)
+		if to == nil {
+			t := time.UnixMicro(alloc.ModifyTime / 1000)
+			to = &t
+		}
 
 		grafanaUrl, err := url.Parse("https://monitoring.infra.aws.iohkdev.io/d/SxGmPry7k/cgroups")
 		if err != nil {
@@ -346,7 +349,7 @@ func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs)
 	return grafanaUrls, nil
 }
 
-func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
+func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
 	vmUrl, err := url.Parse(self.victoriaMetricsAddr + "/api/v1/query_range")
 	if err != nil {
 		return nil, err
@@ -356,9 +359,20 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, que
 	metrics := map[string][]*VMMetric{}
 	for allocName, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000)
-		to := time.UnixMicro(alloc.ModifyTime / 1000)
+		if to == nil {
+			t := time.UnixMicro(alloc.ModifyTime / 1000)
+			to = &t
+		}
 
-		step := math.Max(float64(from.Sub(to).Seconds())/20, 10)
+		// calculate the appropriate step size, that is, every step gives you one point of data.
+		// wtih too many steps, the graph becomes crowded
+		// we target anything between 1 and 20 data points, if there is not a lot
+		// of data, many steps will just display duplicated data because vector sends metrics every 10 seconds.
+		// So the minimum size is 10
+		// The maximum step size is duration/20
+		duration := (*to).Sub(from).Seconds()
+
+		step := math.Max(duration/20, 10)
 		query.Set("step", strconv.FormatFloat(step, 'f', 0, 64))
 		query.Set("start", strconv.FormatInt(from.Unix()-60, 10))
 		query.Set("end", strconv.FormatInt(to.Unix()+60, 10))
@@ -406,8 +420,8 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, que
 	return metrics, nil
 }
 
-func (self *runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs) (map[string][]*VMMetric, error) {
-	return self.metrics(allocs, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
+func (self *runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
 		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
 	})
 }
@@ -419,8 +433,8 @@ const (
 	tib = gib * 1024
 )
 
-func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs) (map[string][]*VMMetric, error) {
-	return self.metrics(allocs, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
+func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
 		if f >= tib {
 			return template.HTML(strconv.FormatFloat(f/tib, 'f', 1, 64) + " TiB")
 		} else if f >= gib {
