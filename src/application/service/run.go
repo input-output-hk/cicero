@@ -358,7 +358,7 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, que
 		from := time.UnixMicro(alloc.CreateTime / 1000)
 		to := time.UnixMicro(alloc.ModifyTime / 1000)
 
-		step := math.Max(float64(from.Sub(to).Seconds())/30, 10)
+		step := math.Max(float64(from.Sub(to).Seconds())/20, 10)
 		query.Set("step", strconv.FormatFloat(step, 'f', 0, 64))
 		query.Set("start", strconv.FormatInt(from.Unix()-60, 10))
 		query.Set("end", strconv.FormatInt(to.Unix()+60, 10))
