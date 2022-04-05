@@ -46,8 +46,8 @@ type RunService interface {
 	Cancel(*domain.Run) error
 	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error)
 	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error)
-	CPUMetrics(map[string]domain.AllocationWithLogs) (map[string][]*vmMetric, error)
-	MemMetrics(map[string]domain.AllocationWithLogs) (map[string][]*vmMetric, error)
+	CPUMetrics(map[string]domain.AllocationWithLogs) (map[string][]*VMMetric, error)
+	MemMetrics(map[string]domain.AllocationWithLogs) (map[string][]*VMMetric, error)
 	GrafanaUrls(map[string]domain.AllocationWithLogs) (map[string]*url.URL, error)
 }
 
@@ -344,14 +344,14 @@ func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs)
 	return grafanaUrls, nil
 }
 
-func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*vmMetric, error) {
+func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
 	vmUrl, err := url.Parse("http://127.0.0.1:8428/api/v1/query_range")
 	if err != nil {
 		return nil, err
 	}
 	query := vmUrl.Query()
 
-	metrics := map[string][]*vmMetric{}
+	metrics := map[string][]*VMMetric{}
 	for allocName, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000)
 		to := time.UnixMicro(alloc.ModifyTime / 1000)
@@ -386,7 +386,7 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, que
 					max = f
 				}
 
-				vm := &vmMetric{Time: t, Size: f, Label: labelFunc(f)}
+				vm := &VMMetric{Time: t, Size: f, Label: labelFunc(f)}
 				metrics[allocName] = append(metrics[allocName], vm)
 			}
 		}
@@ -404,7 +404,7 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, que
 	return metrics, nil
 }
 
-func (self *runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs) (map[string][]*vmMetric, error) {
+func (self *runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
 		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
 	})
@@ -417,7 +417,7 @@ const (
 	tib = gib * 1024
 )
 
-func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs) (map[string][]*vmMetric, error) {
+func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
 		if f >= tib {
 			return template.HTML(strconv.FormatFloat(f/tib, 'f', 1, 64) + " TiB")
@@ -448,7 +448,7 @@ type vmResult struct {
 	Values [][]interface{}   `json:"values"`
 }
 
-type vmMetric struct {
+type VMMetric struct {
 	Time  time.Time
 	Start float64
 	Size  float64
