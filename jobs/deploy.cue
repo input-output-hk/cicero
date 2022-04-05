@@ -9,6 +9,7 @@ package jobs
 #vaultAddr:    string | *#environment.vaultAddr    @tag(vaultAddr)
 #nameserver:   string | *#environment.nameserver   @tag(nameserver)
 #lokiAddr:     string | *#environment.lokiAddr     @tag(lokiAddr)
+#victoriaAddr: string | *#environment.victoriaAddr @tag(victoriaAddr)
 #namespace:    string | *#environment.namespace    @tag(namespace)
 
 #environment: #environments[#env]
@@ -23,6 +24,7 @@ package jobs
 		vaultAddr:    "http://127.0.0.1:8300"
 		nameserver:   "1.1.1.1"
 		lokiAddr:     "http://127.0.0.1:3100"
+		victoriaAddr: "http://127.0.0.1:8428"
 	}
 
 	prod: {
@@ -34,6 +36,7 @@ package jobs
 		vaultAddr:    "https://vault.infra.aws.iohkdev.io"
 		nameserver:   "172.17.0.1"
 		lokiAddr:     "http://monitoring.node.consul:3100"
+		victoriaAddr: "http://monitoring.node.consul:8428"
 	}
 }
 

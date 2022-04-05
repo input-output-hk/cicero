@@ -56,16 +56,18 @@ type runService struct {
 	runRepository       repository.RunRepository
 	runOutputRepository repository.RunOutputRepository
 	prometheus          prometheus.Client
+	victoriaMetricsAddr string
 	nomadClient         application.NomadClient
 	db                  config.PgxIface
 }
 
-func NewRunService(db config.PgxIface, prometheusAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
+func NewRunService(db config.PgxIface, prometheusAddr, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
 	impl := runService{
 		logger:              logger.With().Str("component", "RunService").Logger(),
 		runRepository:       persistence.NewRunRepository(db),
 		runOutputRepository: persistence.NewRunOutputRepository(db),
 		nomadClient:         nomadClient,
+		victoriaMetricsAddr: victoriaMetricsAddr,
 		db:                  db,
 	}
 
@@ -345,7 +347,7 @@ func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs)
 }
 
 func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
-	vmUrl, err := url.Parse("http://127.0.0.1:8428/api/v1/query_range")
+	vmUrl, err := url.Parse(self.victoriaMetricsAddr + "/api/v1/query_range")
 	if err != nil {
 		return nil, err
 	}

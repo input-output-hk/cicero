@@ -21,9 +21,10 @@ import (
 type StartCmd struct {
 	Components []string `arg:"positional" help:"any of: nomad, web"`
 
-	PrometheusAddr string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	Evaluators     []string `arg:"--evaluators"`
-	Transformers   []string `arg:"--transform"`
+	PrometheusAddr      string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
+	VictoriaMetricsAddr string   `arg:"--victoriametrics-addr" default:"http://127.0.0.1:8428"`
+	Evaluators          []string `arg:"--evaluators"`
+	Transformers        []string `arg:"--transform"`
 
 	WebListen string `arg:"--web-listen,env:WEB_LISTEN" default:":8080"`
 }
@@ -83,7 +84,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	})
 
 	runService := once(func() interface{} {
-		return service.NewRunService(db().(config.PgxIface), cmd.PrometheusAddr, nomadClientWrapper().(application.NomadClient), logger)
+		return service.NewRunService(db().(config.PgxIface), cmd.PrometheusAddr, cmd.VictoriaMetricsAddr, nomadClientWrapper().(application.NomadClient), logger)
 	})
 	evaluationService := once(func() interface{} {
 		return service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, logger)

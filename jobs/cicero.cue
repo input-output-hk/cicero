@@ -73,6 +73,7 @@ job: cicero: group: {
 
 			config: command: [
 				"/bin/entrypoint",
+				"--victoriametrics-addr", #victoriaAddr,
 				"--prometheus-addr", #lokiAddr,
 				"--transform", for t in _transformers {t.destination},
 				"--web-listen", ":${NOMAD_PORT_http}",
