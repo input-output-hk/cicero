@@ -51,12 +51,15 @@ func DBConnection(logger *zerolog.Logger) (PgxIface, error) {
 	return pgxpool.ConnectConfig(context.Background(), dbconfig)
 }
 
+//nolint:unused,deadcode
 func wrapLogger(original *zerolog.Logger) pgLogger {
 	return pgLogger{original}
 }
 
+//nolint:unused
 type pgLogger struct{ original *zerolog.Logger }
 
+//nolint:unused,deadcode
 func (l pgLogger) Log(ctx context.Context, level pgx.LogLevel, msg string, data map[string]interface{}) {
 	var event *zerolog.Event
 	switch level {

@@ -370,7 +370,7 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to 
 		// of data, many steps will just display duplicated data because vector sends metrics every 10 seconds.
 		// So the minimum size is 10
 		// The maximum step size is duration/20
-		duration := (*to).Sub(from).Seconds()
+		duration := to.Sub(from).Seconds()
 
 		step := math.Max(duration/20, 10)
 		query.Set("step", strconv.FormatFloat(step, 'f', 0, 64))
@@ -384,7 +384,9 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to 
 		}
 
 		metric := vmResponse{}
-		json.NewDecoder(res.Body).Decode(&metric)
+		if err := json.NewDecoder(res.Body).Decode(&metric); err != nil {
+			return nil, err
+		}
 		if metric.Status != "success" {
 			continue
 		}
@@ -435,15 +437,16 @@ const (
 
 func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
-		if f >= tib {
+		switch {
+		case f >= tib:
 			return template.HTML(strconv.FormatFloat(f/tib, 'f', 1, 64) + " TiB")
-		} else if f >= gib {
+		case f >= gib:
 			return template.HTML(strconv.FormatFloat(f/gib, 'f', 1, 64) + " GiB")
-		} else if f >= mib {
+		case f >= mib:
 			return template.HTML(strconv.FormatFloat(f/mib, 'f', 1, 64) + " MiB")
-		} else if f >= kib {
+		case f >= kib:
 			return template.HTML(strconv.FormatFloat(f/kib, 'f', 1, 64) + " KiB")
-		} else {
+		default:
 			return template.HTML(strconv.FormatFloat(f, 'f', 1, 64) + " B")
 		}
 	})
