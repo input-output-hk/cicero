@@ -20,12 +20,14 @@ in {
     };
 
     postgres = {
-      enable = mkEnableOption ''
-        local postgres database.
-        If you disable this make sure the database
-        Cicero connects to has the extensions
-        <code>pgcrypto</code> and <code>lo</code>.
-      '' // { default = true; };
+      enable =
+        mkEnableOption ''
+          local postgres database.
+          If you disable this make sure the database
+          Cicero connects to has the extensions
+          <code>pgcrypto</code> and <code>lo</code>.
+        ''
+        // {default = true;};
 
       url = mkOption {
         type = types.str;
@@ -36,8 +38,8 @@ in {
 
   config = lib.mkIf cfg.enable {
     systemd.services.cicero = {
-      wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" ] ++ lib.optional cfg.postgres.enable "postgresql.service";
+      wantedBy = ["multi-user.target"];
+      after = ["network.target"] ++ lib.optional cfg.postgres.enable "postgresql.service";
       wants = lib.optional cfg.postgres.enable "postgresql.service";
 
       serviceConfig = {
@@ -45,7 +47,7 @@ in {
         ConfigurationDirectory = "cicero";
       };
 
-      path = [ cfg.package pkgs.dbmate ];
+      path = [cfg.package pkgs.dbmate];
 
       preStart = ''
         dbmate \
@@ -78,13 +80,13 @@ in {
 
     services.postgresql = lib.mkIf cfg.postgres.enable {
       enable = true;
-      ensureDatabases = [ "cicero" ];
+      ensureDatabases = ["cicero"];
       ensureUsers = [
         {
           name = "cicero";
           ensurePermissions."DATABASE cicero" = "ALL PRIVILEGES";
         }
-        { name = "cicero_api"; }
+        {name = "cicero_api";}
       ];
 
       identMap = "cicero cicero cicero";

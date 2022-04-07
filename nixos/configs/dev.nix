@@ -1,7 +1,5 @@
-{ lib, ... }:
-
-{
-  imports = [ ./cicero.nix ];
+{lib, ...}: {
+  imports = [./cicero.nix];
 
   # for development we want to run cicero outside the container
   systemd.services.cicero.enable = lib.mkForce false;

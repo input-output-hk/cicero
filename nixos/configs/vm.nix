@@ -1,6 +1,10 @@
-{ self, config, lib, pkgs, ... }:
-
 {
+  self,
+  config,
+  lib,
+  pkgs,
+  ...
+}: {
   imports = [
     self.inputs.spongix.nixosModules.spongix
     ./dev.nix
@@ -37,14 +41,51 @@
 
   virtualisation = {
     forwardPorts = [
-      { from = "host"; host.port = 8080; guest.port = 8080; } # cicero
-      { from = "host"; host.port = 4646; guest.port = 4646; } # nomad
-      { from = "host"; host.port = 8200; guest.port = lib.toInt (lib.last (lib.splitString ":" config.services.vault.address)); }
-      { from = "host"; host.port = 8428; guest.port = lib.toInt (lib.last (lib.splitString ":" config.services.victoriametrics.listenAddress)); }
-      { from = "host"; host.port = 3100; guest.port = config.services.loki.configuration.server.http_listen_port; }
-      { from = "host"; host.port = 7745; guest.port = config.services.spongix.port; }
-      { from = "host"; host.port = 5432; guest.port = config.services.postgresql.port; }
-      { from = "guest"; guest = { address = "10.0.2.100"; port = 22; }; host.port = 2255; }
+      {
+        # cicero
+        from = "host";
+        host.port = 8080;
+        guest.port = 8080;
+      }
+      {
+        # nomad
+        from = "host";
+        host.port = 4646;
+        guest.port = 4646;
+      }
+      {
+        from = "host";
+        host.port = 8200;
+        guest.port = lib.toInt (lib.last (lib.splitString ":" config.services.vault.address));
+      }
+      {
+        from = "host";
+        host.port = 8428;
+        guest.port = lib.toInt (lib.last (lib.splitString ":" config.services.victoriametrics.listenAddress));
+      }
+      {
+        from = "host";
+        host.port = 3100;
+        guest.port = config.services.loki.configuration.server.http_listen_port;
+      }
+      {
+        from = "host";
+        host.port = 7745;
+        guest.port = config.services.spongix.port;
+      }
+      {
+        from = "host";
+        host.port = 5432;
+        guest.port = config.services.postgresql.port;
+      }
+      {
+        from = "guest";
+        guest = {
+          address = "10.0.2.100";
+          port = 22;
+        };
+        host.port = 2255;
+      }
     ];
 
     cores = 2;
@@ -120,8 +161,8 @@
     spongix = {
       enable = true;
       cacheDir = "/mnt/spongix";
-      substituters = [ "https://cache.nixos.org" ];
-      trustedPublicKeys = [ "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" ];
+      substituters = ["https://cache.nixos.org"];
+      trustedPublicKeys = ["cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
       secretKeyFiles."spongix.sec" = builtins.toFile "spongix.sec" "spongix:J5wXSq2iirA2sksFzfsV1fXoNQZFKh4QUOizy6b46sHI18Hb6kxKauM3IxFahvWgSziKE+dUo+QQJaIPG/Uw0g==";
     };
   };
@@ -129,7 +170,7 @@
   systemd.services = {
     create-netrc = rec {
       serviceConfig.Type = "oneshot";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = ["multi-user.target"];
       before = wantedBy;
       script = ''
         set -xuo pipefail
@@ -152,9 +193,9 @@
     };
 
     vault = {
-      after = [ "create-netrc.service" ];
+      after = ["create-netrc.service"];
 
-      path = with pkgs; [ vault netcat ];
+      path = with pkgs; [vault netcat];
 
       environment = rec {
         VAULT_DEV_ROOT_TOKEN_ID = "root";
@@ -219,7 +260,7 @@
     nomad-follower = rec {
       description = "Nomad Follower";
 
-      wantedBy = [ "nomad.service" ];
+      wantedBy = ["nomad.service"];
       bindsTo = wantedBy;
       after = bindsTo;
 

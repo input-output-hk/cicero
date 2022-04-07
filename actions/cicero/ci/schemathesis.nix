@@ -33,18 +33,23 @@
 
               config.nixos = "github:input-output-hk/cicero/${cfg.sha}#nixosConfigurations.cicero";
 
-              template = [{
-                destination = "/etc/cicero/start.args";
-                data = ''
-                  --web-listen :{{ env "NOMAD_PORT_cicero" }}
+              template = [
+                {
+                  destination = "/etc/cicero/start.args";
+                  data = ''
+                    --web-listen :{{ env "NOMAD_PORT_cicero" }}
 
-                  ${""/*
-                    Do not try to connect to Nomad
-                    as we have none running.
-                  */}
-                  web
-                '';
-              }];
+                    ${
+                      ""
+                      /*
+                       Do not try to connect to Nomad
+                       as we have none running.
+                       */
+                    }
+                    web
+                  '';
+                }
+              ];
             };
 
             schemathesis = std.chain args [

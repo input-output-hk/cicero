@@ -8,7 +8,7 @@
     self.inputs.driver.nixosModules.nix-driver-nomad
   ];
 
-  nixpkgs.overlays = [ self.overlay ];
+  nixpkgs.overlays = [self.overlay];
 
   nix.extraOptions = ''
     experimental-features = nix-command flakes
