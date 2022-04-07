@@ -82,7 +82,9 @@
             filter = ''
               .job[]?.datacenters |= . + ["dc1"] |
               .job[]?.group[]?.restart.attempts = 0 |
-              .job[]?.group[]?.task[]?.env |= . + {
+              .job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"] |
+              .job[]?.group[]?.task[]? |= if .config?.nixos then . else (
+                .env |= . + {
                   CICERO_WEB_URL: "http://127.0.0.1:8080",
                   CICERO_API_URL: "http://127.0.0.1:8080",
                   NIX_CONFIG: (
@@ -91,14 +93,14 @@
                     "post-build-hook = /local/post-build-hook\n" +
                     .NIX_CONFIG
                   ),
-              } |
-              .job[]?.group[]?.task[]?.template |= . + [{
-                destination: "local/post-build-hook",
-                perms: "544",
-                data: env.postBuildHook,
-              }] |
-              .job[]?.group[]?.task[]?.config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#dash"] |
-              .job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"]
+                } |
+                .template |= . + [{
+                  destination: "local/post-build-hook",
+                  perms: "544",
+                  data: env.postBuildHook,
+                }] |
+                .config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#dash"]
+              ) end
             '';
           in
             prev.writers.writeDashBin "dev-cicero-transformer" ''

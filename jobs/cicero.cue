@@ -169,30 +169,32 @@ if #env == "prod" {
 						#! /bin/dash
 						/bin/jq '
 							.job[]?.datacenters |= . + ["eu-central-1", "us-east-2"] |
-							.job[]?.group[]?.task[]?.env |= . + {
-								CICERO_WEB_URL: "https://cicero.infra.aws.iohkdev.io",
-								NIX_CONFIG: (
-									"extra-substituters = http://spongix.service.consul:7745?compression=none\n" +
-									"extra-trusted-public-keys =" +
-										" infra-production-0:T7ZxFWDaNjyEiiYDe6uZn0eq+77gORGkdec+kYwaB1M=" +
-										" hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" +
-										"\n" +
-									"post-build-hook = /local/post-build-hook\n" +
-									.NIX_CONFIG
-								),
-							} |
-							.job[]?.group[]?.task[]?.config.packages |= . + ["github:NixOS/nixpkgs/\(nixpkgsRev)#dash"] |
-							.job[]?.group[]?.task[]?.template |= . + [{
-								destination: "local/post-build-hook",
-								perms: "544",
-								data: (
-									"#! /bin/dash\\n" +
-									"set -euf\\n" +
-									"export IFS=\\\" \\\"\\n" +
-									"echo \\\"Uploading to cache: $OUT_PATHS\\\"\\n" +
-									"exec nix copy --to \\\"http://spongix.service.consul:7745?compression=none\\\" $OUT_PATHS"
-								),
-							}]
+							.job[]?.group[]?.task[]? |= if .config?.nixos then . else (
+								.env |= . + {
+									CICERO_WEB_URL: "https://cicero.infra.aws.iohkdev.io",
+									NIX_CONFIG: (
+										"extra-substituters = http://spongix.service.consul:7745?compression=none\n" +
+										"extra-trusted-public-keys =" +
+											" infra-production-0:T7ZxFWDaNjyEiiYDe6uZn0eq+77gORGkdec+kYwaB1M=" +
+											" hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" +
+											"\n" +
+										"post-build-hook = /local/post-build-hook\n" +
+										.NIX_CONFIG
+									),
+								} |
+								.config.packages |= . + ["github:NixOS/nixpkgs/\(nixpkgsRev)#dash"] |
+								.template |= . + [{
+									destination: "local/post-build-hook",
+									perms: "544",
+									data: (
+										"#! /bin/dash\\n" +
+										"set -euf\\n" +
+										"export IFS=\\\" \\\"\\n" +
+										"echo \\\"Uploading to cache: $OUT_PATHS\\\"\\n" +
+										"exec nix copy --to \\\"http://spongix.service.consul:7745?compression=none\\\" $OUT_PATHS"
+									),
+								}]
+							) end
 						'
 						"""
 				}]
