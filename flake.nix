@@ -76,7 +76,7 @@
               set -euf
               export IFS=' '
               echo 'Uploading to cache: '"$OUT_PATHS"
-              exec nix copy --to 'http://127.0.0.1:7745/cache' $OUT_PATHS
+              exec nix copy --to 'http://127.0.0.1:7745?compression=none' $OUT_PATHS
             '';
 
             filter = ''

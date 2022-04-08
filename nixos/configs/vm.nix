@@ -35,9 +35,21 @@
     };
   };
 
-  nix.extraOptions = ''
-    netrc-file = /etc/nix/netrc
-  '';
+  nix = {
+    binaryCaches = [ "http://127.0.0.1:${toString config.services.spongix.port}" ];
+    binaryCachePublicKeys = [ "spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=" ];
+    extraOptions = let
+      post-build-hook = pkgs.writers.writeDash "post-build-hook" ''
+        set -euf
+        export IFS=' '
+        echo 'Uploading to cache: '"$OUT_PATHS"
+        exec nix copy --to 'http://127.0.0.1:7745?compression=none' $OUT_PATHS
+      '';
+    in ''
+      netrc-file = /etc/nix/netrc
+      post-build-hook = ${post-build-hook}
+    '';
+  };
 
   virtualisation = {
     forwardPorts = [
