@@ -289,7 +289,16 @@ in rec {
       }: action: next:
         chain action (
           [
-            {env = {inherit HOME;};}
+            {
+              env = {inherit HOME;};
+              config.packages = data-merge.append ["github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#which"];
+            }
+
+            (wrapScript "bash" (next: ''
+              mkdir -p /usr/bin
+              ln -s "$(which env)" /usr/bin/env
+              exec ${lib.escapeShellArgs next}
+            ''))
           ]
           ++ (lib.optionals createRoot [
             {
