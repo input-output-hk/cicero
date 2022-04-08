@@ -33,7 +33,7 @@ type ActionService interface {
 	Update(*domain.Action) error
 	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
 	Create(string, string) (*domain.Action, error)
-	Invoke(*domain.Action) (bool, error)
+	Invoke(*domain.Action) (bool, func() error, error)
 	InvokeCurrentActive() error
 }
 
@@ -491,9 +491,10 @@ func (self *actionService) Create(source, name string) (*domain.Action, error) {
 	return &action, nil
 }
 
-func (self *actionService) Invoke(action *domain.Action) (bool, error) {
+func (self *actionService) Invoke(action *domain.Action) (bool, func() error, error) {
 	runnable := false
-	return runnable, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	var registerFunc func() error
+	return runnable, registerFunc, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
 		runnable_, inputs, err := txSelf.IsRunnable(action)
@@ -545,14 +546,17 @@ func (self *actionService) Invoke(action *domain.Action) (bool, error) {
 		runId := run.NomadJobID.String()
 		runDef.Job.ID = &runId
 
-		if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
-			return errors.WithMessage(err, "Failed to run Action")
-		} else if len(response.Warnings) > 0 {
-			self.logger.Warn().
-				Str("nomad-job", runId).
-				Str("nomad-evaluation", response.EvalID).
-				Str("warnings", response.Warnings).
-				Msg("Warnings occured registering Nomad job")
+		registerFunc = func() error {
+			if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
+				return errors.WithMessage(err, "Failed to run Action")
+			} else if len(response.Warnings) > 0 {
+				self.logger.Warn().
+					Str("nomad-job", runId).
+					Str("nomad-evaluation", response.EvalID).
+					Str("warnings", response.Warnings).
+					Msg("Warnings occured registering Nomad job")
+			}
+			return nil
 		}
 
 		return nil
@@ -561,6 +565,8 @@ func (self *actionService) Invoke(action *domain.Action) (bool, error) {
 
 func (self *actionService) InvokeCurrentActive() error {
 	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		registerFuncs := []func() error{}
+
 		txSelf := self.WithQuerier(tx)
 
 		actions, err := txSelf.GetCurrentActive()
@@ -573,11 +579,14 @@ func (self *actionService) InvokeCurrentActive() error {
 			var anyErr error
 
 			for _, action := range actions {
-				runnable, err := txSelf.Invoke(action)
+				runnable, registerFunc, err := txSelf.Invoke(action)
 				if err != nil {
 					anyErr = err
 				} else {
 					anyRunnable = anyRunnable || runnable
+					if registerFunc != nil {
+						registerFuncs = append(registerFuncs, registerFunc)
+					}
 				}
 			}
 
@@ -586,6 +595,12 @@ func (self *actionService) InvokeCurrentActive() error {
 					return anyErr
 				}
 				break
+			}
+		}
+
+		for _, registerFunc := range registerFuncs {
+			if err := registerFunc(); err != nil {
+				return err
 			}
 		}
 
