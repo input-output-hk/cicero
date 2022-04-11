@@ -78,14 +78,6 @@
         host.port = 5432;
         guest.port = config.services.postgresql.port;
       }
-      {
-        from = "guest";
-        guest = {
-          address = "10.0.2.100";
-          port = 22;
-        };
-        host.port = 2255;
-      }
     ];
 
     cores = 2;
