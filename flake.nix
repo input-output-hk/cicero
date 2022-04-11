@@ -131,6 +131,15 @@
             src = ./.;
           };
           inherit (final.cicero-api) cicero-cli;
+
+          # a coreutils package that also provides /usr/bin/env
+          coreutils-env = prev.coreutils.overrideAttrs (oldAttrs: {
+            postInstall = ''
+              ${oldAttrs.postInstall}
+              mkdir -p $out/usr/bin
+              ln -s $out/bin/env $out/usr/bin/env
+            '';
+          });
         }
         // nixpkgs.lib.mapAttrs'
         (k: nixpkgs.lib.nameValuePair "cicero-evaluator-nix-run-${k}")

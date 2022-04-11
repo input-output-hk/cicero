@@ -291,14 +291,8 @@ in rec {
           [
             {
               env = {inherit HOME;};
-              config.packages = data-merge.append ["github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#which"];
+              config.packages = data-merge.append ["github:input-output-hk/cicero/${self.rev or ""}#coreutils-env"];
             }
-
-            (wrapScript "bash" (next: ''
-              mkdir -p /usr/bin
-              ln -s "$(which env)" /usr/bin/env
-              exec ${lib.escapeShellArgs next}
-            ''))
           ]
           ++ (lib.optionals createRoot [
             {
