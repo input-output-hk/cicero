@@ -73,6 +73,7 @@ packages = [
   # formatting
   "treefmt",
   "alejandra",
+  "treefmt-cue",
 
   # deployment
   "cue",

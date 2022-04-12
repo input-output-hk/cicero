@@ -70,6 +70,7 @@
           gouml = final.callPackage pkgs/gouml.nix {};
           gocritic = final.callPackage pkgs/gocritic.nix {};
           schemathesis = final.callPackage pkgs/schemathesis.nix {};
+          treefmt-cue = final.callPackage pkgs/treefmt-cue.nix {};
           dev-cicero-transformer = let
             post-build-hook = ''
               #! /bin/dash
