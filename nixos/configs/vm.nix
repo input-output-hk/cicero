@@ -36,8 +36,8 @@
   };
 
   nix = {
-    binaryCaches = [ "http://127.0.0.1:${toString config.services.spongix.port}" ];
-    binaryCachePublicKeys = [ "spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=" ];
+    binaryCaches = ["http://127.0.0.1:${toString config.services.spongix.port}"];
+    binaryCachePublicKeys = ["spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI="];
     requireSignedBinaryCaches = false; # TODO remove once spongix signs with own key again
     extraOptions = let
       post-build-hook = pkgs.writers.writeDash "post-build-hook" ''
@@ -98,7 +98,8 @@
       then let
         cpuinfo = lib.fileContents /proc/cpuinfo;
         num = builtins.length (lib.splitString "processor\t: " cpuinfo) - 1;
-      in builtins.floor (num / 1.5 + 1)
+      in
+        builtins.floor (num / 1.5 + 1)
       else 8;
     memorySize =
       if builtins.pathExists /proc/meminfo
@@ -107,7 +108,8 @@
         kb = lib.toInt (lib.last (
           builtins.match "MemTotal:[[:space:]]+([[:digit:]]+) kB\n.*" meminfo
         ));
-      in builtins.floor (kb / 1.5 / 1024)
+      in
+        builtins.floor (kb / 1.5 / 1024)
       else 1024 * 4;
     diskSize = 1024 * 8; # nix builds need more inodes
 
