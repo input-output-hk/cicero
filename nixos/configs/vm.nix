@@ -92,9 +92,23 @@
       }
     ];
 
-    cores = 2;
-    memorySize = 1024 * 4;
-    diskSize = 1024 * 4; # nix builds need more inodes
+    cores =
+      if builtins.pathExists /proc/cpuinfo
+      then let
+        cpuinfo = lib.fileContents /proc/cpuinfo;
+        num = builtins.length (lib.splitString "processor\t: " cpuinfo) - 1;
+      in builtins.floor (num / 1.5 + 1)
+      else 8;
+    memorySize =
+      if builtins.pathExists /proc/meminfo
+      then let
+        meminfo = lib.fileContents /proc/meminfo;
+        kb = lib.toInt (lib.last (
+          builtins.match "MemTotal:[[:space:]]+([[:digit:]]+) kB\n.*" meminfo
+        ));
+      in builtins.floor (kb / 1.5 / 1024)
+      else 1024 * 4;
+    diskSize = 1024 * 8; # nix builds need more inodes
 
     useNixStoreImage = true;
     writableStoreUseTmpfs = false;
