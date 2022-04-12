@@ -38,6 +38,7 @@
   nix = {
     binaryCaches = [ "http://127.0.0.1:${toString config.services.spongix.port}" ];
     binaryCachePublicKeys = [ "spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=" ];
+    requireSignedBinaryCaches = false; # TODO remove once spongix signs with own key again
     extraOptions = let
       post-build-hook = pkgs.writers.writeDash "post-build-hook" ''
         set -euf
