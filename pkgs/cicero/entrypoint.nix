@@ -60,14 +60,14 @@ writeShellScriptBin "entrypoint" ''
     --wait \
     up
 
+  set +x
   if [ -n "''${VAULT_TOKEN:-}" ]; then
-    set +x
     NOMAD_TOKEN="$(vault read -field secret_id nomad/creds/cicero)"
     export NOMAD_TOKEN
-    set -x
   else
     echo "No VAULT_TOKEN set, skipped obtaining a Nomad token"
   fi
+  set -x
 
   exec cicero start "$@"
 ''
