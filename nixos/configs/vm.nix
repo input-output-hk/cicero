@@ -183,8 +183,7 @@
       prometheusUrl = let
         addr = config.services.victoriametrics.listenAddress;
       in
-        assert lib.hasPrefix ":" addr;
-        "http://127.0.0.1${addr}/api/v1/write";
+        assert lib.hasPrefix ":" addr; "http://127.0.0.1${addr}/api/v1/write";
     };
 
     vault = {
