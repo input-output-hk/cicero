@@ -22,28 +22,19 @@ password github_token
 EOF
 ```
 
-### Run nix develop, to load Cicero shell
-
+### Start a development VM with Nomad, nomad-follower, Vault and Spongix:
 ```
-nix develop
-```
-
-### Start a development instance of Nomad, nomad-follower, Vault and nix-cache-proxy:
-
-```
-dev-cluster
+nixos-shell --flake .
 ```
 
-### Run the required services in Nomad:
-
-```
-dev-jobs
-```
-
-### Run the application:
-
+### Inside the VM, run the application:
 ```
 dev-cicero
+```
+
+### You can also run it outside the VM if you choose another port:
+```
+dev-cicero --web-listen :8000
 ```
 
 ### Cicero's WebUI should now be available on http://localhost:8080.
