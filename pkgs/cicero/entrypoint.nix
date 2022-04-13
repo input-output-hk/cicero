@@ -31,7 +31,10 @@ writeShellScriptBin "entrypoint" ''
     ]
   }"
 
-  export NIX_CONFIG="experimental-features = nix-command flakes"
+  export NIX_CONFIG="
+  experimental-features = nix-command flakes
+  ''${NIX_CONFIG:-}
+  "
   export SSL_CERT_FILE="${cacert}/etc/ssl/certs/ca-bundle.crt"
 
   mkdir -p /etc

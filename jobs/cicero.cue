@@ -217,9 +217,13 @@ if #env == "prod" {
 					},
 				]
 
-				// go-getter reads from the NETRC env var or $HOME/.netrc
-				// https://github.com/hashicorp/go-getter/blob/4553965d9c4a8d99bd0d381c1180c08e07eff5fd/netrc.go#L24
-				env: NETRC: "/secrets/netrc"
+				env: {
+					NIX_CONFIG: "netrc-file = /secrets/netrc"
+
+					// go-getter reads from the NETRC env var or $HOME/.netrc
+					// https://github.com/hashicorp/go-getter/blob/4553965d9c4a8d99bd0d381c1180c08e07eff5fd/netrc.go#L24
+					NETRC: "/secrets/netrc"
+				}
 			}
 		}
 	}
