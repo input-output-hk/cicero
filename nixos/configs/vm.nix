@@ -7,6 +7,7 @@
 }: {
   imports = [
     self.inputs.spongix.nixosModules.spongix
+    self.inputs.follower.nixosModules.nomad-follower
     ./dev.nix
   ];
 
@@ -14,6 +15,7 @@
 
   nixpkgs.overlays = [
     self.inputs.spongix.overlay
+    self.inputs.follower.overlay
 
     # TODO nix 2.8 fails this command:
     # nix profile install --profile ./x github:NixOS/nix#nix github:NixOS/nixpkgs#cacert
@@ -173,6 +175,18 @@
       };
     };
 
+    nomad-follower = {
+      enable = true;
+      nomadAddr = "http://127.0.0.1:4646";
+      nomadTokenFile = "";
+      lokiUrl = "http://127.0.0.1:${toString config.services.loki.configuration.server.http_listen_port}";
+      prometheusUrl = let
+        addr = config.services.victoriametrics.listenAddress;
+      in
+        assert lib.hasPrefix ":" addr;
+        "http://127.0.0.1${addr}/api/v1/write";
+    };
+
     vault = {
       enable = true;
       address = "0.0.0.0:8200";
@@ -275,24 +289,6 @@
             fi
           fi
         '';
-      };
-    };
-
-    nomad-follower = rec {
-      description = "Nomad Follower";
-
-      wantedBy = ["nomad.service"];
-      bindsTo = wantedBy;
-      after = bindsTo;
-
-      serviceConfig = rec {
-        ExecStart = "${self.inputs.follower.defaultPackage.${pkgs.system}}/bin/nomad-follower";
-
-        Restart = "on-failure";
-        RestartSec = 5;
-
-        StateDirectory = "nomad-follower";
-        WorkingDirectory = "/var/lib/${StateDirectory}";
       };
     };
 

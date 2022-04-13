@@ -1,4 +1,4 @@
-{lib, ...}: {
+{lib, config, ...}: {
   imports = [./cicero.nix];
 
   # for development we want to run cicero outside the container
