@@ -10,10 +10,7 @@
         default_branch: string
         clone_url: string
       }
-      head_commit: {
-        id: string
-        distinct: true
-      }
+      head_commit: id: string
     }
   '';
 
