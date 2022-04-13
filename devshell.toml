@@ -4,7 +4,7 @@ imports = [
 
 [[env]]
 name = "DATABASE_URL"
-value = "postgres://cicero:@127.0.0.1:5432/cicero?sslmode=disable"
+value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
 
 [[env]]
 name = "LOKI_ADDR"
@@ -45,15 +45,6 @@ command = "golangci-lint run -E gocritic && treefmt --fail-on-change"
 help = "Run code linters"
 
 [[commands]]
-package = "dev-cluster"
-help = "Run Nomad and Vault in development mode with Nix driver"
-
-[[commands]]
-name = "dev-jobs"
-command = "cue export ./jobs -e jobs.dev | nomad run -"
-help = "Run Postgres and Loki in Nomad"
-
-[[commands]]
 name = "dev-cicero"
 command = "dbmate up; go run . start --log-level trace --transform dev-cicero-transformer \"$@\""
 help = "Run Cicero from source"
@@ -74,7 +65,7 @@ packages = [
   "go",
   "gcc",
   "gocode",
-  "goimports",
+  "gotools",
   "gopls",
   "go-mockery",
   "golangci-lint",
@@ -86,11 +77,12 @@ packages = [
   # deployment
   "cue",
   "nomad-follower",
-  "postgresql_12",
+  "postgresql",
   "vector",
   "grafana-loki",
 
   # tools
+  "nixos-shell",
   "httpie",
   "curlie",
   "diffutils",

@@ -80,24 +80,22 @@ Documentation is currently available in the form of source code
 - Nix
 	- At least version 2.4
 	- Enable flakes in your `/etc/nix/nix.conf`: `experimental-features = nix-command flakes`
-- (Linux with systemd)
-	- You can run Cicero on other platforms but the [Nix actions library](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix) requires [nomad-driver-nix](https://github.com/input-output-hk/nomad-driver-nix).
 
 ## How To Run
 
 First enter the development shell using either direnv or by running `nix develop`.
 
-Start a development instance of Nomad, nomad-follower, Vault and nix-cache-proxy:
+Start a development VM with Nomad, nomad-follower, Vault and Spongix:
 
-	dev-cluster
+	nixos-shell --flake .
 
-Run the required services in Nomad:
-
-	dev-jobs
-
-Run the application:
+Inside the VM, run the application:
 
 	dev-cicero
+
+You can also run it outside the VM if you choose another port:
+
+	dev-cicero --web-listen :8000
 
 Cicero's web UI should now be available on http://localhost:8080.
 

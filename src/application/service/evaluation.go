@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 
 	"github.com/adrg/xdg"
 	"github.com/google/uuid"
@@ -214,6 +215,30 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 			}); err != nil {
 				return def, err
 			} else {
+				for _, tg := range job.TaskGroups {
+					for _, t := range tg.Tasks {
+						_, found := t.Config["console"]
+						if !found {
+							t.Config["console"] = "pipe"
+						}
+
+						if pkgsI, found := t.Config["packages"]; found {
+							keys := map[string]bool{}
+							for _, pkg := range pkgsI.([]interface{}) {
+								keys[pkg.(string)] = true
+							}
+
+							uniq := []string{}
+							for key := range keys {
+								uniq = append(uniq, key)
+							}
+
+							sort.Strings(uniq)
+
+							t.Config["packages"] = uniq
+						}
+					}
+				}
 				def.Job = job
 			}
 		}

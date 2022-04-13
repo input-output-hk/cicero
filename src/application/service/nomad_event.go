@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"sync"
 
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
@@ -90,29 +91,57 @@ func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map
 		return nil, err
 	}
 
+	run, err := n.runService.GetByNomadJobId(nomadJobId)
+	if err != nil {
+		return nil, err
+	}
+
+	wg := &sync.WaitGroup{}
+	res := make(chan domain.AllocationWithLogs, len(results))
+
 	for _, result := range results {
-		alloc := &nomad.Allocation{}
-		err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
-		if err != nil {
-			return nil, err
-		}
-
-		run, err := n.runService.GetByNomadJobId(nomadJobId)
-		if err != nil {
-			return nil, err
-		}
-
-		logs := map[string]*domain.LokiLog{}
-
-		for taskName := range alloc.TaskResources {
-			taskLogs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
+		wg.Add(1)
+		go func(result map[string]interface{}) {
+			defer wg.Done()
+			alloc := &nomad.Allocation{}
+			err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
 			if err != nil {
+				res <- domain.AllocationWithLogs{Err: err}
+				return
+			}
+
+			logs := map[string]domain.LokiLog{}
+
+			for taskName := range alloc.TaskResources {
+				taskLogs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
+				if err != nil {
+					res <- domain.AllocationWithLogs{Err: err}
+					return
+				}
+				logs[taskName] = taskLogs
+			}
+
+			res <- domain.AllocationWithLogs{Allocation: alloc, Logs: logs}
+		}(result)
+	}
+
+	wg.Wait()
+
+	for i := 0; i < len(results); i++ {
+		select {
+		case result := <-res:
+			if result.Err != nil {
 				return nil, err
 			}
-			logs[taskName] = taskLogs
+			if a, found := allocs[result.ID]; found {
+				if a.ModifyIndex < result.ModifyIndex {
+					allocs[result.ID] = result
+				}
+			} else {
+				allocs[result.ID] = result
+			}
+		default:
 		}
-
-		allocs[alloc.ID] = domain.AllocationWithLogs{Allocation: alloc, Logs: logs}
 	}
 
 	n.logger.Trace().Str("nomad-job-id", nomadJobId.String()).Msg("Got EventAlloc by nomad job id")

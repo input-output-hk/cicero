@@ -64,8 +64,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 		return errors.WithMessage(err, "Could not listen to Nomad events")
 	}
 
-	for {
-		events := <-stream
+	for events := range stream {
 		if events.Err != nil {
 			return errors.WithMessage(events.Err, "Error getting next events from Nomad event stream")
 		}
@@ -100,6 +99,8 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 
 		index = events.Index
 	}
+
+	return errors.New("Nomad event service finished")
 }
 
 var errAlreadyHandled = errors.New("Event has already been handled")
@@ -117,7 +118,8 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 	abort := false
 
 	// Save the event if it's not already in the DB.
-	if event.Uid == [16]byte{} {
+	switch {
+	case event.Uid == [16]byte{}:
 		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx)
 
@@ -140,10 +142,10 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 		}); err != nil {
 			return err
 		}
-	} else if event.Handled {
+	case event.Handled:
 		// No need to handle an event that's already in the DB and flagged as handled.
 		abort = true
-	} else {
+	default:
 		event.Handled = true
 		if err := self.NomadEventService.Update(event); err != nil {
 			return err

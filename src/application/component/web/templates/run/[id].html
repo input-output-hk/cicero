@@ -2,6 +2,9 @@
 
 {{define "main"}}
 	{{$scope := "d2dc0bac8e4747b39b78a49cf274328a"}}
+	{{$memMetrics := .MemMetrics}}
+	{{$cpuMetrics := .CpuMetrics}}
+	{{$grafanas := .Grafanas}}
 
 	<div id="{{$scope}}">
 		<div class="content-flex">
@@ -182,7 +185,7 @@
 						</thead>
 						<tbody>
 							{{range $wrapper}}
-								<tr style="cursor: pointer">
+								<tr>
 									<td class="allocation-label">
 										<label for="allocation-{{.ID}}">
 											{{.ID}}
@@ -210,7 +213,7 @@
 
 					<div id="allocation">
 						{{range $alloc := $wrapper}}
-							<input id="allocation-{{.ID}}" type="radio" name="allocation"/>
+							<input id="allocation-{{.ID}}" type="radio" name="allocation" checked/>
 							<div>
 								<h3>Allocation {{.ID}}</h3>
 								{{with .Resources}}
@@ -257,10 +260,45 @@
 									</table>
 								{{end}}
 
+								<div class="content-flex">
+									<div style="width: calc(50% - 2em);">
+										<h3>CPU Usage in Seconds (relative to max CPU used)</h3>
+										<a href="{{index $grafanas .ID}}">Show in Grafana</a>
+										<table class="charts-css column" style="height: 300px; --color: #55ddaa;">
+											<tbody>
+												{{range $idx, $val := index $cpuMetrics .ID}}
+												<tr>
+													<td style="--start: {{.Start}}; --size: {{.Size}}">
+														<span class="data">{{.Label}}</span>
+														<span class="tooltip">{{.Time}}</span>
+													</td>
+												</tr>
+												{{end}}
+											</tbody>
+										</table>
+									</div>
+
+									<div style="width: calc(50% - 2em);">
+										<h3>Memory Usage (relative to max memory used)</h3>
+										<table class="charts-css column" style="height: 300px; --color: #aadd55;">
+											<tbody>
+												{{range $idx, $val := index $memMetrics .ID}}
+												<tr>
+													<td style="--start: {{.Start}}; --size: {{.Size}}">
+														<span class="data">{{.Label}}</span>
+														<span class="tooltip">{{.Time}}</span>
+													</td>
+												</tr>
+												{{end}}
+											</tbody>
+										</table>
+									</div>
+								</div>
+
 								<h3>Tasks</h3>
 								<div class="tabs border" style="--num-tabs: {{len .TaskStates}}">
 									{{range $taskName, $task := .TaskStates}}
-										<input id="tab-task-{{$taskName}}" type="radio" name="tab-task-{{$alloc.ID}}" checked/>
+										<input id="tab-task-{{$taskName}}" type="radio" name="tab-task-{{$alloc.ID}}"/>
 										<label for="tab-task-{{$taskName}}"><h3>{{$taskName}}</h3></label>
 										<div style="padding: 1em">
 											<table class="table vertical">
@@ -465,20 +503,10 @@
 											</table>
 
 											<h3>Task Logs</h3>
-											{{if (index $alloc.Logs $taskName).Stdout}}
+											{{if (index $alloc.Logs $taskName)}}
 												<table class="panel log">
-													{{range (index $alloc.Logs $taskName).Stdout}}
-														<tr>
-															<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-															<td><samp>{{.Text}}</samp></td>
-														</tr>
-													{{end}}
-												</table>
-											{{end}}
-											{{if (index $alloc.Logs $taskName).Stderr}}
-												<table class="panel log">
-													{{range (index $alloc.Logs $taskName).Stderr}}
-														<tr class="stderr">
+													{{range (index $alloc.Logs $taskName)}}
+                            <tr class="{{.Source}}">
 															<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
 															<td><samp>{{.Text}}</samp></td>
 														</tr>
@@ -495,6 +523,8 @@
 			{{end}}
 		</div>
 	</div>
+
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/charts.css/dist/charts.min.css">
 
 	<style>
 	#{{$scope}} table.log,
@@ -520,6 +550,10 @@
 
 	#{{$scope}} table.log .stderr {
 		color: red;
+	}
+
+	#{{$scope}} label {
+		cursor: pointer;
 	}
 
 	#{{$scope}} #allocation > input,

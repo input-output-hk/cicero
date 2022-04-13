@@ -23,8 +23,8 @@ func (n nomadEventRepository) WithQuerier(querier config.PgxIface) repository.No
 	return nomadEventRepository{querier}
 }
 
-func (n nomadEventRepository) Save(event *domain.NomadEvent) (err error) {
-	err = n.DB.QueryRow(
+func (n nomadEventRepository) Save(event *domain.NomadEvent) error {
+	return n.DB.QueryRow(
 		context.Background(),
 		`INSERT INTO nomad_event (topic, "type", "key", filter_keys, "index", payload)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -34,7 +34,6 @@ func (n nomadEventRepository) Save(event *domain.NomadEvent) (err error) {
 		RETURNING uid, handled`,
 		event.Topic, event.Type, event.Key, event.FilterKeys, event.Index, event.Payload,
 	).Scan(&event.Uid, &event.Handled)
-	return
 }
 
 func (n nomadEventRepository) Update(event *domain.NomadEvent) (err error) {

@@ -9,6 +9,7 @@
 /logs
 .hypothesis/
 /src/mocks/
-/nix-cache-proxy
+/.spongix
 dist-newstyle
 /book
+/nixos.qcow2

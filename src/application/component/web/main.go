@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/davidebianchi/gswagger/apirouter"
@@ -36,7 +37,7 @@ type Web struct {
 }
 
 func (self *Web) Start(ctx context.Context) error {
-	self.Logger.Info().Msg("Starting")
+	self.Logger.Info().Str("listen", self.Listen).Msg("Starting")
 
 	muxRouter := mux.NewRouter().StrictSlash(true).UseEncodedPath()
 	muxRouter.NotFoundHandler = http.NotFoundHandler()
@@ -168,7 +169,7 @@ func (self *Web) Start(ctx context.Context) error {
 		apidoc.BuildSwaggerDef(
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]*domain.LokiLog{"logs": {}}, "OK")),
+			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]domain.LokiLog{"logs": {}}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -505,15 +506,50 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
 		return
 	} else {
+		count := 0
+
+		for _, ids := range inputFactIds {
+			count += len(ids)
+		}
+
+		wg := &sync.WaitGroup{}
+		type Res struct {
+			input string
+			i     int
+			fact  domain.Fact
+			err   error
+		}
+		res := make(chan *Res, count)
+
 		for input, ids := range inputFactIds {
 			inputs[input] = make([]domain.Fact, len(ids))
+
 			for i, id := range ids {
-				if fact, err := self.FactService.GetById(id); err != nil {
-					self.ServerError(w, err)
+				wg.Add(1)
+
+				go func(input string, i int, id uuid.UUID) {
+					defer wg.Done()
+					if fact, err := self.FactService.GetById(id); err != nil {
+						res <- &Res{err: err}
+					} else {
+						res <- &Res{input: input, i: i, fact: fact}
+					}
+				}(input, i, id)
+			}
+		}
+
+		wg.Wait()
+
+		for j := 0; j < count; j++ {
+			select {
+			case result := <-res:
+				if result.err != nil {
+					self.ServerError(w, result.err)
 					return
 				} else {
-					inputs[input][i] = fact
+					inputs[result.input][result.i] = result.fact
 				}
+			default:
 			}
 		}
 	}
@@ -530,12 +566,33 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	grafanaUrls, err := self.RunService.GrafanaUrls(allocs, run.FinishedAt)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	cpuMetrics, err := self.RunService.CPUMetrics(allocs, run.FinishedAt)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	memMetrics, err := self.RunService.MemMetrics(allocs, run.FinishedAt)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
 	if err := render("run/[id].html", w, map[string]interface{}{
-		"Run":    run,
-		"inputs": inputs,
-		"output": output,
-		"facts":  facts,
-		"allocs": allocsByGroup,
+		"Run":        run,
+		"inputs":     inputs,
+		"output":     output,
+		"facts":      facts,
+		"allocs":     allocsByGroup,
+		"MemMetrics": memMetrics,
+		"CpuMetrics": cpuMetrics,
+		"Grafanas":   grafanaUrls,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -912,7 +969,7 @@ func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
 		if logs, err := self.RunService.JobLogs(id, run.CreatedAt, run.FinishedAt); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 		} else {
-			self.json(w, map[string]*domain.LokiLog{"logs": logs}, http.StatusOK)
+			self.json(w, map[string]domain.LokiLog{"logs": logs}, http.StatusOK)
 		}
 	}
 }

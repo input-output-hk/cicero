@@ -25,18 +25,16 @@ func (a *runRepository) WithQuerier(querier config.PgxIface) repository.RunRepos
 	return &runRepository{querier}
 }
 
-func (a *runRepository) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
-	run, err = a.GetByNomadJobIdWithLock(id, "")
-	return
+func (a *runRepository) GetByNomadJobId(id uuid.UUID) (domain.Run, error) {
+	return a.GetByNomadJobIdWithLock(id, "")
 }
 
 func (a *runRepository) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run domain.Run, err error) {
-	err = pgxscan.Get(
+	return run, pgxscan.Get(
 		context.Background(), a.DB, &run,
-		`SELECT * FROM run WHERE nomad_job_id = $1 ` + lock,
+		`SELECT * FROM run WHERE nomad_job_id = $1 `+lock,
 		id,
 	)
-	return
 }
 
 func (a *runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Run, error) {
@@ -49,12 +47,11 @@ func (a *runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*d
 }
 
 func (a *runRepository) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
-	err = pgxscan.Get(
+	return run, pgxscan.Get(
 		context.Background(), a.DB, &run,
 		`SELECT DISTINCT ON (action_id) * FROM run WHERE action_id = $1 ORDER BY action_id, created_at DESC`,
 		id,
 	)
-	return
 }
 
 func (a *runRepository) GetInputFactIdsByNomadJobId(id uuid.UUID) (inputFactIds repository.RunInputFactIds, err error) {

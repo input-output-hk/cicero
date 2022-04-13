@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"cuelang.org/go/cue"
@@ -64,7 +65,12 @@ func (self InputDefinitionSelect) MarshalJSON() ([]byte, error) {
 
 type InputDefinitionMatch string
 
+var cueMutex = &sync.Mutex{}
+
 func (self *InputDefinitionMatch) WithInputs(inputs map[string]interface{}) cue.Value {
+	// There is a race condition around global internal state of CUE.
+	cueMutex.Lock()
+	defer cueMutex.Unlock()
 	ctx := cuecontext.New()
 	return ctx.CompileString(
 		string(*self),

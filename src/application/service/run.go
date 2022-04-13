@@ -4,14 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
+	"math"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/grafana/loki/pkg/loghttp"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
+	"github.com/pborman/ansi"
 	"github.com/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/api"
 	"github.com/rs/zerolog"
@@ -38,8 +44,11 @@ type RunService interface {
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (*domain.LokiLog, error)
-	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiLog, error)
+	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error)
+	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error)
+	CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
+	MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
+	GrafanaUrls(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string]*url.URL, error)
 }
 
 type runService struct {
@@ -47,16 +56,18 @@ type runService struct {
 	runRepository       repository.RunRepository
 	runOutputRepository repository.RunOutputRepository
 	prometheus          prometheus.Client
+	victoriaMetricsAddr string
 	nomadClient         application.NomadClient
 	db                  config.PgxIface
 }
 
-func NewRunService(db config.PgxIface, prometheusAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
+func NewRunService(db config.PgxIface, prometheusAddr, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
 	impl := runService{
 		logger:              logger.With().Str("component", "RunService").Logger(),
 		runRepository:       persistence.NewRunRepository(db),
 		runOutputRepository: persistence.NewRunOutputRepository(db),
 		nomadClient:         nomadClient,
+		victoriaMetricsAddr: victoriaMetricsAddr,
 		db:                  db,
 	}
 
@@ -199,28 +210,25 @@ func (self *runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (*domain.LokiLog, error) {
+func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	return self.LokiQueryRange(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
 		start, end,
 	)
 }
 
-func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (*domain.LokiLog, error) {
+func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	return self.LokiQueryRange(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
 		start, end,
 	)
 }
 
-func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (*domain.LokiLog, error) {
+func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	linesToFetch := 10000
 	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
 	var limit int64 = 5000
-	output := &domain.LokiLog{
-		Stdout: []domain.LokiLine{},
-		Stderr: []domain.LokiLine{},
-	}
+	output := domain.LokiLog{}
 
 	if end == nil {
 		now := time.Now().UTC()
@@ -230,6 +238,7 @@ func (self *runService) LokiQueryRange(query string, start time.Time, end *time.
 	endLater := end.Add(1 * time.Minute)
 	end = &endLater
 
+done:
 	for {
 		req, err := http.NewRequest(
 			"GET",
@@ -237,7 +246,7 @@ func (self *runService) LokiQueryRange(query string, start time.Time, end *time.
 			http.NoBody,
 		)
 		if err != nil {
-			return output, err
+			return nil, err
 		}
 
 		q := req.URL.Query()
@@ -250,49 +259,217 @@ func (self *runService) LokiQueryRange(query string, start time.Time, end *time.
 
 		done, body, err := self.prometheus.Do(context.Background(), req)
 		if err != nil {
-			return output, errors.WithMessage(err, "Failed to talk with loki")
+			return nil, errors.WithMessage(err, "Failed to talk with loki")
 		}
 
 		if done.StatusCode/100 != 2 {
-			return output, fmt.Errorf("Error response %d from Loki: %s", done.StatusCode, string(body))
+			return nil, fmt.Errorf("Error response %d from Loki: %s", done.StatusCode, string(body))
 		}
 
 		response := loghttp.QueryResponse{}
 
 		err = json.Unmarshal(body, &response)
 		if err != nil {
-			return output, err
+			return nil, err
 		}
 
 		streams, ok := response.Data.Result.(loghttp.Streams)
 		if !ok {
-			return output, fmt.Errorf("Unexpected loki result type: %s", response.Data.Result.Type())
+			return nil, fmt.Errorf("Unexpected loki result type: %s", response.Data.Result.Type())
 		}
 
 		if len(streams) == 0 {
-			return output, nil
+			break done
 		}
 
+		entryCount := int64(0)
 		for _, stream := range streams {
 			source, ok := stream.Labels.Map()["source"]
+			if !ok {
+				continue
+			}
 
 			for _, entry := range stream.Entries {
-				if ok && source == "stderr" {
-					output.Stderr = append(output.Stderr, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line})
-				} else {
-					output.Stdout = append(output.Stdout, domain.LokiLine{Time: entry.Timestamp, Text: entry.Line})
+				line := domain.LokiLine{Time: entry.Timestamp, Source: source, Text: entry.Line}
+				lines := strings.Split(entry.Line, "\r")
+				for _, l := range lines {
+					if sane, err := ansi.Strip([]byte(l)); err == nil {
+						line.Text = string(sane)
+					} else {
+						line.Text = l
+					}
+					output = append(output, line)
 				}
 
-				if (len(output.Stdout) + len(output.Stderr)) >= linesToFetch {
-					return output, nil
+				if (len(output)) >= linesToFetch {
+					break done
 				}
 			}
 
-			if int64(len(stream.Entries)) >= limit {
-				start = stream.Entries[len(stream.Entries)-1].Timestamp
-			} else if int64(len(stream.Entries)) < limit {
-				return output, nil
+			entryCount += int64(len(stream.Entries))
+		}
+
+		if entryCount >= limit {
+			start = output[len(output)-1].Time
+		} else {
+			break done
+		}
+	}
+
+	sort.Slice(output, func(i, j int) bool {
+		return output[i].Time.Before(output[j].Time)
+	})
+
+	return output, nil
+}
+
+func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs, to *time.Time) (map[string]*url.URL, error) {
+	grafanaUrls := map[string]*url.URL{}
+
+	for allocName, alloc := range allocs {
+		from := time.UnixMicro(alloc.CreateTime / 1000) // there's no UnixNano
+		if to == nil {
+			t := time.UnixMicro(alloc.ModifyTime / 1000)
+			to = &t
+		}
+
+		grafanaUrl, err := url.Parse("https://monitoring.infra.aws.iohkdev.io/d/SxGmPry7k/cgroups")
+		if err != nil {
+			return nil, err
+		}
+		guQuery := grafanaUrl.Query()
+
+		guQuery.Set("orgId", "1")
+		guQuery.Set("var-pattern", alloc.ID)
+		guQuery.Set("from", strconv.FormatInt(from.UnixMilli(), 10))
+		guQuery.Set("to", strconv.FormatInt(to.UnixMilli(), 10))
+		grafanaUrl.RawQuery = guQuery.Encode()
+		grafanaUrls[allocName] = grafanaUrl
+	}
+	return grafanaUrls, nil
+}
+
+func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
+	vmUrl, err := url.Parse(self.victoriaMetricsAddr + "/api/v1/query_range")
+	if err != nil {
+		return nil, err
+	}
+	query := vmUrl.Query()
+
+	metrics := map[string][]*VMMetric{}
+	for allocName, alloc := range allocs {
+		from := time.UnixMicro(alloc.CreateTime / 1000)
+		if to == nil {
+			t := time.UnixMicro(alloc.ModifyTime / 1000)
+			to = &t
+		}
+
+		// calculate the appropriate step size, that is, every step gives you one point of data.
+		// wtih too many steps, the graph becomes crowded
+		// we target anything between 1 and 20 data points, if there is not a lot
+		// of data, many steps will just display duplicated data because vector sends metrics every 10 seconds.
+		// So the minimum size is 10
+		// The maximum step size is duration/20
+		duration := to.Sub(from).Seconds()
+
+		step := math.Max(duration/20, 10)
+		query.Set("step", strconv.FormatFloat(step, 'f', 0, 64))
+		query.Set("start", strconv.FormatInt(from.Unix()-60, 10))
+		query.Set("end", strconv.FormatInt(to.Unix()+60, 10))
+		query.Set("query", fmt.Sprintf(queryPattern, alloc.ID))
+		vmUrl.RawQuery = query.Encode()
+		res, err := http.Get(vmUrl.String())
+		if err != nil {
+			return nil, err
+		}
+
+		metric := vmResponse{}
+		if err := json.NewDecoder(res.Body).Decode(&metric); err != nil {
+			return nil, err
+		}
+		if metric.Status != "success" {
+			continue
+		}
+
+		max := float64(0)
+		for _, r := range metric.Data.Result {
+			for _, v := range r.Values {
+				t := time.Unix(int64(v[0].(float64)), 0)
+				f, err := strconv.ParseFloat(v[1].(string), 64)
+				if err != nil {
+					return nil, err
+				}
+
+				if f > max {
+					max = f
+				}
+
+				vm := &VMMetric{Time: t, Size: f, Label: labelFunc(f)}
+				metrics[allocName] = append(metrics[allocName], vm)
+			}
+		}
+
+		for i, vm := range metrics[allocName] {
+			vm.Size = ((100 / max) * vm.Size) / 100
+			if i > 0 {
+				vm.Start = metrics[allocName][i-1].Size
+			} else {
+				vm.Start = vm.Size
 			}
 		}
 	}
+
+	return metrics, nil
+}
+
+func (self *runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
+		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
+	})
+}
+
+const (
+	kib = 1024
+	mib = kib * 1024
+	gib = mib * 1024
+	tib = gib * 1024
+)
+
+func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
+		switch {
+		case f >= tib:
+			return template.HTML(strconv.FormatFloat(f/tib, 'f', 1, 64) + " TiB")
+		case f >= gib:
+			return template.HTML(strconv.FormatFloat(f/gib, 'f', 1, 64) + " GiB")
+		case f >= mib:
+			return template.HTML(strconv.FormatFloat(f/mib, 'f', 1, 64) + " MiB")
+		case f >= kib:
+			return template.HTML(strconv.FormatFloat(f/kib, 'f', 1, 64) + " KiB")
+		default:
+			return template.HTML(strconv.FormatFloat(f, 'f', 1, 64) + " B")
+		}
+	})
+}
+
+type vmResponse struct {
+	Status string       `json:"status"`
+	Data   vmResultData `json:"data"`
+}
+
+type vmResultData struct {
+	ResultType string `json:"resultType"`
+	Result     []vmResult
+}
+
+type vmResult struct {
+	Metric map[string]string `json:"metric"`
+	Values [][]interface{}   `json:"values"`
+}
+
+type VMMetric struct {
+	Time  time.Time
+	Start float64
+	Size  float64
+	Label template.HTML
 }

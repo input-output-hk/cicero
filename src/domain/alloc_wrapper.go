@@ -7,16 +7,15 @@ import (
 )
 
 type LokiLine struct {
-	Time time.Time
-	Text string
+	Time   time.Time
+	Source string
+	Text   string
 }
 
-type LokiLog struct {
-	Stderr []LokiLine
-	Stdout []LokiLine
-}
+type LokiLog []LokiLine
 
 type AllocationWithLogs struct {
 	*nomad.Allocation
-	Logs map[string]*LokiLog
+	Logs map[string]LokiLog
+	Err  error
 }

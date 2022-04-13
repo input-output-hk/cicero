@@ -2,30 +2,37 @@
   flake,
   buildGoModule,
   go-mockery,
-}:
-buildGoModule rec {
-  pname = "cicero";
-  version = "2022.02.17.001";
-  vendorSha256 = "sha256-xSzSUYlBxjzRMP+TPzkWQvuuMbkp4IYD1B8VPRn7xzk=";
+}: let
+  final = package "sha256-PLr6c9ROt3bNgopN7XNQHLUJWHXgnagO13h8u0qEbYc=";
+  package = vendorSha256:
+    buildGoModule rec {
+      pname = "cicero";
+      version = "2022.03.25.001";
+      inherit vendorSha256;
 
-  src = flake.inputs.inclusive.lib.inclusive ../../. [
-    ./.
-    ../../go.mod
-    ../../go.sum
-    ../../main.go
-    ../../src
-  ];
+      passthru.invalidHash =
+        package "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
-  nativeBuildInputs = [go-mockery];
+      src = flake.inputs.inclusive.lib.inclusive ../../. [
+        ./.
+        ../../go.mod
+        ../../go.sum
+        ../../main.go
+        ../../src
+      ];
 
-  preBuild = ''
-    go generate ./...
-  '';
+      nativeBuildInputs = [go-mockery];
 
-  ldflags = [
-    "-s"
-    "-w"
-    "-X main.buildVersion=${version}"
-    "-X main.buildCommit=${flake.rev or "dirty"}"
-  ];
-}
+      preBuild = ''
+        go generate ./...
+      '';
+
+      ldflags = [
+        "-s"
+        "-w"
+        "-X main.buildVersion=${version}"
+        "-X main.buildCommit=${flake.rev or "dirty"}"
+      ];
+    };
+in
+  final

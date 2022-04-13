@@ -9,6 +9,7 @@ import (
 	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/rs/zerolog"
 )
 
 type PgxIface interface {
@@ -25,7 +26,7 @@ var (
 	_ PgxIface = pgx.Tx(nil)
 )
 
-func DBConnection() (PgxIface, error) {
+func DBConnection(logger *zerolog.Logger) (PgxIface, error) {
 	url := GetenvStr("DATABASE_URL")
 	if url == "" {
 		return nil, errors.New("Environment variable DATABASE_URL not set or empty")
@@ -35,6 +36,7 @@ func DBConnection() (PgxIface, error) {
 	if err != nil {
 		return nil, err
 	}
+	// dbconfig.ConnConfig.Logger = wrapLogger(logger)
 
 	//TODO: log configuration
 	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
@@ -47,4 +49,35 @@ func DBConnection() (PgxIface, error) {
 	}
 
 	return pgxpool.ConnectConfig(context.Background(), dbconfig)
+}
+
+//nolint:unused,deadcode
+func wrapLogger(original *zerolog.Logger) pgLogger {
+	return pgLogger{original}
+}
+
+//nolint:unused
+type pgLogger struct{ original *zerolog.Logger }
+
+//nolint:unused,deadcode
+func (l pgLogger) Log(ctx context.Context, level pgx.LogLevel, msg string, data map[string]interface{}) {
+	var event *zerolog.Event
+	switch level {
+	case pgx.LogLevelTrace:
+		event = l.original.Trace()
+	case pgx.LogLevelDebug:
+		event = l.original.Debug()
+	case pgx.LogLevelInfo:
+		event = l.original.Info()
+	case pgx.LogLevelWarn:
+		event = l.original.Warn()
+	case pgx.LogLevelError:
+		event = l.original.Error()
+	}
+
+	for k, v := range data {
+		event.Interface(k, v)
+	}
+
+	event.Msg(msg)
 }
