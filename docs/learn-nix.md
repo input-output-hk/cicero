@@ -1,15 +1,15 @@
 # Learn Nix
 
 ## Nix disclaimer
-To actually write Cicero Actions it is required to know the [Nix Expression Language](https://nixos.wiki/wiki/Nix_Expression_Language).
+You need to know the [Nix Expression Language](https://nixos.wiki/wiki/Nix_Expression_Language) to write Cicero Actions.
 
-The same link provides good ressources on how to learn the language.
+The above link provides good resources on how to learn the language.
 
-To get a quick overview it is advised to follow the [Interactive Tour](https://nixcloud.io/tour/?id=1).
+To get a quick overview, follow the [Interactive Tour](https://nixcloud.io/tour/?id=1).
 
-The language itself, is basically a DSL for packaging software.
+The language itself is a DSL for packaging software.
 
-In combination with the [Nix package manager](https://nixos.org/manual/nix/stable/), it leverages the possibilties to declaratively manage and install a system through only nix expressions.
+In combination with the [Nix package manager](https://nixos.org/manual/nix/stable/), it leverages the possibilities to manage and install a system using only Nix declarative expressions.
 
 Also having a basic knowledge how [Flakes](https://nixos.wiki/wiki/Flakes) in NixOS work, will help to understand the [flake.nix](https://github.com/input-output-hk/cicero/blob/main/flake.nix) in the Cicero repository.
 
