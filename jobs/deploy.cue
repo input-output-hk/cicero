@@ -4,6 +4,7 @@ package jobs
 #sha:          string                              @tag(sha)
 #ciceroFlake:  string | *#environment.ciceroFlake  @tag(ciceroFlake)
 #webhookFlake: string | *#environment.webhookFlake @tag(webhookFlake)
+#handbookFlake: string | *#environment.handbookFlake @tag(handbookFlake)
 #nomadAddr:    string | *#environment.nomadAddr    @tag(nomadAddr)
 #databaseUrl:  string | *#environment.databaseUrl  @tag(databaseUrl)
 #vaultAddr:    string | *#environment.vaultAddr    @tag(vaultAddr)
