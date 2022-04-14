@@ -17,27 +17,29 @@ package jobs
 
 #environments: {
 	dev: {
-		namespace:    "default"
-		ciceroFlake:  "path:.#cicero-entrypoint"
-		webhookFlake: "path:.#webhook-trigger"
-		databaseUrl:  "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
-		nomadAddr:    "http://127.0.0.1:4646"
-		vaultAddr:    "http://127.0.0.1:8300"
-		nameserver:   "1.1.1.1"
-		lokiAddr:     "http://127.0.0.1:3100"
-		victoriaAddr: "http://127.0.0.1:8428"
+		namespace:     "default"
+		ciceroFlake:   "path:.#cicero-entrypoint"
+		webhookFlake:  "path:.#webhook-trigger"
+		handbookFlake:  "path:.#handbook-entrypoint"
+		databaseUrl:   "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
+		nomadAddr:     "http://127.0.0.1:4646"
+		vaultAddr:     "http://127.0.0.1:8300"
+		nameserver:    "1.1.1.1"
+		lokiAddr:      "http://127.0.0.1:3100"
+		victoriaAddr:  "http://127.0.0.1:8428"
 	}
 
 	prod: {
-		namespace:    "cicero"
-		ciceroFlake:  "github:input-output-hk/cicero/\(#sha)#cicero-entrypoint"
-		webhookFlake: "github:input-output-hk/cicero/\(#sha)#webhook-trigger"
-		databaseUrl:  "postgres://cicero:@hydra.node.consul:5432/cicero?sslmode=disable"
-		nomadAddr:    "https://nomad.infra.aws.iohkdev.io"
-		vaultAddr:    "https://vault.infra.aws.iohkdev.io"
-		nameserver:   "172.17.0.1"
-		lokiAddr:     "http://monitoring.node.consul:3100"
-		victoriaAddr: "http://monitoring.node.consul:8428"
+		namespace:     "cicero"
+		ciceroFlake:   "github:input-output-hk/cicero/\(#sha)#cicero-entrypoint"
+		webhookFlake:  "github:input-output-hk/cicero/\(#sha)#webhook-trigger"
+		handbookFlake:  "github:input-output-hk/cicero/\(#sha)#handbook-entrypoint"
+		databaseUrl:   "postgres://cicero:@hydra.node.consul:5432/cicero?sslmode=disable"
+		nomadAddr:     "https://nomad.infra.aws.iohkdev.io"
+		vaultAddr:     "https://vault.infra.aws.iohkdev.io"
+		nameserver:    "172.17.0.1"
+		lokiAddr:      "http://monitoring.node.consul:3100"
+		victoriaAddr:  "http://monitoring.node.consul:8428"
 	}
 }
 
