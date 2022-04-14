@@ -16,8 +16,6 @@ Also having a basic knowledge how [Flakes](https://nixos.wiki/wiki/Flakes) in Ni
 ## Cicero flake.nix
 The [Cicero Infrastructure Components](https://miro.com/app/board/uXjVOBqekRU=/) diagram shows what happens in the different stages of the Cicero [flake.nix](https://github.com/input-output-hk/cicero/blob/main/flake.nix).
 
-Those are the same dev-{cluster, jobs, cicero} steps from the [Install Cicero](./install-cicero.md) part of this handbook.
-
 In the bottom part of the diagram, all the external Actors are listed and how they interact with Cicero.
 
 Currently the local installment of Cicero has a WebUI and API available on [http://localhost:8080](http://localhost:8080).

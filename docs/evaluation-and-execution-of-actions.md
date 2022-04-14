@@ -3,12 +3,12 @@
 ##  Evaluation
 Cicero Actions are written in the [nix-expression-language](https://nixos.wiki/wiki/Nix_Expression_Language) plus the actual Cicero Standard Library providing Action specific extensions.
 
-The Cicero Standard Library actually consists of multiple files, which are:
+The Cicero Standard Library consists of multiple files, which are:
 - [Cicero Base Library](https://github.com/input-output-hk/cicero/blob/main/lib.nix)
 - [Cicero Extended Library](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix)
 - [Cicero Action Library](https://github.com/input-output-hk/cicero/blob/main/action-lib.nix)
 
-In the actual Cicero [flake.nix](https://github.com/input-output-hk/cicero/blob/main/flake.nix), this is all already bundled into a single flake output:
+In the actual Cicero [flake.nix](https://github.com/input-output-hk/cicero/blob/main/flake.nix), those are bundled into a single flake output:
 ```
 ...
 ...
@@ -29,9 +29,11 @@ In the actual Cicero [flake.nix](https://github.com/input-output-hk/cicero/blob/
 
 The **ciceroActions** flake output is therefore required to let Cicero know that a flakified repository contains executable Actions.
 
-This is also what the Cicero Evaluator is looking for when a new Path is passed to the Cicero WebUI([Tutorial 1](./tutorial-1.md)).
+When a new Path is passed to the Cicero WebUI([Tutorial 1](./tutorial-1.md)) the Cicero Evaluator will automatically search and evaluate all the Actions in that path.
 
 However, there is also cmdline Tool called cicero-evaluator-nix, which just helps running the evaluation part manually([Debuggin Evaluations](./cicero-evaluator-nix.md)).
+
+**Note:** Actions are only created when their link was clicked.
 
 ## Actions
 The [Cicero Base Library](https://github.com/input-output-hk/cicero/blob/main/lib.nix) already provides a good part of specification for Actions:
