@@ -8,6 +8,5 @@ command = "alejandra"
 includes = ["*.nix"]
 
 [formatter.cue]
-command = "cue"
-options = ["fmt"]
+command = "treefmt-cue"
 includes = ["*.cue"]

@@ -57,6 +57,13 @@
 
               (std.git.clone cfg)
 
+              {
+                resources = {
+                  cpu = 3000;
+                  memory = 1024;
+                };
+              }
+
               std.nix.develop
 
               (std.script "bash" ''

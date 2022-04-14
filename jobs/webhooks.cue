@@ -108,7 +108,7 @@ job: webhooks: group: webhooks: {
 			}
 			if #env == "prod" {
 				_data_events_all_ciceroApiUrl: #"""
-					ciceroPort=$(dig +short cicero.service.consul SRV | cut -d ' ' -f 3)
+					ciceroPort=$(dig +short cicero.service.consul SRV | head -n 1 | cut -d ' ' -f 3)
 					ciceroApiUrl="http://cicero.service.consul:$ciceroPort/api"
 					"""#
 			}

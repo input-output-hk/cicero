@@ -7,6 +7,7 @@
 }: {
   imports = [
     self.inputs.spongix.nixosModules.spongix
+    self.inputs.follower.nixosModules.nomad-follower
     ./dev.nix
   ];
 
@@ -14,6 +15,7 @@
 
   nixpkgs.overlays = [
     self.inputs.spongix.overlay
+    self.inputs.follower.overlay
 
     # TODO nix 2.8 fails this command:
     # nix profile install --profile ./x github:NixOS/nix#nix github:NixOS/nixpkgs#cacert
@@ -35,9 +37,22 @@
     };
   };
 
-  nix.extraOptions = ''
-    netrc-file = /etc/nix/netrc
-  '';
+  nix = {
+    binaryCaches = ["http://127.0.0.1:${toString config.services.spongix.port}"];
+    binaryCachePublicKeys = ["spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI="];
+    requireSignedBinaryCaches = false; # TODO remove once spongix signs with own key again
+    extraOptions = let
+      post-build-hook = pkgs.writers.writeDash "post-build-hook" ''
+        set -euf
+        export IFS=' '
+        echo 'Uploading to cache: '"$OUT_PATHS"
+        exec nix copy --to 'http://127.0.0.1:7745?compression=none' $OUT_PATHS
+      '';
+    in ''
+      netrc-file = /etc/nix/netrc
+      post-build-hook = ${post-build-hook}
+    '';
+  };
 
   virtualisation = {
     forwardPorts = [
@@ -80,9 +95,25 @@
       }
     ];
 
-    cores = 2;
-    memorySize = 1024 * 4;
-    diskSize = 1024 * 4; # nix builds need more inodes
+    cores =
+      if builtins.pathExists /proc/cpuinfo
+      then let
+        cpuinfo = lib.fileContents /proc/cpuinfo;
+        num = builtins.length (lib.splitString "processor\t: " cpuinfo) - 1;
+      in
+        builtins.floor (num / 1.5 + 1)
+      else 8;
+    memorySize =
+      if builtins.pathExists /proc/meminfo
+      then let
+        meminfo = lib.fileContents /proc/meminfo;
+        kb = lib.toInt (lib.last (
+          builtins.match "MemTotal:[[:space:]]+([[:digit:]]+) kB\n.*" meminfo
+        ));
+      in
+        builtins.floor (kb / 1.5 / 1024)
+      else 1024 * 4;
+    diskSize = 1024 * 20; # nix builds need more inodes
 
     useNixStoreImage = true;
     writableStoreUseTmpfs = false;
@@ -142,6 +173,17 @@
           token = VAULT_TOKEN;
         };
       };
+    };
+
+    nomad-follower = {
+      enable = true;
+      nomadAddr = "http://127.0.0.1:4646";
+      nomadTokenFile = "";
+      lokiUrl = "http://127.0.0.1:${toString config.services.loki.configuration.server.http_listen_port}";
+      prometheusUrl = let
+        addr = config.services.victoriametrics.listenAddress;
+      in
+        assert lib.hasPrefix ":" addr; "http://127.0.0.1${addr}/api/v1/write";
     };
 
     vault = {
@@ -246,24 +288,6 @@
             fi
           fi
         '';
-      };
-    };
-
-    nomad-follower = rec {
-      description = "Nomad Follower";
-
-      wantedBy = ["nomad.service"];
-      bindsTo = wantedBy;
-      after = bindsTo;
-
-      serviceConfig = rec {
-        ExecStart = "${self.inputs.follower.defaultPackage.${pkgs.system}}/bin/nomad-follower";
-
-        Restart = "on-failure";
-        RestartSec = 5;
-
-        StateDirectory = "nomad-follower";
-        WorkingDirectory = "/var/lib/${StateDirectory}";
       };
     };
 

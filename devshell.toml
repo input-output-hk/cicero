@@ -41,7 +41,7 @@ package = "damon"
 
 [[commands]]
 name = "lint"
-command = "golangci-lint run -E gocritic && treefmt --fail-on-change"
+command = "golangci-lint run -E gocritic --timeout 5m && treefmt --fail-on-change"
 help = "Run code linters"
 
 [[commands]]
@@ -73,6 +73,7 @@ packages = [
   # formatting
   "treefmt",
   "alejandra",
+  "treefmt-cue",
 
   # deployment
   "cue",

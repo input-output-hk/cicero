@@ -70,13 +70,14 @@
           gouml = final.callPackage pkgs/gouml.nix {};
           gocritic = final.callPackage pkgs/gocritic.nix {};
           schemathesis = final.callPackage pkgs/schemathesis.nix {};
+          treefmt-cue = final.callPackage pkgs/treefmt-cue.nix {};
           dev-cicero-transformer = let
             post-build-hook = ''
               #! /bin/dash
               set -euf
               export IFS=' '
               echo 'Uploading to cache: '"$OUT_PATHS"
-              exec nix copy --to 'http://127.0.0.1:7745/cache' $OUT_PATHS
+              exec nix copy --to 'http://127.0.0.1:7745?compression=none' $OUT_PATHS
             '';
 
             filter = ''
