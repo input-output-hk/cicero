@@ -1,17 +1,17 @@
 package jobs
 
-#env:          string | *"dev" | "prod"            @tag(env)
-#sha:          string                              @tag(sha)
-#ciceroFlake:  string | *#environment.ciceroFlake  @tag(ciceroFlake)
-#webhookFlake: string | *#environment.webhookFlake @tag(webhookFlake)
+#env:           string | *"dev" | "prod"             @tag(env)
+#sha:           string                               @tag(sha)
+#ciceroFlake:   string | *#environment.ciceroFlake   @tag(ciceroFlake)
+#webhookFlake:  string | *#environment.webhookFlake  @tag(webhookFlake)
 #handbookFlake: string | *#environment.handbookFlake @tag(handbookFlake)
-#nomadAddr:    string | *#environment.nomadAddr    @tag(nomadAddr)
-#databaseUrl:  string | *#environment.databaseUrl  @tag(databaseUrl)
-#vaultAddr:    string | *#environment.vaultAddr    @tag(vaultAddr)
-#nameserver:   string | *#environment.nameserver   @tag(nameserver)
-#lokiAddr:     string | *#environment.lokiAddr     @tag(lokiAddr)
-#victoriaAddr: string | *#environment.victoriaAddr @tag(victoriaAddr)
-#namespace:    string | *#environment.namespace    @tag(namespace)
+#nomadAddr:     string | *#environment.nomadAddr     @tag(nomadAddr)
+#databaseUrl:   string | *#environment.databaseUrl   @tag(databaseUrl)
+#vaultAddr:     string | *#environment.vaultAddr     @tag(vaultAddr)
+#nameserver:    string | *#environment.nameserver    @tag(nameserver)
+#lokiAddr:      string | *#environment.lokiAddr      @tag(lokiAddr)
+#victoriaAddr:  string | *#environment.victoriaAddr  @tag(victoriaAddr)
+#namespace:     string | *#environment.namespace     @tag(namespace)
 
 #environment: #environments[#env]
 
