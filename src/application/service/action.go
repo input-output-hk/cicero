@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"cuelang.org/go/cue"
+	cueliteral "cuelang.org/go/cue/literal"
+	"cuelang.org/go/tools/flow"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
@@ -149,47 +152,89 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 	inputs := map[string]interface{}{}
 
-	// Select candidate facts.
-	for name, input := range action.Inputs {
-		inputLogger := logger.With().Str("input", name).Logger()
+	{ // Select candidate facts.
+		dbConnMutex := &sync.Mutex{}
+		errNotRunnable := errors.New("not runnable")
+		valuePath := cue.MakePath(cue.Str("value"))
 
-		switch input.Select {
-		case domain.InputDefinitionSelectLatest:
-			switch fact, err := self.getInputFactLatest(input.Match.WithoutInputs()); {
-			case err != nil:
-				return false, nil, err
-			case fact == nil:
-				if !input.Not && !input.Optional {
-					inputLogger.Debug().
-						Bool("runnable", false).
-						Msg("No fact found for required input")
-					return false, nil, nil
+		if err := action.Inputs.Flow(func(t *flow.Task) error {
+			// XXX kinda hacky, is there no better way?
+			var name string
+			switch sel := t.Path().Selectors()[1].String(); sel[0] { // _inputs: <name>: …
+			case '"', '\'', '#':
+				if name_, err := cueliteral.Unquote(sel); err != nil {
+					return err
+				} else {
+					name = name_
 				}
 			default:
-				inputFact[name] = fact
-				if !input.Not {
-					inputs[name] = fact
-				}
+				name = sel
 			}
-		case domain.InputDefinitionSelectAll:
-			switch facts, err := self.getInputFacts(input.Match.WithoutInputs()); {
-			case err != nil:
-				return false, nil, err
-			case len(facts) == 0:
-				if !input.Not && !input.Optional {
-					inputLogger.Debug().
-						Bool("runnable", false).
-						Msg("No facts found for required input")
-					return false, nil, nil
+
+			input := action.Inputs[name]
+			tValue := t.Value().LookupPath(valuePath)
+			inputLogger := logger.With().Str("input", name).Logger()
+
+			// A transaction happens on exactly one connection so
+			// we cannot use more connections to run queries in parallel.
+			dbConnMutex.Lock()
+			defer dbConnMutex.Unlock()
+
+			switch input.Select {
+			case domain.InputDefinitionSelectLatest:
+				switch fact, err := self.getInputFactLatest(tValue); {
+				case err != nil:
+					return err
+				case fact == nil:
+					if !input.Not && !input.Optional {
+						inputLogger.Debug().
+							Bool("runnable", false).
+							Msg("No fact found for required input")
+						return errNotRunnable
+					}
+				default:
+					inputFact[name] = fact
+					if !input.Not {
+						inputs[name] = fact
+					}
+
+					if err := t.Fill(struct {
+						Value interface{} `json:"value"`
+					}{fact.Value}); err != nil {
+						return err
+					}
+				}
+			case domain.InputDefinitionSelectAll:
+				switch facts, err := self.getInputFacts(tValue); {
+				case err != nil:
+					return err
+				case len(facts) == 0:
+					if !input.Not && !input.Optional {
+						inputLogger.Debug().
+							Bool("runnable", false).
+							Msg("No facts found for required input")
+						return errNotRunnable
+					}
+				default:
+					inputFacts[name] = facts
+					if !input.Not {
+						inputs[name] = facts
+					}
+					// There's no meaningful way to call `t.Fill()`
+					// because that one filter matches multiple facts.
+					// So we just do not call it which makes it unsupported
+					// to depend on inputs that select multiple facts.
 				}
 			default:
-				inputFacts[name] = facts
-				if !input.Not {
-					inputs[name] = facts
-				}
+				return fmt.Errorf("InputDefinitionSelect with unknown value %d", input.Select)
 			}
-		default:
-			return false, nil, fmt.Errorf("InputDefinitionSelect with unknown value %d", input.Select)
+
+			return nil
+		}).Run(context.Background()); err != nil {
+			if errors.Is(err, errNotRunnable) {
+				return false, nil, nil
+			}
+			return false, nil, err
 		}
 	}
 

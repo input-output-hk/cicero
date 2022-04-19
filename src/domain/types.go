@@ -10,6 +10,8 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	cueformat "cuelang.org/go/cue/format"
+	cueliteral "cuelang.org/go/cue/literal"
+	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/pkg/errors"
@@ -65,12 +67,13 @@ func (self InputDefinitionSelect) MarshalJSON() ([]byte, error) {
 
 type InputDefinitionMatch string
 
+// There is a race condition around global internal state of CUE.
 var cueMutex = &sync.Mutex{}
 
 func (self *InputDefinitionMatch) WithInputs(inputs map[string]interface{}) cue.Value {
-	// There is a race condition around global internal state of CUE.
 	cueMutex.Lock()
 	defer cueMutex.Unlock()
+
 	ctx := cuecontext.New()
 	return ctx.CompileString(
 		string(*self),
@@ -131,9 +134,35 @@ type InputDefinition struct {
 	Match    InputDefinitionMatch  `json:"match"`
 }
 
+type InputDefinitions map[string]InputDefinition
+
+func (self *InputDefinitions) Flow(runnerFunc flow.RunnerFunc) *flow.Controller {
+	cueMutex.Lock()
+	defer cueMutex.Unlock()
+
+	cueStr := ``
+	for name, input := range *self {
+		cueStr += `_inputs: `
+		cueStr = string(cueliteral.Label.Append([]byte(cueStr), name))
+		cueStr += `: value: {` + string(input.Match) + "}\n"
+	}
+	value := cuecontext.New().CompileString(cueStr)
+
+	return flow.New(
+		&flow.Config{Root: cue.MakePath(cue.Hid("_inputs", "_"))},
+		value,
+		func(v cue.Value) (flow.Runner, error) {
+			if len(v.Path().Selectors()) != 2 {
+				return nil, nil
+			}
+			return runnerFunc, nil
+		},
+	)
+}
+
 type ActionDefinition struct {
-	Meta   map[string]interface{}     `json:"meta"`
-	Inputs map[string]InputDefinition `json:"inputs"`
+	Meta   map[string]interface{} `json:"meta"`
+	Inputs InputDefinitions       `json:"inputs"`
 }
 
 type RunOutput struct {
