@@ -155,20 +155,10 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		valuePath := cue.MakePath(cue.Str("value"))
 
 		if err := action.Inputs.Flow(func(t *flow.Task) error {
-			// XXX kinda hacky, is there no better way?
-			// FIXME still not correct, how would it handle this: "test
-			var name string
-			switch sel := t.Path().Selectors()[1].String(); sel[0] { // _inputs: <name>: …
-			case '"', '\'', '#':
-				if name_, err := cueliteral.Unquote(sel); err != nil {
-					return err
-				} else {
-					name = name_
-				}
-			default:
-				name = sel
+			name := t.Path().Selectors()[1].String() // _inputs: <name>: …
+			if name_, err := cueliteral.Unquote(name); err == nil {
+				name = name_
 			}
-
 			input := action.Inputs[name]
 			tValue := t.Value().LookupPath(valuePath)
 			inputLogger := logger.With().Str("input", name).Logger()
