@@ -295,7 +295,7 @@
 								<h3>Tasks</h3>
 								<div class="tabs border" style="--num-tabs: {{len .TaskStates}}">
 									{{range $taskName, $task := .TaskStates}}
-										<input id="tab-task-{{$taskName}}" type="radio" name="tab-task-{{$alloc.ID}}"/>
+										<input id="tab-task-{{$taskName}}" type="radio" name="tab-task-{{$alloc.ID}}" checked/>
 										<label for="tab-task-{{$taskName}}"><h3>{{$taskName}}</h3></label>
 										<div style="padding: 1em">
 											<table class="table vertical">
