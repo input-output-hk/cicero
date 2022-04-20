@@ -152,13 +152,14 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 	inputs := map[string]interface{}{}
 
-	{ // Select candidate facts.
+	{ // Select and match candidate facts.
 		dbConnMutex := &sync.Mutex{}
 		errNotRunnable := errors.New("not runnable")
 		valuePath := cue.MakePath(cue.Str("value"))
 
 		if err := action.Inputs.Flow(func(t *flow.Task) error {
 			// XXX kinda hacky, is there no better way?
+			// FIXME still not correct, how would it handle this: "test
 			var name string
 			switch sel := t.Path().Selectors()[1].String(); sel[0] { // _inputs: <name>: …
 			case '"', '\'', '#':
@@ -198,10 +199,29 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 						inputs[name] = fact
 					}
 
-					if err := t.Fill(struct {
-						Value interface{} `json:"value"`
-					}{fact.Value}); err != nil {
+					// Match candidate fact.
+					if matchErr, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
 						return err
+					} else if (matchErr == nil) == input.Not {
+						if !input.Optional || input.Not {
+							inputLogger.Debug().
+								Bool("runnable", false).
+								Str("fact", fact.ID.String()).
+								AnErr("mismatch", matchErr).
+								Msg("Fact does not match")
+							return errNotRunnable
+						}
+						delete(inputs, name)
+					}
+
+					// Fill the CUE expression with the fact's value
+					// so it can be referenced by its dependents.
+					if _, exists := inputs[name]; exists {
+						if err := t.Fill(struct {
+							Value interface{} `json:"value"`
+						}{fact.Value}); err != nil {
+							return err
+						}
 					}
 				}
 			case domain.InputDefinitionSelectAll:
@@ -220,6 +240,50 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 					if !input.Not {
 						inputs[name] = facts
 					}
+
+					// Match candidate facts.
+					for i, fact := range facts {
+						if matchErr, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
+							return err
+						} else if (matchErr == nil) == input.Not {
+							if !input.Optional || input.Not {
+								inputLogger.Debug().
+									Bool("runnable", false).
+									Str("fact", fact.ID.String()).
+									AnErr("mismatch", matchErr).
+									Msg("Fact does not match")
+								return errNotRunnable
+							}
+							if facts, exists := inputs[name]; exists {
+								// We will filter `nil`s out later as
+								// doing that while iterating would be costly.
+								facts.([]*domain.Fact)[i] = nil
+							}
+						}
+
+						if facts, exists := inputs[name]; exists {
+							// Filter out `nil` entries from non-matching facts.
+							newFacts := []*domain.Fact{}
+							for _, fact := range facts.([]*domain.Fact) {
+								if fact == nil {
+									continue
+								}
+								newFacts = append(newFacts, fact)
+							}
+							inputs[name] = newFacts
+
+							if len(newFacts) == 0 {
+								if !input.Optional {
+									inputLogger.Debug().
+										Bool("runnable", false).
+										Msg("No facts match")
+									return errNotRunnable
+								}
+								delete(inputs, name)
+							}
+						}
+					}
+
 					// There's no meaningful way to call `t.Fill()`
 					// because that one filter matches multiple facts.
 					// So we just do not call it which makes it unsupported
@@ -235,75 +299,6 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 				return false, nil, nil
 			}
 			return false, nil, err
-		}
-	}
-
-	// Match candidate facts.
-	for name, input := range action.Inputs {
-		inputLogger := logger.With().Str("input", name).Logger()
-
-		switch input.Select {
-		case domain.InputDefinitionSelectLatest:
-			if inputFactEntry, exists := inputFact[name]; exists {
-				if matchErr, err := matchFact(input.Match.WithInputs(inputs), inputFactEntry); err != nil {
-					return false, nil, err
-				} else if (matchErr == nil) == input.Not {
-					if !input.Optional || input.Not {
-						inputLogger.Debug().
-							Bool("runnable", false).
-							Str("fact", inputFactEntry.ID.String()).
-							AnErr("mismatch", matchErr).
-							Msg("Fact does not match")
-						return false, nil, nil
-					}
-					delete(inputs, name)
-				}
-			}
-		case domain.InputDefinitionSelectAll:
-			if inputFactsEntry, exists := inputFacts[name]; exists {
-				for i, fact := range inputFactsEntry {
-					if matchErr, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
-						return false, nil, err
-					} else if (matchErr == nil) == input.Not {
-						if !input.Optional || input.Not {
-							inputLogger.Debug().
-								Bool("runnable", false).
-								Str("fact", fact.ID.String()).
-								AnErr("mismatch", matchErr).
-								Msg("Fact does not match")
-							return false, nil, nil
-						}
-						if facts, exists := inputs[name]; exists {
-							// We will filter `nil`s out later as doing that here would be costly.
-							facts.([]*domain.Fact)[i] = nil
-						}
-					}
-				}
-
-				if facts, exists := inputs[name]; exists {
-					// Filter out `nil` entries from non-matching facts.
-					newFacts := []*domain.Fact{}
-					for _, fact := range facts.([]*domain.Fact) {
-						if fact == nil {
-							continue
-						}
-						newFacts = append(newFacts, fact)
-					}
-					inputs[name] = newFacts
-
-					if len(newFacts) == 0 {
-						if !input.Optional {
-							inputLogger.Debug().
-								Bool("runnable", false).
-								Msg("No facts match")
-							return false, nil, nil
-						}
-						delete(inputs, name)
-					}
-				}
-			}
-		default:
-			panic("This should have already been caught by the loop above!")
 		}
 	}
 
