@@ -147,10 +147,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 	logger.Debug().Msg("Checking whether Action is runnable")
 
-	inputFact := map[string]*domain.Fact{}
-	inputFacts := map[string][]*domain.Fact{}
-
-	inputs := map[string]interface{}{}
+	inputs := map[string]interface{}{} // either *domain.Fact or []*domain.Fact
 
 	{ // Select and match candidate facts.
 		dbConnMutex := &sync.Mutex{}
@@ -194,7 +191,6 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 						return errNotRunnable
 					}
 				default:
-					inputFact[name] = fact
 					if !input.Not {
 						inputs[name] = fact
 					}
@@ -236,7 +232,6 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 						return errNotRunnable
 					}
 				default:
-					inputFacts[name] = facts
 					if !input.Not {
 						inputs[name] = facts
 					}
@@ -384,11 +379,11 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 			switch input.Select {
 			case domain.InputDefinitionSelectLatest:
-				if didInputFactChange(0, inputFact[name]) {
+				if didInputFactChange(0, inputs[name].(*domain.Fact)) {
 					inputFactsChanged = true
 				}
 			case domain.InputDefinitionSelectAll:
-				if newFacts, oldFacts := inputFacts[name], inputFactIds[name]; len(newFacts) != len(oldFacts) {
+				if newFacts, oldFacts := inputs[name].([]*domain.Fact), inputFactIds[name]; len(newFacts) != len(oldFacts) {
 					logger.Debug().
 						Str("input", name).
 						Int("num-old-facts", len(oldFacts)).
