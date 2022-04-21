@@ -34,11 +34,12 @@ eval)
 			--expr '{...}@args: args // {
 			  id = if args.id == "" then null else args.id;
 			  inputs = builtins.fromJSON args.inputs;
+			  attrs = __filter __isString (__split "[[:space:]]" args.attrs);
 			}' \
 			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
 			--argstr name "${CICERO_ACTION_NAME:-}" \
 			--argstr id "${CICERO_ACTION_ID:-}" \
-			--arg attrs "[$(printf ' "%s"' "$@")]"
+			--argstr attrs "${*}"
 	)"
 
 	evaluate --apply "$(
