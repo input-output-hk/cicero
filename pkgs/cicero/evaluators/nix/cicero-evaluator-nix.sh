@@ -31,10 +31,13 @@ eval)
 	shift
 	vars="$(
 		nix-instantiate --eval --strict \
-			--expr '{...}@args: args // { inputs = builtins.fromJSON args.inputs; }' \
+			--expr '{...}@args: args // {
+			  id = if args.id == "" then null else args.id;
+			  inputs = builtins.fromJSON args.inputs;
+			}' \
 			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
-			--argstr name "${CICERO_ACTION_NAME:-none}" \
-			--argstr id "${CICERO_ACTION_ID:-null}" \
+			--argstr name "${CICERO_ACTION_NAME:-}" \
+			--argstr id "${CICERO_ACTION_ID:-}" \
 			--arg attrs "[$(printf ' "%s"' "$@")]"
 	)"
 
@@ -44,7 +47,11 @@ eval)
 			let
 			  inherit (builtins) attrNames elem filter fromJSON isString listToAttrs split;
 			  inherit (${vars}) attrs id inputs name;
-			  action = actions."\${name}" { inherit id inputs; };
+			  nonNullAttr = k: v: if v == null then {} else { \${k} = v; };
+			  action = actions."\${name}" (
+			    nonNullAttr "id" id //
+			    nonNullAttr "inputs" inputs
+			  );
 			in
 			  builtins.listToAttrs (map
 			    (name: { inherit name; value = action."\${name}"; })
