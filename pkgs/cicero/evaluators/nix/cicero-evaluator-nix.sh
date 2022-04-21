@@ -25,7 +25,7 @@ function evaluate {
 
 case "${1:-}" in
 list)
-	evaluate --apply builtins.attrNames
+	evaluate --apply __attrNames
 	;;
 eval)
 	shift
@@ -33,7 +33,7 @@ eval)
 		nix-instantiate --eval --strict \
 			--expr '{...}@args: args // {
 			  id = if args.id == "" then null else args.id;
-			  inputs = builtins.fromJSON args.inputs;
+			  inputs = __fromJSON args.inputs;
 			  attrs = __filter __isString (__split "[[:space:]]" args.attrs);
 			}' \
 			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
@@ -46,7 +46,6 @@ eval)
 		cat <<-EOF
 			actions:
 			let
-			  inherit (builtins) attrNames elem filter fromJSON isString listToAttrs split;
 			  inherit (${vars}) attrs id inputs name;
 			  nonNullAttr = k: v: if v == null then {} else { \${k} = v; };
 			  action = actions.\${name} (
@@ -54,9 +53,9 @@ eval)
 			    nonNullAttr "inputs" inputs
 			  );
 			in
-			  builtins.listToAttrs (map
+			  __listToAttrs (map
 			    (name: { inherit name; value = action.\${name}; })
-			    (filter (name: elem name attrs) (attrNames action)))
+			    (__filter (name: __elem name attrs) (__attrNames action)))
 		EOF
 	)"
 	;;
