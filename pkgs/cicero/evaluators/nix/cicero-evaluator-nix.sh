@@ -48,13 +48,13 @@ eval)
 			  inherit (builtins) attrNames elem filter fromJSON isString listToAttrs split;
 			  inherit (${vars}) attrs id inputs name;
 			  nonNullAttr = k: v: if v == null then {} else { \${k} = v; };
-			  action = actions."\${name}" (
+			  action = actions.\${name} (
 			    nonNullAttr "id" id //
 			    nonNullAttr "inputs" inputs
 			  );
 			in
 			  builtins.listToAttrs (map
-			    (name: { inherit name; value = action."\${name}"; })
+			    (name: { inherit name; value = action.\${name}; })
 			    (filter (name: elem name attrs) (attrNames action)))
 		EOF
 	)"
