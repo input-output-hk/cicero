@@ -222,6 +222,74 @@ in rec {
       mkActionState
     ];
 
+  # hydraJob as ciceroAction
+  hydraJob = { extraSteps ? []
+             , resources ? {
+                 cpu = 3000;
+                 memory = 1024 * 3;
+               }
+             }:
+    { name
+    , id
+    , std ? import ./pkgs/cicero/evaluators/nix/lib.nix self
+    , lib ? lib
+    , actionLib ? import ./action-lib.nix { inherit std lib; }
+    , ... } @ args:
+    {
+      inputs.start = ''
+        "${name}": start: {
+          clone_url:     string
+          sha:           string
+          statuses_url?: string
+        }
+      '';
+
+      output = { start }: {
+        success.${name} = {
+          ok = true;
+          revision = start.value.${name}.start.sha;
+        };
+      };
+
+      job = { start }:
+        let cfg = start.value.${name}.start; in
+        std.chain args [
+          actionLib.simpleJob
+          (lib.optionalAttrs (cfg ? statuses_url) (std.github.reportStatus cfg.statuses_url))
+          (std.git.clone cfg)
+          { inherit resources; }
+          std.nix.build
+        ] + extraSteps;
+    };
+
+  # Convert hydraJob to ciceroAction
+  fromHydraJob = args: hydraName: _:
+    callAction hydraName (hydraJob args);
+
+  # taken from flake-utils and adjusted
+  flattenJobs = jobs:
+    let
+      op = sum: path: val:
+        let pathStr = builtins.concatStringsSep "/" path; in
+        if (builtins.typeOf val) != "set" then
+          sum
+        else if val ? type && val.type == "derivation" then
+          (sum // { "${pathStr}" = val; })
+        else
+          (recurse sum path val)
+        ;
+      recurse = sum: path: val:
+        builtins.foldl'
+          (sum: key: op sum (path ++ [ key ]) val.${key})
+          sum
+          (builtins.attrNames val)
+      ;
+    in recurse { } [ ] jobs;
+
+  # Convert hydraJobs to ciceroActions
+  fromHydraJobs = args: jobs:
+    mapAttrs (fromHydraJob args) (flattenJobs jobs);
+
   # Recurses through a directory, considering every file an action.
   # The path of the file from the starting directory is used as name.
   listActions = dir:
