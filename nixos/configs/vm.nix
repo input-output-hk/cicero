@@ -53,6 +53,7 @@
       post-build-hook = ${post-build-hook}
     '';
   };
+  nix.package = pkgs.nix_2_5;
 
   virtualisation = {
     forwardPorts = [

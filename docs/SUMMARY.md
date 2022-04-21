@@ -2,7 +2,7 @@
 
 [Introduction](./introduction.md)
 - [Installation](./installation.md)
-  - [Prerequisites](./prerequisites.md)
+  - [Install Nix](./install-nix.md)
   - [Install Cicero](./install-cicero.md)
 - [Tutorial](./tutorial.md)
   - [How to create an Action](./tutorial-1.md)

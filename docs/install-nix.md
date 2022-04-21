@@ -1,14 +1,21 @@
-# Prerequisites
+# Install Nix
+
+## Prerequisites
 - Nix
 	- At least version 2.4 >= and < 2.7
 - (Linux with systemd)
 	- You can run Cicero on other platforms but the [Nix actions library](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix) requires [nomad-driver-nix](https://github.com/input-output-hk/nomad-driver-nix).
 
-## Install Nix
+## Installation
 
 ### Setup MultiUser Nix: [nixos.org/download.html](https://nixos.org/download.html)
+#### Linux
 ```
 sh <(curl -L https://nixos.org/nix/install) --daemon
+```
+#### macOS
+```
+sh <(curl -L https://nixos.org/nix/install) --darwin-use-unencrypted-nix-store-volume --daemon
 ```
 
 ### Install Flakes
