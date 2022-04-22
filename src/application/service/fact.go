@@ -81,7 +81,10 @@ func (self *factService) Save(fact *domain.Fact, binary io.Reader) error {
 		}
 		self.logger.Trace().Str("id", fact.ID.String()).Msg("Created Fact")
 
-		return self.actionService.WithQuerier(tx).InvokeCurrentActive()
+		if _, err := self.actionService.WithQuerier(tx).InvokeCurrentActive(); err != nil {
+			return errors.WithMessagef(err, "Could not invoke currently active Actions")
+		}
+		return nil
 	})
 }
 

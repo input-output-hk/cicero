@@ -37,7 +37,7 @@ type ActionService interface {
 	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
 	Create(string, string) (*domain.Action, error)
 	Invoke(*domain.Action) (bool, func() error, error)
-	InvokeCurrentActive() error
+	InvokeCurrentActive() ([]EvaluationError, error)
 }
 
 type actionService struct {
@@ -588,8 +588,9 @@ func (self *actionService) Invoke(action *domain.Action) (bool, func() error, er
 	})
 }
 
-func (self *actionService) InvokeCurrentActive() error {
-	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+func (self *actionService) InvokeCurrentActive() ([]EvaluationError, error) {
+	evalErrs := []EvaluationError{}
+	return evalErrs, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		registerFuncs := []func() error{}
 
 		txSelf := self.WithQuerier(tx)
@@ -601,12 +602,15 @@ func (self *actionService) InvokeCurrentActive() error {
 
 		for {
 			anyRunnable := false
-			var anyErr error
 
 			for _, action := range actions {
-				runnable, registerFunc, err := txSelf.Invoke(action)
-				if err != nil {
-					anyErr = err
+				if runnable, registerFunc, err := txSelf.Invoke(action); err != nil {
+					var evalErr EvaluationError
+					if errors.As(err, &evalErr) {
+						evalErrs = append(evalErrs, evalErr)
+					} else {
+						return err
+					}
 				} else {
 					anyRunnable = anyRunnable || runnable
 					if registerFunc != nil {
@@ -616,9 +620,6 @@ func (self *actionService) InvokeCurrentActive() error {
 			}
 
 			if !anyRunnable {
-				if anyErr != nil {
-					return anyErr
-				}
 				break
 			}
 		}
