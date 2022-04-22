@@ -9,7 +9,7 @@
     };
     inclusive.url = "github:input-output-hk/nix-inclusive";
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nix.url = "github:NixOS/nix/f22b9e72f51f97f8f2d334748d3e97123940a146";
+    nix.url = "github:NixOS/nix/2.8.0";
     alejandra.url = "github:kamadorueda/alejandra";
     utils.url = "github:numtide/flake-utils";
     driver = {

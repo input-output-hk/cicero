@@ -1,6 +1,7 @@
 {
   name,
   std,
+  lib,
   ...
 } @ args: {
   inputs.start = ''
@@ -13,6 +14,19 @@
       default_branch?: string
     }
   '';
+
+  output = {start}: let
+    cfg = start.value."cicero/ci".start;
+  in {
+    success.${name} =
+      {
+        ok = true;
+        revision = cfg.sha;
+      }
+      // lib.optionalAttrs (cfg ? ref) {
+        inherit (cfg) ref default_branch;
+      };
+  };
 
   job = {start}: let
     cfg = start.value."cicero/ci".start;

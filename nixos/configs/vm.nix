@@ -32,7 +32,7 @@
 
       # We are only interested in /etc/nix/netrc but
       # we can only mount directories, not single files.
-      # See `systemd.tmpfiles.rules` below.
+      # See `systemd.services.create-netrc` below.
       "/etc/nix/host".target = /etc/nix;
     };
   };

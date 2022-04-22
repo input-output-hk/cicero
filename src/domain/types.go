@@ -10,6 +10,8 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	cueformat "cuelang.org/go/cue/format"
+	cueliteral "cuelang.org/go/cue/literal"
+	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/pkg/errors"
@@ -65,12 +67,13 @@ func (self InputDefinitionSelect) MarshalJSON() ([]byte, error) {
 
 type InputDefinitionMatch string
 
+// There is a race condition around global internal state of CUE.
 var cueMutex = &sync.Mutex{}
 
 func (self *InputDefinitionMatch) WithInputs(inputs map[string]interface{}) cue.Value {
-	// There is a race condition around global internal state of CUE.
 	cueMutex.Lock()
 	defer cueMutex.Unlock()
+
 	ctx := cuecontext.New()
 	return ctx.CompileString(
 		string(*self),
@@ -131,9 +134,35 @@ type InputDefinition struct {
 	Match    InputDefinitionMatch  `json:"match"`
 }
 
+type InputDefinitions map[string]InputDefinition
+
+func (self *InputDefinitions) Flow(runnerFunc flow.RunnerFunc) *flow.Controller {
+	cueMutex.Lock()
+	defer cueMutex.Unlock()
+
+	cueStr := ``
+	for name, input := range *self {
+		cueStr += `_inputs: `
+		cueStr = string(cueliteral.Label.Append([]byte(cueStr), name))
+		cueStr += `: value: {` + string(input.Match) + "}\n"
+	}
+	value := cuecontext.New().CompileString(cueStr)
+
+	return flow.New(
+		&flow.Config{Root: cue.MakePath(cue.Hid("_inputs", "_"))},
+		value,
+		func(v cue.Value) (flow.Runner, error) {
+			if len(v.Path().Selectors()) != 2 {
+				return nil, nil
+			}
+			return runnerFunc, nil
+		},
+	)
+}
+
 type ActionDefinition struct {
-	Meta   map[string]interface{}     `json:"meta"`
-	Inputs map[string]InputDefinition `json:"inputs"`
+	Meta   map[string]interface{} `json:"meta"`
+	Inputs InputDefinitions       `json:"inputs"`
 }
 
 type RunOutput struct {
@@ -200,8 +229,8 @@ type MD5Sum [16]byte
 func (self *MD5Sum) Scan(value interface{}) error {
 	if b, ok := value.([]byte); !ok {
 		return fmt.Errorf("Cannot scan %T into MD5Sum", value)
-	} else if copied := copy(self[:], b); copied != 16 {
-		return fmt.Errorf("Could only copy %d/16 bytes into MD5Sum", copied)
+	} else if copied := copy(self[:], b); copied != len(*self) {
+		return fmt.Errorf("Could only copy %d/%d bytes into MD5Sum", copied, len(*self))
 	}
 	return nil
 }

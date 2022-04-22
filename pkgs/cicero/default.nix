@@ -3,11 +3,11 @@
   buildGoModule,
   go-mockery,
 }: let
-  final = package "sha256-PLr6c9ROt3bNgopN7XNQHLUJWHXgnagO13h8u0qEbYc=";
+  final = package "sha256-K0Qbz3WDutHDkGYz/0ZpL4Ix8IwfRlu5cT5lXCwr2rE=";
   package = vendorSha256:
     buildGoModule rec {
       pname = "cicero";
-      version = "2022.03.25.001";
+      version = "2022.04.19.001";
       inherit vendorSha256;
 
       passthru.invalidHash =
