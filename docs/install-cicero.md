@@ -22,6 +22,11 @@ password github_token
 EOF
 ```
 
+### Enter the Cicero development shell
+```
+nix develop
+```
+
 ### Start a development VM with Nomad, nomad-follower, Vault and Spongix:
 ```
 nixos-shell --flake .
