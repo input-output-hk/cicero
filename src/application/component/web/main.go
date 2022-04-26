@@ -28,6 +28,7 @@ import (
 type Web struct {
 	Listen            string
 	Logger            zerolog.Logger
+	InvocationService service.InvocationService
 	RunService        service.RunService
 	ActionService     service.ActionService
 	FactService       service.FactService
@@ -149,6 +150,38 @@ func (self *Web) Start(ctx context.Context) error {
 			nil,
 			apidoc.BuildBodyRequest(apiActionPostBody{}), //TODO: move to domain
 			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/invocation/{id}/inputs",
+		self.ApiInvocationIdInputsGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if route, err := r.AddRoute(http.MethodGet,
+		"/api/invocation",
+		self.ApiInvocationByInputGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Invocation{}, "OK")),
+	); err != nil {
+		return err
+	} else {
+		route.(*mux.Route).Queries("input", "")
+	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/invocation",
+		self.ApiInvocationGet,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Invocation{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -490,6 +523,12 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	invocation, err := self.InvocationService.GetById(run.InvocationId)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
 	allocs, err := self.NomadEventService.GetEventAllocByNomadJobId(id)
 	if err != nil {
 		self.NotFound(w, errors.WithMessagef(err, "Failed to find allocs for Nomad job %q", id))
@@ -502,7 +541,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	inputs := map[string][]domain.Fact{}
-	if inputFactIds, err := self.RunService.GetInputFactIdsByNomadJobId(id); err != nil {
+	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
 		return
 	} else {
@@ -585,7 +624,10 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := render("run/[id].html", w, map[string]interface{}{
-		"Run":        run,
+		"Run": struct {
+			domain.Run
+			ActionId uuid.UUID
+		}{run, invocation.ActionId},
 		"inputs":     inputs,
 		"output":     output,
 		"facts":      facts,
@@ -625,33 +667,43 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	if page, err := getPage(req); err != nil {
 		self.BadRequest(w, err)
 		return
-	} else if runs, err := self.RunService.GetAll(page); err != nil {
+	} else if invocations, err := self.InvocationService.GetAll(page); err != nil {
 		self.ServerError(w, err)
 		return
 	} else {
-		type RunWrapper struct {
-			*domain.Run
-			Action *domain.Action
+		type Entry struct {
+			Run        *domain.Run
+			Invocation *domain.Invocation
+			Action     *domain.Action
 		}
 
-		runWrappers := make([]RunWrapper, len(runs))
-		for i, run := range runs {
-			if action, err := self.ActionService.GetById(run.ActionId); err != nil {
+		entries := make([]Entry, len(invocations))
+		for i, invocation := range invocations {
+			if action, err := self.ActionService.GetByInvocationId(invocation.Id); err != nil {
+				self.ServerError(w, err)
+				return
+			} else if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil && !pgxscan.NotFound(err) {
 				self.ServerError(w, err)
 				return
 			} else {
-				runWrappers[i] = RunWrapper{
-					Run:    run,
-					Action: &action,
+				var runPtr *domain.Run
+				if err == nil {
+					runPtr = &run
+				}
+
+				entries[i] = Entry{
+					Invocation: invocation,
+					Run:        runPtr,
+					Action:     &action,
 				}
 			}
 		}
 
 		if err := render("run/index.html", w, struct {
-			Runs []RunWrapper
+			Entries []Entry
 			*repository.Page
 		}{
-			Runs: runWrappers,
+			Entries: entries,
 			Page: page,
 		}); err != nil {
 			self.ServerError(w, err)
@@ -702,35 +754,84 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 	}
 }
 
+func (self *Web) ApiInvocationGet(w http.ResponseWriter, req *http.Request) {
+	if page, err := getPage(req); err != nil {
+		self.ServerError(w, err)
+	} else if invocations, err := self.InvocationService.GetAll(page); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
+	} else {
+		self.json(w, invocations, http.StatusOK)
+	}
+}
+
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 	} else if runs, err := self.RunService.GetAll(page); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
+		self.ServerError(w, errors.WithMessage(err, "failed to fetch Runs"))
 	} else {
 		self.json(w, runs, http.StatusOK)
 	}
 }
 
-func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
+func getByInputParams(req *http.Request) (bool, *bool, []*uuid.UUID, error) {
 	query := req.URL.Query()
+
 	_, recursive := query["recursive"]
+
+	var ok *bool
+	if okStr := query.Get("ok"); okStr != "" {
+		if ok_, err := strconv.ParseBool(okStr); err != nil {
+			return false, nil, nil, err
+		} else {
+			ok = &ok_
+		}
+	}
+
 	factIds := make([]*uuid.UUID, len(query["input"]))
 	for i, str := range query["input"] {
 		if id, err := uuid.Parse(str); err != nil {
-			self.ClientError(w, err)
-			return
+			return false, nil, nil, err
 		} else {
 			factIds[i] = &id
 		}
 	}
 
-	if page, err := getPage(req); err != nil {
+	return recursive, ok, factIds, nil
+}
+
+func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
+	ok := true
+	if recursive, _, factIds, err := getByInputParams(req); err != nil {
+		self.ClientError(w, err)
+	} else if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
-	} else if runs, err := self.RunService.GetByInputFactIds(factIds, recursive, page); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "failed to fetch actions"))
+	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, &ok, page); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 	} else {
+		runs := make([]*domain.Run, len(invocations))
+		for i, invocation := range invocations {
+			if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil {
+				self.ServerError(w, err)
+				return
+			} else {
+				runs[i] = &run
+			}
+		}
+
 		self.json(w, runs, http.StatusOK)
+	}
+}
+
+func (self *Web) ApiInvocationByInputGet(w http.ResponseWriter, req *http.Request) {
+	if recursive, ok, factIds, err := getByInputParams(req); err != nil {
+		self.ClientError(w, err)
+	} else if page, err := getPage(req); err != nil {
+		self.ServerError(w, err)
+	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, ok, page); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
+	} else {
+		self.json(w, invocations, http.StatusOK)
 	}
 }
 
@@ -788,11 +889,27 @@ func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, err)
+	} else if inputs, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
+		self.NotFound(w, errors.WithMessage(err, "Could not get Invocation's inputs"))
+	} else if action, err := self.ActionService.GetByInvocationId(id); err != nil {
+		self.ServerError(w, err)
+	} else if result, err := inputs.MapStringInterface(action.Inputs); err != nil {
+		self.ServerError(w, err)
+	} else {
+		self.json(w, result, http.StatusOK)
+	}
+}
+
 func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
-	} else if inputs, err := self.RunService.GetInputFactIdsByNomadJobId(id); err != nil {
-		self.NotFound(w, errors.WithMessage(err, "Could not get Run inputs"))
+	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.NotFound(w, err)
+	} else if inputs, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
+		self.NotFound(w, errors.WithMessage(err, "Could not get Run's Invocation's inputs"))
 	} else if action, err := self.ActionService.GetByRunId(id); err != nil {
 		self.ServerError(w, err)
 	} else if result, err := inputs.MapStringInterface(action.Inputs); err != nil {

@@ -15,7 +15,7 @@
 			</tr>
 		</thead>
 		<tbody>
-			{{range .Runs}}
+			{{range .Entries}}
 				<tr>
 					<td>
 						{{with .Action}}
@@ -24,31 +24,47 @@
 							</a>
 						{{end}}
 					</td>
-					<td>{{.CreatedAt}}</td>
-					<td>
-						{{if .FinishedAt}}
-							{{.FinishedAt}}
-						{{else}}
-							<form
-								method="POST"
-								action="/_dispatch/method/DELETE/run/{{.NomadJobID}}"
-							>
-								<button>Cancel</button>
-							</form>
+					{{with .Run}}
+						<td>{{.CreatedAt}}</td>
+						<td>
+							{{if .FinishedAt}}
+								{{.FinishedAt}}
+							{{else}}
+								<form
+									method="POST"
+									action="/_dispatch/method/DELETE/run/{{.NomadJobID}}"
+								>
+									<button>Cancel</button>
+								</form>
+							{{end}}
+						</td>
+						<td class="numerical">
+							{{if .FinishedAt}}
+								{{.FinishedAt.Sub .CreatedAt}}
+							{{else}}
+								{{timeNow.Sub .CreatedAt}}
+							{{end}}
+						</td>
+						<td>
+							<a href="/run/{{.NomadJobID}}">
+								{{.NomadJobID}}
+							</a>
+						</td>
+					{{else}}
+						{{with .Invocation}}
+							<td>{{.CreatedAt}}</td>
+							<td colspan="3">
+								Failed:
+								<pre>
+								{{.EvalStdout}}
+								{{.EvalStderr}}
+								</pre>
+								<a href="/invocation/{{.Id}}">
+									{{.Id}}
+								</a>
+							</td>
 						{{end}}
-					</td>
-					<td class="numerical">
-						{{if .FinishedAt}}
-							{{.FinishedAt.Sub .CreatedAt}}
-						{{else}}
-							{{timeNow.Sub .CreatedAt}}
-						{{end}}
-					</td>
-					<td>
-						<a href="/run/{{.NomadJobID}}">
-							{{.NomadJobID}}
-						</a>
-					</td>
+					{{end}}
 				</tr>
 			{{end}}
 		</tbody>

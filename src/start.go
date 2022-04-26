@@ -89,8 +89,11 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	evaluationService := once(func() interface{} {
 		return service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, logger)
 	})
+	invocationService := once(func() interface{} {
+		return service.NewInvocationService(db().(config.PgxIface), logger)
+	})
 	actionService := once(func() interface{} {
-		return service.NewActionService(db().(config.PgxIface), nomadClientWrapper().(application.NomadClient), runService().(service.RunService), evaluationService().(service.EvaluationService), logger)
+		return service.NewActionService(db().(config.PgxIface), nomadClientWrapper().(application.NomadClient), invocationService().(service.InvocationService), runService().(service.RunService), evaluationService().(service.EvaluationService), logger)
 	})
 	factService := once(func() interface{} {
 		return service.NewFactService(db().(config.PgxIface), actionService().(service.ActionService), logger)
@@ -119,6 +122,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		child := web.Web{
 			Logger:            logger.With().Str("component", "Web").Logger(),
 			Listen:            cmd.WebListen,
+			InvocationService: invocationService().(service.InvocationService),
 			RunService:        runService().(service.RunService),
 			ActionService:     actionService().(service.ActionService),
 			FactService:       factService().(service.FactService),

@@ -22,10 +22,10 @@ func TestShouldGetRunByActionId(t *testing.T) {
 	actionId := uuid.New()
 
 	run := domain.Run{
-		NomadJobID: uuid.New(),
-		ActionId:   uuid.New(),
-		CreatedAt:  now,
-		FinishedAt: &now,
+		NomadJobID:   uuid.New(),
+		InvocationId: uuid.New(),
+		CreatedAt:    now,
+		FinishedAt:   &now,
 	}
 
 	page := repository.Page{
@@ -39,7 +39,7 @@ func TestShouldGetRunByActionId(t *testing.T) {
 		t.Fatalf("an error %q was not expected when opening a stub database connection", err)
 	}
 	defer mock.Close(context.Background())
-	rows := mock.NewRows([]string{"nomad_job_id", "action_id", "created_at", "finished_at"}).AddRow(run.NomadJobID, run.ActionId, run.CreatedAt, run.FinishedAt)
+	rows := mock.NewRows([]string{"nomad_job_id", "invocation_id", "created_at", "finished_at"}).AddRow(run.NomadJobID, run.InvocationId, run.CreatedAt, run.FinishedAt)
 	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId, page.Limit, page.Offset).WillReturnRows(rows)
 	repository := NewRunRepository(mock)
 
@@ -49,7 +49,7 @@ func TestShouldGetRunByActionId(t *testing.T) {
 	// then
 	assert.Nil(t, err)
 	assert.Equal(t, runResult[0].NomadJobID, run.NomadJobID)
-	assert.Equal(t, runResult[0].ActionId, run.ActionId)
+	assert.Equal(t, runResult[0].InvocationId, run.InvocationId)
 	assert.Equal(t, runResult[0].CreatedAt, run.CreatedAt)
 	assert.Equal(t, runResult[0].FinishedAt, run.FinishedAt)
 }
@@ -58,10 +58,10 @@ func TestShouldUpdateRun(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
 	run := domain.Run{
-		NomadJobID: uuid.New(),
-		ActionId:   uuid.New(),
-		CreatedAt:  now,
-		FinishedAt: &now,
+		NomadJobID:   uuid.New(),
+		InvocationId: uuid.New(),
+		CreatedAt:    now,
+		FinishedAt:   &now,
 	}
 
 	// given

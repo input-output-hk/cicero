@@ -35,13 +35,31 @@ func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err erro
 	return
 }
 
+func (a *actionRepository) GetByInvocationId(id uuid.UUID) (action domain.Action, err error) {
+	err = pgxscan.Get(
+		context.Background(), a.DB, &action,
+		`SELECT * FROM action WHERE EXISTS (
+			SELECT NULL
+			FROM invocation
+			WHERE
+				invocation.id = $1 AND 
+				invocation.action_id = action.id
+		)`,
+		id,
+	)
+	return
+}
+
 func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
 	err = pgxscan.Get(
 		context.Background(), a.DB, &action,
 		`SELECT * FROM action WHERE EXISTS (
-			SELECT NULL FROM run WHERE
-				run.nomad_job_id = $1 AND
-				run.action_id = action.id
+			SELECT NULL
+			FROM run
+			JOIN invocation ON
+				invocation.id = run.invocation_id AND
+				invocation.action_id = action.id
+			WHERE run.nomad_job_id = $1
 		)`,
 		id,
 	)
