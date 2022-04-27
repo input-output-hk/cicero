@@ -92,7 +92,7 @@ var templateFuncs = template.FuncMap{
 	"subInt": func(a int, b int) int {
 		return a - b
 	},
-	"maxInt": func (a int, b int) int {
+	"maxInt": func(a int, b int) int {
 		if b > a {
 			return b
 		}

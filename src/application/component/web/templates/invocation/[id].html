@@ -1,0 +1,114 @@
+{{template "layout.html" .}}
+
+{{define "main"}}
+	{{with .Invocation}}
+		<div class="content-flex">
+			<table class="table vertical">
+				<thead>
+					<tr>
+						<th colspan="2">
+							General Information
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<th>ID</th>
+						<td>{{.Id}}</td>
+					</tr>
+					<tr>
+						<th>Action ID</th>
+						<td>
+							<a href="/action/{{.ActionId}}">
+								{{.ActionId}}
+							</a>
+						</td>
+					</tr>
+					<tr>
+						<th>Created at</th>
+						<td>{{.CreatedAt}}</td>
+					</tr>
+					{{with $.Run}}
+						<tr>
+							<th>Duration</th>
+							<td>{{.Run.CreatedAt.Sub .CreatedAt}}</td>
+						</tr>
+						<tr>
+							<th>Run</th>
+							<td>
+								<a href="/run/{{.NomadJobID}}">
+									{{.NomadJobID}}
+								</a>
+							</td>
+						</tr>
+					{{else}}
+						<tr>
+							<td colspan="2" style="text-align: center">
+								<em>Invocation failed</em>
+							</td>
+						</tr>
+					{{end}}
+				</tbody>
+			</table>
+
+			<table class="table">
+				<thead>
+					<tr>
+						<th
+							colspan="2"
+							title="Facts that satisfy inputs"
+						>
+							Inputs
+						</th>
+					</tr>
+					<tr>
+						<th>Name</th>
+						<th>Facts</th>
+					</tr>
+				</thead>
+				<tbody>
+					{{range $name, $facts := $.inputs}}
+						<tr>
+							<td>{{$name}}</td>
+							<td>{{template "facts" .}}</td>
+						</tr>
+					{{else}}
+						<tr>
+							<td colspan="2">
+								<em>
+									<p>No facts found that satisfy any inputs.</p>
+									<p>
+										That is correct if this action has only optional or negated inputs.<br/>
+										Otherwise, maybe they were garbage collected?
+									</p>
+								</em>
+							</td>
+						</tr>
+					{{end}}
+				</tbody>
+			</table>
+		</div>
+
+		<h2>Stderr</h2>
+		{{with .EvalStderr}}
+			{{with derefString .}}
+				<div class="panel" style="padding: 0.25em 0.5em">
+					<samp class="log stderr" style="white-space: pre">{{.}}</samp>
+				</div>
+			{{else}}
+				<em>no output</em>
+			{{end}}
+		{{end}}
+
+		<h2>Stdout</h2>
+		{{with .EvalStdout}}
+			{{with derefString .}}
+				<div class="panel" style="padding: 0.25em 0.5em">
+					<samp class="log" style="white-space: pre">{{.}}</samp>
+				</div>
+			{{else}}
+				<em>no output</em>
+			{{end}}
+		{{end}}
+	{{end}}
+{{end}}

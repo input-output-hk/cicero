@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/davidebianchi/gswagger/apirouter"
@@ -312,6 +311,7 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/invocation/{id}", self.InvocationIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdDelete).Methods(http.MethodDelete)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
@@ -494,6 +494,48 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
+	id, err := uuid.Parse(mux.Vars(req)["id"])
+	if err != nil {
+		self.ClientError(w, err)
+		return
+	}
+
+	invocation, err := self.InvocationService.GetById(id)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	var run *domain.Run
+	if run_, err := self.RunService.GetByInvocationId(id); err != nil && !pgxscan.NotFound(err) {
+		self.ServerError(w, err)
+		return
+	} else {
+		run = &run_
+	}
+
+	var inputs map[string][]domain.Fact
+	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
+		return
+	} else if inputs_, err := self.FactService.GetInvocationInputFacts(inputFactIds); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
+		return
+	} else {
+		inputs = inputs_
+	}
+
+	if err := render("invocation/[id].html", w, map[string]interface{}{
+		"Invocation": invocation,
+		"run":        run,
+		"inputs":     inputs,
+	}); err != nil {
+		self.ServerError(w, err)
+		return
+	}
+}
+
 func (self *Web) RunIdDelete(w http.ResponseWriter, req *http.Request) {
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
@@ -540,57 +582,15 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		allocsByGroup[alloc.TaskGroup] = append(allocsByGroup[alloc.TaskGroup], alloc)
 	}
 
-	inputs := map[string][]domain.Fact{}
+	var inputs map[string][]domain.Fact
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
+		return
+	} else if inputs_, err := self.FactService.GetInvocationInputFacts(inputFactIds); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
 		return
 	} else {
-		count := 0
-
-		for _, ids := range inputFactIds {
-			count += len(ids)
-		}
-
-		wg := &sync.WaitGroup{}
-		type Res struct {
-			input string
-			i     int
-			fact  domain.Fact
-			err   error
-		}
-		res := make(chan *Res, count)
-
-		for input, ids := range inputFactIds {
-			inputs[input] = make([]domain.Fact, len(ids))
-
-			for i, id := range ids {
-				wg.Add(1)
-
-				go func(input string, i int, id uuid.UUID) {
-					defer wg.Done()
-					if fact, err := self.FactService.GetById(id); err != nil {
-						res <- &Res{err: err}
-					} else {
-						res <- &Res{input: input, i: i, fact: fact}
-					}
-				}(input, i, id)
-			}
-		}
-
-		wg.Wait()
-
-		for j := 0; j < count; j++ {
-			select {
-			case result := <-res:
-				if result.err != nil {
-					self.ServerError(w, result.err)
-					return
-				} else {
-					inputs[result.input][result.i] = result.fact
-				}
-			default:
-			}
-		}
+		inputs = inputs_
 	}
 
 	output, err := self.RunService.GetOutputByNomadJobId(id)
@@ -704,7 +704,7 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 			*repository.Page
 		}{
 			Entries: entries,
-			Page: page,
+			Page:    page,
 		}); err != nil {
 			self.ServerError(w, err)
 			return

@@ -54,7 +54,8 @@
 						{{with .Invocation}}
 							<td>{{.CreatedAt}}</td>
 							<td colspan="3">
-								Invocation failed:
+								<a href="/invocation/{{.Id}}">Invocation</a>
+								failed:
 								{{$maxChars := 90}}
 								{{$hasStderr := false}}
 								{{with .EvalStderr}}
