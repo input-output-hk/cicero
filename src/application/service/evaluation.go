@@ -113,7 +113,7 @@ func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byt
 		cmd.Env = append(os.Environ(), cmdEnv...)            //nolint:gocritic // false positive
 
 		e.logger.Debug().
-			Strs("command", cmd.Args).
+			Stringer("command", cmd).
 			Strs("environment", cmdEnv).
 			Msg("Running evaluator")
 
@@ -271,7 +271,7 @@ func (e *evaluationService) transform(output []byte, extraEnv []string) ([]byte,
 		}
 
 		e.logger.Debug().
-			Strs("command", cmd.Args).
+			Stringer("command", cmd).
 			Strs("environment", extraEnv).
 			Str("transformer", transformer).
 			Msg("Running transformer")
