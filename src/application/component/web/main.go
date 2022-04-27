@@ -389,18 +389,38 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 	} else if page, err := getPage(req); err != nil {
 		self.BadRequest(w, err)
 		return
-	} else if runs, err := self.RunService.GetByActionId(id, page); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "Could not get Runs by Action ID: %q", id))
+	} else if invocations, err := self.InvocationService.GetByActionId(id, page); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get Invocations by Action ID: %q", id))
 		return
-	} else if err := render("action/runs.html", w, struct {
-		Runs []*domain.Run
-		*repository.Page
-	}{
-		Runs: runs,
-		Page: page,
-	}); err != nil {
-		self.ServerError(w, err)
-		return
+	} else {
+		type Entry struct {
+			Invocation *domain.Invocation
+			Run        *domain.Run
+		}
+
+		entries := make([]Entry, len(invocations))
+		// XXX parallelize
+		for i, invocation := range invocations {
+			if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil && !pgxscan.NotFound(err) {
+				self.ServerError(w, err)
+				return
+			} else {
+				var runPtr *domain.Run
+				if err == nil {
+					runPtr = &run
+				}
+
+				entries[i] = Entry{invocation, runPtr}
+			}
+		}
+
+		if err := render("action/runs.html", w, struct {
+			Entries []Entry
+			*repository.Page
+		}{entries, page}); err != nil {
+			self.ServerError(w, err)
+			return
+		}
 	}
 }
 
@@ -678,6 +698,7 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 		}
 
 		entries := make([]Entry, len(invocations))
+		// XXX parallelize
 		for i, invocation := range invocations {
 			if action, err := self.ActionService.GetByInvocationId(invocation.Id); err != nil {
 				self.ServerError(w, err)
@@ -691,21 +712,14 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 					runPtr = &run
 				}
 
-				entries[i] = Entry{
-					Invocation: invocation,
-					Run:        runPtr,
-					Action:     &action,
-				}
+				entries[i] = Entry{runPtr, invocation, &action}
 			}
 		}
 
 		if err := render("run/index.html", w, struct {
 			Entries []Entry
 			*repository.Page
-		}{
-			Entries: entries,
-			Page:    page,
-		}); err != nil {
+		}{entries, page}); err != nil {
 			self.ServerError(w, err)
 			return
 		}
