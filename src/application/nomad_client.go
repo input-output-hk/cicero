@@ -26,11 +26,8 @@ func (self *nomadClient) EventStream(ctx context.Context, nomadIndex uint64) (<-
 	return self.nClient.EventStream().Stream(
 		ctx,
 		map[nomad.Topic][]string{
-			nomad.TopicDeployment: {string(nomad.TopicAll)},
-			nomad.TopicEvaluation: {string(nomad.TopicAll)},
 			nomad.TopicAllocation: {string(nomad.TopicAll)},
 			nomad.TopicJob:        {string(nomad.TopicAll)},
-			nomad.TopicNode:       {string(nomad.TopicAll)},
 		},
 		nomadIndex,
 		nil,
