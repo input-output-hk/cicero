@@ -37,6 +37,7 @@ type ActionService interface {
 	Update(*domain.Action) error
 	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
 	Create(string, string) (*domain.Action, error)
+	// Returns a nil pointer for the first and second return value if the Action was not runnable.
 	Invoke(*domain.Action) (*domain.Run, func() error, error)
 	InvokeCurrentActive() ([]EvaluationError, error)
 }
@@ -573,16 +574,16 @@ func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() er
 			}
 		}
 
-		run := domain.Run{InvocationId: invocation.Id}
+		tmpRun := domain.Run{InvocationId: invocation.Id}
 
-		if err := self.runService.WithQuerier(tx).Save(&run, &runDef.Output); err != nil {
+		if err := self.runService.WithQuerier(tx).Save(&tmpRun, &runDef.Output); err != nil {
 			return errors.WithMessage(err, "Could not insert Run")
 		}
 
 		if runDef.IsDecision() {
 			if runDef.Output.Success != nil {
 				fact := domain.Fact{
-					RunId: &run.NomadJobID,
+					RunId: &tmpRun.NomadJobID,
 					Value: runDef.Output.Success,
 				}
 				if err := self.factRepository.WithQuerier(tx).Save(&fact, nil); err != nil {
@@ -590,18 +591,19 @@ func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() er
 				}
 			}
 
-			run.CreatedAt = run.CreatedAt.UTC()
-			run.FinishedAt = &run.CreatedAt
+			tmpRun.CreatedAt = tmpRun.CreatedAt.UTC()
+			tmpRun.FinishedAt = &tmpRun.CreatedAt
 
-			err := self.runService.WithQuerier(tx).Update(&run)
+			err := self.runService.WithQuerier(tx).Update(&tmpRun)
 			err = errors.WithMessage(err, "Could not update decision Run")
 
 			return err
 		}
 
-		runId := run.NomadJobID.String()
+		runId := tmpRun.NomadJobID.String()
 		runDef.Job.ID = &runId
 
+		run = &tmpRun
 		registerFunc = func() error {
 			if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run Action")
@@ -642,18 +644,16 @@ func (self *actionService) InvokeCurrentActive() ([]EvaluationError, error) {
 			anyRunnable := false
 
 			for _, action := range actions {
-				if run, registerFunc, err := txSelf.Invoke(action); err != nil {
+				if _, registerFunc, err := txSelf.Invoke(action); err != nil {
 					var evalErr *EvaluationError
 					if errors.As(err, &evalErr) {
 						evalErrs = append(evalErrs, *evalErr)
 					} else {
 						return err
 					}
-				} else {
-					anyRunnable = anyRunnable || run != nil
-					if registerFunc != nil {
-						registerFuncs = append(registerFuncs, registerFunc)
-					}
+				} else if registerFunc != nil {
+					anyRunnable = true
+					registerFuncs = append(registerFuncs, registerFunc)
 				}
 			}
 
