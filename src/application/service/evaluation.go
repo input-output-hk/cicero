@@ -89,12 +89,10 @@ func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byt
 		return nil, err
 	}
 
-	result, err := getter.GetAny(context.Background(), dst, fetchUrl.String())
-	if err != nil {
+	if result, err := getter.GetAny(context.Background(), dst, fetchUrl.String()); err != nil {
 		return nil, err
-	}
-	if result.Dst != dst {
-		return nil, errors.WithMessage(err, "go-getter did not download to the given directory. This should never happen™")
+	} else if result.Dst != dst {
+		panic("go-getter did not download to the given directory. This should never happen™")
 	}
 
 	tryEval := func(evaluator string) ([]byte, error) {
