@@ -174,3 +174,11 @@ dl.inline > dd:not(:last-child)::after {
 	content: ', ';
 	white-space: pre;
 }
+
+.log {
+	font-size: .8rem;
+	font-family: "SFMono-Regular", Monaco, Menlo, Consolas, "Liberation Mono", Courier, monospace;
+}
+.log.stderr {
+	color: red;
+}

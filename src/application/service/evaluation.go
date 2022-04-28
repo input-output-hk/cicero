@@ -59,15 +59,16 @@ func NewEvaluationService(evaluators, transformers []string, logger *zerolog.Log
 
 // Evaluation failed due to a faulty action definition or transformer output.
 type EvaluationError struct {
-	err error
+	*exec.ExitError
+	Stdout []byte
 }
 
-func (e EvaluationError) Error() string {
-	return e.err.Error()
+func (e *EvaluationError) Error() string {
+	return fmt.Sprintf("%s\nStderr: %s\nStdout: %s", e.ExitError, e.Stderr, e.Stdout)
 }
 
-func (e EvaluationError) Unwrap() error {
-	return e.err
+func (e *EvaluationError) Unwrap() error {
+	return e.ExitError
 }
 
 func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byte, error) {
@@ -107,17 +108,13 @@ func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byt
 			Msg("Running evaluator")
 
 		if output, err := cmd.Output(); err != nil {
-			message := "Failed to evaluate"
-
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
-				message += fmt.Sprintf("\nStdout: %s\nStderr: %s", output, errExit.Stderr)
-				err = EvaluationError{err: errors.WithMessage(err, message)}
+				err = errors.WithMessage(&EvaluationError{errExit, output}, "Failed to evaluate")
 			}
-
 			return nil, err
 		} else {
-			return output, err
+			return output, nil
 		}
 	}
 
@@ -270,12 +267,9 @@ func (e *evaluationService) transform(output []byte, extraEnv []string) ([]byte,
 			Msg("Running transformer")
 
 		if transformedOutput, err := cmd.Output(); err != nil {
-			message := "Failed to transform"
-
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
-				message += fmt.Sprintf("\nStdout: %s\nStderr: %s", transformedOutput, errExit.Stderr)
-				err = EvaluationError{err: errors.WithMessage(err, message)}
+				err = errors.WithMessage(&EvaluationError{errExit, transformedOutput}, "Failed to transform")
 			}
 
 			return nil, err

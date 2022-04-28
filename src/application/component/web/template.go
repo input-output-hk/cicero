@@ -86,6 +86,18 @@ var templateFuncs = template.FuncMap{
 	"derefInt": func(ptr *int) int {
 		return *ptr
 	},
+	"derefString": func(ptr *string) string {
+		return *ptr
+	},
+	"subInt": func(a int, b int) int {
+		return a - b
+	},
+	"maxInt": func(a int, b int) int {
+		if b > a {
+			return b
+		}
+		return a
+	},
 	"InputDefinitionSelectString": func(inputDefinitionSelect domain.InputDefinitionSelect) (string, error) {
 		return inputDefinitionSelect.String()
 	},

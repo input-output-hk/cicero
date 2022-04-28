@@ -34,13 +34,12 @@ type RunService interface {
 
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetByNomadJobIdWithLock(uuid.UUID, string) (domain.Run, error)
-	GetInputFactIdsByNomadJobId(uuid.UUID) (repository.RunInputFactIds, error)
+	GetByInvocationId(uuid.UUID) (domain.Run, error)
 	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (domain.Run, error)
 	GetAll(*repository.Page) ([]*domain.Run, error)
-	GetByInputFactIds([]*uuid.UUID, bool, *repository.Page) ([]*domain.Run, error)
-	Save(*domain.Run, map[string]interface{}, *domain.RunOutput) error
+	Save(*domain.Run, *domain.RunOutput) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
@@ -108,10 +107,10 @@ func (self *runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run 
 	return
 }
 
-func (self *runService) GetInputFactIdsByNomadJobId(id uuid.UUID) (inputFactIds repository.RunInputFactIds, err error) {
-	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run input fact IDs by Nomad Job ID")
-	inputFactIds, err = self.runRepository.GetInputFactIdsByNomadJobId(id)
-	err = errors.WithMessagef(err, "Could not select Run input fact IDs by Nomad Job ID %q", id)
+func (self *runService) GetByInvocationId(invocationId uuid.UUID) (run domain.Run, err error) {
+	self.logger.Trace().Str("invocation-id", invocationId.String()).Msg("Getting Runs by input Fact IDs")
+	run, err = self.runRepository.GetByInvocationId(invocationId)
+	err = errors.WithMessagef(err, "Could not select Runs by Invocation ID %q", invocationId)
 	return
 }
 
@@ -143,17 +142,10 @@ func (self *runService) GetAll(page *repository.Page) (runs []*domain.Run, err e
 	return
 }
 
-func (self *runService) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, page *repository.Page) (runs []*domain.Run, err error) {
-	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Interface("input-fact-ids", factIds).Bool("recursive", recursive).Msg("Getting Runs by input Fact IDs")
-	runs, err = self.runRepository.GetByInputFactIds(factIds, recursive, page)
-	err = errors.WithMessagef(err, "Could not select Runs by input fact IDs %q (recursively: %t) with offset %d and limit %d", factIds, recursive, page.Offset, page.Limit)
-	return
-}
-
-func (self *runService) Save(run *domain.Run, inputs map[string]interface{}, output *domain.RunOutput) error {
+func (self *runService) Save(run *domain.Run, output *domain.RunOutput) error {
 	self.logger.Trace().Msg("Saving new Run")
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.runRepository.WithQuerier(tx).Save(run, inputs); err != nil {
+		if err := self.runRepository.WithQuerier(tx).Save(run); err != nil {
 			return errors.WithMessagef(err, "Could not insert Run")
 		}
 		if err := self.runOutputRepository.WithQuerier(tx).Save(run.NomadJobID, output); err != nil {

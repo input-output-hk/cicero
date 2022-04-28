@@ -212,10 +212,18 @@ type Action struct {
 }
 
 type Run struct {
-	NomadJobID uuid.UUID  `json:"nomad_job_id"`
-	ActionId   uuid.UUID  `json:"action_id"`
-	CreatedAt  time.Time  `json:"created_at"`
-	FinishedAt *time.Time `json:"finished_at"`
+	NomadJobID   uuid.UUID  `json:"nomad_job_id"`
+	InvocationId uuid.UUID  `json:"invocation_id"`
+	CreatedAt    time.Time  `json:"created_at"`
+	FinishedAt   *time.Time `json:"finished_at"`
+}
+
+type Invocation struct {
+	Id         uuid.UUID `json:"id"`
+	ActionId   uuid.UUID `json:"action_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	EvalStdout *string   `json:"eval_stdout"`
+	EvalStderr *string   `json:"eval_stderr"`
 }
 
 type NomadEvent struct {

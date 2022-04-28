@@ -26,6 +26,7 @@ type ActionService interface {
 	WithQuerier(config.PgxIface) ActionService
 
 	GetById(uuid.UUID) (domain.Action, error)
+	GetByInvocationId(uuid.UUID) (domain.Action, error)
 	GetByRunId(uuid.UUID) (domain.Action, error)
 	GetByName(string, *repository.Page) ([]*domain.Action, error)
 	GetLatestByName(string) (domain.Action, error)
@@ -36,25 +37,27 @@ type ActionService interface {
 	Update(*domain.Action) error
 	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
 	Create(string, string) (*domain.Action, error)
-	Invoke(*domain.Action) (bool, func() error, error)
-	InvokeCurrentActive() error
+	Invoke(*domain.Action) (*domain.Run, func() error, error)
+	InvokeCurrentActive() ([]EvaluationError, error)
 }
 
 type actionService struct {
 	logger            zerolog.Logger
 	actionRepository  repository.ActionRepository
 	factRepository    repository.FactRepository
+	invocationService InvocationService
 	evaluationService EvaluationService
 	runService        RunService
 	nomadClient       application.NomadClient
 	db                config.PgxIface
 }
 
-func NewActionService(db config.PgxIface, nomadClient application.NomadClient, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
+func NewActionService(db config.PgxIface, nomadClient application.NomadClient, invocationService InvocationService, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
 	return &actionService{
 		logger:            logger.With().Str("component", "ActionService").Logger(),
 		actionRepository:  persistence.NewActionRepository(db),
 		factRepository:    persistence.NewFactRepository(db),
+		invocationService: invocationService,
 		evaluationService: evaluationService,
 		nomadClient:       nomadClient,
 		runService:        runService,
@@ -67,6 +70,7 @@ func (self *actionService) WithQuerier(querier config.PgxIface) ActionService {
 		logger:            self.logger,
 		actionRepository:  self.actionRepository.WithQuerier(querier),
 		factRepository:    self.factRepository.WithQuerier(querier),
+		invocationService: self.invocationService.WithQuerier(querier),
 		runService:        self.runService.WithQuerier(querier),
 		evaluationService: self.evaluationService,
 		nomadClient:       self.nomadClient,
@@ -85,6 +89,13 @@ func (self *actionService) GetByRunId(id uuid.UUID) (action domain.Action, err e
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Run ID")
 	action, err = self.actionRepository.GetByRunId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Run ID %q", id)
+	return
+}
+
+func (self *actionService) GetByInvocationId(id uuid.UUID) (action domain.Action, err error) {
+	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Invocation ID")
+	action, err = self.actionRepository.GetByInvocationId(id)
+	err = errors.WithMessagef(err, "Could not select existing Action for Invocation ID %q", id)
 	return
 }
 
@@ -294,7 +305,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 		}
 	} else {
 		var inputFactIds map[string][]uuid.UUID
-		if inputFactIds, err = self.runService.GetInputFactIdsByNomadJobId(run.NomadJobID); err != nil {
+		if inputFactIds, err = self.invocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 			if !pgxscan.NotFound(err) {
 				return false, nil, err
 			}
@@ -516,35 +527,55 @@ func (self *actionService) Create(source, name string) (*domain.Action, error) {
 	return &action, nil
 }
 
-func (self *actionService) Invoke(action *domain.Action) (bool, func() error, error) {
-	runnable := false
+func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() error, error) {
+	var run *domain.Run
 	var registerFunc func() error
-	return runnable, registerFunc, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	var evalErr *EvaluationError
+
+	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
-		runnable_, inputs, err := txSelf.IsRunnable(action)
-		runnable = runnable_
+		runnable, inputs, err := txSelf.IsRunnable(action)
 		if err != nil || !runnable {
+			return err
+		}
+
+		invocation := domain.Invocation{ActionId: action.ID}
+
+		if err := self.invocationService.WithQuerier(tx).Save(&invocation, inputs); err != nil {
 			return err
 		}
 
 		runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs)
 		if err != nil {
-			var evalErr EvaluationError
 			if errors.As(err, &evalErr) {
 				self.logger.Err(evalErr).
 					Str("source", action.Source).
 					Str("name", action.Name).
 					Msg("Could not evaluate action")
+
+				{
+					stdout := string(evalErr.Stdout)
+					invocation.EvalStdout = &stdout
+
+					stderr := string(evalErr.Stderr)
+					invocation.EvalStderr = &stderr
+				}
+				if err := self.invocationService.WithQuerier(tx).Update(&invocation); err != nil {
+					return err
+				}
+
+				// Do not return the evalErr so that the transaction commits
+				// and the invocation is updated with the error.
+				return nil
+			} else {
+				return err
 			}
-			return err
 		}
 
-		run := domain.Run{
-			ActionId: action.ID,
-		}
+		run := domain.Run{InvocationId: invocation.Id}
 
-		if err := self.runService.WithQuerier(tx).Save(&run, inputs, &runDef.Output); err != nil {
+		if err := self.runService.WithQuerier(tx).Save(&run, &runDef.Output); err != nil {
 			return errors.WithMessage(err, "Could not insert Run")
 		}
 
@@ -585,11 +616,19 @@ func (self *actionService) Invoke(action *domain.Action) (bool, func() error, er
 		}
 
 		return nil
-	})
+	}); err != nil {
+		return run, registerFunc, err
+	}
+
+	if evalErr != nil {
+		return run, registerFunc, evalErr
+	}
+	return run, registerFunc, nil
 }
 
-func (self *actionService) InvokeCurrentActive() error {
-	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+func (self *actionService) InvokeCurrentActive() ([]EvaluationError, error) {
+	evalErrs := []EvaluationError{}
+	return evalErrs, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		registerFuncs := []func() error{}
 
 		txSelf := self.WithQuerier(tx)
@@ -601,14 +640,17 @@ func (self *actionService) InvokeCurrentActive() error {
 
 		for {
 			anyRunnable := false
-			var anyErr error
 
 			for _, action := range actions {
-				runnable, registerFunc, err := txSelf.Invoke(action)
-				if err != nil {
-					anyErr = err
+				if run, registerFunc, err := txSelf.Invoke(action); err != nil {
+					var evalErr *EvaluationError
+					if errors.As(err, &evalErr) {
+						evalErrs = append(evalErrs, *evalErr)
+					} else {
+						return err
+					}
 				} else {
-					anyRunnable = anyRunnable || runnable
+					anyRunnable = anyRunnable || run != nil
 					if registerFunc != nil {
 						registerFuncs = append(registerFuncs, registerFunc)
 					}
@@ -616,9 +658,6 @@ func (self *actionService) InvokeCurrentActive() error {
 			}
 
 			if !anyRunnable {
-				if anyErr != nil {
-					return anyErr
-				}
 				break
 			}
 		}

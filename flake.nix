@@ -125,7 +125,7 @@
         {
           cicero = prev.callPackage pkgs/cicero {flake = self;};
           cicero-entrypoint = prev.callPackage pkgs/cicero/entrypoint.nix {};
-          cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix {flake = self;};
+          cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix {};
           webhook-trigger = prev.callPackage pkgs/trigger {};
           handbook = prev.callPackage ./pkgs/handbook {};
           handbook-entrypoint = final.callPackage ./pkgs/handbook/entrypoint.nix {};

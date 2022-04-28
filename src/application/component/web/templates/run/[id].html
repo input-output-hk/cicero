@@ -503,9 +503,9 @@
 											{{if (index $alloc.Logs $taskName)}}
 												<table class="panel log">
 													{{range (index $alloc.Logs $taskName)}}
-														<tr class="{{.Source}}">
+														<tr>
 															<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-															<td><samp>{{.Text}}</samp></td>
+															<td><samp class="log {{.Source}}">{{.Text}}</samp></td>
 														</tr>
 													{{end}}
 												</table>
@@ -524,11 +524,8 @@
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/charts.css/dist/charts.min.css">
 
 	<style>
-	#{{$scope}} table.log,
-	#{{$scope}} table.log dl {
+	#{{$scope}} table.log {
 		width: 100%;
-		font-size: .8rem;
-		font-family: "SFMono-Regular", Monaco, Menlo, Consolas, "Liberation Mono", Courier, monospace;
 	}
 
 	#{{$scope}} table.log > tbody > tr > td:first-child {
@@ -543,10 +540,6 @@
 
 	#{{$scope}} table.log > tbody > tr > td:nth-child(2) {
 		padding-left: .5em;
-	}
-
-	#{{$scope}} table.log .stderr {
-		color: red;
 	}
 
 	#{{$scope}} label {

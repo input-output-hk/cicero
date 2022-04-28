@@ -16,9 +16,6 @@
   nixpkgs.overlays = [
     self.inputs.spongix.overlay
     self.inputs.follower.overlay
-
-    # TODO nix 2.8 fails this command:
-    # nix profile install --profile ./x github:NixOS/nix#nix github:NixOS/nixpkgs#cacert
     self.inputs.nix.overlay
   ];
 

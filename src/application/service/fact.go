@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"io"
+	"sync"
 
 	"cuelang.org/go/cue"
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ type FactService interface {
 	GetLatestByCue(cue.Value) (domain.Fact, error)
 	GetByCue(cue.Value) ([]*domain.Fact, error)
 	Save(*domain.Fact, io.Reader) error
+	GetInvocationInputFacts(repository.InvocationInputFactIds) (map[string][]domain.Fact, error)
 }
 
 type factService struct {
@@ -81,7 +83,10 @@ func (self *factService) Save(fact *domain.Fact, binary io.Reader) error {
 		}
 		self.logger.Trace().Str("id", fact.ID.String()).Msg("Created Fact")
 
-		return self.actionService.WithQuerier(tx).InvokeCurrentActive()
+		if _, err := self.actionService.WithQuerier(tx).InvokeCurrentActive(); err != nil {
+			return errors.WithMessagef(err, "Could not invoke currently active Actions")
+		}
+		return nil
 	})
 }
 
@@ -97,4 +102,56 @@ func (self *factService) GetByCue(value cue.Value) (facts []*domain.Fact, err er
 	facts, err = self.factRepository.GetByCue(value)
 	err = errors.WithMessagef(err, "Could not select Facts by CUE %q", value)
 	return
+}
+
+// XXX Could probably be done entirely in the DB with a single SQL query (maybe as `InvocationService.GetInputsById()`).
+func (self *factService) GetInvocationInputFacts(inputFactIds repository.InvocationInputFactIds) (map[string][]domain.Fact, error) {
+	inputs := map[string][]domain.Fact{}
+	count := 0
+
+	for _, ids := range inputFactIds {
+		count += len(ids)
+	}
+
+	wg := &sync.WaitGroup{}
+	type Res struct {
+		input string
+		i     int
+		fact  domain.Fact
+		err   error
+	}
+	res := make(chan *Res, count)
+
+	for input, ids := range inputFactIds {
+		inputs[input] = make([]domain.Fact, len(ids))
+
+		for i, id := range ids {
+			wg.Add(1)
+
+			go func(input string, i int, id uuid.UUID) {
+				defer wg.Done()
+				if fact, err := self.GetById(id); err != nil {
+					res <- &Res{err: err}
+				} else {
+					res <- &Res{input: input, i: i, fact: fact}
+				}
+			}(input, i, id)
+		}
+	}
+
+	wg.Wait()
+
+	for j := 0; j < count; j++ {
+		select {
+		case result := <-res:
+			if result.err != nil {
+				return nil, result.err
+			} else {
+				inputs[result.input][result.i] = result.fact
+			}
+		default:
+		}
+	}
+
+	return inputs, nil
 }
