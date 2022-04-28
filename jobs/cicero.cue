@@ -200,7 +200,7 @@ if #env == "prod" {
 				}]
 
 				template: _transformers + [
-					{
+						{
 						destination: "secrets/netrc"
 						data: """
 							machine github.com
