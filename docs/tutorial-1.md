@@ -17,8 +17,11 @@ And the UI should correspond to:
 ![Cicero WebUI New Action](./cicero_webui_new_action.png "Cicero WebUI New Action")
 
 ## Enter the path to the Actions, which should be created
+
+**For any url the 'https://' part needs to be omitted.**
+
 The path to the Actions can be a remote path like [github.com/input-output-hk/cicero](github.com/input-output-hk/cicero)
-or a local path like [/home/developer/IOHK/cicero](/home/developer/IOHK/cicero)
+or a local path like [/home/developer/IOHK/cicero](/home/developer/IOHK/cicero).
 
 **This doesn't need to be a path to Cicero itself:**
 

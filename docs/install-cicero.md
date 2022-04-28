@@ -8,6 +8,18 @@
 git clone https://github.com/input-output-hk/cicero.git
 ```
 
+### Fix for Local paths
+
+For local paths to work in Cicero it's necessary to add the following line to nixos/configs/vm.nix
+Afterwards the Qemu VM and Cicero need to be restarted.
+
+```
+   nix = {
+     package = pkgs.nix_2_5;
+	 ...
+   };
+```
+
 ### Provide github token with read:org, repo flags
 
 ```
@@ -27,19 +39,15 @@ EOF
 nix develop
 ```
 
-### Start a development VM with Nomad, nomad-follower, Vault and Spongix:
+### Start a development Qemu VM with Nomad, nomad-follower, Vault and Spongix:
 ```
 nixos-shell --flake .
 ```
 
-### Inside the VM, run the application:
+### Open another terminal and run Cicero outside the VM:
 ```
-dev-cicero
-```
-
-### You can also run it outside the VM if you choose another port:
-```
+nix develop
 dev-cicero --web-listen :8000
 ```
 
-### Cicero's WebUI should now be available on http://localhost:8080.
+### Cicero's WebUI should now be available on http://localhost:8000.
