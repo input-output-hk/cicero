@@ -56,38 +56,38 @@
       {
         # cicero
         from = "host";
-        host.port = 8080;
+        host.port = 18080;
         guest.port = 8080;
       }
       {
         # nomad
         from = "host";
-        host.port = 4646;
+        host.port = 14646;
         guest.port = 4646;
       }
       {
         from = "host";
-        host.port = 8200;
+        host.port = 18200;
         guest.port = lib.toInt (lib.last (lib.splitString ":" config.services.vault.address));
       }
       {
         from = "host";
-        host.port = 8428;
+        host.port = 18428;
         guest.port = lib.toInt (lib.last (lib.splitString ":" config.services.victoriametrics.listenAddress));
       }
       {
         from = "host";
-        host.port = 3100;
+        host.port = 13100;
         guest.port = config.services.loki.configuration.server.http_listen_port;
       }
       {
         from = "host";
-        host.port = 7745;
+        host.port = 17745;
         guest.port = config.services.spongix.port;
       }
       {
         from = "host";
-        host.port = 5432;
+        host.port = 15432;
         guest.port = config.services.postgresql.port;
       }
     ];

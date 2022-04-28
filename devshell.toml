@@ -3,20 +3,24 @@ imports = [
 ]
 
 [[env]]
-name = "DATABASE_URL"
-value = "postgres://postgres:@127.0.0.1:5432/cicero?sslmode=disable"
-
-[[env]]
-name = "LOKI_ADDR"
-value = "http://127.0.0.1:3100"
-
-[[env]]
 name = "CONSOLE_LOGGING_ENABLED"
 value = "true"
 
 [[env]]
+name = "DATABASE_URL"
+value = "postgres://postgres:@127.0.0.1:15432/cicero?sslmode=disable"
+
+[[env]]
+name = "LOKI_ADDR"
+value = "http://127.0.0.1:13100"
+
+[[env]]
 name = "VAULT_ADDR"
-value = "http://127.0.0.1:8200"
+value = "http://127.0.0.1:18200"
+
+[[env]]
+name = "NOMAD_ADDR"
+value = "http://127.0.0.1:14646"
 
 [[commands]]
 package = "go"
