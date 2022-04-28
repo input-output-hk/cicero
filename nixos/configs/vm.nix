@@ -73,6 +73,13 @@
         config.services.postgresql.port
       ];
 
+    podman = {
+      enable = true;
+      dockerCompat = true;
+      dockerSocket.enable = true;
+      defaultNetwork.dnsname.enable = true;
+    };
+
     cores =
       if builtins.pathExists /proc/cpuinfo
       then let

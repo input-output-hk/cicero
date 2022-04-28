@@ -224,25 +224,31 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 			} else {
 				for _, tg := range job.TaskGroups {
 					for _, t := range tg.Tasks {
-						_, found := t.Config["console"]
-						if !found {
-							t.Config["console"] = "pipe"
-						}
-
-						if pkgsI, found := t.Config["packages"]; found {
-							keys := map[string]bool{}
-							for _, pkg := range pkgsI.([]interface{}) {
-								keys[pkg.(string)] = true
+						switch t.Driver {
+						case "podman":
+							if _, found := t.Config["packages"]; found {
+								delete(t.Config, "packages")
+							}
+						case "nix":
+							if _, found := t.Config["console"]; !found {
+								t.Config["console"] = "pipe"
 							}
 
-							uniq := []string{}
-							for key := range keys {
-								uniq = append(uniq, key)
+							if pkgsI, found := t.Config["packages"]; found {
+								keys := map[string]bool{}
+								for _, pkg := range pkgsI.([]interface{}) {
+									keys[pkg.(string)] = true
+								}
+
+								uniq := []string{}
+								for key := range keys {
+									uniq = append(uniq, key)
+								}
+
+								sort.Strings(uniq)
+
+								t.Config["packages"] = uniq
 							}
-
-							sort.Strings(uniq)
-
-							t.Config["packages"] = uniq
 						}
 					}
 				}
