@@ -91,7 +91,8 @@ func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byt
 	}
 
 	for {
-		if result, err := getter.GetAny(context.Background(), dst, fetchUrl.String()); err != nil {
+		result, err := getter.GetAny(context.Background(), dst, fetchUrl.String())
+		if err != nil {
 			if strings.Contains(err.Error(), "git exited with 128: ") && strings.Contains(err.Error(), "fatal: Not possible to fast-forward, aborting.\n\n") {
 				if err := os.RemoveAll(dst); err != nil {
 					return nil, err
@@ -99,11 +100,11 @@ func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byt
 				continue
 			}
 			return nil, err
-		} else if result.Dst != dst {
-			panic("go-getter did not download to the given directory. This should never happen™")
-		} else {
-			break
 		}
+		if result.Dst != dst {
+			panic("go-getter did not download to the given directory. This should never happen™")
+		}
+		break
 	}
 
 	tryEval := func(evaluator string) ([]byte, error) {
