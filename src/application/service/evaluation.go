@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/google/uuid"
@@ -89,12 +90,21 @@ func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byt
 		return nil, err
 	}
 
-	result, err := getter.GetAny(context.Background(), dst, fetchUrl.String())
-	if err != nil {
-		return nil, err
-	}
-	if result.Dst != dst {
-		return nil, errors.WithMessage(err, "go-getter did not download to the given directory. This should never happen™")
+	for {
+		result, err := getter.GetAny(context.Background(), dst, fetchUrl.String())
+		if err != nil {
+			if strings.Contains(err.Error(), "git exited with 128: ") && strings.Contains(err.Error(), "fatal: Not possible to fast-forward, aborting.\n\n") {
+				if err := os.RemoveAll(dst); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			return nil, err
+		}
+		if result.Dst != dst {
+			panic("go-getter did not download to the given directory. This should never happen™")
+		}
+		break
 	}
 
 	tryEval := func(evaluator string) ([]byte, error) {
@@ -103,7 +113,7 @@ func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byt
 		cmd.Env = append(os.Environ(), cmdEnv...)            //nolint:gocritic // false positive
 
 		e.logger.Debug().
-			Strs("command", cmd.Args).
+			Stringer("command", cmd).
 			Strs("environment", cmdEnv).
 			Msg("Running evaluator")
 
@@ -261,7 +271,7 @@ func (e *evaluationService) transform(output []byte, extraEnv []string) ([]byte,
 		}
 
 		e.logger.Debug().
-			Strs("command", cmd.Args).
+			Stringer("command", cmd).
 			Strs("environment", extraEnv).
 			Str("transformer", transformer).
 			Msg("Running transformer")

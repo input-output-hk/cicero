@@ -76,8 +76,10 @@
               #! /bin/dash
               set -euf
               export IFS=' '
-              echo 'Uploading to cache: '"$OUT_PATHS"
-              exec nix copy --to 'http://127.0.0.1:7745?compression=none' $OUT_PATHS
+              if [[ -n "$OUT_PATHS" ]]; then
+                echo 'Uploading to cache: '"$OUT_PATHS"
+                exec nix copy --to 'http://127.0.0.1:17745?compression=none' $OUT_PATHS
+              fi
             '';
 
             filter = ''
@@ -89,7 +91,7 @@
                   CICERO_WEB_URL: "http://127.0.0.1:8080",
                   CICERO_API_URL: "http://127.0.0.1:8080",
                   NIX_CONFIG: (
-                    "substituters = http://127.0.0.1:7745?compression=none\n" +
+                    "substituters = http://127.0.0.1:17745?compression=none\n" +
                     "extra-trusted-public-keys = spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=\n" +
                     "post-build-hook = /local/post-build-hook\n" +
                     .NIX_CONFIG
