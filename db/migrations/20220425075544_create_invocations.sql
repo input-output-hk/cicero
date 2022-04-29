@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE invocation (
 	id uuid PRIMARY KEY DEFAULT public.gen_random_uuid(),
 	action_id uuid NOT NULL REFERENCES action (id) ON DELETE CASCADE,
-	created_at timestamp NOT NULL DEFAULT NOW(),
+	created_at timestamp NOT NULL DEFAULT STATEMENT_TIMESTAMP(),
 
 	-- these are nullable because they are only interesting on error
 	eval_stdout text,
