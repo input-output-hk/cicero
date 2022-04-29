@@ -209,12 +209,13 @@
         rm -f /etc/nix/netrc
 
         if [[ -e /etc/nix/host/netrc ]]; then
-          cat /etc/nix/host/netrc >> /etc/nix/netrc
+          # ignore failure in case the host does not have /etc/nix/netrc
+          cat /etc/nix/host/netrc >> /etc/nix/netrc || :
         fi
 
-        if [[ -f ${lib.escapeShellArg "${builtins.getEnv "HOME"}/.netrc"} ]]; then
+        if [[ -f ${lib.escapeShellArg (builtins.getEnv "HOME")}/.netrc ]]; then
           # ignore failure in case ~/.netrc is a link to /etc/nix/netrc
-          cat "${builtins.getEnv "HOME"}/.netrc" >> /etc/nix/netrc || :
+          cat ${lib.escapeShellArg (builtins.getEnv "HOME")}/.netrc >> /etc/nix/netrc || :
         fi
 
         if [[ -n ${lib.escapeShellArg (builtins.getEnv "NETRC")} ]]; then
