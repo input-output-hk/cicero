@@ -22,7 +22,7 @@
   nixos-shell.mounts = {
     cache = "none";
     extraMounts = {
-      "/mnt/spongix" = rec {
+      "/mnt/spongix" = {
         target = "${builtins.getEnv "PWD"}/.spongix";
         cache = "none";
       };
@@ -44,7 +44,7 @@
         export IFS=' '
         if [[ -n "$OUT_PATHS" ]]; then
           echo 'Uploading to cache: '"$OUT_PATHS"
-          exec nix copy --to 'http://127.0.0.1:7745?compression=none' $OUT_PATHS
+          exec nix copy --to 'http://127.0.0.1:17745?compression=none' $OUT_PATHS
         fi
       '';
     in ''
@@ -54,44 +54,22 @@
   };
 
   virtualisation = {
-    forwardPorts = [
-      {
-        # cicero
+    forwardPorts = map (
+      # set all ports to be the same on host and guest
+      # so that we can run cicero and devshell programs wherever
+      port: {
         from = "host";
-        host.port = 18080;
-        guest.port = 8080;
+        host = { inherit port; };
+        guest = { inherit port; };
       }
-      {
-        # nomad
-        from = "host";
-        host.port = 14646;
-        guest.port = 4646;
-      }
-      {
-        from = "host";
-        host.port = 18200;
-        guest.port = lib.toInt (lib.last (lib.splitString ":" config.services.vault.address));
-      }
-      {
-        from = "host";
-        host.port = 18428;
-        guest.port = lib.toInt (lib.last (lib.splitString ":" config.services.victoriametrics.listenAddress));
-      }
-      {
-        from = "host";
-        host.port = 13100;
-        guest.port = config.services.loki.configuration.server.http_listen_port;
-      }
-      {
-        from = "host";
-        host.port = 17745;
-        guest.port = config.services.spongix.port;
-      }
-      {
-        from = "host";
-        host.port = 15432;
-        guest.port = config.services.postgresql.port;
-      }
+    ) [
+      18080 # cicero
+      config.services.nomad.settings.ports.http
+      (lib.toInt (lib.last (lib.splitString ":" config.services.vault.address)))
+      (lib.toInt (lib.last (lib.splitString ":" config.services.victoriametrics.listenAddress)))
+      config.services.loki.configuration.server.http_listen_port
+      config.services.spongix.port
+      config.services.postgresql.port
     ];
 
     cores =
@@ -171,12 +149,14 @@
           address = VAULT_ADDR;
           token = VAULT_TOKEN;
         };
+
+        ports.http = 14646;
       };
     };
 
     nomad-follower = {
       enable = true;
-      nomadAddr = "http://127.0.0.1:4646";
+      nomadAddr = "http://127.0.0.1:${toString config.services.nomad.settings.ports.http}";
       nomadTokenFile = "";
       lokiUrl = "http://127.0.0.1:${toString config.services.loki.configuration.server.http_listen_port}";
       prometheusUrl = let
@@ -187,17 +167,22 @@
 
     vault = {
       enable = true;
-      address = "0.0.0.0:8200";
+      address = "0.0.0.0:18200";
       package = pkgs.vault-bin;
     };
 
     spongix = {
       enable = true;
+      port = 17745;
       cacheDir = "/mnt/spongix";
       substituters = ["https://cache.nixos.org"];
       trustedPublicKeys = ["cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
       secretKeyFiles."spongix.sec" = builtins.toFile "spongix.sec" "spongix:J5wXSq2iirA2sksFzfsV1fXoNQZFKh4QUOizy6b46sHI18Hb6kxKauM3IxFahvWgSziKE+dUo+QQJaIPG/Uw0g==";
     };
+
+    postgresql.port = 15432;
+    loki.configuration.server.http_listen_port = lib.mkForce 13100;
+    victoriametrics.listenAddress = ":18428";
   };
 
   systemd.services = {
