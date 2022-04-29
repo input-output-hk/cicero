@@ -190,8 +190,10 @@ if #env == "prod" {
 										"#! /bin/dash\\n" +
 										"set -euf\\n" +
 										"export IFS=\\\" \\\"\\n" +
-										"echo \\\"Uploading to cache: $OUT_PATHS\\\"\\n" +
-										"exec nix copy --to \\\"http://spongix.service.consul:7745?compression=none\\\" $OUT_PATHS"
+										"if [[ -n \\\"$OUT_PATHS\\\" ]]; then\\n" +
+										"\\techo \\\"Uploading to cache: $OUT_PATHS\\\"\\n" +
+										"\\texec nix copy --to \\\"http://spongix.service.consul:7745?compression=none\\\" $OUT_PATHS\\n" +
+										"fi"
 									),
 								}]
 							) end

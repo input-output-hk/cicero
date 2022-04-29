@@ -42,8 +42,10 @@
       post-build-hook = pkgs.writers.writeDash "post-build-hook" ''
         set -euf
         export IFS=' '
-        echo 'Uploading to cache: '"$OUT_PATHS"
-        exec nix copy --to 'http://127.0.0.1:7745?compression=none' $OUT_PATHS
+        if [[ -n "$OUT_PATHS" ]]; then
+          echo 'Uploading to cache: '"$OUT_PATHS"
+          exec nix copy --to 'http://127.0.0.1:7745?compression=none' $OUT_PATHS
+        fi
       '';
     in ''
       netrc-file = /etc/nix/netrc
