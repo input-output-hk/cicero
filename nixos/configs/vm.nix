@@ -54,23 +54,24 @@
   };
 
   virtualisation = {
-    forwardPorts = map (
-      # set all ports to be the same on host and guest
-      # so that we can run cicero and devshell programs wherever
-      port: {
-        from = "host";
-        host = { inherit port; };
-        guest = { inherit port; };
-      }
-    ) [
-      18080 # cicero
-      config.services.nomad.settings.ports.http
-      (lib.toInt (lib.last (lib.splitString ":" config.services.vault.address)))
-      (lib.toInt (lib.last (lib.splitString ":" config.services.victoriametrics.listenAddress)))
-      config.services.loki.configuration.server.http_listen_port
-      config.services.spongix.port
-      config.services.postgresql.port
-    ];
+    forwardPorts =
+      map (
+        # set all ports to be the same on host and guest
+        # so that we can run cicero and devshell programs wherever
+        port: {
+          from = "host";
+          host = {inherit port;};
+          guest = {inherit port;};
+        }
+      ) [
+        18080 # cicero
+        config.services.nomad.settings.ports.http
+        (lib.toInt (lib.last (lib.splitString ":" config.services.vault.address)))
+        (lib.toInt (lib.last (lib.splitString ":" config.services.victoriametrics.listenAddress)))
+        config.services.loki.configuration.server.http_listen_port
+        config.services.spongix.port
+        config.services.postgresql.port
+      ];
 
     cores =
       if builtins.pathExists /proc/cpuinfo
