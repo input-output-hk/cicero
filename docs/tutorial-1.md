@@ -7,7 +7,7 @@ After all steps from the [installation](./installation.md) are running a visit t
 
 ![Cicero WebUI Intro](./cicero_webui_intro.png "Cicero WebUI Intro")
 
-The first visit should also change the url to: [http://localhost:8080/action/current?active](http://localhost:8080/action/current?active)
+The first visit should also change the url to: [http://localhost:8000/action/current?active](http://localhost:8000/action/current?active)
 
 ## Click on "Create New Action"
 After clicking the "Create New Action" button the url should change to:
