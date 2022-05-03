@@ -25,7 +25,7 @@ EOF
 The creation or update of Facts will trigger the corresponding Actions to run in Cicero.
 
 ```
-http -v post :8080/api/fact "examples/runners/bash":=@/tmp/bash-fact.json
+http -v POST :8000/api/fact "examples/runners/bash":=@/tmp/bash-fact.json
 ```
 
 ## Go to "Runs" tab in Cicero WebUI: [http://localhost:8080/run](http://localhost:8080/run)
