@@ -75,31 +75,13 @@ Documentation is currently available in the form of source code
 
 # Development
 
-## Prerequisites
-
-- Nix
-	- At least version 2.4
-	- Enable flakes in your `/etc/nix/nix.conf`: `experimental-features = nix-command flakes`
-
 ## How To Run
 
-First enter the development shell using either direnv or by running `nix develop`.
+### [Install Nix](https://cicero-handbook.infra.aws.iohkdev.io/install-nix.html) section of the Cicero Handbook.
 
-Start a development VM with Nomad, nomad-follower, Vault and Spongix:
+### [Install Cicero](https://cicero-handbook.infra.aws.iohkdev.io/install-cicero.html) section of the Cicero Handbook.
 
-	nixos-shell --flake .
-
-Inside the VM, run the application:
-
-	dev-cicero
-
-You can also run it outside the VM if you choose another port:
-
-	dev-cicero --web-listen :8000
-
-Cicero's web UI should now be available on http://localhost:8080.
-
-There is also an OpenAPI v3 schema available at:
+### There is also an OpenAPI v3 schema available at:
 - http://localhost:8080/documentation/cicero.json
 - http://localhost:8080/documentation/cicero.yaml
 
@@ -132,13 +114,3 @@ Serve Cicero book locally on port 3000
 See all commands provided by the development shell:
 
 	menu
-
-## Which ports are in use?
-
-- 8080: Cicero (HTTP)
-- 4646: Nomad (HTTP)
-- 4647: Nomad (RPC)
-- 4648: Nomad (Serf)
-- 5432: PostgreSQL
-- 3100: Loki (HTTP)
-- 9095: Loki (GRPC)
