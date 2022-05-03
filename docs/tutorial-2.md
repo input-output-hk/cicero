@@ -28,7 +28,7 @@ The creation or update of Facts will trigger the corresponding Actions to run in
 http -v POST :8000/api/fact "examples/runners/bash":=@/tmp/bash-fact.json
 ```
 
-## Go to "Runs" tab in Cicero WebUI: [http://localhost:8080/run](http://localhost:8080/run)
+## Go to "Runs" tab in Cicero WebUI: [http://localhost:8000/run](http://localhost:8000/run)
 
 This page will provide the exact details how long it took to run the actual Action when it was triggered by the creation of the new fact.
 
