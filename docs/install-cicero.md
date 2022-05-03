@@ -43,6 +43,10 @@ nix develop
 ```
 nixos-shell --flake .
 ```
+At this point a login prompt should show up:
+![Cicero Qemu Prompt](./cicero_qemu_prompt.png "Cicero Qemu Prompt")
+
+Login as 'root' to continue.
 
 ### Open another terminal and run Cicero outside the VM:
 ```
