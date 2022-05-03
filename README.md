@@ -98,11 +98,11 @@ You can also run it outside the VM if you choose another port:
 
 	dev-cicero --web-listen :8000
 
-Cicero's web UI should now be available on http://localhost:8080.
+Cicero's web UI should now be available on http://localhost:18080.
 
 There is also an OpenAPI v3 schema available at:
-- http://localhost:8080/documentation/cicero.json
-- http://localhost:8080/documentation/cicero.yaml
+- http://localhost:18080/documentation/cicero.json
+- http://localhost:18080/documentation/cicero.yaml
 
 ## How To …
 
@@ -124,7 +124,7 @@ Run tests with coverage:
 
 Run OpenApi validation tests:
 
-	schemathesis run http://localhost:8080/documentation/cicero.yaml --validate-schema=false
+	schemathesis run http://localhost:18080/documentation/cicero.yaml --validate-schema=false
 
 See all commands provided by the development shell:
 
