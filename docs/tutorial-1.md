@@ -2,7 +2,7 @@
 
 ## A first visit
 
-After all steps from the [installation](./installation.md) are running a visit to [http://localhost:8080](http://localhost:8080) should show the following UI:
+After all steps from the [installation](./installation.md) are running a visit to [http://localhost:8000](http://localhost:8000) should show the following UI:
 
 
 ![Cicero WebUI Intro](./cicero_webui_intro.png "Cicero WebUI Intro")
