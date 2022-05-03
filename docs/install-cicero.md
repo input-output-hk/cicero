@@ -54,4 +54,4 @@ nix develop
 dev-cicero --web-listen :8000
 ```
 
-### Cicero's WebUI should now be available on http://localhost:8000.
+### Cicero's WebUI should now be available on [http://localhost:8000](http://localhost:8000).
