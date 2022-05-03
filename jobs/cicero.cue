@@ -182,7 +182,12 @@ if #env == "prod" {
 										.NIX_CONFIG
 									),
 								} |
-								.config.packages |= . + ["github:NixOS/nixpkgs/\(nixpkgsRev)#bash"] |
+								.config.packages |=
+									# only add bash if needed to avoid conflicts in profile
+									if any(endswith("#bash"))
+									then .
+									else . + ["github:NixOS/nixpkgs/\(nixpkgsRev)#bash"]
+									end |
 								.template |= . + [{
 									destination: "local/post-build-hook",
 									perms: "544",
