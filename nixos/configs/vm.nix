@@ -39,7 +39,7 @@
     binaryCachePublicKeys = ["spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI="];
     requireSignedBinaryCaches = false; # TODO remove once spongix signs with own key again
     extraOptions = let
-      post-build-hook = pkgs.writers.writeDash "post-build-hook" ''
+      post-build-hook = pkgs.writers.writeBash "post-build-hook" ''
         set -euf
         export IFS=' '
         if [[ -n "$OUT_PATHS" ]]; then
