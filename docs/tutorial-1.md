@@ -11,7 +11,7 @@ The first visit should also change the url to: [http://localhost:8000/action/cur
 
 ## Click on "Create New Action"
 After clicking the "Create New Action" button the url should change to:
-[http://localhost:8080/action/new](http://localhost:8080/action/new)
+[http://localhost:8000/action/new](http://localhost:8000/action/new)
 
 And the UI should correspond to:
 ![Cicero WebUI New Action](./cicero_webui_new_action.png "Cicero WebUI New Action")
