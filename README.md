@@ -105,7 +105,7 @@ Run tests with coverage:
 
 Run OpenApi validation tests:
 
-	schemathesis run http://localhost:18080/documentation/cicero.yaml --validate-schema=false
+	schemathesis run http://localhost:8000/documentation/cicero.yaml --validate-schema=false
 
 Serve Cicero book locally on port 3000
 
