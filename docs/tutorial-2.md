@@ -9,23 +9,20 @@ Now it makes sense explain how to actually start this Action.
 nix develop
 ```
 
-## Create json representation of the fact
+## Use httpie to create a new Fact
+
+By sending a http POST request via httpie to the Cicero-API /api/fact endpoint the Fact gets created or updated.
+
+The creation or update of Facts will trigger the corresponding Actions to run in Cicero.
 
 A fact can have multiple inputs for providing different arguments for calling the actual Action.
 
-But in fact the examples/runners/bash doesn't really need any of those inputs for the moment.
-```
-cat > /tmp/bash-fact.json << EOF
-{
-}
-EOF
-```
+But the examples/runners/bash Action doesn't really need any of those inputs for the moment.
 
-## Use httpie to create a new Fact
-The creation or update of Facts will trigger the corresponding Actions to run in Cicero.
+Therefore the Fact is empty and the JSON representation is '{}'.
 
 ```
-http -v POST :8000/api/fact "examples/runners/bash":=@/tmp/bash-fact.json
+http -v POST :8000/api/fact examples/runners/bash:={}
 ```
 
 ## Go to "Runs" tab in Cicero WebUI: [http://localhost:8000/run](http://localhost:8000/run)
