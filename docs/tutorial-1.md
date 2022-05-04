@@ -29,8 +29,9 @@ Cicero Actions can also be part of a repository, which isn't Cicero.
 Repositories are required to have a flake.nix with **ciceroActions** as flake output to work with Cicero.
 See [How to include external Actions](./tutorial-3.md) for more information.
 
-### Assume the following path was entered:
+### Assume a path to Cicero itself was entered:
 
+The path should point to the root directory of the cloned Cicero repository.
 
 ![Cicero WebUI New Localpath](./cicero_webui_new_action_localpath.png "Cicero WebUI New Localpath")
 
