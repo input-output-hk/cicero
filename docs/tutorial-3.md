@@ -1,8 +1,10 @@
 # How to include external Actions
 
-In this example [lares](https://github.com/input-output-hk/lares) is used, to explain how to setup a external project with Cicero.
+In this example [lares](https://github.com/input-output-hk/lares) is used, to explain how to setup a external repository with Cicero.
 
-First the project needs a [flake.nix](https://github.com/input-output-hk/lares/blob/master/flake.nix) containing **Cicero** itself as flake input and **ciceroActions** as flake output.
+We will call this an external Action, because the Action will be provided by a repository which isn't the Cicero repository itself.
+
+First the repository needs a [flake.nix](https://github.com/input-output-hk/lares/blob/master/flake.nix) containing **Cicero** itself as flake input and **ciceroActions** as flake output.
 
 ## flake.nix:
 ```nix

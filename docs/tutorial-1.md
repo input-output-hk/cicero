@@ -26,7 +26,8 @@ or a local path like [/home/developer/IOHK/cicero](/home/developer/IOHK/cicero).
 **This doesn't need to be a path to Cicero itself:**
 
 Cicero Actions can also be part of a repository, which isn't Cicero.
-See [How to include external actions](./how-to-include-external-actions.md) for more information.
+Repositories are required to have a flake.nix with **ciceroActions** as flake output to work with Cicero.
+See [How to include external Actions](./tutorial-3.md) for more information.
 
 ### Assume the following path was entered:
 
