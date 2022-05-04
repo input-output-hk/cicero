@@ -18,11 +18,11 @@ The [Cicero Infrastructure Components](https://miro.com/app/board/uXjVOBqekRU=/)
 
 In the bottom part of the diagram, all the external Actors are listed and how they interact with Cicero.
 
-Currently the local installment of Cicero has a WebUI and API available on [http://localhost:8080](http://localhost:8080).
+Currently the local installment of Cicero has a WebUI and API available on [http://localhost:8000](http://localhost:8000).
 
 The actual OpenAPI v3 schema of the API can viewed at:
-- [http://localhost:8080/documentation/cicero.json](http://localhost:8080/documentation/cicero.json)
-- [http://localhost:8080/documentation/cicero.yaml](http://localhost:8080/documentation/cicero.yaml)
+- [http://localhost:8000/documentation/cicero.json](http://localhost:8000/documentation/cicero.json)
+- [http://localhost:8000/documentation/cicero.yaml](http://localhost:8000/documentation/cicero.yaml)
 
 ## Cicero + Nix Expression Language
 

@@ -199,5 +199,5 @@ cat > /tmp/lares-fact.json <<EOF
 EOF
 
 nix develop
-http -v post :8080/api/fact "lares/ci":=@/tmp/lares-fact.json
+http -v post :8000/api/fact "lares/ci":=@/tmp/lares-fact.json
 ```

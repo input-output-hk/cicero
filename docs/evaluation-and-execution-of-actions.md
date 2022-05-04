@@ -80,7 +80,7 @@ job = { tick, ticks, double ? false }:
 
 ## Execution
 
-An Action is only invoked and passed to Nomad as new job when a corresponding Fact is posted to [localhost:8080/api/fact](localhost:8080/api/fact), see ([Tutorial 2](./tutorial-2.md)).
+An Action is only invoked and passed to Nomad as new job when a corresponding Fact is posted to [localhost:8000/api/fact](localhost:8000/api/fact), see ([Tutorial 2](./tutorial-2.md)).
 
 The [fact.go](https://github.com/input-output-hk/cicero/blob/main/src/application/service/fact.go) code saves a fact, which results in InvokeCurrentActive getting called.
 

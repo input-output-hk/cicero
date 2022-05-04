@@ -54,12 +54,12 @@ In contrary the binary_hash/binary fields of the db table represent the output w
 
 ### Json of fact piped with binary data
 ```
-echo -n '{"foo": 1}' | cat - /tmp/testfile | http :8080/api/fact
+echo -n '{"foo": 1}' | cat - /tmp/testfile | http :8000/api/fact
 ```
 
 ### Multipart Request: first part json of fact, second part binary artifact:
 ```
-http --multipart :8080/api/fact first='{"foo": 1}' second@/tmp/testfile
+http --multipart :8000/api/fact first='{"foo": 1}' second@/tmp/testfile
 
 ```
 
