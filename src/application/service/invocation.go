@@ -1,11 +1,9 @@
 package service
 
 import (
-	"context"
 	"strconv"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -101,13 +99,8 @@ func (self *invocationService) GetInputFactIdsById(id uuid.UUID) (inputFactIds r
 
 func (self *invocationService) Save(invocation *domain.Invocation, inputs map[string]interface{}) error {
 	self.logger.Trace().Msg("Saving new Invocation")
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.invocationRepository.WithQuerier(tx).Save(invocation, inputs); err != nil {
-			return errors.WithMessagef(err, "Could not insert Invocation")
-		}
-		return nil
-	}); err != nil {
-		return err
+	if err := self.invocationRepository.Save(invocation, inputs); err != nil {
+		return errors.WithMessagef(err, "Could not insert Invocation")
 	}
 	self.logger.Trace().Str("id", invocation.Id.String()).Msg("Created Invocation")
 	return nil

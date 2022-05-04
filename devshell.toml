@@ -50,7 +50,7 @@ help = "Run code linters"
 
 [[commands]]
 name = "dev-cicero"
-command = "dbmate up; go run . start --log-level trace --transform dev-cicero-transformer \"$@\""
+command = "dbmate up; go run . start --log-level trace --victoriametrics-addr http://127.0.0.1:18428 --prometheus-addr http://127.0.0.1:13100 --web-listen :18080 --transform dev-cicero-transformer \"$@\""
 help = "Run Cicero from source"
 
 [[commands]]

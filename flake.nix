@@ -73,7 +73,7 @@
           treefmt-cue = final.callPackage pkgs/treefmt-cue.nix {};
           dev-cicero-transformer = let
             post-build-hook = ''
-              #! /bin/dash
+              #! /bin/bash
               set -euf
               export IFS=' '
               if [[ -n "$OUT_PATHS" ]]; then
@@ -102,7 +102,7 @@
                   perms: "544",
                   data: env.postBuildHook,
                 }] |
-                .config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#dash"]
+                .config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"]
               ) end
             '';
           in

@@ -7,7 +7,7 @@ let commonTransformers = [{
 	destination: "local/transformer.sh"
 	perms:       "544"
 	data: """
-		#! /bin/dash
+		#! /bin/bash
 		/bin/jq '
 			.job[]?.datacenters |= . + ["dc1"] |
 			.job[]?.group[]?.restart.attempts = 0 |
@@ -59,7 +59,7 @@ job: cicero: group: {
 			config: packages: [
 				#ciceroFlake,
 				// for transformers
-				"github:NixOS/nixpkgs/\(nixpkgsRev)#dash",
+				"github:NixOS/nixpkgs/\(nixpkgsRev)#bash",
 				"github:NixOS/nixpkgs/\(nixpkgsRev)#jq",
 			]
 		}
@@ -166,7 +166,7 @@ if #env == "prod" {
 					destination: "local/transformer-prod.sh"
 					perms:       "544"
 					data:        """
-						#! /bin/dash
+						#! /bin/bash
 						/bin/jq '
 							.job[]?.datacenters |= . + ["eu-central-1", "us-east-2"] |
 							.job[]?.group[]?.task[]? |= if .config?.nixos then . else (
@@ -182,12 +182,17 @@ if #env == "prod" {
 										.NIX_CONFIG
 									),
 								} |
-								.config.packages |= . + ["github:NixOS/nixpkgs/\(nixpkgsRev)#dash"] |
+								.config.packages |=
+									# only add bash if needed to avoid conflicts in profile
+									if any(endswith("#bash"))
+									then .
+									else . + ["github:NixOS/nixpkgs/\(nixpkgsRev)#bash"]
+									end |
 								.template |= . + [{
 									destination: "local/post-build-hook",
 									perms: "544",
 									data: (
-										"#! /bin/dash\\n" +
+										"#! /bin/bash\\n" +
 										"set -euf\\n" +
 										"export IFS=\\\" \\\"\\n" +
 										"if [[ -n \\\"$OUT_PATHS\\\" ]]; then\\n" +

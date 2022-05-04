@@ -82,8 +82,8 @@ Documentation is currently available in the form of source code
 ### [Install Cicero](https://cicero-handbook.infra.aws.iohkdev.io/install-cicero.html) section of the Cicero Handbook.
 
 ### There is also an OpenAPI v3 schema available at:
-- http://localhost:8080/documentation/cicero.json
-- http://localhost:8080/documentation/cicero.yaml
+- http://localhost:8000/documentation/cicero.json
+- http://localhost:8000/documentation/cicero.yaml
 
 ## How To …
 
@@ -105,7 +105,7 @@ Run tests with coverage:
 
 Run OpenApi validation tests:
 
-	schemathesis run http://localhost:8080/documentation/cicero.yaml --validate-schema=false
+	schemathesis run http://localhost:18080/documentation/cicero.yaml --validate-schema=false
 
 Serve Cicero book locally on port 3000
 

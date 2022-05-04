@@ -37,7 +37,7 @@ type ActionService interface {
 	Update(*domain.Action) error
 	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
 	Create(string, string) (*domain.Action, error)
-	// Returns a nil pointer for the first and second return value if the Action was not runnable.
+	// Returns a nil pointer for the first return value if the Action was not runnable.
 	Invoke(*domain.Action) (*domain.Run, func() error, error)
 	InvokeCurrentActive() ([]EvaluationError, error)
 }
@@ -597,6 +597,7 @@ func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() er
 			err := self.runService.WithQuerier(tx).Update(&tmpRun)
 			err = errors.WithMessage(err, "Could not update decision Run")
 
+			run = &tmpRun
 			return err
 		}
 
@@ -644,16 +645,18 @@ func (self *actionService) InvokeCurrentActive() ([]EvaluationError, error) {
 			anyRunnable := false
 
 			for _, action := range actions {
-				if _, registerFunc, err := txSelf.Invoke(action); err != nil {
+				if job, registerFunc, err := txSelf.Invoke(action); err != nil {
 					var evalErr *EvaluationError
 					if errors.As(err, &evalErr) {
 						evalErrs = append(evalErrs, *evalErr)
 					} else {
 						return err
 					}
-				} else if registerFunc != nil {
-					anyRunnable = true
-					registerFuncs = append(registerFuncs, registerFunc)
+				} else {
+					anyRunnable = anyRunnable || job != nil
+					if registerFunc != nil {
+						registerFuncs = append(registerFuncs, registerFunc)
+					}
 				}
 			}
 
