@@ -213,6 +213,10 @@ if #env == "prod" {
 							machine github.com
 							login git
 							password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
+
+							machine api.github.com
+							login git
+							password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
 							"""
 					},
 					{
