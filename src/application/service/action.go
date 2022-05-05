@@ -364,6 +364,7 @@ func (self *actionService) Create(source, name string) (*domain.Action, error) {
 		ID:     uuid.New(),
 		Name:   name,
 		Source: source,
+		Active: true,
 	}
 
 	var actionDef domain.ActionDefinition
