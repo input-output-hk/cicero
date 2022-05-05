@@ -115,7 +115,11 @@
 										</div>
 									</details>
 								</td>
-								<td>{{template "fact" (index $.inputs $name)}}</td>
+								<td>
+									{{with index $.inputs $name}}
+										{{template "fact" .}}
+									{{end}}
+								</td>
 							</tr>
 						{{end}}
 					</tbody>
