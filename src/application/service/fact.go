@@ -26,7 +26,7 @@ type FactService interface {
 	GetLatestByCue(cue.Value) (domain.Fact, error)
 	GetByCue(cue.Value) ([]*domain.Fact, error)
 	Save(*domain.Fact, io.Reader) error
-	GetInvocationInputFacts(repository.InvocationInputFactIds) (map[string][]domain.Fact, error)
+	GetInvocationInputFacts(map[string]uuid.UUID) (map[string]domain.Fact, error)
 }
 
 type factService struct {
@@ -105,52 +105,35 @@ func (self *factService) GetByCue(value cue.Value) (facts []*domain.Fact, err er
 }
 
 // XXX Could probably be done entirely in the DB with a single SQL query (maybe as `InvocationService.GetInputsById()`).
-func (self *factService) GetInvocationInputFacts(inputFactIds repository.InvocationInputFactIds) (map[string][]domain.Fact, error) {
-	inputs := map[string][]domain.Fact{}
-	count := 0
+func (self *factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UUID) (map[string]domain.Fact, error) {
+	inputs := map[string]domain.Fact{}
 
-	for _, ids := range inputFactIds {
-		count += len(ids)
-	}
-
-	wg := &sync.WaitGroup{}
 	type Res struct {
 		input string
-		i     int
 		fact  domain.Fact
 		err   error
 	}
-	res := make(chan *Res, count)
+	res := make(chan *Res, len(inputFactIds))
 
-	for input, ids := range inputFactIds {
-		inputs[input] = make([]domain.Fact, len(ids))
-
-		for i, id := range ids {
-			wg.Add(1)
-
-			go func(input string, i int, id uuid.UUID) {
-				defer wg.Done()
-				if fact, err := self.GetById(id); err != nil {
-					res <- &Res{err: err}
-				} else {
-					res <- &Res{input: input, i: i, fact: fact}
-				}
-			}(input, i, id)
-		}
+	wg := &sync.WaitGroup{}
+	for input, id := range inputFactIds {
+		wg.Add(1)
+		go func(input string, id uuid.UUID) {
+			defer wg.Done()
+			fact, err := self.GetById(id)
+			res <- &Res{input, fact, err}
+		}(input, id)
 	}
-
 	wg.Wait()
 
-	for j := 0; j < count; j++ {
-		select {
-		case result := <-res:
-			if result.err != nil {
-				return nil, result.err
-			} else {
-				inputs[result.input][result.i] = result.fact
-			}
-		default:
+	select {
+	case result := <-res:
+		if result.err != nil {
+			return nil, result.err
+		} else {
+			inputs[result.input] = result.fact
 		}
+	default:
 	}
 
 	return inputs, nil

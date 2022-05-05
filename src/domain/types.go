@@ -19,58 +19,12 @@ import (
 	"github.com/input-output-hk/cicero/src/util"
 )
 
-type InputDefinitionSelect uint
-
-const (
-	InputDefinitionSelectLatest InputDefinitionSelect = iota
-	InputDefinitionSelectAll
-)
-
-func (self *InputDefinitionSelect) String() (string, error) {
-	switch *self {
-	case InputDefinitionSelectLatest:
-		return "latest", nil
-	case InputDefinitionSelectAll:
-		return "all", nil
-	default:
-		return "", fmt.Errorf("Unknown value %d", *self)
-	}
-}
-
-func (self *InputDefinitionSelect) FromString(str string) error {
-	switch str {
-	case "latest":
-		*self = InputDefinitionSelectLatest
-	case "all":
-		*self = InputDefinitionSelectAll
-	default:
-		return fmt.Errorf("Unknown value %q", str)
-	}
-	return nil
-}
-
-func (self *InputDefinitionSelect) UnmarshalJSON(data []byte) error {
-	var str string
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
-	}
-	return self.FromString(str)
-}
-
-func (self InputDefinitionSelect) MarshalJSON() ([]byte, error) {
-	if str, err := self.String(); err != nil {
-		return nil, err
-	} else {
-		return json.Marshal(str)
-	}
-}
-
 type InputDefinitionMatch string
 
 // There is a race condition around global internal state of CUE.
 var cueMutex = &sync.Mutex{}
 
-func (self *InputDefinitionMatch) WithInputs(inputs map[string]interface{}) cue.Value {
+func (self *InputDefinitionMatch) WithInputs(inputs map[string]*Fact) cue.Value {
 	cueMutex.Lock()
 	defer cueMutex.Unlock()
 
@@ -85,7 +39,7 @@ func (self *InputDefinitionMatch) WithInputs(inputs map[string]interface{}) cue.
 }
 
 func (self *InputDefinitionMatch) WithoutInputs() cue.Value {
-	return self.WithInputs(map[string]interface{}{})
+	return self.WithInputs(map[string]*Fact{})
 }
 
 func (self *InputDefinitionMatch) UnmarshalJSON(data []byte) error {
@@ -128,10 +82,9 @@ func (self *InputDefinitionMatch) Scan(value interface{}) error {
 }
 
 type InputDefinition struct {
-	Select   InputDefinitionSelect `json:"select"`
-	Not      bool                  `json:"not"`
-	Optional bool                  `json:"optional"`
-	Match    InputDefinitionMatch  `json:"match"`
+	Not      bool                 `json:"not"`
+	Optional bool                 `json:"optional"`
+	Match    InputDefinitionMatch `json:"match"`
 }
 
 type InputDefinitions map[string]InputDefinition

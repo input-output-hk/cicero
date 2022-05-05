@@ -52,7 +52,6 @@ func TestShouldSaveAction(t *testing.T) {
 	dateTime := time.Now().UTC()
 	actionId := uuid.New()
 	inputs := domain.InputDefinition{
-		Select:   domain.InputDefinitionSelect(1),
 		Not:      false,
 		Optional: false,
 		Match:    domain.InputDefinitionMatch(""),

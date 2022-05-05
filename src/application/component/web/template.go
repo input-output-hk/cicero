@@ -98,7 +98,4 @@ var templateFuncs = template.FuncMap{
 		}
 		return a
 	},
-	"InputDefinitionSelectString": func(inputDefinitionSelect domain.InputDefinitionSelect) (string, error) {
-		return inputDefinitionSelect.String()
-	},
 }

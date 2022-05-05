@@ -49,7 +49,7 @@ func (self *invocationRepository) GetLatestByActionId(id uuid.UUID) (invocation 
 	)
 }
 
-func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactIds repository.InvocationInputFactIds, err error) {
+func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId map[string]uuid.UUID, err error) {
 	inputs := []struct {
 		InputName string    `json:"input_name"`
 		FactId    uuid.UUID `json:"fact_id"`
@@ -66,12 +66,12 @@ func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId
 		return
 	}
 
-	inputFactIds = map[string][]uuid.UUID{}
+	inputFactId = map[string]uuid.UUID{}
 	for _, runInput := range inputs {
-		if _, exists := inputFactIds[runInput.InputName]; !exists {
-			inputFactIds[runInput.InputName] = []uuid.UUID{}
+		if _, exists := inputFactId[runInput.InputName]; exists {
+			panic("This should never happen™")
 		}
-		inputFactIds[runInput.InputName] = append(inputFactIds[runInput.InputName], runInput.FactId)
+		inputFactId[runInput.InputName] = runInput.FactId
 	}
 
 	return
@@ -153,7 +153,7 @@ func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recurs
 	)
 }
 
-func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map[string]interface{}) error {
+func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map[string]*domain.Fact) error {
 	ctx := context.Background()
 
 	if err := self.db.BeginFunc(ctx, func(tx pgx.Tx) error {
@@ -170,27 +170,14 @@ func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map
 			args := []interface{}{}
 
 			i := 1
-			for name, factOrFacts := range inputs {
-				addRow := func(factId uuid.UUID) {
-					if i > 1 {
-						sql += `, `
-					}
-
-					sql += `($` + strconv.Itoa(i) + `, $` + strconv.Itoa(i+1) + `, $` + strconv.Itoa(i+2) + `)`
-					args = append(args, invocation.Id, name, factId)
-					i += 3
+			for name, fact := range inputs {
+				if i > 1 {
+					sql += `, `
 				}
 
-				switch factOrFactsTyped := factOrFacts.(type) {
-				case *domain.Fact:
-					addRow(factOrFactsTyped.ID)
-				case []*domain.Fact:
-					for _, fact := range factOrFactsTyped {
-						addRow(fact.ID)
-					}
-				default:
-					panic("inputs must be pointer to a Fact or array")
-				}
+				sql += `($` + strconv.Itoa(i) + `, $` + strconv.Itoa(i+1) + `, $` + strconv.Itoa(i+2) + `)`
+				args = append(args, invocation.Id, name, fact.ID)
+				i += 3
 			}
 
 			if _, err := tx.Exec(ctx, sql, args...); err != nil {

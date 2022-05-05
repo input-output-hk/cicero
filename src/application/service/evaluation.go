@@ -28,7 +28,7 @@ import (
 type EvaluationService interface {
 	ListActions(src string) ([]string, error)
 	EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error)
-	EvaluateRun(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.RunDefinition, error)
+	EvaluateRun(src, name string, id uuid.UUID, inputs map[string]*domain.Fact) (domain.RunDefinition, error)
 }
 
 func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
@@ -173,12 +173,12 @@ func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID) (doma
 	return def, nil
 }
 
-func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs map[string]interface{}) (domain.RunDefinition, error) {
+func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs map[string]*domain.Fact) (domain.RunDefinition, error) {
 	var def domain.RunDefinition
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
-		return def, errors.WithMessagef(err, "Could not marshal inputs to JSON: %s", inputs)
+		return def, errors.WithMessagef(err, "Could not marshal inputs to JSON: %v", inputs)
 	}
 
 	extraEnv := []string{

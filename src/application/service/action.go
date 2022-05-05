@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"cuelang.org/go/cue"
@@ -35,7 +34,7 @@ type ActionService interface {
 	GetCurrentActive() ([]*domain.Action, error)
 	Save(*domain.Action) error
 	Update(*domain.Action) error
-	IsRunnable(*domain.Action) (bool, map[string]interface{}, error)
+	IsRunnable(*domain.Action) (bool, map[string]*domain.Fact, error)
 	Create(string, string) (*domain.Action, error)
 	// Returns a nil pointer for the first return value if the Action was not runnable.
 	Invoke(*domain.Action) (*domain.Run, func() error, error)
@@ -151,7 +150,7 @@ func (self *actionService) GetCurrentActive() (actions []*domain.Action, err err
 	return
 }
 
-func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]interface{}, error) {
+func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*domain.Fact, error) {
 	logger := self.logger.With().
 		Str("name", action.Name).
 		Str("id", action.ID.String()).
@@ -159,7 +158,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 	logger.Debug().Msg("Checking whether Action is runnable")
 
-	inputs := map[string]interface{}{} // either *domain.Fact or []*domain.Fact
+	inputs := map[string]*domain.Fact{}
 
 	{ // Select and match candidate facts.
 		dbConnMutex := &sync.Mutex{}
@@ -180,114 +179,45 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 			dbConnMutex.Lock()
 			defer dbConnMutex.Unlock()
 
-			switch input.Select {
-			case domain.InputDefinitionSelectLatest:
-				switch fact, err := self.getInputFactLatest(tValue); {
-				case err != nil:
-					return err
-				case fact == nil:
-					if !input.Not && !input.Optional {
-						inputLogger.Debug().
-							Bool("runnable", false).
-							Msg("No fact found for required input")
-						return errNotRunnable
-					}
-				default:
-					if !input.Not {
-						inputs[name] = fact
-					}
-
-					// Match candidate fact.
-					if matchErr, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
-						return err
-					} else if (matchErr == nil) == input.Not {
-						if !input.Optional || input.Not {
-							inputLogger.Debug().
-								Bool("runnable", false).
-								Str("fact", fact.ID.String()).
-								AnErr("mismatch", matchErr).
-								Msg("Fact does not match")
-							return errNotRunnable
-						}
-						delete(inputs, name)
-					}
-
-					// Fill the CUE expression with the fact's value
-					// so it can be referenced by its dependents.
-					if _, exists := inputs[name]; exists {
-						if err := t.Fill(struct {
-							Value interface{} `json:"value"`
-						}{fact.Value}); err != nil {
-							return err
-						}
-					}
+			switch fact, err := self.factRepository.GetLatestByCue(tValue); {
+			case pgxscan.NotFound(err):
+				if !input.Not && !input.Optional {
+					inputLogger.Debug().
+						Bool("runnable", false).
+						Msg("No fact found for required input")
+					return errNotRunnable
 				}
-			case domain.InputDefinitionSelectAll:
-				switch facts, err := self.getInputFacts(tValue); {
-				case err != nil:
-					return err
-				case len(facts) == 0:
-					if !input.Not && !input.Optional {
-						inputLogger.Debug().
-							Bool("runnable", false).
-							Msg("No facts found for required input")
-						return errNotRunnable
-					}
-				default:
-					if !input.Not {
-						inputs[name] = facts
-					}
-
-					// Match candidate facts.
-					for i, fact := range facts {
-						if matchErr, err := matchFact(input.Match.WithInputs(inputs), fact); err != nil {
-							return err
-						} else if (matchErr == nil) == input.Not {
-							if !input.Optional || input.Not {
-								inputLogger.Debug().
-									Bool("runnable", false).
-									Str("fact", fact.ID.String()).
-									AnErr("mismatch", matchErr).
-									Msg("Fact does not match")
-								return errNotRunnable
-							}
-							if facts, exists := inputs[name]; exists {
-								// We will filter `nil`s out later as
-								// doing that while iterating would be costly.
-								facts.([]*domain.Fact)[i] = nil
-							}
-						}
-
-						if facts, exists := inputs[name]; exists {
-							// Filter out `nil` entries from non-matching facts.
-							newFacts := []*domain.Fact{}
-							for _, fact := range facts.([]*domain.Fact) {
-								if fact == nil {
-									continue
-								}
-								newFacts = append(newFacts, fact)
-							}
-							inputs[name] = newFacts
-
-							if len(newFacts) == 0 {
-								if !input.Optional {
-									inputLogger.Debug().
-										Bool("runnable", false).
-										Msg("No facts match")
-									return errNotRunnable
-								}
-								delete(inputs, name)
-							}
-						}
-					}
-
-					// There's no meaningful way to call `t.Fill()`
-					// because that one filter matches multiple facts.
-					// So we just do not call it which makes it unsupported
-					// to depend on inputs that select multiple facts.
-				}
+			case err != nil:
+				return err
 			default:
-				return fmt.Errorf("InputDefinitionSelect with unknown value %d", input.Select)
+				if !input.Not {
+					inputs[name] = &fact
+				}
+
+				// Match candidate fact.
+				if matchErr, err := matchFact(input.Match.WithInputs(inputs), &fact); err != nil {
+					return err
+				} else if (matchErr == nil) == input.Not {
+					if !input.Optional || input.Not {
+						inputLogger.Debug().
+							Bool("runnable", false).
+							Str("fact", fact.ID.String()).
+							AnErr("mismatch", matchErr).
+							Msg("Fact does not match")
+						return errNotRunnable
+					}
+					delete(inputs, name)
+				}
+
+				// Fill the CUE expression with the fact's value
+				// so it can be referenced by its dependents.
+				if _, exists := inputs[name]; exists {
+					if err := t.Fill(struct {
+						Value interface{} `json:"value"`
+					}{fact.Value}); err != nil {
+						return err
+					}
+				}
 			}
 
 			return nil
@@ -305,12 +235,12 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 			return false, nil, err
 		}
 	} else {
-		var inputFactIds map[string][]uuid.UUID
+		var inputFactIds map[string]uuid.UUID
 		if inputFactIds, err = self.invocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 			if !pgxscan.NotFound(err) {
 				return false, nil, err
 			}
-			inputFactIds = map[string][]uuid.UUID{}
+			inputFactIds = map[string]uuid.UUID{}
 		}
 
 		inputFactsChanged := false
@@ -323,91 +253,59 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 				continue
 			}
 
-			didInputFactChange := func(oldFactIdsIndex int, newFact *domain.Fact) bool {
-				var oldFactId *uuid.UUID
-				if _, hasOldFact := inputFactIds[name]; hasOldFact {
-					oldFactId = &inputFactIds[name][oldFactIdsIndex]
-				}
+			var oldFactId *uuid.UUID
+			if _, hasOldFact := inputFactIds[name]; hasOldFact {
+				var oldFactIdOnHeap = inputFactIds[name]
+				oldFactId = &oldFactIdOnHeap
+			}
 
-				switch {
-				case input.Optional && oldFactId == nil:
-					if newFact != nil {
-						if logger.Debug().Enabled() {
-							logger.Debug().
-								Str("input", name).
-								Bool("input-optional", true).
-								Interface("old-fact", nil).
-								Str("new-fact", newFact.ID.String()).
-								Msg("input satisfied by new Fact")
-						}
-						return true
-					}
-				case input.Optional && oldFactId != nil:
-					if newFact == nil || *oldFactId != newFact.ID {
-						if logger.Debug().Enabled() {
-							var newFactIdToLog *string
-							if newFact != nil {
-								newFactIdToLogValue := newFact.ID.String()
-								newFactIdToLog = &newFactIdToLogValue
-							}
-							logger.Debug().
-								Str("input", name).
-								Bool("input-optional", true).
-								Str("old-fact", oldFactId.String()).
-								Interface("new-fact", newFactIdToLog).
-								Msg("input satisfied by new Fact or absence of one")
-						}
-						return true
-					}
-				case oldFactId == nil:
-					// A previous Run would not have been started
-					// if a non-optional input was not satisfied.
-					// We are not looking at a negated input here
-					// because those are never passed into the evaluation.
-					panic("This should never happen™")
-				case *oldFactId != newFact.ID:
+			switch {
+			case input.Optional && oldFactId == nil:
+				if inputs[name] != nil {
 					if logger.Debug().Enabled() {
 						logger.Debug().
 							Str("input", name).
-							Str("old-fact", oldFactId.String()).
-							Str("new-fact", newFact.ID.String()).
+							Bool("input-optional", true).
+							Interface("old-fact", nil).
+							Str("new-fact", inputs[name].ID.String()).
 							Msg("input satisfied by new Fact")
 					}
-					return true
-				}
-
-				return false
-			}
-
-			switch input.Select {
-			case domain.InputDefinitionSelectLatest:
-				if didInputFactChange(0, inputs[name].(*domain.Fact)) {
 					inputFactsChanged = true
+					break InputFactsChanged
 				}
-			case domain.InputDefinitionSelectAll:
-				if newFacts, oldFacts := inputs[name].([]*domain.Fact), inputFactIds[name]; len(newFacts) != len(oldFacts) {
+			case input.Optional && oldFactId != nil:
+				if inputs[name] == nil || *oldFactId != inputs[name].ID {
+					if logger.Debug().Enabled() {
+						var newFactIdToLog *string
+						if inputs[name] != nil {
+							newFactIdToLogValue := inputs[name].ID.String()
+							newFactIdToLog = &newFactIdToLogValue
+						}
+						logger.Debug().
+							Str("input", name).
+							Bool("input-optional", true).
+							Str("old-fact", oldFactId.String()).
+							Interface("new-fact", newFactIdToLog).
+							Msg("input satisfied by new Fact or absence of one")
+					}
+					inputFactsChanged = true
+					break InputFactsChanged
+				}
+			case oldFactId == nil:
+				// A previous Run would not have been started
+				// if a non-optional input was not satisfied.
+				// We are not looking at a negated input here
+				// because those are never passed into the evaluation.
+				panic("This should never happen™")
+			case *oldFactId != inputs[name].ID:
+				if logger.Debug().Enabled() {
 					logger.Debug().
 						Str("input", name).
-						Int("num-old-facts", len(oldFacts)).
-						Int("num-new-facts", len(newFacts)).
-						Msg("input satisfied by different number of Facts than last Run")
-					inputFactsChanged = true
-				} else {
-				LoopOverNewInputFacts:
-					for _, match := range newFacts {
-						for i := range oldFacts {
-							if didInputFactChange(i, match) {
-								inputFactsChanged = true
-								break LoopOverNewInputFacts
-							}
-						}
-					}
+						Str("old-fact", oldFactId.String()).
+						Str("new-fact", inputs[name].ID.String()).
+						Msg("input satisfied by new Fact")
 				}
-			default:
-				panic("This should have already been caught by the loop above!")
-			}
-
-			if inputFactsChanged {
+				inputFactsChanged = true
 				break InputFactsChanged
 			}
 
@@ -423,20 +321,8 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]i
 
 	// Filter input facts. We only provide keys requested by the CUE expression.
 	for name, input := range action.Inputs {
-		switch input.Select {
-		case domain.InputDefinitionSelectLatest:
-			if entry, exists := inputs[name]; exists {
-				filterFields(&entry.(*domain.Fact).Value, input.Match.WithoutInputs())
-			}
-		case domain.InputDefinitionSelectAll:
-			if entry, exists := inputs[name]; exists {
-				match := input.Match.WithoutInputs()
-				for _, fact := range entry.([]*domain.Fact) {
-					filterFields(&fact.Value, match)
-				}
-			}
-		default:
-			panic("This should have already been caught by the loop above!")
+		if entry, exists := inputs[name]; exists {
+			filterFields(&entry.Value, input.Match.WithoutInputs())
 		}
 	}
 
@@ -463,22 +349,6 @@ func filterFields(factValue *interface{}, filter cue.Value) {
 		// fact must be a map because filter is struct
 		*factValue = map[string]interface{}{}
 	}
-}
-
-func (self *actionService) getInputFactLatest(value cue.Value) (*domain.Fact, error) {
-	fact, err := self.factRepository.GetLatestByCue(value)
-	if err != nil && errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	return &fact, err
-}
-
-func (self *actionService) getInputFacts(value cue.Value) ([]*domain.Fact, error) {
-	facts, err := self.factRepository.GetByCue(value)
-	if err != nil && errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	return facts, err
 }
 
 func matchFact(match cue.Value, fact *domain.Fact) (error, error) {
