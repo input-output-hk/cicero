@@ -591,6 +591,12 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	action, err := self.ActionService.GetById(invocation.ActionId)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
 	allocs, err := self.NomadEventService.GetEventAllocByNomadJobId(id)
 	if err != nil {
 		self.NotFound(w, errors.WithMessagef(err, "Failed to find allocs for Nomad job %q", id))
@@ -646,8 +652,9 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run": struct {
 			domain.Run
-			ActionId uuid.UUID
-		}{run, invocation.ActionId},
+			ActionId   uuid.UUID
+			ActionName string
+		}{run, invocation.ActionId, action.Name},
 		"inputs":     inputs,
 		"output":     output,
 		"facts":      facts,
