@@ -223,7 +223,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*
 			return nil
 		}).Run(context.Background()); err != nil {
 			if errors.Is(err, errNotRunnable) {
-				return false, nil, nil
+				return false, inputs, nil
 			}
 			return false, nil, err
 		}
