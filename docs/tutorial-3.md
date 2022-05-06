@@ -1,15 +1,15 @@
 # How to include external Actions
 
-In this example [lares](https://github.com/input-output-hk/lares) is used, to explain how to setup a external repository with Cicero.
+Now an [example rust project](https://github.com/input-output-hk/cicero-example/tree/main/rust) is used, to explain how to setup an external repository with Cicero.
 
 We will call this an external Action, because the Action will be provided by a repository which isn't the Cicero repository itself.
 
-First the repository needs a [flake.nix](https://github.com/input-output-hk/lares/blob/master/flake.nix) containing **Cicero** itself as flake input and **ciceroActions** as flake output.
+First the repository needs a [flake.nix](https://github.com/input-output-hk/cicero-example/blob/main/rust/flake.nix) containing **Cicero** itself as flake input and **ciceroActions** as flake output.
 
 ## flake.nix:
 ```nix
 {
-  description = "Lares";
+  description = "Flake for Cicero rustExample";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -18,30 +18,37 @@ First the repository needs a [flake.nix](https://github.com/input-output-hk/lare
       url = "github:input-output-hk/cicero";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix2container.url = "github:nlewo/nix2container";
   };
 
-  outputs = { self, nixpkgs, utils, cicero, nix2container, ... }:
-    utils.lib.eachSystem [ "x86_64-linux" ]
-      (system:
-        let
-          pkgs = nixpkgs.legacyPackages.${system}.extend self.outputs.overlay;
-          n2c = nix2container.packages.${system}.nix2container;
-        in
-        rec {
-  	   ...
-  	   ...
-     }) // rec {
-  	   ...
-  	   ...
-
-       ciceroActions = cicero.lib.callActionsWithExtraArgs
-         rec {
-           inherit (cicero.lib) std;
-           inherit (nixpkgs) lib;
-           actionLib = import "${cicero}/action-lib.nix" { inherit std lib; };
-         } ./cicero;
-     };
+  outputs = { self, nixpkgs, utils, cicero }:
+    utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+      in
+      {
+        defaultPackage = pkgs.stdenv.mkDerivation {
+          name = "rustExample";
+          src = ./src;
+          buildInputs = with pkgs; [
+            coreutils
+            gcc
+            rustc
+          ];
+          installPhase = ''
+            rustc $src/hello.rs
+            mkdir -p $out
+            mv ./hello $out
+          '';
+        };
+      }) // {
+        ciceroActions = cicero.lib.callActionsWithExtraArgs
+          rec {
+            inherit (cicero.lib) std;
+            inherit (nixpkgs) lib;
+            actionLib = import cicero/lib.nix { inherit cicero lib; };
+            nixpkgsRev = nixpkgs.rev;
+          } ./cicero/actions;
+      };
 }
 ```
 
@@ -49,7 +56,7 @@ First the repository needs a [flake.nix](https://github.com/input-output-hk/lare
 
 Now it's required to write the corresponding Action for Cicero to execute later on.
 
-The ciceroActions already hints that it does a recursive lookup in the ./cicero folder, so therefore it's possible to place our Action under the ./cicero/lares directory.
+The ciceroActions already hints that it does a recursive lookup in the ./cicero folder, so therefore it's possible to place our Action under the ./cicero/actions/rust/example directory.
 
 ### ci.nix
 The Action itself is written as nix expression.
@@ -60,22 +67,14 @@ The Action itself is written as nix expression.
 // std, lib & actionLib are provided by the set/rec in the ciceroActions flake output.
 { name, std, lib, actionLib, ... } @ args:
 
-
 {
 
   // The inputs.start describes the expected Fact as json input
   // expecting sha & clone_url as fields
   // while statuses_url, ref & default_branch being optional fields
   inputs.start = ''
-    "${name}": start: {
-      // from both std/ci/{pr,push}
-      sha: string
-      clone_url: string
-      statuses_url?: string
-
-      // only from std/ci/push
-      ref?: "refs/heads/\(default_branch)"
-      default_branch?: string
+    "rust/example": start: {
+      ${actionLib.common.inputStartCue}
     }
   '';
 
@@ -85,24 +84,17 @@ The Action itself is written as nix expression.
   // It will also be stored in the Fact table in Cicero db
   // after a Run has completed
   output = { start }:
-    let cfg = start.value.${name}.start; in
-    {
-      success.${name} = {
-        ok = true;
-        revision = cfg.sha;
-      } // lib.optionalAttrs (cfg ? ref) {
-        inherit (cfg) ref default_branch;
-      };
-    };
+    actionLib.common.output args
+      start.value."rust/example".start;
 
   // The job describes, what is executed
   // when the Nomad task is created and run
   job = { start }:
-    let cfg = start.value.${name}.start; in
+    let start-value = start.value."rust/example".start; in
 
     // A chain allows to chain multiple functions
     // into one array.
-    // The functions in the array a called consecutively
+    // The functions in the array are called consecutively
     std.chain args [
 
       // simpleJob just escapes the provided name
@@ -110,94 +102,61 @@ The Action itself is written as nix expression.
       // and calls the next job
       actionLib.simpleJob
 
-      // reportStatus tries to report to the github status api
-      // if a statuses_url is available
-      (std.github.reportStatus cfg.statuses_url or null)
-
-      // the template set creates a netrc file
-      // inside the Nomad Task
-      {
-        template = std.data-merge.append [{
-          destination = "secrets/netrc";
-          data = ''
-            machine github.com
-            login git
-            password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
-          '';
-        }];
-      }
+      // wraps multiple steps
+      // 1. report to the github status api
+      // 2. creating a netrc template
+      // 3. setting configuration for the nomad task
+      (actionLib.common.task start-value)
 
       // git.clone actually starts to clone
       // the url provided by the input Fact
-      (std.git.clone cfg)
+      (std.git.clone start-value)
+      std.nix.install
 
-      // the resources set is used
-      // for configuring the Nomad Task
-      {
-        resources = {
-          cpu = 3000;
-          memory = 1024 * 3;
-        };
-      }
-
-      // nix.build actually runs the nix build of the flake.nix
-      std.nix.build
-
-
-      // another template set, which is used for storing
-      // docker credentials in the Nomad Task
-      {
-        env.REGISTRY_AUTH_FILE = "/secrets/auth.json";
-
-        template = std.data-merge.append [{
-          destination = "secrets/auth.json";
-          data = ''{
-            "auths": {
-              "docker.infra.aws.iohkdev.io": {
-                "auth": "{{with secret "kv/data/cicero/docker"}}{{with .Data.data}}{{base64Encode (print .user ":" .password)}}{{end}}{{end}}"
-              }
-            }
-          }'';
-        }];
-      }
-
-      // this bash script will actually execute
-      // a specific flake output, which
-      // creates and pushes a docker image to a registry
+      // runs the following cmds in a shell
       (std.script "bash" ''
-        set -x
-        nix run .#laresImage.copyToRegistry
+        cd rust
+        nix build .
       '')
     ];
-
+}
 ```
 
 ## Create Action in WebUI
 
-Click on "List Actions"
+### Click on "List Actions"
 
-![Cicero WebUI List lares](./cicero_webui_list_actions_lares.png "Cicero WebUI List lares")
+**Please note:**
 
-Click on "lares/ci"
+The actual [flake.nix](https://github.com/input-output-hk/cicero-example/blob/main/rust/flake.nix) we want to use resides in a Subdirectory.
 
-![Cicero WebUI Create lares](./cicero_webui_create_action_lares.png "Cicero WebUI Create lares")
+Therefore the URL needs to be adapted to respect [go-getter Subdirectories](https://github.com/hashicorp/go-getter#subdirectories):
+```
+github.com/input-output-hk/cicero-example//rust
+```
 
-## Create "lares/ci" Fact
+![Cicero WebUI List rust](./cicero_webui_list_actions_rust.png "Cicero WebUI List rust")
 
-This will trigger the run of the "lares/ci" Action.
+### Click on "rust/example/build"
 
-Pick the commit hash a docker image should be created for.
+![Cicero WebUI Create rust](./cicero_webui_create_action_rust.png "Cicero WebUI Create rust")
+
+## Create "rust/example" Fact
+
+This will trigger the run of the "rust/example/build" Action.
+
+Pick the commit hash which the build should run for.
 
 ```
-cat > /tmp/lares-fact.json <<EOF
+cat > /tmp/rust-example.json <<EOF
 {
     "start": {
-	"clone_url":   "https://github.com/input-output-hk/lares",
-	"sha":         "desiredCommitHash"
+    "clone_url":   "https://github.com/input-output-hk/cicero-example",
+    "sha":         "desiredCommitHash"
     }
 }
 EOF
 
 nix develop
-http -v post :8000/api/fact "lares/ci":=@/tmp/lares-fact.json
+http -v post :8000/api/fact "rust/example":=@/tmp/rust-example.json
 ```
