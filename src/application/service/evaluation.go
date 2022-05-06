@@ -225,10 +225,6 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 				for _, tg := range job.TaskGroups {
 					for _, t := range tg.Tasks {
 						switch t.Driver {
-						case "podman":
-							if _, found := t.Config["packages"]; found {
-								delete(t.Config, "packages")
-							}
 						case "nix":
 							if _, found := t.Config["console"]; !found {
 								t.Config["console"] = "pipe"
