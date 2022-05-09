@@ -265,40 +265,54 @@
 									</table>
 								{{end}}
 
-								<div class="content-flex">
-									<div style="width: calc(50% - 2em);">
-										<h3>CPU Usage in Seconds (relative to max CPU used)</h3>
-										<a href="{{index $.Grafanas .ID}}">Show in Grafana</a>
-										<table class="charts-css column" style="height: 300px; --color: #55ddaa;">
-											<tbody>
-												{{range $idx, $val := index $.CpuMetrics .ID}}
-												<tr>
-													<td style="--start: {{.Start}}; --size: {{.Size}}">
-														<span class="data">{{.Label}}</span>
-														<span class="tooltip">{{.Time}}</span>
-													</td>
-												</tr>
-												{{end}}
-											</tbody>
-										</table>
-									</div>
+								<table
+									class="
+										charts-css line
+										show-heading
+										show-primary-axis show-4-secondary-axes
+										show-labels
+									"
+									style="
+										height: 300px;
+										margin: 1em 0;
+									"
+								>
+									<caption>
+										<h3 style="margin: 2em 0 0 0">
+											Resource Usage
+										</h3>
+										<div>(relative to max used)</div>
+									</caption>
+									<tbody>
+										{{range $time, $metric := index $.metrics .ID}}
+											<tr>
+												<th>{{$time.Format "15:04"}}</th>
 
-									<div style="width: calc(50% - 2em);">
-										<h3>Memory Usage (relative to max memory used)</h3>
-										<table class="charts-css column" style="height: 300px; --color: #aadd55;">
-											<tbody>
-												{{range $idx, $val := index $.MemMetrics .ID}}
-												<tr>
+												{{with .Cpu}}
 													<td style="--start: {{.Start}}; --size: {{.Size}}">
 														<span class="data">{{.Label}}</span>
 														<span class="tooltip">{{.Time}}</span>
 													</td>
-												</tr>
+												{{else}}
+													<td style="display: none"></td>
 												{{end}}
-											</tbody>
-										</table>
-									</div>
-								</div>
+
+												{{with .Mem}}
+													<td style="--start: {{.Start}}; --size: {{.Size}}">
+														<span class="data">{{.Label}}</span>
+														<span class="tooltip">{{.Time}}</span>
+													</td>
+												{{else}}
+													<td style="display: none"></td>
+												{{end}}
+											</tr>
+										{{end}}
+									</tbody>
+								</table>
+								<ul class="charts-css legend legend-inline legend-line">
+									<li>CPU (<a href="{{index $.grafanaUrls .ID}}">Grafana</a>)</li>
+									<li>Memory</li>
+								</ul>
 
 								<h3>Tasks</h3>
 								<div class="tabs border" style="--num-tabs: {{len .TaskStates}}">

@@ -649,19 +649,62 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	type Metric struct {
+		Cpu *service.VMMetric
+		Mem *service.VMMetric
+	}
+	metrics := map[string]map[time.Time]*Metric{}
+	for allocId, cpuMetrics := range cpuMetrics {
+		for _, cpuMetric := range cpuMetrics {
+			for t, metric := range metrics[allocId] {
+				if cpuMetric.Time.Equal(t) {
+					if metric.Cpu != nil {
+						panic("should never happen")
+					}
+					metric.Cpu = cpuMetric
+					break
+				}
+			}
+			if metrics[allocId] == nil {
+				metrics[allocId] = map[time.Time]*Metric{}
+			}
+			metrics[allocId][cpuMetric.Time] = &Metric{Cpu: cpuMetric}
+		}
+	}
+	for allocId, memMetrics := range memMetrics {
+		for _, memMetric := range memMetrics {
+			for t, metric := range metrics[allocId] {
+				if memMetric.Time.Equal(t) {
+					if metric.Mem != nil {
+						panic("should never happen")
+					}
+					metric.Mem = memMetric
+					break
+				}
+			}
+			if metrics[allocId] == nil {
+				metrics[allocId] = map[time.Time]*Metric{}
+			}
+			if metric, exists := metrics[allocId][memMetric.Time]; exists {
+				metric.Mem = memMetric
+			} else {
+				metrics[allocId][memMetric.Time] = &Metric{Mem: memMetric}
+			}
+		}
+	}
+
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run": struct {
 			domain.Run
 			ActionId   uuid.UUID
 			ActionName string
 		}{run, invocation.ActionId, action.Name},
-		"inputs":     inputs,
-		"output":     output,
-		"facts":      facts,
-		"allocs":     allocsByGroup,
-		"MemMetrics": memMetrics,
-		"CpuMetrics": cpuMetrics,
-		"Grafanas":   grafanaUrls,
+		"inputs":      inputs,
+		"output":      output,
+		"facts":       facts,
+		"allocs":      allocsByGroup,
+		"metrics":     metrics,
+		"grafanaUrls": grafanaUrls,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
