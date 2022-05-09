@@ -313,6 +313,19 @@
 									<li>CPU (<a href="{{index $.grafanaUrls .ID}}">Grafana</a>)</li>
 									<li>Memory</li>
 								</ul>
+								<style>
+								#{{$scope}} .charts-css .data {
+									transform: scale(0.85);
+								}
+								#{{$scope}} .charts-css tbody td {
+									transform-origin: bottom;
+									animation: reveal-resources 0.5s ease;
+								}
+								@keyframes reveal-resources {
+									0%   { transform: scaleY(0); }
+									100% { transform: scaleY(1); }
+								}
+								</style>
 
 								<h3>Tasks</h3>
 								<div class="tabs border" style="--num-tabs: {{len .TaskStates}}">
