@@ -1,16 +1,27 @@
 # Cicero
 
-Cicero is an action execution engine.
+Cicero is an action execution engine for running Continuous Integration (CI) and Continuous Delivery (CD) tasks.
 
-Think of it like an if-this-then-that machine on HashiCorp Nomad.
+In contrast to CI/CD tools like [Jenkins](https://www.jenkins.io/)
+or [Hydra](https://github.com/NixOS/hydra) Cicero provides more flexibility in writing pipelines
+and a deep integration of the [Nix Expression Language](https://nixos.wiki/wiki/Nix_Expression_Language) and the [Nix Package Manager](https://nixos.wiki/wiki/Nix_Package_Manager).
 
-Cicero’s actions are flexible enough to build Continuous Integration (CI) and
-Continuous Delivery (CD) pipelines. It offers a rich Web UI as well as a CLI
-tool for developers to query and inspect actions and their runs,
-as well as the action output. Integration with third party applications (e.g.
-JIRA) is possible, for automatic status updates. By using a declarative
-approach to actions, dependencies and intermediate results can be easily cached,
+Cicero also offers a rich Web UI to query and inspect **actions** and their **runs**,
+as well as the **action output**.
+
+To interact with the Cicero-API via CLI POST requests with JSON are sent to the api endpoints.
+The api definition can be found here: [https://cicero.infra.aws.iohkdev.io/documentation/cicero.yaml](https://cicero.infra.aws.iohkdev.io/documentation/cicero.yaml).
+
+**Actions** are defined in the Nix expression language which is extended by Cicero specific libraries.
+Therefore the execution of an **action** is called **run**.
+
+**Runs** are converted into a job description which gets deployed to a Hashicorp Nomad instance.
+
+Integration with third party applications (e.g.JIRA) is possible, for automatic status updates.
+By using a declarative approach to **actions**, dependencies and intermediate results can be easily cached,
 and execution parallelised, thus reducing build times.
+
+Vault from the Hashicorp tech stack is used to enable authentication.
 
 ## Vocabulary
 
