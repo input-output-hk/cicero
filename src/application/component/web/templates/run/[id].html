@@ -287,23 +287,15 @@
 										{{range $time, $metric := index $.metrics .ID}}
 											<tr>
 												<th>{{$time.Format "15:04"}}</th>
-
-												{{with .Cpu}}
-													<td style="--start: {{.Start}}; --size: {{.Size}}">
-														<span class="data">{{.Label}}</span>
-														<span class="tooltip">{{.Time}}</span>
-													</td>
-												{{else}}
-													<td style="display: none"></td>
-												{{end}}
-
-												{{with .Mem}}
-													<td style="--start: {{.Start}}; --size: {{.Size}}">
-														<span class="data">{{.Label}}</span>
-														<span class="tooltip">{{.Time}}</span>
-													</td>
-												{{else}}
-													<td style="display: none"></td>
+												{{range .}}
+													{{with .}}
+														<td style="--start: {{.Start}}; --size: {{.Size}}">
+															<span class="data">{{.Label}}</span>
+															<span class="tooltip">{{.Time}}</span>
+														</td>
+													{{else}}
+														<td style="display: none"></td>
+													{{end}}
 												{{end}}
 											</tr>
 										{{end}}
