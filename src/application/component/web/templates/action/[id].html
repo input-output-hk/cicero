@@ -66,7 +66,7 @@
 						<tr>
 							<th>Name</th>
 							<th>Details</th>
-							<th title="Facts that currently satisfy this input">
+							<th title="Fact that currently satisfies this input">
 								Satisfied by
 							</th>
 						</tr>
@@ -81,9 +81,8 @@
 											<dl class="inline">
 												<dt style="display: none">
 													<!-- We keep this invisible element for semantics. -->
-													Select
 												</dt>
-												<dd>{{InputDefinitionSelectString .Select}}</dd>
+												<dd>CUE</dd>
 												{{with .Not}}
 													<dt>Not</dt>
 													<dd>
@@ -117,14 +116,8 @@
 									</details>
 								</td>
 								<td>
-									{{if eq (InputDefinitionSelectString .Select) "latest"}}
-										{{with (index $.inputs $name)}}
-											{{template "fact" .}}
-										{{end}}
-									{{else}}
-										{{with (index $.inputs $name)}}
-											{{template "facts" .}}
-										{{end}}
+									{{with index $.inputs $name}}
+										{{template "fact" .}}
 									{{end}}
 								</td>
 							</tr>

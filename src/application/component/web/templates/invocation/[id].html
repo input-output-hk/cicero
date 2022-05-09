@@ -67,10 +67,10 @@
 					</tr>
 				</thead>
 				<tbody>
-					{{range $name, $facts := $.inputs}}
+					{{range $name, $fact := $.inputs}}
 						<tr>
 							<td>{{$name}}</td>
-							<td>{{template "facts" .}}</td>
+							<td>{{template "fact" .}}</td>
 						</tr>
 					{{else}}
 						<tr>

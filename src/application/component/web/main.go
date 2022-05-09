@@ -535,7 +535,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		run = &run_
 	}
 
-	var inputs map[string][]domain.Fact
+	var inputs map[string]domain.Fact
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
 		return
@@ -591,6 +591,12 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	action, err := self.ActionService.GetById(invocation.ActionId)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
 	allocs, err := self.NomadEventService.GetEventAllocByNomadJobId(id)
 	if err != nil {
 		self.NotFound(w, errors.WithMessagef(err, "Failed to find allocs for Nomad job %q", id))
@@ -602,7 +608,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		allocsByGroup[alloc.TaskGroup] = append(allocsByGroup[alloc.TaskGroup], alloc)
 	}
 
-	var inputs map[string][]domain.Fact
+	var inputs map[string]domain.Fact
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
 		return
@@ -646,8 +652,9 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run": struct {
 			domain.Run
-			ActionId uuid.UUID
-		}{run, invocation.ActionId},
+			ActionId   uuid.UUID
+			ActionName string
+		}{run, invocation.ActionId, action.Name},
 		"inputs":     inputs,
 		"output":     output,
 		"facts":      facts,
@@ -908,12 +915,8 @@ func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Reque
 		self.ClientError(w, err)
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
 		self.NotFound(w, errors.WithMessage(err, "Could not get Invocation's inputs"))
-	} else if action, err := self.ActionService.GetByInvocationId(id); err != nil {
-		self.ServerError(w, err)
-	} else if result, err := inputs.MapStringInterface(action.Inputs); err != nil {
-		self.ServerError(w, err)
 	} else {
-		self.json(w, result, http.StatusOK)
+		self.json(w, inputs, http.StatusOK)
 	}
 }
 
@@ -924,12 +927,8 @@ func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 		self.NotFound(w, err)
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.NotFound(w, errors.WithMessage(err, "Could not get Run's Invocation's inputs"))
-	} else if action, err := self.ActionService.GetByRunId(id); err != nil {
-		self.ServerError(w, err)
-	} else if result, err := inputs.MapStringInterface(action.Inputs); err != nil {
-		self.ServerError(w, err)
 	} else {
-		self.json(w, result, http.StatusOK)
+		self.json(w, inputs, http.StatusOK)
 	}
 }
 

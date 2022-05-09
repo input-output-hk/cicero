@@ -20,10 +20,18 @@
 							<td>{{.NomadJobID}}</td>
 						</tr>
 						<tr>
-							<th>Action ID</th>
+							<th>Action</th>
 							<td>
 								<a href="/action/{{.ActionId}}">
-									{{.ActionId}}
+									{{.ActionName}}
+								</a>
+							</td>
+						</tr>
+						<tr>
+							<th>Invocation ID</th>
+							<td>
+								<a href="/invocation/{{.InvocationId}}">
+									{{.InvocationId}}
 								</a>
 							</td>
 						</tr>
@@ -71,14 +79,14 @@
 						</tr>
 						<tr>
 							<th>Name</th>
-							<th>Facts</th>
+							<th>Fact</th>
 						</tr>
 					</thead>
 					<tbody>
-						{{range $name, $facts := $.inputs}}
+						{{range $name, $fact := $.inputs}}
 							<tr>
 								<td>{{$name}}</td>
-								<td>{{template "facts" .}}</td>
+								<td>{{template "fact" .}}</td>
 							</tr>
 						{{else}}
 							<tr>

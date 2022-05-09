@@ -21,8 +21,8 @@ type InvocationService interface {
 	GetLatestByActionId(uuid.UUID) (domain.Invocation, error)
 	GetAll(*repository.Page) ([]*domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, *bool, *repository.Page) ([]*domain.Invocation, error)
-	GetInputFactIdsById(uuid.UUID) (repository.InvocationInputFactIds, error)
-	Save(*domain.Invocation, map[string]interface{}) error
+	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
+	Save(*domain.Invocation, map[string]*domain.Fact) error
 	Update(*domain.Invocation) error
 }
 
@@ -90,14 +90,14 @@ func (self *invocationService) GetByInputFactIds(factIds []*uuid.UUID, recursive
 	return
 }
 
-func (self *invocationService) GetInputFactIdsById(id uuid.UUID) (inputFactIds repository.InvocationInputFactIds, err error) {
+func (self *invocationService) GetInputFactIdsById(id uuid.UUID) (inputFactIds map[string]uuid.UUID, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Invocation input fact IDs by Nomad Job ID")
 	inputFactIds, err = self.invocationRepository.GetInputFactIdsById(id)
 	err = errors.WithMessagef(err, "Could not select Invocation input fact IDs by Nomad Job ID %q", id)
 	return
 }
 
-func (self *invocationService) Save(invocation *domain.Invocation, inputs map[string]interface{}) error {
+func (self *invocationService) Save(invocation *domain.Invocation, inputs map[string]*domain.Fact) error {
 	self.logger.Trace().Msg("Saving new Invocation")
 	if err := self.invocationRepository.Save(invocation, inputs); err != nil {
 		return errors.WithMessagef(err, "Could not insert Invocation")

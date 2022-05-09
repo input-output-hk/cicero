@@ -14,12 +14,6 @@ self:
  match = "count: >9";
  };
  
- # get all ticks
- ticks = {
- select = "all";
- match = "count: int";
- };
- 
  # has no influence on runnability
  double = {
  optional = true;
@@ -33,9 +27,8 @@ self:
  failure.${name} = false;
  };
  
- job = { tick, ticks, double ? false }:
+ job = { tick, double ? false }:
  # `tick` is the latest fact that matches
- # `ticks` is a list of all facts that match
  # `double` is provided if found
  …; # nomad HCL job spec in JSON format
  }
@@ -71,7 +64,6 @@ in rec {
           mapAttrs
           (k: v:
             {
-              select = "latest";
               match = v;
               not = false;
               optional = false;
@@ -112,25 +104,8 @@ in rec {
               t = typeOf v;
             in
               if t != "string" && t != "set"
-              then throw ''`inputs."${k}"` must be string or set with keys `select` (optional), `not` (optional), `optional` (optional), and `match` but is ${t}''
+              then throw ''`inputs."${k}"` must be string or set with keys `not` (optional), `optional` (optional), and `match` but is ${t}''
               else null
-          )
-          inputs)
-
-        (mapAttrs
-          (
-            k: v:
-              if typeOf v == "string"
-              then null
-              else let
-                select = v.select or "latest";
-                t = typeOf select;
-              in
-                if t != "string"
-                then throw ''`inputs."${k}".select` must be string but is ${t}''
-                else if select != "latest" && select != "all"
-                then throw ''`inputs."${k}".select` must be either "latest" or "all" but is "${select}"''
-                else null
           )
           inputs)
 
