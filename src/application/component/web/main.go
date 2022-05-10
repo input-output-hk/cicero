@@ -528,9 +528,11 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var run *domain.Run
-	if run_, err := self.RunService.GetByInvocationId(id); err != nil && !pgxscan.NotFound(err) {
-		self.ServerError(w, err)
-		return
+	if run_, err := self.RunService.GetByInvocationId(id); err != nil {
+		if !pgxscan.NotFound(err) {
+			self.ServerError(w, err)
+			return
+		}
 	} else {
 		run = &run_
 	}
@@ -548,7 +550,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 
 	if err := render("invocation/[id].html", w, map[string]interface{}{
 		"Invocation": invocation,
-		"run":        run,
+		"Run":        run,
 		"inputs":     inputs,
 	}); err != nil {
 		self.ServerError(w, err)

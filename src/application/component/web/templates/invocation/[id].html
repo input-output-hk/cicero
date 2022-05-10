@@ -31,7 +31,7 @@
 					{{with $.Run}}
 						<tr>
 							<th>Duration</th>
-							<td>{{.Run.CreatedAt.Sub .CreatedAt}}</td>
+							<td>{{.CreatedAt.Sub $.Invocation.CreatedAt}}</td>
 						</tr>
 						<tr>
 							<th>Run</th>
