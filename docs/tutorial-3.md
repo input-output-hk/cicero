@@ -58,7 +58,7 @@ Now it's required to write the corresponding Action for Cicero to execute later 
 
 The ciceroActions already hints that it does a recursive lookup in the ./cicero folder, so therefore it's possible to place our Action under the ./cicero/actions/rust/example directory.
 
-### ci.nix
+### build.nix
 The Action itself is written as nix expression.
 
 ```
