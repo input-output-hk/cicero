@@ -281,7 +281,10 @@
 										<h3 style="margin: 2em 0 0 0">
 											Resource Usage
 										</h3>
-										<div>(relative to max used)</div>
+										<div>
+											(relative to max used)<br/>
+											view in <a href="{{index $.grafanaUrls .ID}}">Grafana</a>
+										</div>
 									</caption>
 									<tbody>
 										{{range $time, $metric := index $.metrics .ID}}
@@ -302,7 +305,7 @@
 									</tbody>
 								</table>
 								<ul class="charts-css legend legend-inline legend-line">
-									<li>CPU (<a href="{{index $.grafanaUrls .ID}}">Grafana</a>)</li>
+									<li>CPU</li>
 									<li>Memory</li>
 								</ul>
 								<style>
