@@ -528,9 +528,11 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var run *domain.Run
-	if run_, err := self.RunService.GetByInvocationId(id); err != nil && !pgxscan.NotFound(err) {
-		self.ServerError(w, err)
-		return
+	if run_, err := self.RunService.GetByInvocationId(id); err != nil {
+		if !pgxscan.NotFound(err) {
+			self.ServerError(w, err)
+			return
+		}
 	} else {
 		run = &run_
 	}
@@ -548,7 +550,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 
 	if err := render("invocation/[id].html", w, map[string]interface{}{
 		"Invocation": invocation,
-		"run":        run,
+		"Run":        run,
 		"inputs":     inputs,
 	}); err != nil {
 		self.ServerError(w, err)
@@ -655,13 +657,12 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 			ActionId   uuid.UUID
 			ActionName string
 		}{run, invocation.ActionId, action.Name},
-		"inputs":     inputs,
-		"output":     output,
-		"facts":      facts,
-		"allocs":     allocsByGroup,
-		"MemMetrics": memMetrics,
-		"CpuMetrics": cpuMetrics,
-		"Grafanas":   grafanaUrls,
+		"inputs":      inputs,
+		"output":      output,
+		"facts":       facts,
+		"allocs":      allocsByGroup,
+		"metrics":     service.GroupMetrics(cpuMetrics, memMetrics),
+		"grafanaUrls": grafanaUrls,
 	}); err != nil {
 		self.ServerError(w, err)
 		return

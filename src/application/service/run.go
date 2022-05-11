@@ -465,3 +465,30 @@ type VMMetric struct {
 	Size  float64
 	Label template.HTML
 }
+
+// Groups metrics by timestamp.
+// Useful to display as multiple datasets in one chart.
+func GroupMetrics(seriesByAllocId ...map[string][]*VMMetric) map[string]map[time.Time][]*VMMetric {
+	result := map[string]map[time.Time][]*VMMetric{}
+	for seriesIdx, series := range seriesByAllocId {
+		for allocId, seriesMetrics := range series {
+			for _, seriesMetric := range seriesMetrics {
+				// Make sure the map of groups for this allocation exists.
+				if result[allocId] == nil {
+					result[allocId] = map[time.Time][]*VMMetric{}
+				}
+
+				if group, exists := result[allocId][seriesMetric.Time]; exists {
+					// A group for the same timestamp exists so add seriesMetric to it.
+					group[seriesIdx] = seriesMetric
+				} else {
+					// No group for the same timestamp exists so create it.
+					group = make([]*VMMetric, len(seriesByAllocId))
+					group[seriesIdx] = seriesMetric
+					result[allocId][seriesMetric.Time] = group
+				}
+			}
+		}
+	}
+	return result
+}
