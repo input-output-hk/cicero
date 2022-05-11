@@ -124,6 +124,10 @@ The Action itself is written as nix expression.
 
 ## Create Action in WebUI
 
+### Add required team to repository
+Cicero will use specific credentials to clone the repository from Github.
+Therefore the following team 'input-output-hk/devops' needs to be added to the repository in question.
+
 ### Click on "List Actions"
 
 **Please note:**
