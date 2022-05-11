@@ -134,6 +134,10 @@ Therefore the URL needs to be adapted to respect [go-getter Subdirectories](http
 ```
 github.com/input-output-hk/cicero-example//rust
 ```
+It's also possible to refer to a specific commit by using:
+```
+github.com/input-output-hk/cicero-example//rust?ref=yourCommitHash
+```
 
 ![Cicero WebUI List rust](./cicero_webui_list_actions_rust.png "Cicero WebUI List rust")
 
