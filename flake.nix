@@ -201,7 +201,7 @@
           cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix {
             inherit (nix2container.packages.${prev.system}) skopeo-nix2container;
           };
-          webhook-trigger = prev.callPackage pkgs/trigger {};
+          webhook-trigger = prev.callPackage pkgs/trigger {flake = self;};
           cicero-api = (final.extend haskell-nix.overlay).callPackage pkgs/cicero-api {
             inherit supportedSystems;
             src = ./.;

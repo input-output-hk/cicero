@@ -20,11 +20,13 @@ require (
 	github.com/jackc/pgconn v1.10.1
 	github.com/jackc/pgtype v1.9.0
 	github.com/jackc/pgx/v4 v4.14.0
+	github.com/miekg/dns v1.1.49
 	github.com/pashagolub/pgxmock v1.4.2
 	github.com/pborman/ansi v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rs/zerolog v1.26.1
+	github.com/steinfletcher/apitest v1.5.11
 	github.com/stretchr/testify v1.7.2
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
@@ -126,7 +128,6 @@ require (
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
-	github.com/miekg/dns v1.1.49 // indirect
 	github.com/mitchellh/copystructure v1.1.1 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.14.1 // indirect
