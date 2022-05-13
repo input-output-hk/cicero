@@ -39,9 +39,9 @@ type InOutDefinition struct {
 type InputDefinitions map[string]InputDefinition
 
 type InputDefinition struct {
-	Not      bool        `json:"not"`
-	Optional bool        `json:"optional"`
-	Match    InOutString `json:"match"`
+	Not      bool           `json:"not"`
+	Optional bool           `json:"optional"`
+	Match    InOutCUEString `json:"match"`
 }
 
 type Output struct {
@@ -50,11 +50,11 @@ type Output struct {
 }
 
 type OutputDefinition struct {
-	Success *InOutString `json:"success"`
-	Failure *InOutString `json:"failure"`
+	Success *InOutCUEString `json:"success"`
+	Failure *InOutCUEString `json:"failure"`
 }
 
-type InOutString util.CUEString
+type InOutCUEString util.CUEString
 
 type Invocation struct {
 	Id         uuid.UUID `json:"id"`
@@ -97,15 +97,15 @@ func (self InOutDefinition) CUEString() (str util.CUEString) {
 }
 
 func (self *InOutDefinition) UnmarshalJSON(data []byte) error {
-	var io InOutString
-	if err := io.UnmarshalJSON(data); err != nil {
+	var io util.CUEString
+	if err := json.Unmarshal(data, &io); err != nil {
 		return err
 	}
-	return self.FromInOutString(io)
+	return self.FromCUEString(io)
 }
 
-func (self *InOutDefinition) FromInOutString(io InOutString) error {
-	value := util.CUEString(io).Value(nil)
+func (self *InOutDefinition) FromCUEString(io util.CUEString) error {
+	value := io.Value(nil)
 	if err := value.Err(); err != nil {
 		return err
 	}
@@ -158,15 +158,13 @@ func (self *InOutDefinition) FromInOutString(io InOutString) error {
 	}
 
 	if v := value.LookupPath(pathOutputSuccess); v.Exists() {
-		var success InOutString
-		self.Output.Success = &success
+		self.Output.Success = new(InOutCUEString)
 		if err := self.Output.Success.FromValue(v); err != nil {
 			return err
 		}
 	}
 	if v := value.LookupPath(pathOutputFailure); v.Exists() {
-		var failure InOutString
-		self.Output.Failure = &failure
+		self.Output.Failure = new(InOutCUEString)
 		if err := self.Output.Failure.FromValue(v); err != nil {
 			return err
 		}
@@ -176,7 +174,7 @@ func (self *InOutDefinition) FromInOutString(io InOutString) error {
 }
 
 func (self *InOutDefinition) Scan(value interface{}) error {
-	return self.FromInOutString(InOutString(value.(string)))
+	return self.FromCUEString(util.CUEString(value.(string)))
 }
 
 func (self *InputDefinitions) CUEString() (str util.CUEString) {
@@ -271,7 +269,7 @@ func (self Output) Failure() (*string, error) {
 	}
 }
 
-func (self InOutString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
+func (self InOutCUEString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
 	return util.CUEString(self).Value(func(ctx *cue.Context) []cue.BuildOption {
 		return []cue.BuildOption{cue.Scope(ctx.Encode(struct{}{}).
 			// XXX check which inputs are actually used and pass in only those
@@ -280,11 +278,11 @@ func (self InOutString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
 	})
 }
 
-func (self *InOutString) FromValue(v cue.Value) error {
+func (self *InOutCUEString) FromValue(v cue.Value) error {
 	return (*util.CUEString)(self).FromValue(v)
 }
 
-func (self *InOutString) UnmarshalJSON(data []byte) error {
+func (self *InOutCUEString) UnmarshalJSON(data []byte) error {
 	var str util.CUEString
 	if err := json.Unmarshal(data, &str); err != nil {
 		return err
@@ -295,7 +293,7 @@ func (self *InOutString) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	*self = InOutString(str)
+	*self = InOutCUEString(str)
 	return nil
 }
 
