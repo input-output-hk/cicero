@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"sync"
 	"time"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
-	cueformat "cuelang.org/go/cue/format"
 	cueliteral "cuelang.org/go/cue/literal"
 	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
@@ -19,68 +17,10 @@ import (
 	"github.com/input-output-hk/cicero/src/util"
 )
 
-// There is a race condition around global internal state of CUE.
-var cueMutex = &sync.Mutex{}
-
-type CUEString string
-
-// Parses into a NEW CONTEXT!
-func (self CUEString) Value(optionsFunc func(*cue.Context) []cue.BuildOption) cue.Value {
-	cueMutex.Lock()
-	defer cueMutex.Unlock()
-
-	ctx := cuecontext.New()
-
-	var options []cue.BuildOption
-	if optionsFunc == nil {
-		options = []cue.BuildOption{}
-	} else {
-		options = optionsFunc(ctx)
-	}
-
-	return ctx.CompileString(string(self), options...)
-}
-
-func (self *CUEString) FromValue(value cue.Value, options ...cueformat.Option) error {
-	if syntax, err := cueformat.Node(
-		value.Syntax(
-			cue.Hidden(true),
-			cue.Optional(true),
-			cue.ResolveReferences(false),
-		),
-		options...,
-	); err != nil {
-		return err
-	} else {
-		*self = CUEString(syntax)
-	}
-	return nil
-}
-
-// Converts to a `cue.Value` and back to string so that the caller can use `cueformat.Simplify()`.
-// If that is not needed use `cueformat.Source()` directly instead.
-func (self CUEString) Format(options ...cueformat.Option) (result CUEString, err error) {
-	value := self.Value(nil)
-	err = result.FromValue(value, options...)
-	if err != nil {
-		return
-	}
-	err = value.Err()
-	if err != nil {
-		return
-	}
-
-	var b []byte
-	b, err = cueformat.Source([]byte(result), options...)
-	result = CUEString(b)
-
-	return
-}
-
-type InOutString CUEString
+type InOutString util.CUEString
 
 func (self InOutString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
-	return CUEString(self).Value(func(ctx *cue.Context) []cue.BuildOption {
+	return util.CUEString(self).Value(func(ctx *cue.Context) []cue.BuildOption {
 		return []cue.BuildOption{cue.Scope(ctx.Encode(struct{}{}).
 			// XXX check which inputs are actually used and pass in only those
 			FillPath(cue.MakePath(cue.Str("inputs")), inputs),
@@ -89,28 +29,21 @@ func (self InOutString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
 }
 
 func (self *InOutString) FromValue(v cue.Value) error {
-	str := new(CUEString)
-	if err := str.FromValue(v); err != nil {
-		return err
-	}
-	*self = InOutString(*str)
-	return nil
+	return (*util.CUEString)(self).FromValue(v)
 }
 
 func (self *InOutString) UnmarshalJSON(data []byte) error {
-	var str string
+	var str util.CUEString
 	if err := json.Unmarshal(data, &str); err != nil {
 		return err
 	}
 
-	match := CUEString(str)
-
 	// Fail to unmarshal an error value to fail early.
-	if err := match.Value(nil).Err(); err != nil {
+	if err := str.Value(nil).Err(); err != nil {
 		return err
 	}
 
-	*self = InOutString(match)
+	*self = InOutString(str)
 	return nil
 }
 
@@ -119,12 +52,12 @@ type InOutDefinition struct {
 	Output OutputDefinition `json:"output"`
 }
 
-func (self InOutDefinition) CUEString() (str CUEString) {
+func (self InOutDefinition) CUEString() (str util.CUEString) {
 	if inStr := self.Inputs.CUEString(); inStr != "" {
-		str += CUEString(`inputs: {` + inStr + "}\n")
+		str += util.CUEString(`inputs: {` + inStr + "}\n")
 	}
 	if outStr := self.Output.CUEString(); outStr != "" {
-		str += CUEString(`output: {` + outStr + "}\n")
+		str += util.CUEString(`output: {` + outStr + "}\n")
 	}
 	return
 }
@@ -138,7 +71,7 @@ func (self *InOutDefinition) UnmarshalJSON(data []byte) error {
 }
 
 func (self *InOutDefinition) FromInOutString(io InOutString) error {
-	value := CUEString(io).Value(nil)
+	value := util.CUEString(io).Value(nil)
 	if err := value.Err(); err != nil {
 		return err
 	}
@@ -220,9 +153,9 @@ type InputDefinition struct {
 
 type InputDefinitions map[string]InputDefinition
 
-func (self *InputDefinitions) CUEString() (str CUEString) {
+func (self *InputDefinitions) CUEString() (str util.CUEString) {
 	for name, def := range *self {
-		str = CUEString(cueliteral.Label.Append([]byte(str), name))
+		str = util.CUEString(cueliteral.Label.Append([]byte(str), name))
 		str += `: {`
 
 		str += `not: `
@@ -241,7 +174,7 @@ func (self *InputDefinitions) CUEString() (str CUEString) {
 		}
 		str += "\n"
 
-		str += `match: {` + CUEString(def.Match) + "}\n"
+		str += `match: {` + util.CUEString(def.Match) + "}\n"
 
 		str += "}\n"
 	}
@@ -249,8 +182,8 @@ func (self *InputDefinitions) CUEString() (str CUEString) {
 }
 
 func (self *InputDefinitions) Flow(runnerFunc flow.RunnerFunc) *flow.Controller {
-	cueMutex.Lock()
-	defer cueMutex.Unlock()
+	util.CueMutex.Lock()
+	defer util.CueMutex.Unlock()
 
 	cueStr := ``
 	for name, input := range *self {
@@ -277,12 +210,12 @@ type OutputDefinition struct {
 	Failure *InOutString `json:"failure"`
 }
 
-func (self OutputDefinition) CUEString() (str CUEString) {
+func (self OutputDefinition) CUEString() (str util.CUEString) {
 	if self.Success != nil {
-		str += "success: " + CUEString(*self.Success) + "\n"
+		str += "success: " + util.CUEString(*self.Success) + "\n"
 	}
 	if self.Failure != nil {
-		str += "failure: " + CUEString(*self.Failure) + "\n"
+		str += "failure: " + util.CUEString(*self.Failure) + "\n"
 	}
 	return
 }
