@@ -87,12 +87,16 @@ type NomadEvent struct {
 }
 
 func (self InOutDefinition) CUEString() (str util.CUEString) {
-	if inStr := self.Inputs.CUEString(); inStr != "" {
+	var allImports string
+	if _, imports, inStr := self.Inputs.CUEString().StripHead(); inStr != "" {
 		str += util.CUEString(`inputs: {` + inStr + "}\n")
+		allImports += imports + "\n"
 	}
-	if outStr := self.Output.CUEString(); outStr != "" {
+	if _, imports, outStr := self.Output.CUEString().StripHead(); outStr != "" {
 		str += util.CUEString(`output: {` + outStr + "}\n")
+		allImports += imports + "\n"
 	}
+	str = util.CUEString(allImports) + str
 	return
 }
 
@@ -178,6 +182,7 @@ func (self *InOutDefinition) Scan(value interface{}) error {
 }
 
 func (self *InputDefinitions) CUEString() (str util.CUEString) {
+	var allImports string
 	for name, def := range *self {
 		str = util.CUEString(cueliteral.Label.Append([]byte(str), name))
 		str += `: {`
@@ -198,10 +203,13 @@ func (self *InputDefinitions) CUEString() (str util.CUEString) {
 		}
 		str += "\n"
 
-		str += `match: {` + util.CUEString(def.Match) + "}\n"
+		_, imports, match := util.CUEString(def.Match).StripHead()
+		allImports += imports + "\n"
+		str += `match: {` + match + "}\n"
 
 		str += "}\n"
 	}
+	str = util.CUEString(allImports) + str
 	return
 }
 
@@ -211,9 +219,11 @@ func (self *InputDefinitions) Flow(runnerFunc flow.RunnerFunc) *flow.Controller 
 
 	cueStr := ``
 	for name, input := range *self {
+		_, imports, match := util.CUEString(input.Match).StripHead()
+		cueStr += imports + "\n"
 		cueStr += `inputs: `
 		cueStr = string(cueliteral.Label.Append([]byte(cueStr), name))
-		cueStr += `: value: {` + string(input.Match) + "}\n"
+		cueStr += `: value: {` + string(match) + "}\n"
 	}
 	value := cuecontext.New().CompileString(cueStr)
 
@@ -230,12 +240,18 @@ func (self *InputDefinitions) Flow(runnerFunc flow.RunnerFunc) *flow.Controller 
 }
 
 func (self OutputDefinition) CUEString() (str util.CUEString) {
+	var allImports string
 	if self.Success != nil {
-		str += "success: " + util.CUEString(*self.Success) + "\n"
+		_, imports, success := util.CUEString(*self.Success).StripHead()
+		str += "success: " + success + "\n"
+		allImports += imports + "\n"
 	}
 	if self.Failure != nil {
-		str += "failure: " + util.CUEString(*self.Failure) + "\n"
+		_, imports, failure := util.CUEString(*self.Failure).StripHead()
+		str += "failure: " + failure + "\n"
+		allImports += imports + "\n"
 	}
+	str = util.CUEString(allImports) + str
 	return
 }
 

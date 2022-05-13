@@ -185,7 +185,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 		valuePath := cue.MakePath(cue.Str("value"))
 
 		if err := action.InOut.Inputs.Flow(func(t *flow.Task) error {
-			name := t.Path().Selectors()[1].String() // _inputs: <name>: …
+			name := t.Path().Selectors()[1].String() // inputs: <name>: …
 			if name_, err := cueliteral.Unquote(name); err == nil {
 				name = name_
 			}

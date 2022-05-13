@@ -2,6 +2,7 @@ package util
 
 import (
 	"sync"
+	"regexp"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
@@ -62,6 +63,22 @@ func (self CUEString) Format(options ...cueformat.Option) (result CUEString, err
 	var b []byte
 	b, err = cueformat.Source([]byte(result), options...)
 	result = CUEString(b)
+
+	return
+}
+
+func (self CUEString) StripHead() (pkg string, imports string, rest CUEString) {
+	rest = self
+
+	if i := regexp.MustCompile(`\s*(package\s+\w+\r?\n)?\s*`).FindIndex([]byte(rest)); i != nil {
+		pkg = string(rest[i[0]:i[1]])
+		rest = CUEString(rest[i[1]:])
+	}
+
+	if i := regexp.MustCompile(`\s*(import\s+(\"\w+\"\r?\n|\([^\)]+\))\s*)*`).FindIndex([]byte(rest)); i != nil {
+		imports = string(rest[i[0]:i[1]])
+		rest = CUEString(rest[i[1]:])
+	}
 
 	return
 }
