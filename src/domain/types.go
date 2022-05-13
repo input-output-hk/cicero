@@ -17,39 +17,73 @@ import (
 	"github.com/input-output-hk/cicero/src/util"
 )
 
-type InOutString util.CUEString
-
-func (self InOutString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
-	return util.CUEString(self).Value(func(ctx *cue.Context) []cue.BuildOption {
-		return []cue.BuildOption{cue.Scope(ctx.Encode(struct{}{}).
-			// XXX check which inputs are actually used and pass in only those
-			FillPath(cue.MakePath(cue.Str("inputs")), inputs),
-		)}
-	})
+type Action struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Source    string    `json:"source"`
+	CreatedAt time.Time `json:"created_at"`
+	Active    bool      `json:"active"`
+	ActionDefinition
 }
 
-func (self *InOutString) FromValue(v cue.Value) error {
-	return (*util.CUEString)(self).FromValue(v)
-}
-
-func (self *InOutString) UnmarshalJSON(data []byte) error {
-	var str util.CUEString
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
-	}
-
-	// Fail to unmarshal an error value to fail early.
-	if err := str.Value(nil).Err(); err != nil {
-		return err
-	}
-
-	*self = InOutString(str)
-	return nil
+type ActionDefinition struct {
+	Meta  map[string]interface{} `json:"meta"`
+	InOut InOutDefinition        `json:"io" db:"io"`
 }
 
 type InOutDefinition struct {
 	Inputs InputDefinitions `json:"inputs"`
 	Output OutputDefinition `json:"output"`
+}
+
+type InputDefinitions map[string]InputDefinition
+
+type InputDefinition struct {
+	Not      bool        `json:"not"`
+	Optional bool        `json:"optional"`
+	Match    InOutString `json:"match"`
+}
+
+type Output struct {
+	definition OutputDefinition
+	inputs     map[string]*Fact
+}
+
+type OutputDefinition struct {
+	Success *InOutString `json:"success"`
+	Failure *InOutString `json:"failure"`
+}
+
+type InOutString util.CUEString
+
+type Invocation struct {
+	Id         uuid.UUID `json:"id"`
+	ActionId   uuid.UUID `json:"action_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	EvalStdout *string   `json:"eval_stdout"`
+	EvalStderr *string   `json:"eval_stderr"`
+}
+
+type Run struct {
+	NomadJobID   uuid.UUID  `json:"nomad_job_id"`
+	InvocationId uuid.UUID  `json:"invocation_id"`
+	CreatedAt    time.Time  `json:"created_at"`
+	FinishedAt   *time.Time `json:"finished_at"`
+}
+
+type Fact struct {
+	ID         uuid.UUID   `json:"id"`
+	RunId      *uuid.UUID  `json:"run_id,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
+	Value      interface{} `json:"value"`
+	BinaryHash *string     `json:"binary_hash,omitempty"`
+	// TODO nyi: unique key over (value, binary_hash)?
+}
+
+type NomadEvent struct {
+	nomad.Event
+	Uid     util.MD5Sum
+	Handled bool
 }
 
 func (self InOutDefinition) CUEString() (str util.CUEString) {
@@ -145,14 +179,6 @@ func (self *InOutDefinition) Scan(value interface{}) error {
 	return self.FromInOutString(InOutString(value.(string)))
 }
 
-type InputDefinition struct {
-	Not      bool        `json:"not"`
-	Optional bool        `json:"optional"`
-	Match    InOutString `json:"match"`
-}
-
-type InputDefinitions map[string]InputDefinition
-
 func (self *InputDefinitions) CUEString() (str util.CUEString) {
 	for name, def := range *self {
 		str = util.CUEString(cueliteral.Label.Append([]byte(str), name))
@@ -205,11 +231,6 @@ func (self *InputDefinitions) Flow(runnerFunc flow.RunnerFunc) *flow.Controller 
 	)
 }
 
-type OutputDefinition struct {
-	Success *InOutString `json:"success"`
-	Failure *InOutString `json:"failure"`
-}
-
 func (self OutputDefinition) CUEString() (str util.CUEString) {
 	if self.Success != nil {
 		str += "success: " + util.CUEString(*self.Success) + "\n"
@@ -222,11 +243,6 @@ func (self OutputDefinition) CUEString() (str util.CUEString) {
 
 func (self OutputDefinition) WithInputs(inputs map[string]*Fact) Output {
 	return Output{self, inputs}
-}
-
-type Output struct {
-	definition OutputDefinition
-	inputs     map[string]*Fact
 }
 
 func (self Output) Success() (*string, error) {
@@ -255,18 +271,32 @@ func (self Output) Failure() (*string, error) {
 	}
 }
 
-type ActionDefinition struct {
-	Meta  map[string]interface{} `json:"meta"`
-	InOut InOutDefinition        `json:"io" db:"io"`
+func (self InOutString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
+	return util.CUEString(self).Value(func(ctx *cue.Context) []cue.BuildOption {
+		return []cue.BuildOption{cue.Scope(ctx.Encode(struct{}{}).
+			// XXX check which inputs are actually used and pass in only those
+			FillPath(cue.MakePath(cue.Str("inputs")), inputs),
+		)}
+	})
 }
 
-type Fact struct {
-	ID         uuid.UUID   `json:"id"`
-	RunId      *uuid.UUID  `json:"run_id,omitempty"`
-	CreatedAt  time.Time   `json:"created_at"`
-	Value      interface{} `json:"value"`
-	BinaryHash *string     `json:"binary_hash,omitempty"`
-	// TODO nyi: unique key over (value, binary_hash)?
+func (self *InOutString) FromValue(v cue.Value) error {
+	return (*util.CUEString)(self).FromValue(v)
+}
+
+func (self *InOutString) UnmarshalJSON(data []byte) error {
+	var str util.CUEString
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+
+	// Fail to unmarshal an error value to fail early.
+	if err := str.Value(nil).Err(); err != nil {
+		return err
+	}
+
+	*self = InOutString(str)
+	return nil
 }
 
 // Sets the value from JSON and returns the rest of the buffer as binary.
@@ -281,34 +311,4 @@ func (f *Fact) FromReader(reader io.Reader, trimWhitespace bool) (io.Reader, err
 		}
 		return binary, nil
 	}
-}
-
-type Action struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Source    string    `json:"source"`
-	CreatedAt time.Time `json:"created_at"`
-	Active    bool      `json:"active"`
-	ActionDefinition
-}
-
-type Run struct {
-	NomadJobID   uuid.UUID  `json:"nomad_job_id"`
-	InvocationId uuid.UUID  `json:"invocation_id"`
-	CreatedAt    time.Time  `json:"created_at"`
-	FinishedAt   *time.Time `json:"finished_at"`
-}
-
-type Invocation struct {
-	Id         uuid.UUID `json:"id"`
-	ActionId   uuid.UUID `json:"action_id"`
-	CreatedAt  time.Time `json:"created_at"`
-	EvalStdout *string   `json:"eval_stdout"`
-	EvalStderr *string   `json:"eval_stderr"`
-}
-
-type NomadEvent struct {
-	nomad.Event
-	Uid     util.MD5Sum
-	Handled bool
 }
