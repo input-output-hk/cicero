@@ -2,10 +2,10 @@ package persistence
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
+	cueformat "cuelang.org/go/cue/format"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -93,19 +93,19 @@ func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {
 }
 
 func (a *actionRepository) Save(action *domain.Action) error {
-	if inputs, err := json.Marshal(action.Inputs); err != nil {
+	var sql string
+	if action.ID == (uuid.UUID{}) {
+		sql = `INSERT INTO action (    name, source, io) VALUES (    $2, $3, $4) RETURNING id, created_at`
+	} else {
+		sql = `INSERT INTO action (id, name, source, io) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
+	}
+	if inOutStr, err := action.InOut.CUEString().Format(cueformat.Simplify(), cueformat.UseSpaces(0)); err != nil {
 		return err
 	} else {
-		var sql string
-		if action.ID == (uuid.UUID{}) {
-			sql = `INSERT INTO action (    name, source, inputs) VALUES (    $2, $3, $4) RETURNING id, created_at`
-		} else {
-			sql = `INSERT INTO action (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
-		}
 		return a.DB.QueryRow(
 			context.Background(),
 			sql,
-			action.ID, action.Name, action.Source, inputs,
+			action.ID, action.Name, action.Source, inOutStr,
 		).Scan(&action.ID, &action.CreatedAt)
 	}
 }

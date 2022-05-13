@@ -59,56 +59,49 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		cmd.Evaluators = []string{"nix"}
 	}
 
-	db := once(func() interface{} {
-		if db, err := config.DBConnection(logger); err != nil {
-			logger.Fatal().Err(err).Send()
-			return nil
-		} else {
-			return db
-		}
-	})
+	var db config.PgxIface
+	if db_, err := config.DBConnection(logger); err != nil {
+		logger.Fatal().Err(err).Send()
+		return nil
+	} else {
+		db = db_
+	}
 
-	nomadClient := once(func() interface{} {
-		if client, err := config.NewNomadClient(); err != nil {
-			logger.Fatal().Err(err).Send()
-			return nil
-		} else {
-			return client
-		}
-	})
-	nomadClientWrapper := once(func() interface{} {
-		return application.NewNomadClient(nomadClient().(*nomad.Client))
-	})
+	var nomadClient *nomad.Client
+	if client, err := config.NewNomadClient(); err != nil {
+		logger.Fatal().Err(err).Send()
+		return nil
+	} else {
+		nomadClient = client
+	}
+	nomadClientWrapper := application.NewNomadClient(nomadClient)
 
-	runService := once(func() interface{} {
-		return service.NewRunService(db().(config.PgxIface), cmd.PrometheusAddr, cmd.VictoriaMetricsAddr, nomadClientWrapper().(application.NomadClient), logger)
-	})
-	evaluationService := once(func() interface{} {
-		return service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, logger)
-	})
-	invocationService := once(func() interface{} {
-		return service.NewInvocationService(db().(config.PgxIface), logger)
-	})
-	actionService := once(func() interface{} {
-		return service.NewActionService(db().(config.PgxIface), nomadClientWrapper().(application.NomadClient), invocationService().(service.InvocationService), runService().(service.RunService), evaluationService().(service.EvaluationService), logger)
-	})
-	factService := once(func() interface{} {
-		return service.NewFactService(db().(config.PgxIface), actionService().(service.ActionService), logger)
-	})
-	nomadEventService := once(func() interface{} {
-		return service.NewNomadEventService(db().(config.PgxIface), runService().(service.RunService), logger)
-	})
+	// These are pointers to interfaces to allow them do cyclically depend on each other.
+	invocationService := new(service.InvocationService)
+	actionService := new(service.ActionService)
+	factService := new(service.FactService)
+	nomadEventService := new(service.NomadEventService)
+
+	// These don't depend on other services so we don't need to put them behind a pointer.
+	runService := service.NewRunService(db, cmd.PrometheusAddr, cmd.VictoriaMetricsAddr, nomadClientWrapper, logger)
+	evaluationService := service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, logger)
+
+	*invocationService = service.NewInvocationService(db, actionService, factService, logger)
+	*actionService = service.NewActionService(db, nomadClientWrapper, invocationService, runService, evaluationService, logger)
+	*factService = service.NewFactService(db, actionService, logger)
+	*nomadEventService = service.NewNomadEventService(db, runService, logger)
 
 	supervisor := cmd.newSupervisor(logger)
 
 	if start.nomadEvent {
 		child := component.NomadEventConsumer{
 			Logger:            logger.With().Str("component", "NomadEventConsumer").Logger(),
-			RunService:        runService().(service.RunService),
-			NomadEventService: nomadEventService().(service.NomadEventService),
-			FactService:       factService().(service.FactService),
-			NomadClient:       nomadClientWrapper().(application.NomadClient),
-			Db:                db().(config.PgxIface),
+			RunService:        runService,
+			NomadEventService: *nomadEventService,
+			FactService:       *factService,
+			InvocationService: *invocationService,
+			NomadClient:       nomadClientWrapper,
+			Db:                db,
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err
@@ -119,13 +112,13 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		child := web.Web{
 			Logger:            logger.With().Str("component", "Web").Logger(),
 			Listen:            cmd.WebListen,
-			InvocationService: invocationService().(service.InvocationService),
-			RunService:        runService().(service.RunService),
-			ActionService:     actionService().(service.ActionService),
-			FactService:       factService().(service.FactService),
-			NomadEventService: nomadEventService().(service.NomadEventService),
-			EvaluationService: evaluationService().(service.EvaluationService),
-			Db:                db().(config.PgxIface),
+			InvocationService: *invocationService,
+			RunService:        runService,
+			ActionService:     *actionService,
+			FactService:       *factService,
+			NomadEventService: *nomadEventService,
+			EvaluationService: evaluationService,
+			Db:                db,
 		}
 		if err := supervisor.Add(child.Start); err != nil {
 			return err
@@ -152,15 +145,4 @@ func (cmd *StartCmd) newSupervisor(logger *zerolog.Logger) *oversight.Tree {
 			oversight.OneForOne(), // restart every task on its own
 		),
 	)
-}
-
-func once(init func() interface{}) func() interface{} {
-	var inst *interface{}
-	return func() interface{} {
-		if inst == nil {
-			val := init()
-			inst = &val
-		}
-		return *inst
-	}
 }

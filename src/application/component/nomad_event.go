@@ -22,6 +22,7 @@ type NomadEventConsumer struct {
 	FactService       service.FactService
 	NomadEventService service.NomadEventService
 	RunService        service.RunService
+	InvocationService service.InvocationService
 	Db                config.PgxIface
 	NomadClient       application.NomadClient
 }
@@ -32,6 +33,7 @@ func (self *NomadEventConsumer) WithQuerier(querier config.PgxIface) *NomadEvent
 		FactService:       self.FactService.WithQuerier(querier),
 		NomadEventService: self.NomadEventService.WithQuerier(querier),
 		RunService:        self.RunService.WithQuerier(querier),
+		InvocationService: self.InvocationService.WithQuerier(querier),
 		Db:                querier,
 		NomadClient:       self.NomadClient,
 	}
@@ -340,27 +342,31 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 	run.FinishedAt = &modifyTime
 
 	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-		if output, err := self.RunService.GetOutputByNomadJobId(run.NomadJobID); err != nil && !pgxscan.NotFound(err) {
+		fact := domain.Fact{
+			RunId: &run.NomadJobID,
+		}
+
+		if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
 			return err
 		} else {
-			fact := domain.Fact{
-				RunId: &run.NomadJobID,
-			}
-
 			if success {
-				if output.Success != nil {
-					fact.Value = output.Success
+				if value, err := output.Success(); err != nil {
+					return err
+				} else if value != nil {
+					fact.Value = value
 				}
 			} else {
-				if output.Failure != nil {
-					fact.Value = output.Failure
+				if value, err := output.Failure(); err != nil {
+					return err
+				} else if value != nil {
+					fact.Value = value
 				}
 			}
+		}
 
-			if fact.Value != nil {
-				if err := self.FactService.Save(&fact, nil); err != nil {
-					return err
-				}
+		if fact.Value != nil {
+			if err := self.FactService.Save(&fact, nil); err != nil {
+				return err
 			}
 		}
 

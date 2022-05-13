@@ -23,6 +23,7 @@ import (
 
 type ActionService interface {
 	WithQuerier(config.PgxIface) ActionService
+	withQuerier(config.PgxIface, ActionServiceCyclicDependencies) ActionService
 
 	GetById(uuid.UUID) (domain.Action, error)
 	GetByInvocationId(uuid.UUID) (domain.Action, error)
@@ -41,84 +42,102 @@ type ActionService interface {
 	InvokeCurrentActive() ([]EvaluationError, error)
 }
 
+type ActionServiceCyclicDependencies struct {
+	invocationService *InvocationService
+}
+
 type actionService struct {
 	logger            zerolog.Logger
 	actionRepository  repository.ActionRepository
 	factRepository    repository.FactRepository
-	invocationService InvocationService
 	evaluationService EvaluationService
 	runService        RunService
 	nomadClient       application.NomadClient
 	db                config.PgxIface
+	ActionServiceCyclicDependencies
 }
 
-func NewActionService(db config.PgxIface, nomadClient application.NomadClient, invocationService InvocationService, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
+func NewActionService(db config.PgxIface, nomadClient application.NomadClient, invocationService *InvocationService, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
 	return &actionService{
 		logger:            logger.With().Str("component", "ActionService").Logger(),
 		actionRepository:  persistence.NewActionRepository(db),
 		factRepository:    persistence.NewFactRepository(db),
-		invocationService: invocationService,
 		evaluationService: evaluationService,
 		nomadClient:       nomadClient,
 		runService:        runService,
 		db:                db,
+		ActionServiceCyclicDependencies: ActionServiceCyclicDependencies{
+			invocationService: invocationService,
+		},
 	}
 }
 
-func (self *actionService) WithQuerier(querier config.PgxIface) ActionService {
-	return &actionService{
+func (self actionService) WithQuerier(querier config.PgxIface) ActionService {
+	return self.withQuerier(querier, ActionServiceCyclicDependencies{})
+}
+
+func (self actionService) withQuerier(querier config.PgxIface, cyclicDeps ActionServiceCyclicDependencies) ActionService {
+	result := actionService{
 		logger:            self.logger,
 		actionRepository:  self.actionRepository.WithQuerier(querier),
 		factRepository:    self.factRepository.WithQuerier(querier),
-		invocationService: self.invocationService.WithQuerier(querier),
 		runService:        self.runService.WithQuerier(querier),
 		evaluationService: self.evaluationService,
 		nomadClient:       self.nomadClient,
 		db:                querier,
+		ActionServiceCyclicDependencies: cyclicDeps,
 	}
+
+	if result.invocationService == nil {
+		r := ActionService(result)
+		result.invocationService = new(InvocationService)
+		*result.invocationService = (*self.invocationService).withQuerier(querier, InvocationServiceCyclicDependencies{actionService: &r})
+	}
+
+	return &result
 }
 
-func (self *actionService) GetById(id uuid.UUID) (action domain.Action, err error) {
+func (self actionService) GetById(id uuid.UUID) (action domain.Action, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by ID")
 	action, err = self.actionRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for ID %q", id)
 	return
 }
 
-func (self *actionService) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
+func (self actionService) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Run ID")
 	action, err = self.actionRepository.GetByRunId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Run ID %q", id)
 	return
 }
 
-func (self *actionService) GetByInvocationId(id uuid.UUID) (action domain.Action, err error) {
+func (self actionService) GetByInvocationId(id uuid.UUID) (action domain.Action, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Invocation ID")
 	action, err = self.actionRepository.GetByInvocationId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Invocation ID %q", id)
 	return
 }
 
-func (self *actionService) GetByName(name string, page *repository.Page) (actions []*domain.Action, err error) {
+func (self actionService) GetByName(name string, page *repository.Page) (actions []*domain.Action, err error) {
 	self.logger.Trace().Str("name", name).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Actions by name")
 	actions, err = self.actionRepository.GetByName(name, page)
 	err = errors.WithMessagef(err, "Could not select Actions for name %q with offset %d and limit %d", name, page.Offset, page.Limit)
 	return
 }
 
-func (self *actionService) GetLatestByName(name string) (action domain.Action, err error) {
+func (self actionService) GetLatestByName(name string) (action domain.Action, err error) {
 	self.logger.Trace().Str("name", name).Msg("Getting latest Action by name")
 	action, err = self.actionRepository.GetLatestByName(name)
 	err = errors.WithMessagef(err, "Could not select latest Action for name %q", name)
 	return
 }
 
-func (self *actionService) GetAll() ([]*domain.Action, error) {
+func (self actionService) GetAll() ([]*domain.Action, error) {
 	self.logger.Trace().Msg("Getting all Actions")
 	return self.actionRepository.GetAll()
 }
 
-func (self *actionService) Save(action *domain.Action) error {
+func (self actionService) Save(action *domain.Action) error {
 	self.logger.Trace().Str("name", action.Name).Msg("Saving new Action")
 	if err := self.actionRepository.Save(action); err != nil {
 		return errors.WithMessagef(err, "Could not insert Action")
@@ -127,7 +146,7 @@ func (self *actionService) Save(action *domain.Action) error {
 	return nil
 }
 
-func (self *actionService) Update(action *domain.Action) error {
+func (self actionService) Update(action *domain.Action) error {
 	self.logger.Trace().Str("id", action.ID.String()).Msg("Updating Action")
 	if err := self.actionRepository.Update(action); err != nil {
 		return errors.WithMessagef(err, "Could not update Action")
@@ -136,21 +155,21 @@ func (self *actionService) Update(action *domain.Action) error {
 	return nil
 }
 
-func (self *actionService) GetCurrent() (actions []*domain.Action, err error) {
+func (self actionService) GetCurrent() (actions []*domain.Action, err error) {
 	self.logger.Trace().Msg("Getting current Actions")
 	actions, err = self.actionRepository.GetCurrent()
 	err = errors.WithMessagef(err, "Could not select current Actions")
 	return
 }
 
-func (self *actionService) GetCurrentActive() (actions []*domain.Action, err error) {
+func (self actionService) GetCurrentActive() (actions []*domain.Action, err error) {
 	self.logger.Trace().Msg("Getting current active Actions")
 	actions, err = self.actionRepository.GetCurrentActive()
 	err = errors.WithMessagef(err, "Could not select current active Actions")
 	return
 }
 
-func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*domain.Fact, error) {
+func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*domain.Fact, error) {
 	logger := self.logger.With().
 		Str("name", action.Name).
 		Str("id", action.ID.String()).
@@ -165,12 +184,12 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*
 		errNotRunnable := errors.New("not runnable")
 		valuePath := cue.MakePath(cue.Str("value"))
 
-		if err := action.Inputs.Flow(func(t *flow.Task) error {
+		if err := action.InOut.Inputs.Flow(func(t *flow.Task) error {
 			name := t.Path().Selectors()[1].String() // _inputs: <name>: …
 			if name_, err := cueliteral.Unquote(name); err == nil {
 				name = name_
 			}
-			input := action.Inputs[name]
+			input := action.InOut.Inputs[name]
 			tValue := t.Value().LookupPath(valuePath)
 			inputLogger := logger.With().Str("input", name).Logger()
 
@@ -195,7 +214,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*
 				}
 
 				// Match candidate fact.
-				if matchErr, err := matchFact(input.Match.WithInputs(inputs), &fact); err != nil {
+				if matchErr, err := matchFact(input.Match.ValueWithInputs(inputs), &fact); err != nil {
 					return err
 				} else if (matchErr == nil) == input.Not {
 					if !input.Optional || input.Not {
@@ -236,7 +255,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*
 		}
 	} else {
 		var inputFactIds map[string]uuid.UUID
-		if inputFactIds, err = self.invocationService.GetInputFactIdsById(run.InvocationId); err != nil {
+		if inputFactIds, err = (*self.invocationService).GetInputFactIdsById(run.InvocationId); err != nil {
 			if !pgxscan.NotFound(err) {
 				return false, nil, err
 			}
@@ -246,7 +265,7 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*
 		inputFactsChanged := false
 
 	InputFactsChanged:
-		for name, input := range action.Inputs {
+		for name, input := range action.InOut.Inputs {
 			if _, exists := inputs[name]; !exists {
 				// We only care about inputs that are
 				// passed into the evaluation.
@@ -320,9 +339,9 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*
 	}
 
 	// Filter input facts. We only provide keys requested by the CUE expression.
-	for name, input := range action.Inputs {
+	for name, input := range action.InOut.Inputs {
 		if entry, exists := inputs[name]; exists {
-			filterFields(&entry.Value, input.Match.WithoutInputs())
+			filterFields(&entry.Value, input.Match.ValueWithInputs(inputs))
 		}
 	}
 
@@ -359,7 +378,7 @@ func matchFact(match cue.Value, fact *domain.Fact) (error, error) {
 	return match.Unify(factCue).Validate(cue.Final()), nil
 }
 
-func (self *actionService) Create(source, name string) (*domain.Action, error) {
+func (self actionService) Create(source, name string) (*domain.Action, error) {
 	action := domain.Action{
 		ID:     uuid.New(),
 		Name:   name,
@@ -367,16 +386,12 @@ func (self *actionService) Create(source, name string) (*domain.Action, error) {
 		Active: true,
 	}
 
-	var actionDef domain.ActionDefinition
 	if def, err := self.evaluationService.EvaluateAction(source, name, action.ID); err != nil {
 		self.logger.Err(err).Send()
 		return nil, err
 	} else {
-		actionDef = def
+		action.ActionDefinition = def
 	}
-
-	action.Meta = actionDef.Meta
-	action.Inputs = actionDef.Inputs
 
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
@@ -399,7 +414,7 @@ func (self *actionService) Create(source, name string) (*domain.Action, error) {
 	return &action, nil
 }
 
-func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() error, error) {
+func (self actionService) Invoke(action *domain.Action) (*domain.Run, func() error, error) {
 	var run *domain.Run
 	var registerFunc func() error
 	var evalErr *EvaluationError
@@ -414,11 +429,11 @@ func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() er
 
 		invocation := domain.Invocation{ActionId: action.ID}
 
-		if err := self.invocationService.WithQuerier(tx).Save(&invocation, inputs); err != nil {
+		if err := (*self.invocationService).WithQuerier(tx).Save(&invocation, inputs); err != nil {
 			return err
 		}
 
-		runDef, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs)
+		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs)
 		if err != nil {
 			if errors.As(err, &evalErr) {
 				self.logger.Err(evalErr).
@@ -433,7 +448,7 @@ func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() er
 					stderr := string(evalErr.Stderr)
 					invocation.EvalStderr = &stderr
 				}
-				if err := self.invocationService.WithQuerier(tx).Update(&invocation); err != nil {
+				if err := (*self.invocationService).WithQuerier(tx).Update(&invocation); err != nil {
 					return err
 				}
 
@@ -447,15 +462,17 @@ func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() er
 
 		tmpRun := domain.Run{InvocationId: invocation.Id}
 
-		if err := self.runService.WithQuerier(tx).Save(&tmpRun, &runDef.Output); err != nil {
+		if err := self.runService.WithQuerier(tx).Save(&tmpRun); err != nil {
 			return errors.WithMessage(err, "Could not insert Run")
 		}
 
-		if runDef.IsDecision() {
-			if runDef.Output.Success != nil {
+		if job == nil { // An action that has no job is called a decision.
+			if success, err := action.InOut.Output.WithInputs(inputs).Success(); err != nil {
+				return err
+			} else if success != nil {
 				fact := domain.Fact{
 					RunId: &tmpRun.NomadJobID,
-					Value: runDef.Output.Success,
+					Value: success,
 				}
 				if err := self.factRepository.WithQuerier(tx).Save(&fact, nil); err != nil {
 					return errors.WithMessage(err, "Could not publish fact")
@@ -473,11 +490,11 @@ func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() er
 		}
 
 		runId := tmpRun.NomadJobID.String()
-		runDef.Job.ID = &runId
+		job.ID = &runId
 
 		run = &tmpRun
 		registerFunc = func() error {
-			if response, _, err := self.nomadClient.JobsRegister(runDef.Job, &nomad.WriteOptions{}); err != nil {
+			if response, _, err := self.nomadClient.JobsRegister(job, &nomad.WriteOptions{}); err != nil {
 				return errors.WithMessage(err, "Failed to run Action")
 			} else if len(response.Warnings) > 0 {
 				self.logger.Warn().
@@ -500,7 +517,7 @@ func (self *actionService) Invoke(action *domain.Action) (*domain.Run, func() er
 	return run, registerFunc, nil
 }
 
-func (self *actionService) InvokeCurrentActive() ([]EvaluationError, error) {
+func (self actionService) InvokeCurrentActive() ([]EvaluationError, error) {
 	evalErrs := []EvaluationError{}
 	return evalErrs, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		registerFuncs := []func() error{}

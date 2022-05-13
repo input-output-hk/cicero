@@ -17,6 +17,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/google/uuid"
 	getter "github.com/hashicorp/go-getter/v2"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -28,7 +29,7 @@ import (
 type EvaluationService interface {
 	ListActions(src string) ([]string, error)
 	EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error)
-	EvaluateRun(src, name string, id uuid.UUID, inputs map[string]*domain.Fact) (domain.RunDefinition, error)
+	EvaluateRun(src, name string, id uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error)
 }
 
 func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
@@ -72,7 +73,7 @@ func (e *EvaluationError) Unwrap() error {
 	return e.ExitError
 }
 
-func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byte, error) {
+func (e evaluationService) evaluate(src string, args, extraEnv []string) ([]byte, error) {
 	fetchUrl, evaluator, err := parseSource(src)
 	if err != nil {
 		return nil, err
@@ -154,11 +155,11 @@ func (e *evaluationService) evaluate(src string, args, extraEnv []string) ([]byt
 	}
 }
 
-func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
+func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
 	var def domain.ActionDefinition
 
 	if output, err := e.evaluate(src,
-		[]string{"eval", "meta", "inputs"},
+		[]string{"eval", "meta", "io"},
 		[]string{
 			"CICERO_ACTION_NAME=" + name,
 			"CICERO_ACTION_ID=" + id.String(),
@@ -173,8 +174,8 @@ func (e *evaluationService) EvaluateAction(src, name string, id uuid.UUID) (doma
 	return def, nil
 }
 
-func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs map[string]*domain.Fact) (domain.RunDefinition, error) {
-	var def domain.RunDefinition
+func (e evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error) {
+	var def *nomad.Job
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
@@ -187,7 +188,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 		"CICERO_ACTION_INPUTS=" + string(inputsJson),
 	}
 
-	output, err := e.evaluate(src, []string{"eval", "output", "job"}, extraEnv)
+	output, err := e.evaluate(src, []string{"eval", "job"}, extraEnv)
 	if err != nil {
 		return def, err
 	}
@@ -198,7 +199,6 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 	}
 
 	freeformDef := struct {
-		domain.RunDefinition
 		Job *interface{} `json:"job"`
 	}{}
 
@@ -207,7 +207,6 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 		return def, errors.WithMessagef(err, "While unmarshaling evaluator output %s into freeform definition", string(output))
 	}
 
-	def.Output = freeformDef.Output
 	if freeformDef.Job != nil {
 		if job, err := json.Marshal(*freeformDef.Job); err != nil {
 			return def, err
@@ -248,7 +247,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 						}
 					}
 				}
-				def.Job = job
+				def = job
 			}
 		}
 	}
@@ -256,7 +255,7 @@ func (e *evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs m
 	return def, nil
 }
 
-func (e *evaluationService) transform(output []byte, extraEnv []string) ([]byte, error) {
+func (e evaluationService) transform(output []byte, extraEnv []string) ([]byte, error) {
 	for _, transformer := range e.Transformers {
 		cmd := exec.Command(transformer)
 		cmd.Env = append(os.Environ(), extraEnv...) //nolint:gocritic // false positive
@@ -293,7 +292,7 @@ func (e *evaluationService) transform(output []byte, extraEnv []string) ([]byte,
 	return output, nil
 }
 
-func (e *evaluationService) ListActions(src string) ([]string, error) {
+func (e evaluationService) ListActions(src string) ([]string, error) {
 	output, err := e.evaluate(src, []string{"list"}, nil)
 	if err != nil {
 		return nil, err

@@ -627,7 +627,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		inputs = inputs_
 	}
 
-	output, err := self.RunService.GetOutputByNomadJobId(id)
+	output, err := self.InvocationService.GetOutputById(run.InvocationId)
 	if err != nil && !pgxscan.NotFound(err) {
 		self.ServerError(w, err)
 		return
@@ -927,6 +927,20 @@ func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Reque
 	}
 }
 
+func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Request) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, err)
+	} else if output, err := self.InvocationService.GetOutputById(id); err != nil {
+		if pgxscan.NotFound(err) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			self.ServerError(w, err)
+		}
+	} else {
+		self.json(w, output, http.StatusOK)
+	}
+}
+
 func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
@@ -942,7 +956,13 @@ func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
-	} else if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil {
+	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		if pgxscan.NotFound(err) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			self.ServerError(w, err)
+		}
+	} else if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
 		if pgxscan.NotFound(err) {
 			w.WriteHeader(http.StatusNotFound)
 		} else {

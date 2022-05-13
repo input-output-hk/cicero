@@ -35,11 +35,10 @@ type RunService interface {
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetByNomadJobIdWithLock(uuid.UUID, string) (domain.Run, error)
 	GetByInvocationId(uuid.UUID) (domain.Run, error)
-	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (domain.Run, error)
 	GetAll(*repository.Page) ([]*domain.Run, error)
-	Save(*domain.Run, *domain.RunOutput) error
+	Save(*domain.Run) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
@@ -53,7 +52,6 @@ type RunService interface {
 type runService struct {
 	logger              zerolog.Logger
 	runRepository       repository.RunRepository
-	runOutputRepository repository.RunOutputRepository
 	prometheus          prometheus.Client
 	victoriaMetricsAddr string
 	nomadClient         application.NomadClient
@@ -64,7 +62,6 @@ func NewRunService(db config.PgxIface, prometheusAddr, victoriaMetricsAddr strin
 	impl := runService{
 		logger:              logger.With().Str("component", "RunService").Logger(),
 		runRepository:       persistence.NewRunRepository(db),
-		runOutputRepository: persistence.NewRunOutputRepository(db),
 		nomadClient:         nomadClient,
 		victoriaMetricsAddr: victoriaMetricsAddr,
 		db:                  db,
@@ -82,84 +79,68 @@ func NewRunService(db config.PgxIface, prometheusAddr, victoriaMetricsAddr strin
 	return &impl
 }
 
-func (self *runService) WithQuerier(querier config.PgxIface) RunService {
+func (self runService) WithQuerier(querier config.PgxIface) RunService {
 	return &runService{
 		logger:              self.logger,
 		runRepository:       self.runRepository.WithQuerier(querier),
-		runOutputRepository: self.runOutputRepository.WithQuerier(querier),
 		prometheus:          self.prometheus,
 		nomadClient:         self.nomadClient,
 		db:                  querier,
 	}
 }
 
-func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
+func (self runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
 	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
 	return
 }
 
-func (self *runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run domain.Run, err error) {
+func (self runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run domain.Run, err error) {
 	self.logger.Trace().Str("nomad-job-id", id.String()).Str("lock", lock).Msg("Getting Run by Nomad Job ID with lock")
 	run, err = self.runRepository.GetByNomadJobIdWithLock(id, lock)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q with lock %q", id, lock)
 	return
 }
 
-func (self *runService) GetByInvocationId(invocationId uuid.UUID) (run domain.Run, err error) {
+func (self runService) GetByInvocationId(invocationId uuid.UUID) (run domain.Run, err error) {
 	self.logger.Trace().Str("invocation-id", invocationId.String()).Msg("Getting Runs by input Fact IDs")
 	run, err = self.runRepository.GetByInvocationId(invocationId)
 	err = errors.WithMessagef(err, "Could not select Runs by Invocation ID %q", invocationId)
 	return
 }
 
-func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOutput, err error) {
-	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run Output by Nomad Job ID")
-	output, err = self.runOutputRepository.GetByRunId(id)
-	err = errors.WithMessagef(err, "Could not select existing Run Output by Nomad Job ID %q", id)
-	return
-}
-
-func (self *runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []*domain.Run, err error) {
+func (self runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []*domain.Run, err error) {
 	self.logger.Trace().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Run by Action ID")
 	runs, err = self.runRepository.GetByActionId(id, page)
 	err = errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
 	return
 }
 
-func (self *runService) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
+func (self runService) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
 	self.logger.Trace().Str("action-id", id.String()).Msg("Getting latest Run by Action ID")
 	run, err = self.runRepository.GetLatestByActionId(id)
 	err = errors.WithMessagef(err, "Could not select latest Run by Action ID %q", id)
 	return
 }
 
-func (self *runService) GetAll(page *repository.Page) (runs []*domain.Run, err error) {
+func (self runService) GetAll(page *repository.Page) (runs []*domain.Run, err error) {
 	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Runs")
 	runs, err = self.runRepository.GetAll(page)
 	err = errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
 	return
 }
 
-func (self *runService) Save(run *domain.Run, output *domain.RunOutput) error {
+func (self runService) Save(run *domain.Run) error {
 	self.logger.Trace().Msg("Saving new Run")
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.runRepository.WithQuerier(tx).Save(run); err != nil {
-			return errors.WithMessagef(err, "Could not insert Run")
-		}
-		if err := self.runOutputRepository.WithQuerier(tx).Save(run.NomadJobID, output); err != nil {
-			return errors.WithMessagef(err, "Could not insert Run Output")
-		}
-		return nil
-	}); err != nil {
-		return err
+	if err := self.runRepository.Save(run); err != nil {
+		return errors.WithMessagef(err, "Could not insert Run")
 	}
 	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Created Run")
 	return nil
 }
 
-func (self *runService) Update(run *domain.Run) error {
+func (self runService) Update(run *domain.Run) error {
 	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Updating Run")
 	if err := self.runRepository.Update(run); err != nil {
 		return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
@@ -168,14 +149,11 @@ func (self *runService) Update(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) End(run *domain.Run) error {
+func (self runService) End(run *domain.Run) error {
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Ending Run")
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if err := self.runRepository.WithQuerier(tx).Update(run); err != nil {
 			return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
-		}
-		if err := self.runOutputRepository.WithQuerier(tx).Delete(run.NomadJobID); err != nil {
-			return errors.WithMessagef(err, "Could not delete Run Output with ID %q", run.NomadJobID)
 		}
 		if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
 			return errors.WithMessagef(err, "Could not deregister Nomad job with ID %q", run.NomadJobID)
@@ -188,13 +166,14 @@ func (self *runService) End(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) Cancel(run *domain.Run) error {
+func (self runService) Cancel(run *domain.Run) error {
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopping Run")
 	// Nomad does not know whether the job simply ran to finish
 	// or was stopped manually. Delete output to avoid publishing it.
-	if err := self.runOutputRepository.Delete(run.NomadJobID); err != nil {
-		return err
-	}
+	// FIXME we need some other way to tell Cicero not to publish the output fact
+	// if err := self.runOutputRepository.Delete(run.NomadJobID); err != nil {
+	// 	return err
+	// }
 	if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
 		return errors.WithMessagef(err, "Failed to deregister job %q", run.NomadJobID)
 	}
@@ -202,21 +181,21 @@ func (self *runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error) {
+func (self runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	return self.LokiQueryRange(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
 		start, end,
 	)
 }
 
-func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error) {
+func (self runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	return self.LokiQueryRange(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
 		start, end,
 	)
 }
 
-func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (domain.LokiLog, error) {
+func (self runService) LokiQueryRange(query string, start time.Time, end *time.Time) (domain.LokiLog, error) {
 	linesToFetch := 10000
 	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
 	var limit int64 = 5000
@@ -315,7 +294,7 @@ done:
 	return output, nil
 }
 
-func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs, to *time.Time) (map[string]*url.URL, error) {
+func (self runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs, to *time.Time) (map[string]*url.URL, error) {
 	grafanaUrls := map[string]*url.URL{}
 
 	for allocName, alloc := range allocs {
@@ -341,7 +320,7 @@ func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs,
 	return grafanaUrls, nil
 }
 
-func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
+func (self runService) metrics(allocs map[string]domain.AllocationWithLogs, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
 	vmUrl, err := url.Parse(self.victoriaMetricsAddr + "/api/v1/query_range")
 	if err != nil {
 		return nil, err
@@ -414,7 +393,7 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to 
 	return metrics, nil
 }
 
-func (self *runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
 		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
 	})
@@ -427,7 +406,7 @@ const (
 	tib = gib * 1024
 )
 
-func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
 		switch {
 		case f >= tib:

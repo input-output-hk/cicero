@@ -39,7 +39,7 @@ func NewNomadEventService(db config.PgxIface, runService RunService, logger *zer
 	}
 }
 
-func (n *nomadEventService) WithQuerier(querier config.PgxIface) NomadEventService {
+func (n nomadEventService) WithQuerier(querier config.PgxIface) NomadEventService {
 	return &nomadEventService{
 		logger:               n.logger,
 		nomadEventRepository: n.nomadEventRepository.WithQuerier(querier),
@@ -47,7 +47,7 @@ func (n *nomadEventService) WithQuerier(querier config.PgxIface) NomadEventServi
 	}
 }
 
-func (n *nomadEventService) Save(event *domain.NomadEvent) (err error) {
+func (n nomadEventService) Save(event *domain.NomadEvent) (err error) {
 	n.logger.Trace().Bytes("uid", event.Uid[:]).Uint64("index", event.Index).Msg("Saving nomad event")
 	if err = n.nomadEventRepository.Save(event); err != nil {
 		err = errors.WithMessagef(err, "Could not save nomad event")
@@ -57,7 +57,7 @@ func (n *nomadEventService) Save(event *domain.NomadEvent) (err error) {
 	return
 }
 
-func (n *nomadEventService) Update(event *domain.NomadEvent) (err error) {
+func (n nomadEventService) Update(event *domain.NomadEvent) (err error) {
 	n.logger.Trace().Bytes("uid", event.Uid[:]).Bool("handled", event.Handled).Msg("Updating nomad event")
 	if err = n.nomadEventRepository.Update(event); err != nil {
 		err = errors.WithMessagef(err, "Could not update nomad event")
@@ -67,7 +67,7 @@ func (n *nomadEventService) Update(event *domain.NomadEvent) (err error) {
 	return
 }
 
-func (n *nomadEventService) GetByHandled(handled bool) (events []*domain.NomadEvent, err error) {
+func (n nomadEventService) GetByHandled(handled bool) (events []*domain.NomadEvent, err error) {
 	n.logger.Trace().Bool("handled", handled).Msg("Get nomad events by handled flag")
 	if events, err = n.nomadEventRepository.GetByHandled(handled); err != nil {
 		err = errors.WithMessagef(err, "Could not get nomad events by handled flag %t", handled)
@@ -77,12 +77,12 @@ func (n *nomadEventService) GetByHandled(handled bool) (events []*domain.NomadEv
 	return
 }
 
-func (n *nomadEventService) GetLastNomadEventIndex() (uint64, error) {
+func (n nomadEventService) GetLastNomadEventIndex() (uint64, error) {
 	n.logger.Trace().Msg("Get last nomad event index")
 	return n.nomadEventRepository.GetLastNomadEventIndex()
 }
 
-func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]domain.AllocationWithLogs, error) {
+func (n nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]domain.AllocationWithLogs, error) {
 	n.logger.Trace().Str("nomad-job-id", nomadJobId.String()).Msg("Getting EventAlloc by nomad job id")
 
 	allocs := map[string]domain.AllocationWithLogs{}
