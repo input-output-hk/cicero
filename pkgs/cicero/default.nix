@@ -3,7 +3,7 @@
   buildGoModule,
   go-mockery,
 }: let
-  final = package "sha256-mItKG0FH5dSl9znHLqeLkJk8owJEyXrNe74n+Wgtp+4=";
+  final = package "sha256-np1hs97ZMyR9RzmWYLkT61kmytmkBuhtcUMoTvmei0E=";
   package = vendorSha256:
     buildGoModule rec {
       pname = "cicero";
