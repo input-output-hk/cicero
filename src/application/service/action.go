@@ -331,21 +331,21 @@ func (self *actionService) IsRunnable(action *domain.Action) (bool, map[string]*
 }
 
 func filterFields(factValue *interface{}, filter cue.Value) {
-	if strukt, err := filter.Struct(); err != nil {
-		if _, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
-			// fact is not allowed to be map because filter is not a struct
+	if value, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
+		if filter.Kind().IsAnyOf(cue.StructKind) {
+			for k, v := range value {
+				if filterV := filter.LookupPath(cue.MakePath(cue.Str(k)).Optional()); filterV.Exists() {
+					filterFields(&v, filterV)
+					value[k] = v
+				} else {
+					delete(value, k)
+				}
+			}
+		} else {
+			// fact is not allowed to be map because filter is not allowed to be a struct
 			*factValue = nil
 		}
-	} else if value, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
-		for k, v := range value {
-			if field, err := strukt.FieldByName(k, false); err != nil {
-				delete(value, k)
-			} else {
-				filterFields(&v, field.Value)
-				value[k] = v
-			}
-		}
-	} else {
+	} else if filter.Kind().IsAnyOf(cue.StructKind) {
 		// fact must be a map because filter is struct
 		*factValue = map[string]interface{}{}
 	}
