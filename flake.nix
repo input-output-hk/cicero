@@ -102,7 +102,12 @@
                   perms: "544",
                   data: env.postBuildHook,
                 }] |
-                .config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"]
+                .config.packages |=
+                  # only add bash if needed to avoid conflicts in profile
+                  if any(endswith("#bash"))
+                  then .
+                  else . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"]
+                  end
               ) end
             '';
           in
