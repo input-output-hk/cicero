@@ -1,6 +1,6 @@
 {...}: {
-  inputs.github-event = ''
-    "github-event": {
+  io = ''
+    inputs: "github-event": match: "github-event": {
       repository: {
         name: string
         owner: login: string
@@ -14,15 +14,12 @@
         }
       }
     }
-  '';
 
-  output = {github-event}: let
-    inherit (github-event.value.github-event) pull_request repository;
-  in {
-    success."${repository.name}/ci".start = {
-      inherit (pull_request.head.repo) clone_url;
-      inherit (pull_request.head) sha;
-      statuses_url = pull_request._links.statuses.href;
-    };
-  };
+    let event = inputs."github-event".value."github-event"
+    output: success: "\(event.repository.name)/ci": start: {
+      clone_url:    event.pull_request.head.repo.clone_url
+      sha:          event.pull_request.head.sha
+      statuses_url: event.pull_request."_links".statuses.href
+    }
+  '';
 }

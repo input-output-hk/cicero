@@ -6,22 +6,21 @@
   nixpkgsRev,
   ...
 } @ args: {
-  inputs.ci = ''
-    "cicero/ci": {
-      ok: true
+  io = ''
+    inputs: ci: match: "cicero/ci": {
+      ok:       true
       revision: string
 
-      ref: "refs/heads/\(default_branch)"
+      ref:            "refs/heads/\(default_branch)"
       default_branch: string
+    }
+
+    output: success: "${name}": {
+      ok:       true
+      revision: inputs.ci.value."cicero/ci".revision
     }
   '';
 
-  output = {ci}: {
-    success.${name} = {
-      ok = true;
-      inherit (ci.value."cicero/ci") revision;
-    };
-  };
 
   job = {ci}: let
     inherit (ci.value."cicero/ci") revision;

@@ -4,28 +4,31 @@ self:
  
  ```nix
  { name, id }: {
- inputs = {
- # require last fact with `count` of at least 1
- tick = "count: >0";
+ io = ''
+   inputs: {
+     # require last fact with `count` of at least 1
+     tick: match: count: >0
+
+     # stop at 10 (no `over_nine` input will be created)
+     over_nine: {
+       not: true
+       match: count: >9
+     }
+     
+     # has no influence on runnability
+     double: {
+       optional: true
+       match: double: true
+     }
+   }
  
- # stop at 10 (no `over_nine` input will be created)
- over_nine = {
- not = true;
- match = "count: >9";
- };
- 
- # has no influence on runnability
- double = {
- optional = true;
- match = "double: true";
- };
- };
- 
- # these are the defaults
- output = inputs: {
- success.${name} = true;
- failure.${name} = false;
- };
+   output: {
+     # this is the default
+     success: null
+
+     failure: count: inputs.tick.value.count
+   }
+ '';
  
  job = { tick, double ? false }:
  # `tick` is the latest fact that matches
@@ -47,108 +50,19 @@ in rec {
       (builtins)
       isFunction
       typeOf
-      attrValues
-      attrNames
-      functionArgs
       deepSeq
       ;
 
-    expandAction = {
-      inputs ? {},
-      output ? _: {},
-      ...
-    } @ action:
-      action
-      // {
-        inputs =
-          mapAttrs
-          (k: v:
-            {
-              match = v;
-              not = false;
-              optional = false;
-            }
-            // lib.optionalAttrs (typeOf v != "string") v)
-          inputs;
-
-        inherit output;
-      };
-
-    validateAction = {inputs, ...} @ action: let
-      validateInputFunctionArgs = key: (mapAttrs
-        (
-          input: hasDefault:
-            if !(inputs ? ${input})
-            then throw ''`${key}` can only take arguments declared in `inputs` which `${input}` is not''
-            else if inputs.${input}.not
-            then throw ''`${key}`'s cannot take argument `${input}` because it refers to a negated input''
-            else if inputs.${input}.optional && !hasDefault
-            then throw ''`${key}`'s argument `${input}` must have a default value because it refers to an optional input''
-            else null
-        )
-        (functionArgs action.${key}));
-    in
+    validateAction = {io, ...} @ action:
       lib.pipe action (map deepSeq [
         (
           let
-            t = typeOf inputs;
+            t = typeOf io;
           in
-            if t != "set"
-            then throw "`inputs` must be set but is ${t}"
+            if t != "string"
+            then throw "`io` must be string but is ${t}"
             else null
         )
-
-        (mapAttrs
-          (
-            k: v: let
-              t = typeOf v;
-            in
-              if t != "string" && t != "set"
-              then throw ''`inputs."${k}"` must be string or set with keys `not` (optional), `optional` (optional), and `match` but is ${t}''
-              else null
-          )
-          inputs)
-
-        (mapAttrs
-          (
-            k: v:
-              if typeOf v == "string"
-              then null
-              else let
-                t = typeOf v.not or false;
-              in
-                if t != "bool"
-                then throw ''`inputs."${k}".not` must be bool but is ${t}''
-                else null
-          )
-          inputs)
-
-        (mapAttrs
-          (
-            k: v:
-              if typeOf v == "string"
-              then null
-              else let
-                t = typeOf v.match;
-              in
-                if t != "string"
-                then throw ''`inputs."${k}".match` must be string but is ${t}''
-                else null
-          )
-          inputs)
-
-        (mapAttrs
-          (
-            k: v:
-              if v.not && v.optional
-              then throw ''`inputs."${k}"`.{Not,Optional} are mutually exclusive as both would not make sense''
-              else null
-          )
-          inputs)
-
-        (validateInputFunctionArgs "output")
-
-        (lib.optionals (action ? job) (validateInputFunctionArgs "job"))
       ]);
 
     hydrateNomadJob = mapAttrs (k: job:
@@ -172,15 +86,7 @@ in rec {
     mkActionState = action:
       action
       // {
-        inherit (action) inputs;
-        output = let
-          output = action.output inputs;
-        in
-          # Impossible to check in `validateAction` because calling `output` with `{}` as dummy inputs
-          # would break if `output` decides which attributes to return based on the inputs.
-          lib.warnIf (!action ? job && !output ? success) "This decision Action does not declare a success output! It will not do anything." (
-            lib.warnIf (!action ? job && output ? failure) "This decision Action declares a failure output! It will never be published." output
-          );
+        inherit (action) io;
       }
       // lib.optionalAttrs (action ? job) {
         job = hydrateNomadJob (action.job inputs);
@@ -192,7 +98,6 @@ in rec {
         then action
         else import action)
       (action: action {inherit name id;})
-      expandAction
       validateAction
       mkActionState
     ];

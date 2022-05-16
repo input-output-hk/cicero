@@ -5,29 +5,27 @@
   actionLib,
   ...
 } @ args: {
-  inputs.start = ''
-    "cicero/ci": start: {
-      clone_url: string
-      sha: string
+  io = ''
+    inputs: start: match: "cicero/ci": start: {
+      clone_url:     string
+      sha:           string
       statuses_url?: string
 
-      ref?: "refs/heads/\(default_branch)"
+      ref?:            "refs/heads/\(default_branch)"
       default_branch?: string
     }
-  '';
 
-  output = {start}: let
-    cfg = start.value."cicero/ci".start;
-  in {
-    success.${name} =
-      {
-        ok = true;
-        revision = cfg.sha;
+    let cfg = inputs.start.value."cicero/ci".start
+    output: success: "${name}": {
+      ok:       true
+      revision: cfg.sha
+
+      if cfg.ref != _|_ {
+        ref:            cfg.ref
+        default_branch: cfg.default_branch
       }
-      // lib.optionalAttrs (cfg ? ref) {
-        inherit (cfg) ref default_branch;
-      };
-  };
+    }
+  '';
 
   job = {start}: let
     cfg = start.value."cicero/ci".start;

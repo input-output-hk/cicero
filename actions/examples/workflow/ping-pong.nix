@@ -7,13 +7,10 @@ in
     actionLib,
     ...
   } @ args: {
-    inputs.state = ''
-      "${workflow}": "pong"
+    io = ''
+      inputs: state: match: "${workflow}": "pong"
+      output: success: "${workflow}": "ping-pong"
     '';
-
-    output = _: {
-      success.${workflow} = "ping-pong";
-    };
 
     job = {state}:
       actionLib.simpleJob args (std.script "bash" ''

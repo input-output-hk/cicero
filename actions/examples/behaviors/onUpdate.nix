@@ -7,16 +7,14 @@
   ...
 } @ args:
 std.behavior.onUpdate args {
-  inputs.old = {
-    optional = true;
-    match = ''
-      "${name}": _
-    '';
-  };
+  io = ''
+    inputs: old: {
+      optional: true
+      match: "${name}": _
+    }
 
-  output = _: {
-    success.${name} = id;
-  };
+    output: success: "${name}": "${id}"
+  '';
 
   job = {old ? null}:
     actionLib.simpleJob args (std.script "bash" (''

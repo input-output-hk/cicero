@@ -5,8 +5,8 @@
   actionLib,
   ...
 } @ args: {
-  inputs.start = ''
-    "${name}": exit: _ // TODO make `uint` work
+  io = ''
+    inputs: start: match: "${name}": exit: _ // TODO make `uint` work
   '';
 
   job = {start}:

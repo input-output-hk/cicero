@@ -5,40 +5,30 @@
   actionLib,
   ...
 } @ args: {
-  inputs = let
-    common = ''
-      ok: true
+  io = ''
+    inputs: {
+      lintAndBuild: match: "cicero/ci/lintAndBuild": revision: string
 
-      // push to default branch
-      ref?: "refs/heads/\(default_branch)"
-      default_branch?: string
-    '';
-  in {
-    lintAndBuild = ''
-      "cicero/ci/lintAndBuild": {
-        revision: string
-        ${common}
-      }
-    '';
+      schemathesis: match: "cicero/ci/schemathesis": revision: inputs.lintAndBuild.value."cicero/ci/lintAndBuild".revision
 
-    schemathesis = ''
-      "cicero/ci/schemathesis": {
-        revision: _inputs.lintAndBuild.value."cicero/ci/lintAndBuild".revision
-        ${common}
-      }
-    '';
-  };
+      [string]: match: [string]: {
+        ok: true
 
-  output = {lintAndBuild, ...}: let
-    cfg = lintAndBuild.value."cicero/ci/lintAndBuild";
-  in {
-    success.${name} =
-      {
-        ok = true;
-        inherit (cfg) revision;
+        // push to default branch
+        ref?: "refs/heads/\(default_branch)"
+        default_branch?: string
       }
-      // lib.optionalAttrs (cfg ? ref) {
-        inherit (cfg) ref default_branch;
-      };
-  };
+    }
+
+    let cfg = inputs.lintAndBuild.value."cicero/ci/lintAndBuild"
+    output: success: "${name}": {
+      ok:       true
+      revision: cfg.revision
+
+      if cfg.ref != _|_ {
+        ref:            cfg.ref
+        default_branch: cfg.default_branch
+      }
+    }
+  '';
 }
