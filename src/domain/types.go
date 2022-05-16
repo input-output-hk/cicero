@@ -243,12 +243,12 @@ func (self OutputDefinition) CUEString() (str util.CUEString) {
 	var allImports string
 	if self.Success != nil {
 		_, imports, success := util.CUEString(*self.Success).StripHead()
-		str += "success: " + success + "\n"
+		str += `success: {` + success + "}\n"
 		allImports += imports + "\n"
 	}
 	if self.Failure != nil {
 		_, imports, failure := util.CUEString(*self.Failure).StripHead()
-		str += "failure: " + failure + "\n"
+		str += `failure: {` + failure + "}\n"
 		allImports += imports + "\n"
 	}
 	str = util.CUEString(allImports) + str
