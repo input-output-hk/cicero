@@ -7,88 +7,56 @@ in rec {
       base
       // part
       // {
-        inputs =
-          base.inputs
-          or {}
-          // part.inputs or {};
-
-        output = inputs:
-          lib.recursiveUpdate
-          (base.output or (_: {}) inputs)
-          (part.output or (_: {}) inputs);
+        ${if base ? io || part ? io then "io" else null} = ''
+          ${base.io or ""}
+          ${part.io or ""}
+        '';
       };
 
     behavior = {
       onUpdate = action: behavior.once action.id action;
 
-      # Same as `stopOnSuccess` and `stopOnFailure` combined
-      # but more efficient (just one input so only one DB query).
-      # TODO this is actually not significantly more efficient
       once = key: _: next:
-        actions.apply
-        {
-          inputs."behavior: run only once for \"${key}\"" = {
-            not = true;
-            match = ''
-              "_behavior": once: "${key}": _
-            '';
-          };
-
-          output = _: let
-            fact._behavior.once.${key} = null;
-          in
-            {success = fact;}
-            // lib.optionalAttrs (next ? job) {
-              failure = fact;
-            };
-        }
-        next;
+        (behavior.stopOnSuccess key _) ((behavior.stopOnFailure key _) next);
 
       stopOnSuccess = key: _:
         actions.apply {
-          inputs."behavior: stop on success for \"${key}\"" = {
-            not = true;
-            match = ''
-              "_behavior": stopOnSuccess: "${key}": _
-            '';
-          };
+          io = ''
+            inputs: "behavior: stop on success for \"${key}\"": {
+              not: true
+              match: "_behavior": stopOnSuccess: "${key}": _
+            }
 
-          output = _: {
-            success._behavior.stopOnSuccess.${key} = null;
-          };
+            output: success: "_behavior": stopOnSuccess: "${key}": null
+          '';
         };
 
       stopOnFailure = key: _:
         actions.apply {
-          inputs."behavior: stop on failure for \"${key}\"" = {
-            not = true;
-            match = ''
-              "_behavior": stopOnFailure: "${key}": _
-            '';
-          };
+          io = ''
+            inputs: "behavior: stop on failure for \"${key}\"": {
+              not: true
+              match: "_behavior": stopOnFailure: "${key}": _
+            }
 
-          output = _: {
-            failure._behavior.stopOnFailure.${key} = null;
-          };
+            output: failure: "_behavior": stopOnFailure: "${key}": null
+          '';
         };
 
       onInputChange = input: key: _: next:
         actions.apply
         {
-          inputs."behavior: input \"${input}\" changed for \"${key}\"" = {
-            not = true;
-            match = ''
-              "_behavior": onInputChange: "${key}": "${input}": _inputs."${input}".id
-            '';
-          };
+          io = ''
+            inputs: "behavior: input \"${input}\" changed for \"${key}\"": {
+              not: true
+              match: "_behavior": onInputChange: "${key}": "${input}": inputs."${input}".id
+            }
 
-          output = inputs: let
-            fact._behavior.onInputChange.${key}.${input} = inputs.${input}.id;
-          in
-            {success = fact;}
-            // lib.optionalAttrs (next ? job) {
-              failure = fact;
-            };
+            output: {
+              success: "_behavior": onInputChange: "${key}": "${input}": inputs."${input}".id
+              ${lib.optionalString (next ? job) "failure: success"}
+            }
+          '';
         }
         next;
     };
