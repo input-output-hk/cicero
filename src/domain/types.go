@@ -300,10 +300,12 @@ func (self Output) MarshalJSON() ([]byte, error) {
 
 func (self InOutCUEString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
 	return util.CUEString(self).Value(func(ctx *cue.Context) []cue.BuildOption {
-		return []cue.BuildOption{cue.Scope(ctx.Encode(struct{}{}).
+		return []cue.BuildOption{cue.Scope(ctx.Encode(struct {
+			Inputs map[string]*Fact `json:"inputs"`
+		}{
 			// XXX check which inputs are actually used and pass in only those
-			FillPath(cue.MakePath(cue.Str("inputs")), inputs),
-		)}
+			inputs,
+		}))}
 	})
 }
 
