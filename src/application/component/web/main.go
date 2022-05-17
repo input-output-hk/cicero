@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"time"
 
@@ -608,6 +609,11 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	allocsByGroup := map[string][]domain.AllocationWithLogs{}
 	for _, alloc := range allocs {
 		allocsByGroup[alloc.TaskGroup] = append(allocsByGroup[alloc.TaskGroup], alloc)
+	}
+	for _, allocs := range allocsByGroup {
+		sort.Slice(allocs, func(i, j int) bool {
+			return allocs[i].CreateTime > allocs[j].CreateTime
+		})
 	}
 
 	var inputs map[string]domain.Fact

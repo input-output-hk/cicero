@@ -217,8 +217,10 @@
 					</table>
 
 					<div id="allocation">
-						{{range $alloc := $wrapper}}
-							<input id="allocation-{{.ID}}" type="radio" name="allocation" checked/>
+						{{range $i, $alloc := $wrapper}}
+							<input id="allocation-{{.ID}}" type="radio" name="allocation"
+								{{if eq $i 0}}checked{{end}}
+							/>
 							<div>
 								<h3>Allocation {{.ID}}</h3>
 								{{with .Resources}}
