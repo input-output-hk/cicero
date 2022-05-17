@@ -2,10 +2,10 @@ package persistence
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
+	cueformat "cuelang.org/go/cue/format"
 	"github.com/google/uuid"
 	"github.com/pashagolub/pgxmock"
 	"github.com/stretchr/testify/assert"
@@ -51,31 +51,32 @@ func TestShouldSaveAction(t *testing.T) {
 	t.Parallel()
 	dateTime := time.Now().UTC()
 	actionId := uuid.New()
-	inputs := domain.InputDefinition{
-		Not:      false,
-		Optional: false,
-		Match:    domain.InputDefinitionMatch(""),
-	}
-	actionInputs := make(map[string]domain.InputDefinition)
-	actionInputs["inputs"] = inputs
 	action := domain.Action{
 		ID:     actionId,
 		Name:   "Name",
 		Source: "Source",
 		ActionDefinition: domain.ActionDefinition{
-			Meta:   map[string]interface{}{},
-			Inputs: actionInputs,
+			Meta: map[string]interface{}{},
+			InOut: domain.InOutDefinition{
+				Inputs: domain.InputDefinitions{
+					"a": domain.InputDefinition{
+						Not:      false,
+						Optional: false,
+						Match:    domain.InOutCUEString(""),
+					},
+				},
+			},
 		},
 	}
 
 	// given
-	marshalInputs, err := json.Marshal(action.Inputs)
+	ioStr, err := action.InOut.CUEString().Format(cueformat.Simplify(), cueformat.UseSpaces(0))
 	if err != nil {
-		t.Fatalf("an error '%s' was not expected when marshaling the action.Inputs", err)
+		t.Fatalf("an error %q was not expected when formatting the IO CUE", err)
 	}
 	mock, _ := mocks.BuildTransaction(context.Background(), t)
 	rows := mock.NewRows([]string{"id", "created_at"}).AddRow(actionId, dateTime)
-	mock.ExpectQuery("INSERT INTO action").WithArgs(action.ID, action.Name, action.Source, marshalInputs).WillReturnRows(rows)
+	mock.ExpectQuery("INSERT INTO action").WithArgs(action.ID, action.Name, action.Source, ioStr).WillReturnRows(rows)
 	mock.ExpectCommit()
 	repository := NewActionRepository(mock)
 
