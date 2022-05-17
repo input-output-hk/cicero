@@ -277,6 +277,17 @@ func (self Output) Failure() *cue.Value {
 	return &v
 }
 
+func (self Output) MarshalJSON() ([]byte, error) {
+	result := map[string]*cue.Value{}
+	if success := self.Success(); success != nil {
+		result["success"] = success
+	}
+	if failure := self.Failure(); failure != nil {
+		result["failure"] = failure
+	}
+	return json.Marshal(result)
+}
+
 func (self InOutCUEString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
 	return util.CUEString(self).Value(func(ctx *cue.Context) []cue.BuildOption {
 		return []cue.BuildOption{cue.Scope(ctx.Encode(struct{}{}).
