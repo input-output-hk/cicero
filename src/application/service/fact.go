@@ -104,7 +104,8 @@ func (self *factService) GetByCue(value cue.Value) (facts []*domain.Fact, err er
 	return
 }
 
-// XXX Could probably be done entirely in the DB with a single SQL query (maybe as `InvocationService.GetInputsById()`).
+// XXX Could probably be done entirely in the DB with a single SQL query
+// XXX Should this be `InvocationService.GetInputsById()`?
 func (self *factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UUID) (map[string]domain.Fact, error) {
 	inputs := map[string]domain.Fact{}
 
@@ -116,8 +117,8 @@ func (self *factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UU
 	res := make(chan *Res, len(inputFactIds))
 
 	wg := &sync.WaitGroup{}
+	wg.Add(len(inputFactIds))
 	for input, id := range inputFactIds {
-		wg.Add(1)
 		go func(input string, id uuid.UUID) {
 			defer wg.Done()
 			fact, err := self.GetById(id)
@@ -126,14 +127,18 @@ func (self *factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UU
 	}
 	wg.Wait()
 
-	select {
-	case result := <-res:
-		if result.err != nil {
-			return nil, result.err
-		} else {
-			inputs[result.input] = result.fact
+Res:
+	for {
+		select {
+		case result := <-res:
+			if result.err != nil {
+				return nil, result.err
+			} else {
+				inputs[result.input] = result.fact
+			}
+		default:
+			break Res
 		}
-	default:
 	}
 
 	return inputs, nil
