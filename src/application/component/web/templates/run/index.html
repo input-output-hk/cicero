@@ -11,6 +11,7 @@
 				<th>Created At</th>
 				<th>Finished At</th>
 				<th>Duration</th>
+				<th>Status</th>
 				<th>Nomad Job ID</th>
 			</tr>
 		</thead>
@@ -45,6 +46,7 @@
 								{{timeNow.Sub .CreatedAt}}
 							{{end}}
 						</td>
+						<td>{{.Status}}</td>
 						<td>
 							<a href="/run/{{.NomadJobID}}">
 								{{.NomadJobID}}
@@ -53,7 +55,7 @@
 					{{else}}
 						{{with .Invocation}}
 							<td>{{.CreatedAt}}</td>
-							<td colspan="3">
+							<td colspan="4">
 								<a href="/invocation/{{.Id}}">Invocation</a>
 								failed:
 								{{$maxChars := 90}}

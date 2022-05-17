@@ -16,6 +16,10 @@
 					</thead>
 					<tbody>
 						<tr>
+							<th>Status</th>
+							<td>{{.Status}}</td>
+						</tr>
+						<tr>
 							<th>Nomad Job ID</th>
 							<td>{{.NomadJobID}}</td>
 						</tr>
@@ -42,8 +46,8 @@
 						<tr>
 							<th>Finished at</th>
 							<td>
-								{{if .FinishedAt}}
-									{{.FinishedAt}}
+								{{with .FinishedAt}}
+									{{.}}
 								{{else}}
 									<form
 										method="POST"

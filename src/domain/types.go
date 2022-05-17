@@ -69,7 +69,17 @@ type Run struct {
 	InvocationId uuid.UUID  `json:"invocation_id"`
 	CreatedAt    time.Time  `json:"created_at"`
 	FinishedAt   *time.Time `json:"finished_at"`
+	Status       RunStatus  `json:"status"`
 }
+
+type RunStatus int8
+
+const (
+	RunStatusRunning RunStatus = iota
+	RunStatusSucceeded
+	RunStatusFailed
+	RunStatusCanceled
+)
 
 type Fact struct {
 	ID         uuid.UUID   `json:"id"`
@@ -314,6 +324,53 @@ func (self *InOutCUEString) UnmarshalJSON(data []byte) error {
 
 	*self = InOutCUEString(str)
 	return nil
+}
+
+func (self *RunStatus) FromString(str string) error {
+	switch str {
+	case "running":
+		*self = RunStatusRunning
+	case "succeeded":
+		*self = RunStatusSucceeded
+	case "failed":
+		*self = RunStatusFailed
+	case "canceled":
+		*self = RunStatusCanceled
+	default:
+		return fmt.Errorf("Unknown RunStatus %s", str)
+	}
+	return nil
+}
+
+func (self RunStatus) String() string {
+	switch self {
+	case RunStatusRunning:
+		return "running"
+	case RunStatusSucceeded:
+		return "succeeded"
+	case RunStatusFailed:
+		return "failed"
+	case RunStatusCanceled:
+		return "canceled"
+	default:
+		panic(fmt.Sprintf("Unknown RunStatus %d", self))
+	}
+}
+
+func (self *RunStatus) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+	return self.FromString(str)
+}
+
+func (self RunStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(self.String())
+}
+
+func (self *RunStatus) Scan(value interface{}) error {
+	return self.FromString(value.(string))
 }
 
 // Sets the value from JSON and returns the rest of the buffer as binary.

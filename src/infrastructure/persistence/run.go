@@ -78,16 +78,16 @@ func (a runRepository) GetAll(page *repository.Page) ([]*domain.Run, error) {
 func (a runRepository) Save(run *domain.Run) error {
 	return a.DB.QueryRow(
 		context.Background(),
-		`INSERT INTO run (invocation_id) VALUES ($1) RETURNING nomad_job_id, created_at`,
-		run.InvocationId,
+		`INSERT INTO run (invocation_id, status) VALUES ($1, $2) RETURNING nomad_job_id, created_at`,
+		run.InvocationId, run.Status.String(),
 	).Scan(&run.NomadJobID, &run.CreatedAt)
 }
 
 func (a runRepository) Update(run *domain.Run) (err error) {
 	_, err = a.DB.Exec(
 		context.Background(),
-		`UPDATE run SET finished_at = $2 WHERE nomad_job_id = $1`,
-		run.NomadJobID, run.FinishedAt,
+		`UPDATE run SET finished_at = $2, status = $3 WHERE nomad_job_id = $1`,
+		run.NomadJobID, run.FinishedAt, run.Status.String(),
 	)
 	return
 }

@@ -242,7 +242,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(ctx context.Context, 
 		return err
 	}
 
-	return self.endRun(ctx, run, allocation.ModifyTime, false)
+	return self.endRun(ctx, run, allocation.ModifyTime, domain.RunStatusFailed)
 }
 
 func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *nomad.Event) error {
@@ -307,7 +307,7 @@ func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *
 		}
 	}
 
-	return self.endRun(ctx, run, modifyTime, true)
+	return self.endRun(ctx, run, modifyTime, domain.RunStatusSucceeded)
 }
 
 func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*domain.Run, error) {
@@ -334,42 +334,47 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 	return &run, nil
 }
 
-func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, success bool) error {
+func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) error {
 	modifyTime := time.Unix(
 		timestamp/int64(time.Second),
 		timestamp%int64(time.Second),
 	).UTC()
 	run.FinishedAt = &modifyTime
 
-	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-		fact := domain.Fact{
-			RunId: &run.NomadJobID,
-		}
+	return self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
 
-		if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
-			return err
-		} else {
-			if success {
-				fact.Value = output.Success()
-			} else {
-				fact.Value = output.Failure()
-			}
-		}
+		switch run.Status {
+		default:
+			panic(`endRun() called on Run with status "` + run.Status.String() + `"`)
+		case domain.RunStatusCanceled:
+		case domain.RunStatusRunning:
+			run.Status = status
 
-		if fact.Value != nil {
-			if err := self.FactService.Save(&fact, nil); err != nil {
+			if output, err := txSelf.InvocationService.GetOutputById(run.InvocationId); err != nil {
 				return err
+			} else {
+				fact := domain.Fact{
+					RunId: &run.NomadJobID,
+				}
+
+				switch run.Status {
+				case domain.RunStatusSucceeded:
+					fact.Value = output.Success()
+				case domain.RunStatusFailed:
+					fact.Value = output.Failure()
+				default:
+					panic("should have been caught in switch above")
+				}
+
+				if fact.Value != nil {
+					if err := txSelf.FactService.Save(&fact, nil); err != nil {
+						return err
+					}
+				}
 			}
 		}
 
-		return errors.WithMessagef(
-			self.RunService.End(run),
-			"Failed to end Run with ID %q",
-			run.NomadJobID,
-		)
-	}); err != nil {
-		return err
-	}
-
-	return nil
+		return txSelf.RunService.End(run)
+	})
 }

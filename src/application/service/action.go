@@ -460,7 +460,10 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Run, func() err
 			}
 		}
 
-		tmpRun := domain.Run{InvocationId: invocation.Id}
+		tmpRun := domain.Run{
+			InvocationId: invocation.Id,
+			Status: domain.RunStatusRunning,
+		}
 
 		if err := self.runService.WithQuerier(tx).Save(&tmpRun); err != nil {
 			return errors.WithMessage(err, "Could not insert Run")
@@ -479,6 +482,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Run, func() err
 
 			tmpRun.CreatedAt = tmpRun.CreatedAt.UTC()
 			tmpRun.FinishedAt = &tmpRun.CreatedAt
+			tmpRun.Status = domain.RunStatusSucceeded
 
 			err := self.runService.WithQuerier(tx).Update(&tmpRun)
 			err = errors.WithMessage(err, "Could not update decision Run")
