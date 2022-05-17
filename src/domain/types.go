@@ -259,30 +259,22 @@ func (self OutputDefinition) WithInputs(inputs map[string]*Fact) Output {
 	return Output{self, inputs}
 }
 
-func (self Output) Success() (*string, error) {
+func (self Output) Success() *cue.Value {
 	if self.definition.Success == nil {
-		return nil, nil
+		return nil
 	}
 
-	if b, err := self.definition.Success.ValueWithInputs(self.inputs).MarshalJSON(); err != nil {
-		return nil, err
-	} else {
-		str := string(b)
-		return &str, nil
-	}
+	v := self.definition.Success.ValueWithInputs(self.inputs)
+	return &v
 }
 
-func (self Output) Failure() (*string, error) {
+func (self Output) Failure() *cue.Value {
 	if self.definition.Failure == nil {
-		return nil, nil
+		return nil
 	}
 
-	if b, err := self.definition.Failure.ValueWithInputs(self.inputs).MarshalJSON(); err != nil {
-		return nil, err
-	} else {
-		str := string(b)
-		return &str, nil
-	}
+	v := self.definition.Failure.ValueWithInputs(self.inputs)
+	return &v
 }
 
 func (self InOutCUEString) ValueWithInputs(inputs map[string]*Fact) cue.Value {

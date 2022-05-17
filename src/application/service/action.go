@@ -467,9 +467,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Run, func() err
 		}
 
 		if job == nil { // An action that has no job is called a decision.
-			if success, err := action.InOut.Output.WithInputs(inputs).Success(); err != nil {
-				return err
-			} else if success != nil {
+			if success := action.InOut.Output.WithInputs(inputs).Success(); success != nil {
 				fact := domain.Fact{
 					RunId: &tmpRun.NomadJobID,
 					Value: success,

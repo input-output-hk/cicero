@@ -350,17 +350,9 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 			return err
 		} else {
 			if success {
-				if value, err := output.Success(); err != nil {
-					return err
-				} else if value != nil {
-					fact.Value = value
-				}
+				fact.Value = output.Success()
 			} else {
-				if value, err := output.Failure(); err != nil {
-					return err
-				} else if value != nil {
-					fact.Value = value
-				}
+				fact.Value = output.Failure()
 			}
 		}
 
