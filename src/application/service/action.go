@@ -78,13 +78,13 @@ func (self actionService) WithQuerier(querier config.PgxIface) ActionService {
 
 func (self actionService) withQuerier(querier config.PgxIface, cyclicDeps ActionServiceCyclicDependencies) ActionService {
 	result := actionService{
-		logger:            self.logger,
-		actionRepository:  self.actionRepository.WithQuerier(querier),
-		factRepository:    self.factRepository.WithQuerier(querier),
-		runService:        self.runService.WithQuerier(querier),
-		evaluationService: self.evaluationService,
-		nomadClient:       self.nomadClient,
-		db:                querier,
+		logger:                          self.logger,
+		actionRepository:                self.actionRepository.WithQuerier(querier),
+		factRepository:                  self.factRepository.WithQuerier(querier),
+		runService:                      self.runService.WithQuerier(querier),
+		evaluationService:               self.evaluationService,
+		nomadClient:                     self.nomadClient,
+		db:                              querier,
 		ActionServiceCyclicDependencies: cyclicDeps,
 	}
 

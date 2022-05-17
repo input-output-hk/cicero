@@ -3,9 +3,9 @@ package persistence
 import (
 	"context"
 
+	cueformat "cuelang.org/go/cue/format"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
-	cueformat "cuelang.org/go/cue/format"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"

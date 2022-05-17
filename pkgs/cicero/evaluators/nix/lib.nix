@@ -7,7 +7,11 @@ in rec {
       base
       // part
       // {
-        ${if base ? io || part ? io then "io" else null} = ''
+        ${
+          if base ? io || part ? io
+          then "io"
+          else null
+        } = ''
           ${base.io or ""}
           ${part.io or ""}
         '';

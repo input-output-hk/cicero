@@ -81,11 +81,11 @@ func NewRunService(db config.PgxIface, prometheusAddr, victoriaMetricsAddr strin
 
 func (self runService) WithQuerier(querier config.PgxIface) RunService {
 	return &runService{
-		logger:              self.logger,
-		runRepository:       self.runRepository.WithQuerier(querier),
-		prometheus:          self.prometheus,
-		nomadClient:         self.nomadClient,
-		db:                  querier,
+		logger:        self.logger,
+		runRepository: self.runRepository.WithQuerier(querier),
+		prometheus:    self.prometheus,
+		nomadClient:   self.nomadClient,
+		db:            querier,
 	}
 }
 

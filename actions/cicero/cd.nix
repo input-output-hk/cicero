@@ -21,7 +21,6 @@
     }
   '';
 
-
   job = {ci}: let
     inherit (ci.value."cicero/ci") revision;
   in

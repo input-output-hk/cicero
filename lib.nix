@@ -8,13 +8,13 @@ self:
    inputs: {
      # require last fact with `count` of at least 1
      tick: match: count: >0
-
+ 
      # stop at 10 (no `over_nine` input will be created)
      over_nine: {
        not: true
        match: count: >9
      }
-     
+ 
      # has no influence on runnability
      double: {
        optional: true
@@ -25,7 +25,7 @@ self:
    output: {
      # this is the default
      success: null
-
+ 
      failure: count: inputs.tick.value.count
    }
  '';

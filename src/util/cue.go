@@ -1,8 +1,8 @@
 package util
 
 import (
-	"sync"
 	"regexp"
+	"sync"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
