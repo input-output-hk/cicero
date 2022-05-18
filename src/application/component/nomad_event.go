@@ -164,6 +164,8 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 			// FIXME if we crash before unflagging the event will never be handled
 			// save a timestamp and consider it unflagged after a while?
 
+			logger.Err(err).Msg("Error handling nomad event")
+
 			event.Handled = false
 			if err := txSelf.NomadEventService.Update(event); err != nil {
 				return err
