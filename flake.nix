@@ -181,7 +181,7 @@
 
       lib = import ./lib.nix self;
 
-      ciceroActions =
+      cicero.x86_64-linux =
         self.lib.callActionsWithExtraArgs
         rec {
           inherit (self.lib) std;

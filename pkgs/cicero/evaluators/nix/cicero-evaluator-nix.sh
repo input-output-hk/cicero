@@ -12,15 +12,21 @@ function usage {
 		echo -e '\t- CICERO_ACTION_ID'
 		echo -e '\t- CICERO_ACTION_INPUTS'
 		echo
+		echo 'For eval, the following env vars must be set'
+		echo 'in order to run respective preparation hooks:'
+		echo -e '\t- CICERO_EVALUATOR_NIX_OCI_REGISTRY'
+		echo
 		echo 'The following env vars are optional:'
 		echo -e '\t- CICERO_EVALUATOR_NIX_STACKTRACE'
 	} >&2
 }
 
+system="$(nix eval --impure --raw --expr __currentSystem)"
+
 function evaluate {
 	nix eval --no-write-lock-file --json \
 		${CICERO_EVALUATOR_NIX_STACKTRACE:+--show-trace} \
-		"${CICERO_ACTION_SRC:-.}#ciceroActions" "$@"
+		"${CICERO_ACTION_SRC:-.}#cicero.$system" "$@"
 }
 
 case "${1:-}" in
@@ -31,31 +37,46 @@ eval)
 	shift
 	vars="$(
 		nix-instantiate --eval --strict \
-			--expr '{...}@args: args // {
-			  id = if args.id == "" then null else args.id;
+			--expr '{...}@args: let
+			  ifEmptyThenNull = x: if x == "" then null else x;
+			in args // {
+			  id = ifEmptyThenNull args.id;
 			  inputs = __fromJSON args.inputs;
 			  attrs = __filter __isString (__split "[[:space:]]" args.attrs);
+			  ociRegistry = ifEmptyThenNull args.ociRegistry;
 			}' \
 			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
 			--argstr name "${CICERO_ACTION_NAME:-}" \
 			--argstr id "${CICERO_ACTION_ID:-}" \
-			--argstr attrs "${*}"
+			--argstr attrs "${*}" \
+			--argstr ociRegistry "${CICERO_EVALUATOR_NIX_OCI_REGISTRY:-}"
 	)"
 
 	evaluate --apply "$(
 		cat <<-EOF
 			actions:
 			let
-			  inherit (${vars}) attrs id inputs name;
-			  nonNullAttr = k: v: if v == null then {} else { \${k} = v; };
-			  action = actions.\${name} (
-			    nonNullAttr "id" id //
-			    nonNullAttr "inputs" inputs
+			  mapAttrs' = fn: attrs: __listToAttrs (
+			    __filter
+			      (kv: kv.name != null)
+			      (map
+			        (name: fn name attrs.\${name})
+			        (__attrNames attrs)
+			      )
 			  );
+
+			  vars = $vars;
+
+			  actionFn = actions.\${vars.name};
+			  action = actionFn (mapAttrs' (k: v: {
+			    name = if vars.\${k} or null == null then null else k;
+			    value = vars.\${k} or null;
+			  }) (__functionArgs actionFn));
 			in
-			  __listToAttrs (map
-			    (name: { inherit name; value = action.\${name}; })
-			    (__filter (name: __elem name attrs) (__attrNames action)))
+			  mapAttrs' (k: value: {
+			    name = if __elem k vars.attrs then k else null;
+			    inherit value;
+			  }) action
 		EOF
 	)"
 	;;
