@@ -35,7 +35,6 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	// If none are given then start all,
 	// otherwise start only those that are given.
 	var start struct {
-		factCreate bool
 		nomadEvent bool
 		web        bool
 	}
@@ -49,10 +48,8 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 			logger.Fatal().Msgf("Unknown component: %s", component)
 		}
 	}
-	if !(start.factCreate ||
-		start.nomadEvent ||
+	if !(start.nomadEvent ||
 		start.web) {
-		start.factCreate = true
 		start.nomadEvent = true
 		start.web = true
 	}

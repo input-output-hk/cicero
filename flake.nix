@@ -88,8 +88,8 @@
               .job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"] |
               .job[]?.group[]?.task[]? |= if .config?.nixos then . else (
                 .env |= . + {
-                  CICERO_WEB_URL: "http://127.0.0.1:8080",
-                  CICERO_API_URL: "http://127.0.0.1:8080",
+                  CICERO_WEB_URL: "http://127.0.0.1:18080",
+                  CICERO_API_URL: "http://127.0.0.1:18080",
                   NIX_CONFIG: (
                     "substituters = http://127.0.0.1:17745?compression=none\n" +
                     "extra-trusted-public-keys = spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=\n" +
@@ -102,7 +102,12 @@
                   perms: "544",
                   data: env.postBuildHook,
                 }] |
-                .config.packages |= . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"]
+                .config.packages |=
+                  # only add bash if needed to avoid conflicts in profile
+                  if any(endswith("#bash"))
+                  then .
+                  else . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"]
+                  end
               ) end
             '';
           in
