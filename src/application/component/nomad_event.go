@@ -360,9 +360,13 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 
 				switch run.Status {
 				case domain.RunStatusSucceeded:
-					fact.Value = output.Success()
+					if output.Success.Exists() {
+						fact.Value = output.Success
+					}
 				case domain.RunStatusFailed:
-					fact.Value = output.Failure()
+					if output.Failure.Exists() {
+						fact.Value = output.Failure
+					}
 				default:
 					panic("should have been caught in switch above")
 				}

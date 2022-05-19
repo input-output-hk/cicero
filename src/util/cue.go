@@ -1,7 +1,6 @@
 package util
 
 import (
-	"regexp"
 	"sync"
 
 	"cuelang.org/go/cue"
@@ -10,16 +9,17 @@ import (
 )
 
 // There is a race condition around global internal state of CUE.
-var CueMutex = &sync.Mutex{}
+var cueMutex = &sync.Mutex{}
 
 type CUEString string
 
-// Parses into a NEW CONTEXT!
-func (self CUEString) Value(optionsFunc func(*cue.Context) []cue.BuildOption) cue.Value {
-	CueMutex.Lock()
-	defer CueMutex.Unlock()
+func (self CUEString) Value(ctx *cue.Context, optionsFunc func(*cue.Context) []cue.BuildOption) cue.Value {
+	if ctx == nil {
+		cueMutex.Lock()
+		defer cueMutex.Unlock()
 
-	ctx := cuecontext.New()
+		ctx = cuecontext.New()
+	}
 
 	var options []cue.BuildOption
 	if optionsFunc == nil {
@@ -50,7 +50,7 @@ func (self *CUEString) FromValue(value cue.Value, options ...cueformat.Option) e
 // Converts to a `cue.Value` and back to string so that the caller can use `cueformat.Simplify()`.
 // If that is not needed use `cueformat.Source()` directly instead.
 func (self CUEString) Format(options ...cueformat.Option) (result CUEString, err error) {
-	value := self.Value(nil)
+	value := self.Value(nil, nil)
 	err = result.FromValue(value, options...)
 	if err != nil {
 		return
@@ -63,22 +63,6 @@ func (self CUEString) Format(options ...cueformat.Option) (result CUEString, err
 	var b []byte
 	b, err = cueformat.Source([]byte(result), options...)
 	result = CUEString(b)
-
-	return
-}
-
-func (self CUEString) StripHead() (pkg string, imports string, rest CUEString) {
-	rest = self
-
-	if i := regexp.MustCompile(`\s*(package\s+\w+\r?\n)?\s*`).FindIndex([]byte(rest)); i != nil {
-		pkg = string(rest[i[0]:i[1]])
-		rest = CUEString(rest[i[1]:])
-	}
-
-	if i := regexp.MustCompile(`\s*(import\s+(\"\w+\"\r?\n|\([^\)]+\))\s*)*`).FindIndex([]byte(rest)); i != nil {
-		imports = string(rest[i[0]:i[1]])
-		rest = CUEString(rest[i[1]:])
-	}
 
 	return
 }

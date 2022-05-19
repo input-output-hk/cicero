@@ -184,12 +184,12 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 		errNotRunnable := errors.New("not runnable")
 		valuePath := cue.MakePath(cue.Str("value"))
 
-		if err := action.InOut.Inputs.Flow(func(t *flow.Task) error {
+		if err := action.InOut.InputsFlow(func(t *flow.Task) error {
 			name := t.Path().Selectors()[1].String() // inputs: <name>: …
 			if name_, err := cueliteral.Unquote(name); err == nil {
 				name = name_
 			}
-			input := action.InOut.Inputs[name]
+			input := action.InOut.Inputs(nil)[name]
 			tValue := t.Value().LookupPath(valuePath)
 			inputLogger := logger.With().Str("input", name).Logger()
 
@@ -214,7 +214,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 				}
 
 				// Match candidate fact.
-				if matchErr, err := matchFact(input.Match.ValueWithInputs(inputs), &fact); err != nil {
+				if matchErr, err := matchFact(action.InOut.Input(name, inputs).Match, &fact); err != nil {
 					return err
 				} else if (matchErr == nil) == input.Not {
 					if !input.Optional || input.Not {
@@ -265,7 +265,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 		inputFactsChanged := false
 
 	InputFactsChanged:
-		for name, input := range action.InOut.Inputs {
+		for name, input := range action.InOut.Inputs(inputs) {
 			if _, exists := inputs[name]; !exists {
 				// We only care about inputs that are
 				// passed into the evaluation.
@@ -339,9 +339,9 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 	}
 
 	// Filter input facts. We only provide keys requested by the CUE expression.
-	for name, input := range action.InOut.Inputs {
+	for name, input := range action.InOut.Inputs(inputs) {
 		if entry, exists := inputs[name]; exists {
-			filterFields(&entry.Value, input.Match.ValueWithInputs(inputs))
+			filterFields(&entry.Value, input.Match)
 		}
 	}
 
@@ -470,7 +470,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Run, func() err
 		}
 
 		if job == nil { // An action that has no job is called a decision.
-			if success := action.InOut.Output.WithInputs(inputs).Success(); success != nil {
+			if success := action.InOut.Output(inputs).Success; success.Exists() {
 				fact := domain.Fact{
 					RunId: &tmpRun.NomadJobID,
 					Value: success,

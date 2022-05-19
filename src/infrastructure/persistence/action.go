@@ -10,6 +10,7 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type actionRepository struct {
@@ -99,7 +100,7 @@ func (a *actionRepository) Save(action *domain.Action) error {
 	} else {
 		sql = `INSERT INTO action (id, name, source, io) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
 	}
-	if inOutStr, err := action.InOut.CUEString().Format(cueformat.Simplify(), cueformat.UseSpaces(0)); err != nil {
+	if inOutStr, err := util.CUEString(action.InOut).Format(cueformat.Simplify(), cueformat.UseSpaces(0)); err != nil {
 		return err
 	} else {
 		return a.DB.QueryRow(

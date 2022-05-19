@@ -23,7 +23,7 @@ type InvocationService interface {
 	GetAll(*repository.Page) ([]*domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, *bool, *repository.Page) ([]*domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
-	GetOutputById(uuid.UUID) (domain.Output, error)
+	GetOutputById(uuid.UUID) (domain.OutputDefinition, error)
 	Save(*domain.Invocation, map[string]*domain.Fact) error
 	Update(*domain.Invocation) error
 }
@@ -130,15 +130,14 @@ func (self invocationService) GetInputFactIdsById(id uuid.UUID) (inputFactIds ma
 	return
 }
 
-func (self invocationService) GetOutputById(id uuid.UUID) (domain.Output, error) {
+func (self invocationService) GetOutputById(id uuid.UUID) (domain.OutputDefinition, error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Evaluating output for ID")
-	output := domain.Output{}
 	if action, err := (*self.actionService).GetByInvocationId(id); err != nil {
-		return output, err
+		return domain.OutputDefinition{}, err
 	} else if inputFactIds, err := self.GetInputFactIdsById(id); err != nil {
-		return output, err
+		return domain.OutputDefinition{}, err
 	} else if inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds); err != nil {
-		return output, err
+		return domain.OutputDefinition{}, err
 	} else {
 		// XXX decide on map[string]*Fact vs map[string]Fact
 		// and refactor everywhere (where applicable)
@@ -146,7 +145,7 @@ func (self invocationService) GetOutputById(id uuid.UUID) (domain.Output, error)
 		for k, v := range inputs {
 			inputsPtr[k] = &v
 		}
-		return action.InOut.Output.WithInputs(inputsPtr), nil
+		return action.InOut.Output(inputsPtr), nil
 	}
 }
 

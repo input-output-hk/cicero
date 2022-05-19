@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/cuecontext"
 	cueliteral "cuelang.org/go/cue/literal"
 	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
@@ -28,33 +27,25 @@ type Action struct {
 
 type ActionDefinition struct {
 	Meta  map[string]interface{} `json:"meta"`
-	InOut InOutDefinition        `json:"io" db:"io"`
+	InOut TrustedInOutCUEString  `json:"io" db:"io"`
 }
 
-type InOutDefinition struct {
-	Inputs InputDefinitions `json:"inputs"`
-	Output OutputDefinition `json:"output"`
-}
+type TrustedInOutCUEString InOutCUEString
+
+type InOutCUEString util.CUEString
 
 type InputDefinitions map[string]InputDefinition
 
 type InputDefinition struct {
-	Not      bool           `json:"not"`
-	Optional bool           `json:"optional"`
-	Match    InOutCUEString `json:"match"`
-}
-
-type Output struct {
-	definition OutputDefinition
-	inputs     map[string]*Fact
+	Not      bool
+	Optional bool
+	Match    cue.Value
 }
 
 type OutputDefinition struct {
-	Success *InOutCUEString `json:"success"`
-	Failure *InOutCUEString `json:"failure"`
+	Success cue.Value
+	Failure cue.Value
 }
-
-type InOutCUEString util.CUEString
 
 type Invocation struct {
 	Id         uuid.UUID `json:"id"`
@@ -96,236 +87,192 @@ type NomadEvent struct {
 	Handled bool
 }
 
-func (self InOutDefinition) CUEString() (str util.CUEString) {
-	var allImports string
-	if _, imports, inStr := self.Inputs.CUEString().StripHead(); inStr != "" {
-		str += util.CUEString(`inputs: {` + inStr + "}\n")
-		allImports += imports + "\n"
-	}
-	if _, imports, outStr := self.Output.CUEString().StripHead(); outStr != "" {
-		str += util.CUEString(`output: {` + outStr + "}\n")
-		allImports += imports + "\n"
-	}
-	str = util.CUEString(allImports) + str
-	return
-}
-
-func (self *InOutDefinition) UnmarshalJSON(data []byte) error {
-	var io util.CUEString
-	if err := json.Unmarshal(data, &io); err != nil {
-		return err
-	}
-	return self.FromCUEString(io)
-}
-
-func (self *InOutDefinition) FromCUEString(io util.CUEString) error {
-	value := io.Value(nil)
-	if err := value.Err(); err != nil {
+// XXX This just calls all methods to see if they return an error.
+// Instead it should check the value using `cue.Value.Subsume` or something.
+func (self TrustedInOutCUEString) Validate() error {
+	if err := util.CUEString(self).Value(nil, nil).Err(); err != nil {
 		return err
 	}
 
-	pathInputs := cue.MakePath(cue.Str("inputs"))
-	pathOutputSuccess := cue.MakePath(cue.Str("output"), cue.Str("success"))
-	pathOutputFailure := cue.MakePath(cue.Str("output"), cue.Str("failure"))
+	str := InOutCUEString(self)
 
-	self.Inputs = InputDefinitions{}
-	if fields, err := value.LookupPath(pathInputs).Fields(); err != nil {
+	if _, err := str.Inputs(nil); err != nil {
 		return err
-	} else {
-		pathNot := cue.MakePath(cue.Str("not"))
-		pathOptional := cue.MakePath(cue.Str("optional"))
-		pathMatch := cue.MakePath(cue.Str("match"))
-
-		for fields.Next() {
-			field := fields.Value()
-
-			def := InputDefinition{}
-
-			if v := field.LookupPath(pathNot); v.Exists() {
-				if not, err := v.Bool(); err != nil {
-					return err
-				} else {
-					def.Not = not
-				}
-			} else {
-				def.Not = false
-			}
-
-			if v := field.LookupPath(pathOptional); v.Exists() {
-				if optional, err := v.Bool(); err != nil {
-					return err
-				} else {
-					def.Optional = optional
-				}
-			} else {
-				def.Optional = false
-			}
-
-			if v := field.LookupPath(pathMatch); !v.Exists() {
-				return fmt.Errorf(`input %q must have a "match" field`, fields.Label())
-			} else if err := def.Match.FromValue(v); err != nil {
-				return err
-			}
-
-			self.Inputs[fields.Label()] = def
-		}
 	}
 
-	if v := value.LookupPath(pathOutputSuccess); v.Exists() {
-		self.Output.Success = new(InOutCUEString)
-		if err := self.Output.Success.FromValue(v); err != nil {
-			return err
-		}
+	if _, err := str.InputsFlow(func(t *flow.Task) error {
+		return nil
+	}); err != nil {
+		return err
 	}
-	if v := value.LookupPath(pathOutputFailure); v.Exists() {
-		self.Output.Failure = new(InOutCUEString)
-		if err := self.Output.Failure.FromValue(v); err != nil {
-			return err
-		}
+
+	if _, err := str.Output(nil); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (self *InOutDefinition) Scan(value interface{}) error {
-	return self.FromCUEString(util.CUEString(value.(string)))
-}
-
-func (self *InputDefinitions) CUEString() (str util.CUEString) {
-	var allImports string
-	for name, def := range *self {
-		str = util.CUEString(cueliteral.Label.Append([]byte(str), name))
-		str += `: {`
-
-		str += `not: `
-		if def.Not {
-			str += `true`
-		} else {
-			str += `false`
-		}
-		str += "\n"
-
-		str += `optional: `
-		if def.Optional {
-			str += `true`
-		} else {
-			str += `false`
-		}
-		str += "\n"
-
-		_, imports, match := util.CUEString(def.Match).StripHead()
-		allImports += imports + "\n"
-		str += `match: {` + match + "}\n"
-
-		str += "}\n"
+func (self *TrustedInOutCUEString) UnmarshalJSON(data []byte) error {
+	var str util.CUEString
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
 	}
-	str = util.CUEString(allImports) + str
-	return
+
+	*self = TrustedInOutCUEString(str)
+
+	return self.Validate()
 }
 
-func (self *InputDefinitions) Flow(runnerFunc flow.RunnerFunc) *flow.Controller {
-	util.CueMutex.Lock()
-	defer util.CueMutex.Unlock()
+func (self TrustedInOutCUEString) Inputs(inputs map[string]*Fact) InputDefinitions {
+	if r, err := InOutCUEString(self).Inputs(inputs); err != nil {
+		panic(err.Error())
+	} else {
+		return r
+	}
+}
 
-	cueStr := ``
-	for name, input := range *self {
-		_, imports, match := util.CUEString(input.Match).StripHead()
-		cueStr += imports + "\n"
+func (self TrustedInOutCUEString) Input(name string, inputs map[string]*Fact) InputDefinition {
+	if r, err := InOutCUEString(self).Input(name, inputs); err != nil {
+		panic(err.Error())
+	} else {
+		return r
+	}
+}
+
+func (self TrustedInOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) *flow.Controller {
+	if r, err := InOutCUEString(self).InputsFlow(runnerFunc); err != nil {
+		panic(err.Error())
+	} else {
+		return r
+	}
+}
+
+func (self TrustedInOutCUEString) Output(inputs map[string]*Fact) OutputDefinition {
+	if r, err := InOutCUEString(self).Output(inputs); err != nil {
+		panic(err.Error())
+	} else {
+		return r
+	}
+}
+
+func (self InOutCUEString) Inputs(inputs map[string]*Fact) (InputDefinitions, error) {
+	defs := InputDefinitions{}
+
+	value := self.valueWithInputs(inputs)
+
+	if fields, err := value.LookupPath(cue.MakePath(cue.Str("inputs"))).Fields(); err != nil {
+		return nil, err
+	} else {
+		for fields.Next() {
+			if def, err := self.Input(fields.Label(), nil); err != nil {
+				return nil, err
+			} else {
+				defs[fields.Label()] = def
+			}
+		}
+	}
+
+	return defs, nil
+}
+
+func (self InOutCUEString) Input(name string, inputs map[string]*Fact) (InputDefinition, error) {
+	def := InputDefinition{}
+
+	value := self.valueWithInputs(inputs).LookupPath(cue.MakePath(cue.Str("inputs"), cue.Str(name)))
+
+	if v := value.LookupPath(cue.MakePath(cue.Str("not"))); v.Exists() {
+		if not, err := v.Bool(); err != nil {
+			return def, err
+		} else {
+			def.Not = not
+		}
+	} else {
+		def.Not = false
+	}
+
+	if v := value.LookupPath(cue.MakePath(cue.Str("optional"))); v.Exists() {
+		if optional, err := v.Bool(); err != nil {
+			return def, err
+		} else {
+			def.Optional = optional
+		}
+	} else {
+		def.Optional = false
+	}
+
+	if v := value.LookupPath(cue.MakePath(cue.Str("match"))); !v.Exists() {
+		return def, fmt.Errorf(`input %q must have a "match" field`, name)
+	} else {
+		def.Match = v
+	}
+
+	return def, nil
+}
+
+func (self InOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) (*flow.Controller, error) {
+	inputs, err := self.Inputs(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	cueStr := util.CUEString(self)
+	for name, input := range inputs {
+		if input.Not {
+			// not really necessary but makes sense
+			continue
+		}
 		cueStr += `inputs: `
-		cueStr = string(cueliteral.Label.Append([]byte(cueStr), name))
-		cueStr += `: value: {` + string(match) + "}\n"
+		cueStr = util.CUEString(cueliteral.Label.Append([]byte(cueStr), name))
+		cueStr += `: value: inputs.`
+		cueStr = util.CUEString(cueliteral.Label.Append([]byte(cueStr), name))
+		cueStr += ".match\n"
 	}
-	value := cuecontext.New().CompileString(cueStr)
+
+	// XXX replace loop above with this?
+	/*
+		value := util.CUEString(*self.source).Value(nil, nil)
+		for name, input := range self.inputs {
+			value = value.FillPath(cue.MakePath(cue.Str("inputs"), cue.Str(name), cue.Str("value")), input.Match)
+		}
+	*/
 
 	return flow.New(
 		&flow.Config{Root: cue.MakePath(cue.Str("inputs"))},
-		value,
+		cueStr.Value(nil, nil),
 		func(v cue.Value) (flow.Runner, error) {
 			if len(v.Path().Selectors()) != 2 {
 				return nil, nil
 			}
 			return runnerFunc, nil
 		},
-	)
+	), nil
 }
 
-func (self OutputDefinition) CUEString() (str util.CUEString) {
-	var allImports string
-	if self.Success != nil {
-		_, imports, success := util.CUEString(*self.Success).StripHead()
-		str += `success: {` + success + "}\n"
-		allImports += imports + "\n"
-	}
-	if self.Failure != nil {
-		_, imports, failure := util.CUEString(*self.Failure).StripHead()
-		str += `failure: {` + failure + "}\n"
-		allImports += imports + "\n"
-	}
-	str = util.CUEString(allImports) + str
-	return
+func (self InOutCUEString) Output(inputs map[string]*Fact) (OutputDefinition, error) {
+	value := self.valueWithInputs(inputs)
+	return OutputDefinition{
+		Success: value.LookupPath(cue.MakePath(cue.Str("output"), cue.Str("success"))),
+		Failure: value.LookupPath(cue.MakePath(cue.Str("output"), cue.Str("failure"))),
+	}, nil
 }
 
-func (self OutputDefinition) WithInputs(inputs map[string]*Fact) Output {
-	return Output{self, inputs}
-}
+func (self InOutCUEString) valueWithInputs(inputs map[string]*Fact) cue.Value {
+	cueStr := util.CUEString(self)
 
-func (self Output) Success() *cue.Value {
-	if self.definition.Success == nil {
-		return nil
-	}
+	if inputs != nil {
+		inputsJson, err := json.Marshal(inputs)
+		if err != nil {
+			panic("Facts should always be serializable to JSON")
+		}
 
-	v := self.definition.Success.ValueWithInputs(self.inputs)
-	return &v
-}
-
-func (self Output) Failure() *cue.Value {
-	if self.definition.Failure == nil {
-		return nil
-	}
-
-	v := self.definition.Failure.ValueWithInputs(self.inputs)
-	return &v
-}
-
-func (self Output) MarshalJSON() ([]byte, error) {
-	result := map[string]*cue.Value{}
-	if success := self.Success(); success != nil {
-		result["success"] = success
-	}
-	if failure := self.Failure(); failure != nil {
-		result["failure"] = failure
-	}
-	return json.Marshal(result)
-}
-
-func (self InOutCUEString) ValueWithInputs(inputs map[string]*Fact) cue.Value {
-	return util.CUEString(self).Value(func(ctx *cue.Context) []cue.BuildOption {
-		return []cue.BuildOption{cue.Scope(ctx.Encode(struct {
-			Inputs map[string]*Fact `json:"inputs"`
-		}{
+		cueStr += util.CUEString(
 			// XXX check which inputs are actually used and pass in only those
-			inputs,
-		}))}
-	})
-}
-
-func (self *InOutCUEString) FromValue(v cue.Value) error {
-	return (*util.CUEString)(self).FromValue(v)
-}
-
-func (self *InOutCUEString) UnmarshalJSON(data []byte) error {
-	var str util.CUEString
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
+			"\ninputs: {" + string(inputsJson) + "}",
+		)
 	}
 
-	// Fail to unmarshal an error value to fail early.
-	if err := str.Value(nil).Err(); err != nil {
-		return err
-	}
-
-	*self = InOutCUEString(str)
-	return nil
+	return cueStr.Value(nil, nil)
 }
 
 func (self *RunStatus) FromString(str string) error {
