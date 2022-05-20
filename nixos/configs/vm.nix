@@ -96,6 +96,13 @@
 
     useNixStoreImage = true;
     writableStoreUseTmpfs = false;
+
+    podman = {
+      enable = true;
+      dockerCompat = true;
+      dockerSocket.enable = true;
+      defaultNetwork.dnsname.enable = true;
+    };
   };
 
   environment = {
@@ -122,6 +129,7 @@
 
       extraSettingsPlugins = [
         self.inputs.driver.defaultPackage.${pkgs.system}
+        pkgs.nomad-driver-podman
       ];
       extraPackages = with pkgs; [
         config.nix.package
@@ -132,7 +140,10 @@
       settings = {
         log_level = "TRACE";
 
-        plugin.nix_driver = {};
+        plugin = {
+          nix_driver = {};
+          podman = {};
+        };
 
         server = {
           enabled = true;
