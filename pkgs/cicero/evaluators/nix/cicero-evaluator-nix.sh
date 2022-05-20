@@ -1,5 +1,9 @@
 # shellcheck shell=bash
 
+if [[ -n "${CICERO_EVALUATOR_NIX_LOG:-}" ]]; then
+	set -x
+fi
+
 function usage {
 	{
 		echo "Usage: $(basename "$0") [list] [eval <attrs...>]"
@@ -17,6 +21,7 @@ function usage {
 		echo -e '\t- CICERO_EVALUATOR_NIX_OCI_REGISTRY'
 		echo
 		echo 'The following env vars are optional:'
+		echo -e '\t- CICERO_EVALUATOR_NIX_LOG'
 		echo -e '\t- CICERO_EVALUATOR_NIX_STACKTRACE'
 	} >&2
 }
