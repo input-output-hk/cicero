@@ -26,12 +26,37 @@ function usage {
 	} >&2
 }
 
-system="$(nix eval --impure --raw --expr __currentSystem)"
+system=$(nix eval --impure --raw --expr __currentSystem)
 
 function evaluate {
 	nix eval --no-write-lock-file --json \
 		${CICERO_EVALUATOR_NIX_STACKTRACE:+--show-trace} \
 		"${CICERO_ACTION_SRC:-.}#cicero.$system" "$@"
+}
+
+function prepare {
+	while read -r step; do
+		local type
+		type=$(<<< "$step" jq -r .type)
+
+		echo "Preparing $type…"
+
+		case "$type" in
+			nix2container)
+				local name imageDrv
+				name=$(<<<"$step" jq -r .name)
+				imageDrv=$(<<<"$step" jq -r .imageDrv)
+				for image in $(nix build --json "$imageDrv" | jq -r '.[].outputs.out'); do
+					echo "Pushing $image to $name…"
+					skopeo --insecure-policy copy nix:"$image" "$name"
+				done
+				;;
+			*)
+				echo 'Unknown type of prepare step: "'"$step"\"
+				exit 1
+				;;
+		esac
+	done >&2
 }
 
 case "${1:-}" in
@@ -40,7 +65,8 @@ list)
 	;;
 eval)
 	shift
-	vars="$(
+
+	vars=$(
 		nix-instantiate --eval --strict \
 			--expr '{...} @ vars: {
 			  args = __mapAttrs (k: v: if v == "" then null else v) {
@@ -50,17 +76,22 @@ eval)
 			    inputs = __fromJSON vars.inputs;
 			  };
 
-			  name = vars.name;
-			  attrs = __filter __isString (__split "[[:space:]]" vars.attrs);
+			  inherit (vars) name;
+			  attrs =
+			    let requestedAttrs = __filter __isString (__split "[[:space:]]" vars.attrs); in
+			    requestedAttrs ++
+			    # Add "prepare" to the list of attributes to evaluate
+			    # if "job" is present so that the preparation hooks can run.
+			    (if __elem "job" requestedAttrs then [ "prepare" ] else []);
 			}' \
 			--argstr name "${CICERO_ACTION_NAME:-}" \
 			--argstr id "${CICERO_ACTION_ID:-}" \
 			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
 			--argstr ociRegistry "${CICERO_EVALUATOR_NIX_OCI_REGISTRY:-}" \
 			--argstr attrs "${*}"
-	)"
+	)
 
-	evaluate --apply "$(
+	result=$(evaluate --apply "$(
 		cat <<-EOF
 			actions:
 			let
@@ -92,7 +123,11 @@ eval)
 			    inherit value;
 			  }) action
 		EOF
-	)"
+	)")
+
+	echo -n "$result"
+
+	echo -n "$result" | jq -c '.prepare[]?' | prepare >&2
 	;;
 '')
 	echo >&2 'No command given'

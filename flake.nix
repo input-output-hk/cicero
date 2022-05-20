@@ -36,6 +36,10 @@
       url = "github:input-output-hk/haskell.nix";
       inputs.nixpkgs-unstable.follows = "nixpkgs";
     };
+    nix2container = {
+      url = "github:nlewo/nix2container";
+      inputs.flake-utils.follows = "utils";
+    };
   };
 
   outputs = {
@@ -51,6 +55,7 @@
     haskell-nix,
     nix,
     alejandra,
+    nix2container,
     ...
   }: let
     supportedSystems = ["x86_64-linux"];
@@ -134,7 +139,9 @@
         {
           cicero = prev.callPackage pkgs/cicero {flake = self;};
           cicero-entrypoint = prev.callPackage pkgs/cicero/entrypoint.nix {};
-          cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix {};
+          cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix {
+            inherit (nix2container.packages.${prev.system}) skopeo-nix2container;
+          };
           webhook-trigger = prev.callPackage pkgs/trigger {};
           cicero-api = (final.extend haskell-nix.overlay).callPackage pkgs/cicero-api {
             inherit supportedSystems;
