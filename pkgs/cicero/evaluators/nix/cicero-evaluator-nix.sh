@@ -42,19 +42,22 @@ eval)
 	shift
 	vars="$(
 		nix-instantiate --eval --strict \
-			--expr '{...}@args: let
-			  ifEmptyThenNull = x: if x == "" then null else x;
-			in args // {
-			  id = ifEmptyThenNull args.id;
-			  inputs = __fromJSON args.inputs;
-			  attrs = __filter __isString (__split "[[:space:]]" args.attrs);
-			  ociRegistry = ifEmptyThenNull args.ociRegistry;
+			--expr '{...} @ vars: {
+			  args = __mapAttrs (k: v: if v == "" then null else v) {
+			    id = vars.id;
+			    ociRegistry = vars.ociRegistry;
+			  } // {
+			    inputs = __fromJSON vars.inputs;
+			  };
+
+			  name = vars.name;
+			  attrs = __filter __isString (__split "[[:space:]]" vars.attrs);
 			}' \
-			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
 			--argstr name "${CICERO_ACTION_NAME:-}" \
 			--argstr id "${CICERO_ACTION_ID:-}" \
-			--argstr attrs "${*}" \
-			--argstr ociRegistry "${CICERO_EVALUATOR_NIX_OCI_REGISTRY:-}"
+			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
+			--argstr ociRegistry "${CICERO_EVALUATOR_NIX_OCI_REGISTRY:-}" \
+			--argstr attrs "${*}"
 	)"
 
 	evaluate --apply "$(
@@ -73,10 +76,16 @@ eval)
 			  vars = $vars;
 
 			  actionFn = actions.\${vars.name};
-			  action = actionFn (mapAttrs' (k: v: {
-			    name = if vars.\${k} or null == null then null else k;
-			    value = vars.\${k} or null;
-			  }) (__functionArgs actionFn));
+			  actionFnArgs =
+			    # If the action takes named args
+			    # provide only those requested (like callPackage).
+			    # If it does not simply provide everything.
+			    let args = __functionArgs actionFn; in
+			    if args == {} then vars.args else mapAttrs' (k: v: {
+			      name = if vars.args.\${k} or null == null then null else k;
+			      value = vars.args.\${k} or null;
+			    }) args;
+			  action = actionFn actionFnArgs;
 			in
 			  mapAttrs' (k: value: {
 			    name = if __elem k vars.attrs then k else null;

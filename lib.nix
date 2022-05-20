@@ -45,6 +45,7 @@ in rec {
   callAction = name: action: {
     id,
     inputs ? throw "no inputs given",
+    ociRegistry ? null,
   }: let
     inherit
       (builtins)
@@ -97,7 +98,7 @@ in rec {
         if isFunction action
         then action
         else import action)
-      (action: action {inherit name id;})
+      (action: action {inherit name id ociRegistry;})
       validateAction
       mkActionState
     ];
