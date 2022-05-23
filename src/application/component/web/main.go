@@ -50,16 +50,6 @@ func (self *Web) Start(ctx context.Context) error {
 
 	// sorted alphabetically, please keep it this way
 	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/current/{name}/definition",
-		self.ApiActionCurrentNameDefinitionGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "name", Description: "name of an action", Value: "actionName"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
 		"/api/action/current/{name}",
 		self.ApiActionCurrentNameGet,
 		apidoc.BuildSwaggerDef(
@@ -100,16 +90,6 @@ func (self *Web) Start(ctx context.Context) error {
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "source", Description: "source of one or more action definitions", Value: "source"}}),
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, []string{}, "Ok")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/{id}/definition",
-		self.ApiActionIdDefinitionGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of the action", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "Ok")),
 	); err != nil {
 		return err
 	}
@@ -1054,19 +1034,6 @@ func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Reques
 	}
 }
 
-func (self *Web) ApiActionCurrentNameDefinitionGet(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	if name, err := url.PathUnescape(vars["name"]); err != nil {
-		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
-	} else if action, err := self.ActionService.GetLatestByName(name); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Failed to get action"))
-	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
-	} else {
-		self.json(w, actionDef, http.StatusOK)
-	}
-}
-
 func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
@@ -1097,19 +1064,6 @@ func (self *Web) ApiActionIdPatch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (self *Web) ApiActionIdDefinitionGet(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	if id, err := uuid.Parse(vars["id"]); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else if action, err := self.ActionService.GetById(id); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
-	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
-	} else {
-		self.json(w, actionDef, http.StatusOK)
-	}
 }
 
 func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
