@@ -124,6 +124,47 @@
 						{{end}}
 					</tbody>
 				</table>
+
+				<table class="table vertical">
+					<thead>
+						<tr>
+							<th
+								colspan="2"
+								title="Fact that will be published when a Run ends"
+							>
+								Output
+							</th>
+						</tr>
+						<tr>
+							<th>Success</th>
+							<th>Failure</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							{{with .InOut.Output nil}}
+								<td>
+									{{if .Success.Exists}}
+										<textarea
+											readonly
+											rows="10"
+											cols="50"
+										>{{.Success}}</textarea>
+									{{end}}
+								</td>
+								<td>
+									{{if .Failure.Exists}}
+										<textarea
+											readonly
+											rows="10"
+											cols="50"
+										>{{.Failure}}</textarea>
+									{{end}}
+								</td>
+							{{end}}
+						</tr>
+					</tbody>
+				</table>
 			</div>
 
 			<h2>Runs</h2>
