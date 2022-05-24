@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -110,22 +111,74 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string) ([]byte
 
 	tryEval := func(evaluator string) ([]byte, error) {
 		cmd := exec.Command("cicero-evaluator-"+evaluator, args...)
-		cmdEnv := append(extraEnv, "CICERO_ACTION_SRC="+dst) //nolint:gocritic // false positive
-		cmd.Env = append(os.Environ(), cmdEnv...)            //nolint:gocritic // false positive
+		cmd.Env = append(os.Environ(), extraEnv...) //nolint:gocritic // false positive
+		cmd.Dir = dst
 
 		e.logger.Debug().
 			Stringer("command", cmd).
-			Strs("environment", cmdEnv).
+			Strs("environment", extraEnv).
 			Msg("Running evaluator")
 
-		if output, err := cmd.Output(); err != nil {
+		stdout := bytes.Buffer{}
+		var stdoutTee io.Reader
+		if pipe, err := cmd.StdoutPipe(); err != nil {
+			return nil, err
+		} else {
+			stdoutTee = io.TeeReader(pipe, &stdout)
+		}
+
+		// TODO the Invocation must probably somehow be passed to the EvaluationService
+		// so that it can update its stdout and stderr fields (e.g. at 500ms intervals)
+		// WHILE the command is running.
+		// TODO Display the status of prepare steps in the web UI?
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+
+		var scanErr error
+		var result []byte
+		scanner := bufio.NewScanner(stdoutTee)
+	Scan:
+		for scanner.Scan() {
+			var msg map[string]interface{}
+			if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
+				scanErr = err
+				break
+			}
+
+			if event, ok := msg["event"]; !ok {
+				scanErr = fmt.Errorf("Message without event key received from evaluator: %v", msg)
+				break
+			} else {
+				switch event {
+				default:
+					scanErr = fmt.Errorf("Message with unknown event received from evaluator: %q", event)
+					break Scan
+				case "error":
+					scanErr = fmt.Errorf("Error message received from evaluator: %q", msg["error"])
+					break Scan
+				case "result":
+					// XXX Take *interface{} to unmarshal result into instead of returning its []byte using json.Decoder?
+					if r, err := json.Marshal(msg["result"]); err != nil {
+						scanErr = err
+						break Scan
+					} else {
+						result = r
+					}
+				case "prepare":
+					e.logger.Debug().Fields(msg).Msg("Running prepare step")
+				}
+			}
+		}
+
+		if err := cmd.Wait(); err != nil {
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
-				err = errors.WithMessage(&EvaluationError{errExit, output}, "Failed to evaluate")
+				err = errors.WithMessage(&EvaluationError{errExit, stdout.Bytes()}, "Failed to evaluate")
 			}
 			return nil, err
 		} else {
-			return output, nil
+			return result, scanErr
 		}
 	}
 
@@ -193,7 +246,7 @@ func (e evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs ma
 		return def, err
 	}
 
-	output, err = e.transform(output, extraEnv)
+	output, err = e.transform(output, src, extraEnv)
 	if err != nil {
 		return def, err
 	}
@@ -255,10 +308,11 @@ func (e evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs ma
 	return def, nil
 }
 
-func (e evaluationService) transform(output []byte, extraEnv []string) ([]byte, error) {
+func (e evaluationService) transform(output []byte, src string, extraEnv []string) ([]byte, error) {
 	for _, transformer := range e.Transformers {
 		cmd := exec.Command(transformer)
 		cmd.Env = append(os.Environ(), extraEnv...) //nolint:gocritic // false positive
+		cmd.Dir = src
 
 		stdin, err := cmd.StdinPipe()
 		if err != nil {

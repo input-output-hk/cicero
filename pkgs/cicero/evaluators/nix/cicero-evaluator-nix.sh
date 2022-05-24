@@ -1,15 +1,12 @@
 # shellcheck shell=bash
 
-if [[ -n "${CICERO_EVALUATOR_NIX_LOG:-}" ]]; then
+if [[ -n "${CICERO_EVALUATOR_NIX_VERBOSE:-}" ]]; then
 	set -x
 fi
 
 function usage {
 	{
 		echo "Usage: $(basename "$0") [list] [eval <attrs...>]"
-		echo
-		echo 'The following env vars must be set:'
-		echo -e '\t- CICERO_ACTION_SRC'
 		echo
 		echo 'For eval, the following env vars must be set:'
 		echo -e '\t- CICERO_ACTION_NAME'
@@ -21,17 +18,48 @@ function usage {
 		echo -e '\t- CICERO_EVALUATOR_NIX_OCI_REGISTRY'
 		echo
 		echo 'The following env vars are optional:'
-		echo -e '\t- CICERO_EVALUATOR_NIX_LOG'
+		echo -e '\t- CICERO_EVALUATOR_NIX_VERBOSE'
 		echo -e '\t- CICERO_EVALUATOR_NIX_STACKTRACE'
 	} >&2
 }
 
-system=$(nix eval --impure --raw --expr __currentSystem)
+function msg {
+	local event=${1:?'No event given'}
+	shift
+
+	local json='{'
+	for pair in event="$event" "$@"; do
+		local key=${pair%%=*}
+		local val=${pair#*=}
+
+		json+='"'"$key"'":'
+		case ${val:0:1} in
+		'{') ;&
+		'[') ;&
+		'0') ;& '1') ;& '2') ;& '3') ;& '4') ;& '5') ;& '6') ;& '7') ;& '8') ;& '9')
+			json+="$val"
+			;;
+		*)
+			json+='"'"$val"'"'
+			;;
+		esac
+		json+=','
+	done
+	json="${json%,}"
+	json+='}'
+
+	echo "$json"
+}
 
 function evaluate {
+	echo >&2 'Getting current system…'
+	system=$(nix eval --impure --raw --expr __currentSystem)
+	echo >&2 "Got current system: $system"
+
+	echo >&2 'Evaluating…'
 	nix eval --no-write-lock-file --json \
 		${CICERO_EVALUATOR_NIX_STACKTRACE:+--show-trace} \
-		"${CICERO_ACTION_SRC:-.}#cicero.$system" "$@"
+		".#cicero.$system" "$@"
 }
 
 function prepare {
@@ -39,33 +67,44 @@ function prepare {
 		local type
 		type=$(<<< "$step" jq -r .type)
 
-		echo "Preparing $type…"
+		echo >&2 "Preparing $type…"
 
 		case "$type" in
-			nix2container)
-				local name imageDrv
-				name=$(<<<"$step" jq -r .name)
-				imageDrv=$(<<<"$step" jq -r .imageDrv)
-				for image in $(nix build --json "$imageDrv" | jq -r '.[].outputs.out'); do
-					echo "Pushing $image to $name…"
-					skopeo --insecure-policy copy nix:"$image" "$name"
-				done
-				;;
-			*)
-				echo 'Unknown type of prepare step: "'"$step"\"
-				exit 1
-				;;
+		nix2container)
+			local name imageDrv outputs
+			name=$(<<<"$step" jq -r .name)
+			imageDrv=$(<<<"$step" jq -r .imageDrv)
+
+			local -a msgPairs=(prepare type="$type" name="$name")
+
+			msg "${msgPairs[@]}" step=build imageDrv="$imageDrv"
+			outputs=$(nix build --json "$imageDrv" | jq -r '.[].outputs.out')
+
+			for image in $outputs; do
+				echo >&2 "Pushing $image to $name…"
+				msg "${msgPairs[@]}" step=push image="$image"
+				>&2 skopeo --insecure-policy copy nix:"$image" "$name"
+			done
+			;;
+		*)
+			local error='Unknown type "'"$type"'" in prepare step'
+			echo >&2 "$error: $step"
+			msg error error="$error" prepare="$step"
+			exit 1
+			;;
 		esac
-	done >&2
+	done
 }
 
 case "${1:-}" in
 list)
-	evaluate --apply __attrNames
+	shift
+	msg result result="$(evaluate --apply __attrNames)"
 	;;
 eval)
 	shift
 
+	echo >&2 'Evaluating variables…'
 	vars=$(
 		nix-instantiate --eval --strict \
 			--expr '{...} @ vars: {
@@ -125,20 +164,23 @@ eval)
 		EOF
 	)")
 
-	echo -n "$result"
+	msg result result="$result"
 
-	echo -n "$result" | jq -c '.prepare[]?' | prepare >&2
-	;;
-'')
-	echo >&2 'No command given'
-	echo >&2
-	usage
-	exit 1
+	echo -n "$result" | jq -c '.prepare[]?' | prepare
 	;;
 *)
-	echo >&2 "Unknown command: $1"
+	if [[ -n "${1:-}" ]]; then
+		error="Unknown command: $1"
+	else
+		error='No command given'
+	fi
+
+	msg error error="$error"
+
+	echo >&2 "$error"
 	echo >&2
 	usage
+
 	exit 1
 	;;
 esac
