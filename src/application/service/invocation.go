@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -25,7 +26,7 @@ type InvocationService interface {
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
 	GetOutputById(uuid.UUID) (domain.OutputDefinition, error)
 	Save(*domain.Invocation, map[string]*domain.Fact) error
-	Update(*domain.Invocation) error
+	GetLog(domain.Invocation) (LokiLog, error)
 }
 
 type InvocationServiceCyclicDependencies struct {
@@ -37,14 +38,16 @@ type invocationService struct {
 	logger               zerolog.Logger
 	invocationRepository repository.InvocationRepository
 	db                   config.PgxIface
+	lokiService          LokiService
 	InvocationServiceCyclicDependencies
 }
 
-func NewInvocationService(db config.PgxIface, actionService *ActionService, factService *FactService, logger *zerolog.Logger) InvocationService {
+func NewInvocationService(db config.PgxIface, lokiService LokiService, actionService *ActionService, factService *FactService, logger *zerolog.Logger) InvocationService {
 	return &invocationService{
 		logger:               logger.With().Str("component", "InvocationService").Logger(),
 		invocationRepository: persistence.NewInvocationRepository(db),
 		db:                   db,
+		lokiService:          lokiService,
 		InvocationServiceCyclicDependencies: InvocationServiceCyclicDependencies{
 			actionService: actionService,
 			factService:   factService,
@@ -158,11 +161,10 @@ func (self invocationService) Save(invocation *domain.Invocation, inputs map[str
 	return nil
 }
 
-func (self invocationService) Update(invocation *domain.Invocation) error {
-	self.logger.Trace().Str("id", invocation.Id.String()).Msg("Updating Invocation")
-	if err := self.invocationRepository.Update(invocation); err != nil {
-		return errors.WithMessagef(err, "Could not update Invocation with ID %q", invocation.Id)
-	}
-	self.logger.Trace().Str("id", invocation.Id.String()).Msg("Updated Invocation")
-	return nil
+func (self invocationService) GetLog(invocation domain.Invocation) (LokiLog, error) {
+	return self.lokiService.QueryRangeLog(
+		fmt.Sprintf(`{cicero="evaluation",invocation=%q}`, invocation.Id),
+		invocation.CreatedAt, nil,
+		"fd",
+	)
 }

@@ -51,8 +51,6 @@ type Invocation struct {
 	Id         uuid.UUID `json:"id"`
 	ActionId   uuid.UUID `json:"action_id"`
 	CreatedAt  time.Time `json:"created_at"`
-	EvalStdout *string   `json:"eval_stdout"`
-	EvalStderr *string   `json:"eval_stderr"`
 }
 
 type Run struct {

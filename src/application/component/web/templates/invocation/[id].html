@@ -89,26 +89,14 @@
 			</table>
 		</div>
 
-		<h2>Stderr</h2>
-		{{with .EvalStderr}}
-			{{with derefString .}}
-				<div class="panel" style="padding: 0.25em 0.5em">
-					<samp class="log stderr" style="white-space: pre">{{.}}</samp>
-				</div>
-			{{else}}
-				<em>no output</em>
+		<h2>Logs</h2>
+		<table class="panel log">
+			{{range $.log}}
+				<tr>
+					<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+					<td><samp class="log {{.Source}}">{{.Text}}</samp></td>
+				</tr>
 			{{end}}
-		{{end}}
-
-		<h2>Stdout</h2>
-		{{with .EvalStdout}}
-			{{with derefString .}}
-				<div class="panel" style="padding: 0.25em 0.5em">
-					<samp class="log" style="white-space: pre">{{.}}</samp>
-				</div>
-			{{else}}
-				<em>no output</em>
-			{{end}}
-		{{end}}
+		</table>
 	{{end}}
 {{end}}

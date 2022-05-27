@@ -116,7 +116,7 @@ func ConfigureLogger(level zerolog.Level) *zerolog.Logger {
 		writers = append(writers, newRollingFile(config))
 	}
 
-	logger := zerolog.New(zerolog.MultiLevelWriter(writers...)).
+	logger := zerolog.New(zerolog.SyncWriter(zerolog.MultiLevelWriter(writers...))).
 		With().Timestamp().Logger()
 
 	zerolog.SetGlobalLevel(level)

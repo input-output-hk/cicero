@@ -57,26 +57,8 @@
 							<td>{{.CreatedAt}}</td>
 							<td colspan="4">
 								<a href="/invocation/{{.Id}}">Invocation</a>
-								failed:
-								{{$maxChars := 90}}
-								{{$hasStderr := false}}
-								{{with .EvalStderr}}
-									{{with derefString .}}
-										<samp class="log stderr">
-											{{if gt (len .) $maxChars}}…{{end}}
-											{{slice . (maxInt 0 (subInt (len .) $maxChars))}}
-										</samp>
-										{{$hasStderr = true}}
-									{{end}}
-								{{end}}
-								{{if not $hasStderr}}
-									{{with derefString .EvalStdout}}
-										<samp class="log">
-											{{if gt (len .) $maxChars}}…{{end}}
-											{{slice . (maxInt 0 (subInt (len .) $maxChars))}}
-										</samp>
-									{{end}}
-								{{end}}
+								failed
+								<!-- XXX show last line of invocation log output here? -->
 							</td>
 						{{end}}
 					{{end}}

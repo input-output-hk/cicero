@@ -192,12 +192,3 @@ func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map
 
 	return nil
 }
-
-func (self *invocationRepository) Update(invocation *domain.Invocation) (err error) {
-	_, err = self.db.Exec(
-		context.Background(),
-		`UPDATE invocation SET eval_stdout = $2, eval_stderr = $3 WHERE id = $1`,
-		invocation.Id, invocation.EvalStdout, invocation.EvalStderr,
-	)
-	return
-}

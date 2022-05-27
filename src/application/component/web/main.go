@@ -182,7 +182,7 @@ func (self *Web) Start(ctx context.Context) error {
 		apidoc.BuildSwaggerDef(
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]domain.LokiLog{"logs": {}}, "OK")),
+			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]service.LokiLog{"logs": {}}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -508,6 +508,13 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	log, err := self.InvocationService.GetLog(invocation)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+	log.Deduplicate()
+
 	var run *domain.Run
 	if run_, err := self.RunService.GetByInvocationId(id); err != nil {
 		if !pgxscan.NotFound(err) {
@@ -533,6 +540,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		"Invocation": invocation,
 		"Run":        run,
 		"inputs":     inputs,
+		"log":        log,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -586,7 +594,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	allocsByGroup := map[string][]domain.AllocationWithLogs{}
+	allocsByGroup := map[string][]service.AllocationWithLogs{}
 	for _, alloc := range allocs {
 		allocsByGroup[alloc.TaskGroup] = append(allocsByGroup[alloc.TaskGroup], alloc)
 	}
@@ -1080,7 +1088,7 @@ func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
 		if logs, err := self.RunService.JobLogs(id, run.CreatedAt, run.FinishedAt); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 		} else {
-			self.json(w, map[string]domain.LokiLog{"logs": logs}, http.StatusOK)
+			self.json(w, map[string]service.LokiLog{"logs": logs}, http.StatusOK)
 		}
 	}
 }

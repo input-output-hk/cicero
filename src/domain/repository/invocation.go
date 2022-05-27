@@ -17,5 +17,4 @@ type InvocationRepository interface {
 	GetAll(*Page) ([]*domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, *bool, *Page) ([]*domain.Invocation, error)
 	Save(*domain.Invocation, map[string]*domain.Fact) error
-	Update(*domain.Invocation) error
 }

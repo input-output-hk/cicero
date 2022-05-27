@@ -14,13 +14,17 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/google/uuid"
+	promtail "github.com/grafana/loki/clients/pkg/promtail/api"
+	"github.com/grafana/loki/pkg/logproto"
 	getter "github.com/hashicorp/go-getter/v2"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/pkg/errors"
+	"github.com/prometheus/common/model"
 	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/config"
@@ -30,7 +34,7 @@ import (
 type EvaluationService interface {
 	ListActions(src string) ([]string, error)
 	EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error)
-	EvaluateRun(src, name string, id uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error)
+	EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error)
 }
 
 func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
@@ -49,32 +53,31 @@ func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
 type evaluationService struct {
 	Evaluators   []string // Default evaluators. Will be tried in order if none is given for a source.
 	Transformers []string
+	promtailChan chan<- promtail.Entry
 	logger       zerolog.Logger
 }
 
-func NewEvaluationService(evaluators, transformers []string, logger *zerolog.Logger) EvaluationService {
+func NewEvaluationService(evaluators, transformers []string, promtailChan chan<- promtail.Entry, logger *zerolog.Logger) EvaluationService {
 	return &evaluationService{
 		Evaluators:   evaluators,
 		Transformers: transformers,
+		promtailChan: promtailChan,
 		logger:       logger.With().Str("component", "EvaluationService").Logger(),
 	}
 }
 
 // Evaluation failed due to a faulty action definition or transformer output.
-type EvaluationError struct {
-	*exec.ExitError
-	Stdout []byte
-}
+type EvaluationError exec.ExitError
 
 func (e *EvaluationError) Error() string {
-	return fmt.Sprintf("%s\nStderr: %s\nStdout: %s", e.ExitError, e.Stderr, e.Stdout)
+	return (*exec.ExitError)(e).Error()
 }
 
 func (e *EvaluationError) Unwrap() error {
-	return e.ExitError
+	return (*exec.ExitError)(e)
 }
 
-func (e evaluationService) evaluate(src string, args, extraEnv []string) ([]byte, error) {
+func (e evaluationService) evaluate(src string, args, extraEnv []string, invocationId *uuid.UUID) ([]byte, error) {
 	fetchUrl, evaluator, err := parseSource(src)
 	if err != nil {
 		return nil, err
@@ -119,27 +122,34 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string) ([]byte
 			Strs("environment", extraEnv).
 			Msg("Running evaluator")
 
-		stdout := bytes.Buffer{}
-		var stdoutTee io.Reader
-		if pipe, err := cmd.StdoutPipe(); err != nil {
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
 			return nil, err
-		} else {
-			stdoutTee = io.TeeReader(pipe, &stdout)
 		}
 
-		// TODO the Invocation must probably somehow be passed to the EvaluationService
-		// so that it can update its stdout and stderr fields (e.g. at 500ms intervals)
-		// WHILE the command is running.
-		// TODO Display the status of prepare steps in the web UI?
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return nil, err
+		}
+
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
 
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				e.promtailChan <- promtailEntry(scanner.Text(), "stderr", invocationId)
+			}
+		}()
+
 		var scanErr error
 		var result []byte
-		scanner := bufio.NewScanner(stdoutTee)
+		scanner := bufio.NewScanner(stdout)
 	Scan:
 		for scanner.Scan() {
+			e.promtailChan <- promtailEntry(scanner.Text(), "stdout", invocationId)
+
 			var msg map[string]interface{}
 			if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
 				scanErr = err
@@ -158,7 +168,7 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string) ([]byte
 					scanErr = fmt.Errorf("Error message received from evaluator: %q", msg["error"])
 					break Scan
 				case "result":
-					// XXX Take *interface{} to unmarshal result into instead of returning its []byte using json.Decoder?
+					// XXX Take *interface{} to unmarshal result into using json.Decoder instead of returning its []byte?
 					if r, err := json.Marshal(msg["result"]); err != nil {
 						scanErr = err
 						break Scan
@@ -174,7 +184,8 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string) ([]byte
 		if err := cmd.Wait(); err != nil {
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
-				err = errors.WithMessage(&EvaluationError{errExit, stdout.Bytes()}, "Failed to evaluate")
+				evalErr := EvaluationError(*errExit)
+				err = errors.WithMessage(&evalErr, "Failed to evaluate")
 			}
 			return nil, err
 		} else {
@@ -208,6 +219,24 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string) ([]byte
 	}
 }
 
+func promtailEntry(line, fd string, invocationId *uuid.UUID) promtail.Entry {
+	labels := map[model.LabelName]model.LabelValue{
+		"cicero": "evaluation",
+		"fd":     model.LabelValue(fd),
+	}
+	if invocationId != nil {
+		labels["invocation"] = model.LabelValue(invocationId.String())
+	}
+
+	return promtail.Entry{
+		Labels: labels,
+		Entry: logproto.Entry{
+			Timestamp: time.Now(),
+			Line:      line,
+		},
+	}
+}
+
 func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
 	var def domain.ActionDefinition
 
@@ -217,6 +246,7 @@ func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domai
 			"CICERO_ACTION_NAME=" + name,
 			"CICERO_ACTION_ID=" + id.String(),
 		},
+		nil,
 	); err != nil {
 		return def, err
 	} else if err := json.Unmarshal(output, &def); err != nil {
@@ -227,7 +257,7 @@ func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domai
 	return def, nil
 }
 
-func (e evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error) {
+func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error) {
 	var def *nomad.Job
 
 	inputsJson, err := json.Marshal(inputs)
@@ -241,7 +271,7 @@ func (e evaluationService) EvaluateRun(src, name string, id uuid.UUID, inputs ma
 		"CICERO_ACTION_INPUTS=" + string(inputsJson),
 	}
 
-	output, err := e.evaluate(src, []string{"eval", "job"}, extraEnv)
+	output, err := e.evaluate(src, []string{"eval", "job"}, extraEnv, &invocationId)
 	if err != nil {
 		return def, err
 	}
@@ -334,7 +364,8 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 		if transformedOutput, err := cmd.Output(); err != nil {
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
-				err = errors.WithMessage(&EvaluationError{errExit, transformedOutput}, "Failed to transform")
+				evalErr := EvaluationError(*errExit)
+				err = errors.WithMessage(&evalErr, "Failed to transform")
 			}
 
 			return nil, err
@@ -347,7 +378,7 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 }
 
 func (e evaluationService) ListActions(src string) ([]string, error) {
-	output, err := e.evaluate(src, []string{"list"}, nil)
+	output, err := e.evaluate(src, []string{"list"}, nil, nil)
 	if err != nil {
 		return nil, err
 	}

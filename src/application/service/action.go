@@ -433,36 +433,19 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Run, func() err
 			return err
 		}
 
-		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, inputs)
+		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, invocation.Id, inputs)
 		if err != nil {
 			if errors.As(err, &evalErr) {
-				self.logger.Err(evalErr).
-					Str("source", action.Source).
-					Str("name", action.Name).
-					Msg("Could not evaluate action")
-
-				{
-					stdout := string(evalErr.Stdout)
-					invocation.EvalStdout = &stdout
-
-					stderr := string(evalErr.Stderr)
-					invocation.EvalStderr = &stderr
-				}
-				if err := (*self.invocationService).WithQuerier(tx).Update(&invocation); err != nil {
-					return err
-				}
-
 				// Do not return the evalErr so that the transaction commits
-				// and the invocation is updated with the error.
+				// and the invocation is not lost.
 				return nil
-			} else {
-				return err
 			}
+			return err
 		}
 
 		tmpRun := domain.Run{
 			InvocationId: invocation.Id,
-			Status: domain.RunStatusRunning,
+			Status:       domain.RunStatusRunning,
 		}
 
 		if err := self.runService.WithQuerier(tx).Save(&tmpRun); err != nil {

@@ -22,7 +22,7 @@ type NomadEventService interface {
 	Update(*domain.NomadEvent) error
 	GetByHandled(bool) ([]*domain.NomadEvent, error)
 	GetLastNomadEventIndex() (uint64, error)
-	GetEventAllocByNomadJobId(id uuid.UUID) (map[string]domain.AllocationWithLogs, error)
+	GetEventAllocByNomadJobId(id uuid.UUID) (map[string]AllocationWithLogs, error)
 }
 
 type nomadEventService struct {
@@ -82,10 +82,10 @@ func (n nomadEventService) GetLastNomadEventIndex() (uint64, error) {
 	return n.nomadEventRepository.GetLastNomadEventIndex()
 }
 
-func (n nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]domain.AllocationWithLogs, error) {
+func (n nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]AllocationWithLogs, error) {
 	n.logger.Trace().Str("nomad-job-id", nomadJobId.String()).Msg("Getting EventAlloc by nomad job id")
 
-	allocs := map[string]domain.AllocationWithLogs{}
+	allocs := map[string]AllocationWithLogs{}
 	results, err := n.nomadEventRepository.GetEventAllocByNomadJobId(nomadJobId)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (n nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[
 	}
 
 	wg := &sync.WaitGroup{}
-	res := make(chan domain.AllocationWithLogs, len(results))
+	res := make(chan AllocationWithLogs, len(results))
 
 	for _, result := range results {
 		wg.Add(1)
@@ -106,22 +106,23 @@ func (n nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[
 			alloc := &nomad.Allocation{}
 			err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
 			if err != nil {
-				res <- domain.AllocationWithLogs{Err: err}
+				res <- AllocationWithLogs{Err: err}
 				return
 			}
 
-			logs := map[string]domain.LokiLog{}
+			logs := map[string]LokiLog{}
 
 			for taskName := range alloc.TaskResources {
+				// XXX this is called unnecessarily multiple times. only call for the alloc event chosen after wg.Wait()
 				taskLogs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
 				if err != nil {
-					res <- domain.AllocationWithLogs{Err: err}
+					res <- AllocationWithLogs{Err: err}
 					return
 				}
 				logs[taskName] = taskLogs
 			}
 
-			res <- domain.AllocationWithLogs{Allocation: alloc, Logs: logs}
+			res <- AllocationWithLogs{Allocation: alloc, Logs: logs}
 		}(result)
 	}
 

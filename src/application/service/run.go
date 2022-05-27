@@ -8,18 +8,13 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/grafana/loki/pkg/loghttp"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
-	"github.com/pborman/ansi"
 	"github.com/pkg/errors"
-	prometheus "github.com/prometheus/client_golang/api"
 	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/application"
@@ -42,48 +37,44 @@ type RunService interface {
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error)
-	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error)
-	CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
-	MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
-	GrafanaUrls(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string]*url.URL, error)
+	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (LokiLog, error)
+	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error)
+	CPUMetrics(allocs map[string]AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
+	MemMetrics(allocs map[string]AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
+	GrafanaUrls(allocs map[string]AllocationWithLogs, end *time.Time) (map[string]*url.URL, error)
+}
+
+type AllocationWithLogs struct {
+	*nomad.Allocation
+	Logs map[string]LokiLog
+	Err  error
 }
 
 type runService struct {
 	logger              zerolog.Logger
 	runRepository       repository.RunRepository
-	prometheus          prometheus.Client
+	lokiService         LokiService
 	victoriaMetricsAddr string
 	nomadClient         application.NomadClient
 	db                  config.PgxIface
 }
 
-func NewRunService(db config.PgxIface, prometheusAddr, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
-	impl := runService{
+func NewRunService(db config.PgxIface, lokiService LokiService, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
+	return &runService{
 		logger:              logger.With().Str("component", "RunService").Logger(),
 		runRepository:       persistence.NewRunRepository(db),
 		nomadClient:         nomadClient,
+		lokiService:         lokiService,
 		victoriaMetricsAddr: victoriaMetricsAddr,
 		db:                  db,
 	}
-
-	if prom, err := prometheus.NewClient(prometheus.Config{
-		Address: prometheusAddr,
-	}); err != nil {
-		impl.logger.Fatal().Err(err).Msg("Failed to create new prometheus client")
-		return nil
-	} else {
-		impl.prometheus = prom
-	}
-
-	return &impl
 }
 
 func (self runService) WithQuerier(querier config.PgxIface) RunService {
 	return &runService{
 		logger:        self.logger,
 		runRepository: self.runRepository.WithQuerier(querier),
-		prometheus:    self.prometheus,
+		lokiService:   self.lokiService,
 		nomadClient:   self.nomadClient,
 		db:            querier,
 	}
@@ -179,120 +170,21 @@ func (self runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error) {
-	return self.LokiQueryRange(
+func (self runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (LokiLog, error) {
+	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
-		start, end,
+		start, end, "source",
 	)
 }
 
-func (self runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error) {
-	return self.LokiQueryRange(
+func (self runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error) {
+	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
-		start, end,
+		start, end, "source",
 	)
 }
 
-func (self runService) LokiQueryRange(query string, start time.Time, end *time.Time) (domain.LokiLog, error) {
-	linesToFetch := 10000
-	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
-	var limit int64 = 5000
-	output := domain.LokiLog{}
-
-	if end == nil {
-		now := time.Now().UTC()
-		end = &now
-	}
-
-	endLater := end.Add(1 * time.Minute)
-	end = &endLater
-
-done:
-	for {
-		req, err := http.NewRequest(
-			"GET",
-			self.prometheus.URL("/loki/api/v1/query_range", nil).String(),
-			http.NoBody,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		q := req.URL.Query()
-		q.Set("query", query)
-		q.Set("limit", strconv.FormatInt(limit, 10))
-		q.Set("start", strconv.FormatInt(start.UnixNano(), 10))
-		q.Set("end", strconv.FormatInt(end.UnixNano(), 10))
-		q.Set("direction", "FORWARD")
-		req.URL.RawQuery = q.Encode()
-
-		done, body, err := self.prometheus.Do(context.Background(), req)
-		if err != nil {
-			return nil, errors.WithMessage(err, "Failed to talk with loki")
-		}
-
-		if done.StatusCode/100 != 2 {
-			return nil, fmt.Errorf("Error response %d from Loki: %s", done.StatusCode, string(body))
-		}
-
-		response := loghttp.QueryResponse{}
-
-		err = json.Unmarshal(body, &response)
-		if err != nil {
-			return nil, err
-		}
-
-		streams, ok := response.Data.Result.(loghttp.Streams)
-		if !ok {
-			return nil, fmt.Errorf("Unexpected loki result type: %s", response.Data.Result.Type())
-		}
-
-		if len(streams) == 0 {
-			break done
-		}
-
-		entryCount := int64(0)
-		for _, stream := range streams {
-			source, ok := stream.Labels.Map()["source"]
-			if !ok {
-				continue
-			}
-
-			for _, entry := range stream.Entries {
-				line := domain.LokiLine{Time: entry.Timestamp, Source: source, Text: entry.Line}
-				lines := strings.Split(entry.Line, "\r")
-				for _, l := range lines {
-					if sane, err := ansi.Strip([]byte(l)); err == nil {
-						line.Text = string(sane)
-					} else {
-						line.Text = l
-					}
-					output = append(output, line)
-				}
-
-				if (len(output)) >= linesToFetch {
-					break done
-				}
-			}
-
-			entryCount += int64(len(stream.Entries))
-		}
-
-		if entryCount >= limit {
-			start = output[len(output)-1].Time
-		} else {
-			break done
-		}
-	}
-
-	sort.Slice(output, func(i, j int) bool {
-		return output[i].Time.Before(output[j].Time)
-	})
-
-	return output, nil
-}
-
-func (self runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs, to *time.Time) (map[string]*url.URL, error) {
+func (self runService) GrafanaUrls(allocs map[string]AllocationWithLogs, to *time.Time) (map[string]*url.URL, error) {
 	grafanaUrls := map[string]*url.URL{}
 
 	for allocName, alloc := range allocs {
@@ -318,7 +210,7 @@ func (self runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs, 
 	return grafanaUrls, nil
 }
 
-func (self runService) metrics(allocs map[string]domain.AllocationWithLogs, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
+func (self runService) metrics(allocs map[string]AllocationWithLogs, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
 	vmUrl, err := url.Parse(self.victoriaMetricsAddr + "/api/v1/query_range")
 	if err != nil {
 		return nil, err
@@ -391,7 +283,7 @@ func (self runService) metrics(allocs map[string]domain.AllocationWithLogs, to *
 	return metrics, nil
 }
 
-func (self runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) CPUMetrics(allocs map[string]AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
 		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
 	})
@@ -404,7 +296,7 @@ const (
 	tib = gib * 1024
 )
 
-func (self runService) MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) MemMetrics(allocs map[string]AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
 		switch {
 		case f >= tib:

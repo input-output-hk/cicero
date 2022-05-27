@@ -5,9 +5,11 @@ import (
 	"time"
 
 	"cirello.io/oversight"
+	promtailClient "github.com/grafana/loki/clients/pkg/promtail/client"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	prometheus "github.com/prometheus/client_golang/api"
 
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/application/component"
@@ -62,7 +64,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	var db config.PgxIface
 	if db_, err := config.DBConnection(logger); err != nil {
 		logger.Fatal().Err(err).Send()
-		return nil
+		return err
 	} else {
 		db = db_
 	}
@@ -70,11 +72,30 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	var nomadClient *nomad.Client
 	if client, err := config.NewNomadClient(); err != nil {
 		logger.Fatal().Err(err).Send()
-		return nil
+		return err
 	} else {
 		nomadClient = client
 	}
 	nomadClientWrapper := application.NewNomadClient(nomadClient)
+
+	var prometheusClient prometheus.Client
+	if client, err := prometheus.NewClient(prometheus.Config{
+		Address: cmd.PrometheusAddr,
+	}); err != nil {
+		logger.Fatal().Err(err).Send()
+		return err
+	} else {
+		prometheusClient = client
+	}
+
+	var promtailClient promtailClient.Client
+	if client, err := config.NewPromtailClient(cmd.PrometheusAddr, logger); err != nil {
+		logger.Fatal().Err(err).Send()
+		return err
+	} else {
+		promtailClient = client
+		defer promtailClient.Stop()
+	}
 
 	// These are pointers to interfaces to allow them do cyclically depend on each other.
 	invocationService := new(service.InvocationService)
@@ -82,11 +103,12 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	factService := new(service.FactService)
 	nomadEventService := new(service.NomadEventService)
 
-	// These don't depend on other services so we don't need to put them behind a pointer.
-	runService := service.NewRunService(db, cmd.PrometheusAddr, cmd.VictoriaMetricsAddr, nomadClientWrapper, logger)
-	evaluationService := service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, logger)
+	// These don't cyclically depend on other services so we don't need to put them behind a pointer.
+	lokiService := service.NewLokiService(prometheusClient)
+	runService := service.NewRunService(db, lokiService, cmd.VictoriaMetricsAddr, nomadClientWrapper, logger)
+	evaluationService := service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, promtailClient.Chan(), logger)
 
-	*invocationService = service.NewInvocationService(db, actionService, factService, logger)
+	*invocationService = service.NewInvocationService(db, lokiService, actionService, factService, logger)
 	*actionService = service.NewActionService(db, nomadClientWrapper, invocationService, runService, evaluationService, logger)
 	*factService = service.NewFactService(db, actionService, logger)
 	*nomadEventService = service.NewNomadEventService(db, runService, logger)
