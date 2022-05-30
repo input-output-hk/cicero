@@ -21,11 +21,12 @@
 
   nixos-shell.mounts = {
     cache = "none";
-    extraMounts = {
-      "/mnt/spongix" = {
-        target = "${builtins.getEnv "PWD"}/.spongix";
-        cache = "none";
-      };
+    extraMounts = let
+      pwd = builtins.getEnv "PWD";
+    in {
+      ${pwd}.target = pwd;
+
+      "/mnt/spongix".target = "${pwd}/.spongix";
 
       # We are only interested in /etc/nix/netrc but
       # we can only mount directories, not single files.
