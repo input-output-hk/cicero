@@ -9,7 +9,13 @@
     self.inputs.spongix.nixosModules.spongix
     self.inputs.follower.nixosModules.nomad-follower
     ./dev.nix
+
+    # TODO use nixpkgs nomad module again once merged
+    # https://github.com/NixOS/nixpkgs/pull/147670
+    "${builtins.getFlake github:GTrunSec/nixpkgs/26ad08f8c4e718b3a5a5e7a35bfc1745c4245eb9}/nixos/modules/services/networking/nomad.nix"
   ];
+
+  disabledModules = [ "services/networking/nomad.nix" ];
 
   nix-driver-nomad.enable = false;
 
