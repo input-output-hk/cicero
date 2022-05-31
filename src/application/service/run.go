@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,17 +38,17 @@ type RunService interface {
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (LokiLog, error)
-	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error)
-	CPUMetrics(allocs map[string]AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
-	MemMetrics(allocs map[string]AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
-	GrafanaUrls(allocs map[string]AllocationWithLogs, end *time.Time) (map[string]*url.URL, error)
+	JobLog(id uuid.UUID, start time.Time, end *time.Time) (LokiLog, error)
+	RunLog(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error)
+	GetRunAllocationsWithLogs(domain.Run) ([]AllocationWithLogs, error)
+	CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
+	MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
+	GrafanaUrls(allocs []*nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
 }
 
 type AllocationWithLogs struct {
 	*nomad.Allocation
-	Logs map[string]LokiLog
-	Err  error
+	TaskLogs map[string]LokiLog
 }
 
 type runService struct {
@@ -55,15 +56,17 @@ type runService struct {
 	runRepository       repository.RunRepository
 	lokiService         LokiService
 	victoriaMetricsAddr string
+	nomadEventService   NomadEventService
 	nomadClient         application.NomadClient
 	db                  config.PgxIface
 }
 
-func NewRunService(db config.PgxIface, lokiService LokiService, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
+func NewRunService(db config.PgxIface, lokiService LokiService, nomadEventService NomadEventService, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
 	return &runService{
 		logger:              logger.With().Str("component", "RunService").Logger(),
 		runRepository:       persistence.NewRunRepository(db),
 		nomadClient:         nomadClient,
+		nomadEventService:   nomadEventService,
 		lokiService:         lokiService,
 		victoriaMetricsAddr: victoriaMetricsAddr,
 		db:                  db,
@@ -72,11 +75,12 @@ func NewRunService(db config.PgxIface, lokiService LokiService, victoriaMetricsA
 
 func (self runService) WithQuerier(querier config.PgxIface) RunService {
 	return &runService{
-		logger:        self.logger,
-		runRepository: self.runRepository.WithQuerier(querier),
-		lokiService:   self.lokiService,
-		nomadClient:   self.nomadClient,
-		db:            querier,
+		logger:            self.logger,
+		runRepository:     self.runRepository.WithQuerier(querier),
+		nomadEventService: self.nomadEventService.WithQuerier(querier),
+		lokiService:       self.lokiService,
+		nomadClient:       self.nomadClient,
+		db:                querier,
 	}
 }
 
@@ -170,24 +174,83 @@ func (self runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (LokiLog, error) {
+func (self runService) JobLog(nomadJobID uuid.UUID, start time.Time, end *time.Time) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
 		start, end, "source",
 	)
 }
 
-func (self runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error) {
+func (self runService) RunLog(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
 		start, end, "source",
 	)
 }
 
-func (self runService) GrafanaUrls(allocs map[string]AllocationWithLogs, to *time.Time) (map[string]*url.URL, error) {
+func (self runService) GetRunAllocationsWithLogs(run domain.Run) ([]AllocationWithLogs, error) {
+	allocs, err := self.nomadEventService.GetLatestEventAllocationByJobId(run.NomadJobID)
+	if err != nil {
+		return nil, err
+	}
+
+	allocsWithLog := make([]AllocationWithLogs, len(allocs))
+
+	type logsMsg struct {
+		idx      int
+		taskName string
+		log      LokiLog
+		err      error
+	}
+
+	logs := make(chan logsMsg)
+	var numMsgs uint
+
+	wg := &sync.WaitGroup{}
+
+	for i, alloc := range allocs {
+		alloc := alloc
+
+		allocsWithLog[i] = AllocationWithLogs{
+			Allocation: &alloc,
+			TaskLogs:   map[string]LokiLog{},
+		}
+
+		numMsgs += uint(len(alloc.TaskResources))
+		wg.Add(len(alloc.TaskResources))
+		for taskName := range alloc.TaskResources {
+			go func(i int, taskName string) {
+				defer wg.Done()
+				log, err := self.RunLog(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
+				logs <- logsMsg{
+					idx:      i,
+					taskName: taskName,
+					log:      log,
+					err:      err,
+				}
+			}(i, taskName)
+		}
+	}
+
+	for i := uint(0); i < numMsgs; i++ {
+		select {
+		case msg := <-logs:
+			if msg.err != nil {
+				return nil, err
+			}
+			allocsWithLog[msg.idx].TaskLogs[msg.taskName] = msg.log
+		}
+	}
+
+	wg.Wait()
+
+	return allocsWithLog, nil
+}
+
+func (self runService) GrafanaUrls(allocs []*nomad.Allocation, to *time.Time) (map[string]*url.URL, error) {
 	grafanaUrls := map[string]*url.URL{}
 
-	for allocName, alloc := range allocs {
+	for _, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000) // there's no UnixNano
 		if to == nil {
 			t := time.UnixMicro(alloc.ModifyTime / 1000)
@@ -205,12 +268,12 @@ func (self runService) GrafanaUrls(allocs map[string]AllocationWithLogs, to *tim
 		guQuery.Set("from", strconv.FormatInt(from.UnixMilli(), 10))
 		guQuery.Set("to", strconv.FormatInt(to.UnixMilli(), 10))
 		grafanaUrl.RawQuery = guQuery.Encode()
-		grafanaUrls[allocName] = grafanaUrl
+		grafanaUrls[alloc.ID] = grafanaUrl
 	}
 	return grafanaUrls, nil
 }
 
-func (self runService) metrics(allocs map[string]AllocationWithLogs, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
+func (self runService) metrics(allocs []*nomad.Allocation, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
 	vmUrl, err := url.Parse(self.victoriaMetricsAddr + "/api/v1/query_range")
 	if err != nil {
 		return nil, err
@@ -218,7 +281,7 @@ func (self runService) metrics(allocs map[string]AllocationWithLogs, to *time.Ti
 	query := vmUrl.Query()
 
 	metrics := map[string][]*VMMetric{}
-	for allocName, alloc := range allocs {
+	for _, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000)
 		if to == nil {
 			t := time.UnixMicro(alloc.ModifyTime / 1000)
@@ -266,14 +329,14 @@ func (self runService) metrics(allocs map[string]AllocationWithLogs, to *time.Ti
 				}
 
 				vm := &VMMetric{Time: t, Size: f, Label: labelFunc(f)}
-				metrics[allocName] = append(metrics[allocName], vm)
+				metrics[alloc.ID] = append(metrics[alloc.ID], vm)
 			}
 		}
 
-		for i, vm := range metrics[allocName] {
+		for i, vm := range metrics[alloc.ID] {
 			vm.Size = ((100 / max) * vm.Size) / 100
 			if i > 0 {
-				vm.Start = metrics[allocName][i-1].Size
+				vm.Start = metrics[alloc.ID][i-1].Size
 			} else {
 				vm.Start = vm.Size
 			}
@@ -283,7 +346,7 @@ func (self runService) metrics(allocs map[string]AllocationWithLogs, to *time.Ti
 	return metrics, nil
 }
 
-func (self runService) CPUMetrics(allocs map[string]AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
 		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
 	})
@@ -296,7 +359,7 @@ const (
 	tib = gib * 1024
 )
 
-func (self runService) MemMetrics(allocs map[string]AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
 		switch {
 		case f >= tib:

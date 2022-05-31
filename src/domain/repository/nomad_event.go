@@ -2,6 +2,7 @@ package repository
 
 import (
 	"github.com/google/uuid"
+	nomad "github.com/hashicorp/nomad/api"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -14,5 +15,6 @@ type NomadEventRepository interface {
 	Update(*domain.NomadEvent) error
 	GetByHandled(bool) ([]*domain.NomadEvent, error)
 	GetLastNomadEventIndex() (uint64, error)
-	GetEventAllocByNomadJobId(uuid.UUID) ([]map[string]interface{}, error)
+	GetEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
+	GetLatestEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
 }

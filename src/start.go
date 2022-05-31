@@ -101,17 +101,16 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	invocationService := new(service.InvocationService)
 	actionService := new(service.ActionService)
 	factService := new(service.FactService)
-	nomadEventService := new(service.NomadEventService)
 
 	// These don't cyclically depend on other services so we don't need to put them behind a pointer.
-	lokiService := service.NewLokiService(prometheusClient)
-	runService := service.NewRunService(db, lokiService, cmd.VictoriaMetricsAddr, nomadClientWrapper, logger)
+	lokiService := service.NewLokiService(prometheusClient, logger)
+	nomadEventService := service.NewNomadEventService(db, logger)
+	runService := service.NewRunService(db, lokiService, nomadEventService, cmd.VictoriaMetricsAddr, nomadClientWrapper, logger)
 	evaluationService := service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, promtailClient.Chan(), logger)
 
 	*invocationService = service.NewInvocationService(db, lokiService, actionService, factService, logger)
 	*actionService = service.NewActionService(db, nomadClientWrapper, invocationService, runService, evaluationService, logger)
 	*factService = service.NewFactService(db, actionService, logger)
-	*nomadEventService = service.NewNomadEventService(db, runService, logger)
 
 	supervisor := cmd.newSupervisor(logger)
 
@@ -119,7 +118,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		child := component.NomadEventConsumer{
 			Logger:            logger.With().Str("component", "NomadEventConsumer").Logger(),
 			RunService:        runService,
-			NomadEventService: *nomadEventService,
+			NomadEventService: nomadEventService,
 			FactService:       *factService,
 			InvocationService: *invocationService,
 			NomadClient:       nomadClientWrapper,
@@ -138,7 +137,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 			RunService:        runService,
 			ActionService:     *actionService,
 			FactService:       *factService,
-			NomadEventService: *nomadEventService,
+			NomadEventService: nomadEventService,
 			EvaluationService: evaluationService,
 			Db:                db,
 		}

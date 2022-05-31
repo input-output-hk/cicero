@@ -14,6 +14,7 @@ import (
 	"github.com/pborman/ansi"
 	"github.com/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/api"
+	"github.com/rs/zerolog"
 )
 
 type LokiService interface {
@@ -30,11 +31,15 @@ type LokiLine struct {
 }
 
 type lokiService struct {
+	logger zerolog.Logger
 	prometheus prometheus.Client
 }
 
-func NewLokiService(prometheusClient prometheus.Client) LokiService {
-	return &lokiService{prometheusClient}
+func NewLokiService(prometheusClient prometheus.Client, logger *zerolog.Logger) LokiService {
+	return &lokiService{
+		logger: logger.With().Str("component", "LokiService").Logger(),
+		prometheus: prometheusClient,
+	}
 }
 
 func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.Time, fdLabel string) (LokiLog, error) {
@@ -59,6 +64,7 @@ func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.T
 }
 
 func (self lokiService) QueryRange(query string, start time.Time, end *time.Time, callback func(loghttp.Stream) (bool, error)) error {
+	const timeout time.Duration = 2 * time.Second
 	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
 	const limit int64 = 5000
 
@@ -70,8 +76,10 @@ func (self lokiService) QueryRange(query string, start time.Time, end *time.Time
 	endLater := end.Add(1 * time.Minute)
 	end = &endLater
 
-done:
+Page:
 	for {
+		self.logger.Trace().Str("query", query).Stringer("start", start).Stringer("end", end).Msg("Fetching from query_range endpoint")
+
 		req, err := http.NewRequest(
 			"GET",
 			self.prometheus.URL("/loki/api/v1/query_range", nil).String(),
@@ -89,7 +97,9 @@ done:
 		q.Set("direction", "FORWARD")
 		req.URL.RawQuery = q.Encode()
 
-		done, body, err := self.prometheus.Do(context.Background(), req)
+		ctxTimeout, ctxTimeoutCancel := context.WithTimeout(context.Background(), timeout)
+		done, body, err := self.prometheus.Do(ctxTimeout, req)
+		ctxTimeoutCancel()
 		if err != nil {
 			return errors.WithMessage(err, "Failed to talk with loki")
 		}
@@ -111,7 +121,7 @@ done:
 		}
 
 		if len(streams) == 0 {
-			break done
+			break Page
 		}
 
 		var numEntries int64 
@@ -119,7 +129,7 @@ done:
 			if stop, err := callback(stream); err != nil {
 				return err
 			} else if stop {
-				break done
+				break Page
 			}
 
 			numEntries += int64(len(stream.Entries))
@@ -130,7 +140,7 @@ done:
 			}
 		}
 		if numEntries < limit {
-			break done
+			break Page
 		}
 	}
 
@@ -163,7 +173,7 @@ func (self *LokiLog) Sort() {
 	})
 }
 
-// Removes duplicates as considered by `LokiLine.Equal()`.
+// Removes consecutive duplicates as considered by `LokiLine.Equal()`.
 // Assumes the log is already sorted.
 func (self *LokiLog) Deduplicate() {
 	deduped := make(LokiLog, 0, len(*self))

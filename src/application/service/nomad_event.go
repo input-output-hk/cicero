@@ -1,9 +1,6 @@
 package service
 
 import (
-	"encoding/json"
-	"sync"
-
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/pkg/errors"
@@ -22,20 +19,19 @@ type NomadEventService interface {
 	Update(*domain.NomadEvent) error
 	GetByHandled(bool) ([]*domain.NomadEvent, error)
 	GetLastNomadEventIndex() (uint64, error)
-	GetEventAllocByNomadJobId(id uuid.UUID) (map[string]AllocationWithLogs, error)
+	GetEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
+	GetLatestEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
 }
 
 type nomadEventService struct {
 	logger               zerolog.Logger
 	nomadEventRepository repository.NomadEventRepository
-	runService           RunService
 }
 
-func NewNomadEventService(db config.PgxIface, runService RunService, logger *zerolog.Logger) NomadEventService {
+func NewNomadEventService(db config.PgxIface, logger *zerolog.Logger) NomadEventService {
 	return &nomadEventService{
 		logger:               logger.With().Str("component", "NomadEventService").Logger(),
 		nomadEventRepository: persistence.NewNomadEventRepository(db),
-		runService:           runService,
 	}
 }
 
@@ -43,7 +39,6 @@ func (n nomadEventService) WithQuerier(querier config.PgxIface) NomadEventServic
 	return &nomadEventService{
 		logger:               n.logger,
 		nomadEventRepository: n.nomadEventRepository.WithQuerier(querier),
-		runService:           n.runService.WithQuerier(querier),
 	}
 }
 
@@ -82,69 +77,22 @@ func (n nomadEventService) GetLastNomadEventIndex() (uint64, error) {
 	return n.nomadEventRepository.GetLastNomadEventIndex()
 }
 
-func (n nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]AllocationWithLogs, error) {
-	n.logger.Trace().Str("nomad-job-id", nomadJobId.String()).Msg("Getting EventAlloc by nomad job id")
-
-	allocs := map[string]AllocationWithLogs{}
-	results, err := n.nomadEventRepository.GetEventAllocByNomadJobId(nomadJobId)
+func (n nomadEventService) GetEventAllocationByJobId(jobId uuid.UUID) (results []nomad.Allocation, err error) {
+	n.logger.Trace().Stringer("job-id", jobId).Msg("Get AllocationUpdated event's Allocation by job ID")
+	results, err = n.nomadEventRepository.GetEventAllocationByJobId(jobId)
 	if err != nil {
-		return nil, err
+		return
 	}
+	n.logger.Trace().Stringer("job-id", jobId).Msg("Got AllocationUpdated event's Allocation by job ID")
+	return
+}
 
-	run, err := n.runService.GetByNomadJobId(nomadJobId)
+func (n nomadEventService) GetLatestEventAllocationByJobId(jobId uuid.UUID) (results []nomad.Allocation, err error) {
+	n.logger.Trace().Stringer("job-id", jobId).Msg("Get latest AllocationUpdated event's Allocation by job ID")
+	results, err = n.nomadEventRepository.GetLatestEventAllocationByJobId(jobId)
 	if err != nil {
-		return nil, err
+		return
 	}
-
-	wg := &sync.WaitGroup{}
-	res := make(chan AllocationWithLogs, len(results))
-
-	for _, result := range results {
-		wg.Add(1)
-		go func(result map[string]interface{}) {
-			defer wg.Done()
-			alloc := &nomad.Allocation{}
-			err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
-			if err != nil {
-				res <- AllocationWithLogs{Err: err}
-				return
-			}
-
-			logs := map[string]LokiLog{}
-
-			for taskName := range alloc.TaskResources {
-				// XXX this is called unnecessarily multiple times. only call for the alloc event chosen after wg.Wait()
-				taskLogs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
-				if err != nil {
-					res <- AllocationWithLogs{Err: err}
-					return
-				}
-				logs[taskName] = taskLogs
-			}
-
-			res <- AllocationWithLogs{Allocation: alloc, Logs: logs}
-		}(result)
-	}
-
-	wg.Wait()
-
-	for i := 0; i < len(results); i++ {
-		select {
-		case result := <-res:
-			if result.Err != nil {
-				return nil, err
-			}
-			if a, found := allocs[result.ID]; found {
-				if a.ModifyIndex < result.ModifyIndex {
-					allocs[result.ID] = result
-				}
-			} else {
-				allocs[result.ID] = result
-			}
-		default:
-		}
-	}
-
-	n.logger.Trace().Str("nomad-job-id", nomadJobId.String()).Msg("Got EventAlloc by nomad job id")
-	return allocs, nil
+	n.logger.Trace().Stringer("job-id", jobId).Msg("Got latest AllocationUpdated event's Allocation by job ID")
+	return
 }

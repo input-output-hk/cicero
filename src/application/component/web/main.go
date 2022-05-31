@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"time"
 
@@ -14,6 +13,7 @@ import (
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -177,12 +177,12 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	if _, err := r.AddRoute(http.MethodGet,
-		"/api/run/{id}/logs",
-		self.ApiRunIdLogsGet,
+		"/api/run/{id}/log",
+		self.ApiRunIdLogGet,
 		apidoc.BuildSwaggerDef(
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]service.LokiLog{"logs": {}}, "OK")),
+			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -588,20 +588,17 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	allocs, err := self.NomadEventService.GetEventAllocByNomadJobId(id)
+	allocsWithLogs, err := self.RunService.GetRunAllocationsWithLogs(run)
 	if err != nil {
-		self.NotFound(w, errors.WithMessagef(err, "Failed to find allocs for Nomad job %q", id))
+		self.NotFound(w, err)
 		return
 	}
 
-	allocsByGroup := map[string][]service.AllocationWithLogs{}
-	for _, alloc := range allocs {
-		allocsByGroup[alloc.TaskGroup] = append(allocsByGroup[alloc.TaskGroup], alloc)
-	}
-	for _, allocs := range allocsByGroup {
-		sort.Slice(allocs, func(i, j int) bool {
-			return allocs[i].CreateTime > allocs[j].CreateTime
-		})
+	allocs := []*nomad.Allocation{}
+	allocsWithLogsByGroup := map[string][]service.AllocationWithLogs{}
+	for _, alloc := range allocsWithLogs {
+		allocs = append(allocs, alloc.Allocation)
+		allocsWithLogsByGroup[alloc.TaskGroup] = append(allocsWithLogsByGroup[alloc.TaskGroup], alloc)
 	}
 
 	var inputs map[string]domain.Fact
@@ -648,15 +645,16 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run": struct {
 			domain.Run
+			// XXX why not just embed the entire Action?
 			ActionId   uuid.UUID
 			ActionName string
 		}{run, invocation.ActionId, action.Name},
-		"inputs":      inputs,
-		"output":      output,
-		"facts":       facts,
-		"allocs":      allocsByGroup,
-		"metrics":     service.GroupMetrics(cpuMetrics, memMetrics),
-		"grafanaUrls": grafanaUrls,
+		"inputs":                inputs,
+		"output":                output,
+		"facts":                 facts,
+		"allocsWithLogsByGroup": allocsWithLogsByGroup,
+		"metrics":               service.GroupMetrics(cpuMetrics, memMetrics),
+		"grafanaUrls":           grafanaUrls,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -1074,7 +1072,7 @@ func (self *Web) ApiActionIdPatch(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
@@ -1085,10 +1083,10 @@ func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		if logs, err := self.RunService.JobLogs(id, run.CreatedAt, run.FinishedAt); err != nil {
+		if log, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt); err != nil {
 			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 		} else {
-			self.json(w, map[string]service.LokiLog{"logs": logs}, http.StatusOK)
+			self.json(w, log, http.StatusOK)
 		}
 	}
 }
