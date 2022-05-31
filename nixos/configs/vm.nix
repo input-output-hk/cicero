@@ -224,6 +224,8 @@
 
         VAULT_ADDR = "http://${VAULT_DEV_LISTEN_ADDRESS}";
         VAULT_TOKEN = VAULT_DEV_ROOT_TOKEN_ID;
+
+        REGISTRY_AUTH_FILE = "${builtins.getEnv "HOME"}/.docker/config.json";
       };
 
       serviceConfig = {
