@@ -383,12 +383,7 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 		entries := make([]entry, len(invocations))
 
 		{
-			type runChanMsg struct {
-				idx int
-				run *domain.Run
-				err error
-			}
-			runChan := make(chan runChanMsg)
+			errChan := make(chan error, len(invocations))
 
 			wg := &sync.WaitGroup{}
 
@@ -401,26 +396,25 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 
 					var runPtr *domain.Run
 					run, err := self.RunService.GetByInvocationId(id)
-					if pgxscan.NotFound(err) {
-						err = nil
+					if err != nil && !pgxscan.NotFound(err) {
+						errChan <- err
+						return
 					} else {
 						runPtr = &run
 					}
 
-					runChan <- runChanMsg{i, runPtr, err}
+					entries[i].Run = runPtr
 				}(i, invocation.Id)
 			}
 
-			for i := 0; i < len(invocations); i++ {
-				msg := <-runChan
-				if msg.err != nil {
-					self.ServerError(w, err)
-					return
-				}
-				entries[msg.idx].Run = msg.run
-			}
-
 			wg.Wait()
+
+			select {
+			case err := <-errChan:
+				self.ServerError(w, err)
+				return
+			default:
+			}
 		}
 
 		if err := render("action/runs.html", w, struct {
