@@ -720,19 +720,7 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 		entries := make([]entry, len(invocations))
 
 		{
-			type actionChanMsg struct {
-				idx    int
-				action *domain.Action
-				err    error
-			}
-			actionChan := make(chan actionChanMsg)
-
-			type runChanMsg struct {
-				idx int
-				run *domain.Run
-				err error
-			}
-			runChan := make(chan runChanMsg)
+			errChan := make(chan error, len(invocations)*2)
 
 			wg := &sync.WaitGroup{}
 
@@ -742,41 +730,31 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 
 				go func(i int, id uuid.UUID) {
 					defer wg.Done()
-					action, err := self.ActionService.GetByInvocationId(id)
-					actionChan <- actionChanMsg{i, &action, err}
+					if action, err := self.ActionService.GetByInvocationId(id); err != nil {
+						errChan <- err
+					} else {
+						entries[i].Action = &action
+					}
 				}(i, invocation.Id)
 
 				go func(i int, id uuid.UUID) {
 					defer wg.Done()
-					var runPtr *domain.Run
-					run, err := self.RunService.GetByInvocationId(id)
-					if pgxscan.NotFound(err) {
-						err = nil
-					} else {
-						runPtr = &run
+					if run, err := self.RunService.GetByInvocationId(id); err != nil && !pgxscan.NotFound(err) {
+						errChan <- err
+					} else if err == nil {
+						entries[i].Run = &run
 					}
-					runChan <- runChanMsg{i, runPtr, err}
 				}(i, invocation.Id)
 			}
 
-			for i := 0; i < len(invocations)*2; i++ {
-				select {
-				case msg := <-runChan:
-					if msg.err != nil {
-						self.ServerError(w, err)
-						return
-					}
-					entries[msg.idx].Run = msg.run
-				case msg := <-actionChan:
-					if msg.err != nil {
-						self.ServerError(w, err)
-						return
-					}
-					entries[msg.idx].Action = msg.action
-				}
-			}
-
 			wg.Wait()
+
+			select {
+			case err := <-errChan:
+				self.ServerError(w, err)
+				return
+			default:
+			}
 		}
 
 		if err := render("run/index.html", w, struct {
