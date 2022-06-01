@@ -645,10 +645,8 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run": struct {
 			domain.Run
-			// XXX why not just embed the entire Action?
-			ActionId   uuid.UUID
-			ActionName string
-		}{run, invocation.ActionId, action.Name},
+			Action domain.Action
+		}{run, action},
 		"inputs":                inputs,
 		"output":                output,
 		"facts":                 facts,
