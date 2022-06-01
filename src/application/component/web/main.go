@@ -374,12 +374,12 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Invocations by Action ID: %q", id))
 		return
 	} else {
-		type Entry struct {
+		type entry struct {
 			Invocation *domain.Invocation
 			Run        *domain.Run
 		}
 
-		entries := make([]Entry, len(invocations))
+		entries := make([]entry, len(invocations))
 		// XXX parallelize
 		for i, invocation := range invocations {
 			if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil && !pgxscan.NotFound(err) {
@@ -391,12 +391,12 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 					runPtr = &run
 				}
 
-				entries[i] = Entry{invocation, runPtr}
+				entries[i] = entry{invocation, runPtr}
 			}
 		}
 
 		if err := render("action/runs.html", w, struct {
-			Entries []Entry
+			Entries []entry
 			*repository.Page
 		}{entries, page}); err != nil {
 			self.ServerError(w, err)
@@ -689,13 +689,13 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, err)
 		return
 	} else {
-		type Entry struct {
+		type entry struct {
 			Run        *domain.Run
 			Invocation *domain.Invocation
 			Action     *domain.Action
 		}
 
-		entries := make([]Entry, len(invocations))
+		entries := make([]entry, len(invocations))
 		// XXX parallelize
 		for i, invocation := range invocations {
 			if action, err := self.ActionService.GetByInvocationId(invocation.Id); err != nil {
@@ -710,12 +710,12 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 					runPtr = &run
 				}
 
-				entries[i] = Entry{runPtr, invocation, &action}
+				entries[i] = entry{runPtr, invocation, &action}
 			}
 		}
 
 		if err := render("run/index.html", w, struct {
-			Entries []Entry
+			Entries []entry
 			*repository.Page
 		}{entries, page}); err != nil {
 			self.ServerError(w, err)
