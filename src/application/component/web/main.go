@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/davidebianchi/gswagger/apirouter"
@@ -696,22 +697,65 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 		}
 
 		entries := make([]entry, len(invocations))
-		// XXX parallelize
-		for i, invocation := range invocations {
-			if action, err := self.ActionService.GetByInvocationId(invocation.Id); err != nil {
-				self.ServerError(w, err)
-				return
-			} else if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil && !pgxscan.NotFound(err) {
-				self.ServerError(w, err)
-				return
-			} else {
-				var runPtr *domain.Run
-				if err == nil {
-					runPtr = &run
-				}
 
-				entries[i] = entry{runPtr, invocation, &action}
+		{
+			type actionChanMsg struct {
+				idx int
+				action *domain.Action
+				err error
 			}
+			actionChan := make(chan actionChanMsg)
+
+			type runChanMsg struct {
+				idx int
+				run *domain.Run
+				err error
+			}
+			runChan := make(chan runChanMsg)
+
+			wg := &sync.WaitGroup{}
+
+			wg.Add(len(invocations) * 2)
+			for i, invocation := range invocations {
+				entries[i].Invocation = invocation
+
+				go func(i int, id uuid.UUID) {
+					defer wg.Done()
+					action, err := self.ActionService.GetByInvocationId(id)
+					actionChan <- actionChanMsg{i, &action, err}
+				}(i, invocation.Id)
+
+				go func(i int, id uuid.UUID) {
+					defer wg.Done()
+					var runPtr *domain.Run
+					run, err := self.RunService.GetByInvocationId(id)
+					if pgxscan.NotFound(err) {
+						err = nil
+					} else {
+						runPtr = &run
+					}
+					runChan<- runChanMsg{i, runPtr, err}
+				}(i, invocation.Id)
+			}
+
+			for i := 0; i < len(invocations) * 2; i++ {
+				select {
+					case msg := <-runChan:
+						if msg.err != nil {
+							self.ServerError(w, err)
+							return
+						}
+						entries[msg.idx].Run = msg.run
+					case msg := <-actionChan:
+						if msg.err != nil {
+							self.ServerError(w, err)
+							return
+						}
+						entries[msg.idx].Action = msg.action
+				}
+			}
+
+			wg.Wait()
 		}
 
 		if err := render("run/index.html", w, struct {
