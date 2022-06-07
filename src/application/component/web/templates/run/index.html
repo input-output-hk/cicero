@@ -28,8 +28,8 @@
 					{{with .Run}}
 						<td>{{.CreatedAt}}</td>
 						<td>
-							{{if .FinishedAt}}
-								{{.FinishedAt}}
+							{{with .FinishedAt}}
+								{{.}}
 							{{else}}
 								<form
 									method="POST"
@@ -57,7 +57,11 @@
 							<td>{{.CreatedAt}}</td>
 							<td colspan="4">
 								<a href="/invocation/{{.Id}}">Invocation</a>
-								failed
+								{{if .FinishedAt}}
+									failed
+								{{else}}
+									running…
+								{{end}}
 								<!-- XXX show last line of invocation log output here? -->
 							</td>
 						{{end}}

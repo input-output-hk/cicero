@@ -94,18 +94,38 @@ func (self factService) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadSe
 }
 
 func (self factService) Save(fact *domain.Fact, binary io.Reader) error {
-	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	var runFunc func(config.PgxIface) (InvokeRegisterFunc, error)
+
+	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx).(*factService)
+
 		self.logger.Trace().Msg("Saving new Fact")
-		if err := self.factRepository.WithQuerier(tx).Save(fact, binary); err != nil {
+		if err := txSelf.factRepository.Save(fact, binary); err != nil {
 			return errors.WithMessagef(err, "Could not insert Fact")
 		}
 		self.logger.Trace().Str("id", fact.ID.String()).Msg("Created Fact")
 
-		if _, err := (*self.actionService).WithQuerier(tx).InvokeCurrentActive(); err != nil {
+		if runFunc_, err := (*txSelf.actionService).InvokeCurrentActive(); err != nil {
 			return errors.WithMessagef(err, "Could not invoke currently active Actions")
+		} else {
+			runFunc = runFunc_
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	if runFunc != nil {
+		if registerFunc, err := runFunc(self.db); err != nil {
+			return err
+		} else if registerFunc != nil {
+			if err := registerFunc(); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (self factService) GetLatestByCue(value cue.Value) (fact domain.Fact, err error) {

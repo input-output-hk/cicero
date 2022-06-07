@@ -48,9 +48,10 @@ type OutputDefinition struct {
 }
 
 type Invocation struct {
-	Id         uuid.UUID `json:"id"`
-	ActionId   uuid.UUID `json:"action_id"`
-	CreatedAt  time.Time `json:"created_at"`
+	Id         uuid.UUID  `json:"id"`
+	ActionId   uuid.UUID  `json:"action_id"`
+	CreatedAt  time.Time  `json:"created_at"`
+	FinishedAt *time.Time `json:"finished_at"`
 }
 
 type Run struct {

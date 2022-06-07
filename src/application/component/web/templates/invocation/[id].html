@@ -28,11 +28,23 @@
 						<th>Created at</th>
 						<td>{{.CreatedAt}}</td>
 					</tr>
-					{{with $.Run}}
+					{{if .FinishedAt}}
 						<tr>
-							<th>Duration</th>
-							<td>{{.CreatedAt.Sub $.Invocation.CreatedAt}}</td>
+							<th>Finished at</th>
+							<td>{{.FinishedAt}}</td>
 						</tr>
+					{{end}}
+					<tr>
+						<th>Duration</th>
+						<td>
+							{{if .FinishedAt}}
+								{{.FinishedAt.Sub .CreatedAt}}
+							{{else}}
+								{{timeNow.Sub .CreatedAt}}
+							{{end}}
+						</td>
+					</tr>
+					{{with $.Run}}
 						<tr>
 							<th>Run</th>
 							<td>
@@ -44,7 +56,14 @@
 					{{else}}
 						<tr>
 							<td colspan="2" style="text-align: center">
-								<em>Invocation failed</em>
+								<em>
+									Invocation
+									{{if .FinishedAt}}
+										failed
+									{{else}}
+										running…
+									{{end}}
+								</em>
 							</td>
 						</tr>
 					{{end}}

@@ -38,9 +38,12 @@ type ActionService interface {
 	IsRunnable(*domain.Action) (bool, map[string]*domain.Fact, error)
 	Create(string, string) (*domain.Action, error)
 	// Returns a nil pointer for the first return value if the Action was not runnable.
-	Invoke(*domain.Action) (*domain.Run, func() error, error)
-	InvokeCurrentActive() ([]EvaluationError, error)
+	Invoke(*domain.Action) (*domain.Invocation, InvokeRunFunc, error)
+	InvokeCurrentActive() (func(config.PgxIface) (InvokeRegisterFunc, error), error)
 }
+
+type InvokeRunFunc func(config.PgxIface) (*domain.Run, InvokeRegisterFunc, error)
+type InvokeRegisterFunc func() error
 
 type ActionServiceCyclicDependencies struct {
 	invocationService *InvocationService
@@ -248,14 +251,14 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 		}
 	}
 
-	// Not runnable if the inputs are the same as last run.
-	if run, err := self.runService.GetLatestByActionId(action.ID); err != nil {
+	// Not runnable if the inputs are the same as last invocation.
+	if invocation, err := (*self.invocationService).GetLatestByActionId(action.ID); err != nil {
 		if !pgxscan.NotFound(err) {
 			return false, nil, err
 		}
 	} else {
 		var inputFactIds map[string]uuid.UUID
-		if inputFactIds, err = (*self.invocationService).GetInputFactIdsById(run.InvocationId); err != nil {
+		if inputFactIds, err = (*self.invocationService).GetInputFactIdsById(invocation.Id); err != nil {
 			if !pgxscan.NotFound(err) {
 				return false, nil, err
 			}
@@ -311,7 +314,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 					break InputFactsChanged
 				}
 			case oldFactId == nil:
-				// A previous Run would not have been started
+				// A previous Invocation would not have been done
 				// if a non-optional input was not satisfied.
 				// We are not looking at a negated input here
 				// because those are never passed into the evaluation.
@@ -330,7 +333,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 
 			logger.Debug().
 				Str("input", name).
-				Msg("input satisfied by same Fact(s) as last Run")
+				Msg("input satisfied by same Fact(s) as last Invocation")
 		}
 
 		if !inputFactsChanged {
@@ -394,7 +397,7 @@ func (self actionService) Create(source, name string) (*domain.Action, error) {
 	}
 
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		txSelf := self.WithQuerier(tx)
+		txSelf := self.WithQuerier(tx).(*actionService)
 
 		// deactivate previous version for convenience
 		if prev, err := txSelf.GetLatestByName(action.Name); err != nil && !pgxscan.NotFound(err) {
@@ -414,136 +417,168 @@ func (self actionService) Create(source, name string) (*domain.Action, error) {
 	return &action, nil
 }
 
-func (self actionService) Invoke(action *domain.Action) (*domain.Run, func() error, error) {
-	var run *domain.Run
-	var registerFunc func() error
-	var evalErr *EvaluationError
+func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, InvokeRunFunc, error) {
+	var invocation *domain.Invocation
+	var inputs map[string]*domain.Fact
+	var runnable bool
 
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		txSelf := self.WithQuerier(tx)
+		txSelf := self.WithQuerier(tx).(*actionService)
 
-		runnable, inputs, err := txSelf.IsRunnable(action)
-		if err != nil || !runnable {
+		if runnable_, inputs_, err := txSelf.IsRunnable(action); err != nil {
 			return err
+		} else {
+			runnable = runnable_
+			inputs = inputs_
 		}
 
-		invocation := domain.Invocation{ActionId: action.ID}
-
-		if err := (*self.invocationService).WithQuerier(tx).Save(&invocation, inputs); err != nil {
-			return err
-		}
-
-		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, invocation.Id, inputs)
-		if err != nil {
-			if errors.As(err, &evalErr) {
-				// Do not return the evalErr so that the transaction commits
-				// and the invocation is not lost.
-				return nil
-			}
-			return err
-		}
-
-		tmpRun := domain.Run{
-			InvocationId: invocation.Id,
-			Status:       domain.RunStatusRunning,
-		}
-
-		if err := self.runService.WithQuerier(tx).Save(&tmpRun); err != nil {
-			return errors.WithMessage(err, "Could not insert Run")
-		}
-
-		if job == nil { // An action that has no job is called a decision.
-			if success := action.InOut.Output(inputs).Success; success.Exists() {
-				fact := domain.Fact{
-					RunId: &tmpRun.NomadJobID,
-					Value: success,
-				}
-				if err := self.factRepository.WithQuerier(tx).Save(&fact, nil); err != nil {
-					return errors.WithMessage(err, "Could not publish fact")
-				}
-			}
-
-			tmpRun.CreatedAt = tmpRun.CreatedAt.UTC()
-			tmpRun.FinishedAt = &tmpRun.CreatedAt
-			tmpRun.Status = domain.RunStatusSucceeded
-
-			err := self.runService.WithQuerier(tx).Update(&tmpRun)
-			err = errors.WithMessage(err, "Could not update decision Run")
-
-			run = &tmpRun
-			return err
-		}
-
-		runId := tmpRun.NomadJobID.String()
-		job.ID = &runId
-
-		run = &tmpRun
-		registerFunc = func() error {
-			if response, _, err := self.nomadClient.JobsRegister(job, &nomad.WriteOptions{}); err != nil {
-				return errors.WithMessage(err, "Failed to run Action")
-			} else if len(response.Warnings) > 0 {
-				self.logger.Warn().
-					Str("nomad-job", runId).
-					Str("nomad-evaluation", response.EvalID).
-					Str("warnings", response.Warnings).
-					Msg("Warnings occured registering Nomad job")
-			}
+		if !runnable {
 			return nil
+		}
+
+		invocation = &domain.Invocation{ActionId: action.ID}
+		if err := (*txSelf.invocationService).Save(invocation, inputs); err != nil {
+			return err
 		}
 
 		return nil
 	}); err != nil {
-		return run, registerFunc, err
+		return invocation, nil, err
 	}
 
-	if evalErr != nil {
-		return run, registerFunc, evalErr
+	if !runnable {
+		return nil, nil, nil
 	}
-	return run, registerFunc, nil
-}
 
-func (self actionService) InvokeCurrentActive() ([]EvaluationError, error) {
-	evalErrs := []EvaluationError{}
-	return evalErrs, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		registerFuncs := []func() error{}
-
-		txSelf := self.WithQuerier(tx)
-
-		actions, err := txSelf.GetCurrentActive()
+	return invocation, func(db config.PgxIface) (*domain.Run, InvokeRegisterFunc, error) {
+		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, invocation.Id, inputs)
 		if err != nil {
-			return err
+			var evalErr *EvaluationError
+			if errors.As(err, &evalErr) {
+				if err := (*self.invocationService).WithQuerier(db).End(invocation.Id); err != nil {
+					return nil, nil, err
+				}
+				return nil, nil, nil
+			}
+			return nil, nil, err
 		}
 
-		for {
-			anyRunnable := false
+		var run *domain.Run
+		var registerFunc InvokeRegisterFunc
 
-			for _, action := range actions {
-				if job, registerFunc, err := txSelf.Invoke(action); err != nil {
-					var evalErr *EvaluationError
-					if errors.As(err, &evalErr) {
-						evalErrs = append(evalErrs, *evalErr)
-					} else {
+		return run, registerFunc, db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			txSelf := self.WithQuerier(tx).(*actionService)
+
+			if err := (*txSelf.invocationService).End(invocation.Id); err != nil {
+				return err
+			}
+
+			tmpRun := domain.Run{
+				InvocationId: invocation.Id,
+				Status:       domain.RunStatusRunning,
+			}
+
+			if err := txSelf.runService.Save(&tmpRun); err != nil {
+				return errors.WithMessage(err, "Could not insert Run")
+			}
+
+			if job == nil { // An action that has no job is called a decision.
+				if success := action.InOut.Output(inputs).Success; success.Exists() {
+					fact := domain.Fact{
+						RunId: &tmpRun.NomadJobID,
+						Value: success,
+					}
+					if err := txSelf.factRepository.Save(&fact, nil); err != nil {
+						return errors.WithMessage(err, "Could not publish fact")
+					}
+					if runFunc, err := txSelf.InvokeCurrentActive(); err != nil {
+						return err
+					} else if registerFunc, err = runFunc(tx); err != nil {
 						return err
 					}
-				} else {
-					anyRunnable = anyRunnable || job != nil
-					if registerFunc != nil {
-						registerFuncs = append(registerFuncs, registerFunc)
-					}
+				}
+
+				tmpRun.CreatedAt = tmpRun.CreatedAt.UTC()
+				tmpRun.FinishedAt = &tmpRun.CreatedAt
+				tmpRun.Status = domain.RunStatusSucceeded
+
+				err := txSelf.runService.Update(&tmpRun)
+				err = errors.WithMessage(err, "Could not update decision Run")
+
+				run = &tmpRun
+				return err
+			}
+
+			runId := tmpRun.NomadJobID.String()
+			job.ID = &runId
+
+			run = &tmpRun
+			registerFunc = func() error {
+				if response, _, err := self.nomadClient.JobsRegister(job, &nomad.WriteOptions{}); err != nil {
+					return errors.WithMessage(err, "Failed to run Action")
+				} else if len(response.Warnings) > 0 {
+					self.logger.Warn().
+						Str("nomad-job", runId).
+						Str("nomad-evaluation", response.EvalID).
+						Str("warnings", response.Warnings).
+						Msg("Warnings occured registering Nomad job")
+				}
+				return nil
+			}
+
+			return nil
+		})
+	}, nil
+}
+
+func (self actionService) InvokeCurrentActive() (func(config.PgxIface) (InvokeRegisterFunc, error), error) {
+	runFuncs := []InvokeRunFunc{}
+	return func(db config.PgxIface) (InvokeRegisterFunc, error) {
+			registerFuncs := []InvokeRegisterFunc{}
+
+			for _, runFunc := range runFuncs {
+				if _, registerFunc, err := runFunc(db); err != nil {
+					return nil, err
+				} else if registerFunc != nil {
+					registerFuncs = append(registerFuncs, registerFunc)
 				}
 			}
 
-			if !anyRunnable {
-				break
-			}
-		}
+			return func() error {
+				for _, registerFunc := range registerFuncs {
+					if err := registerFunc(); err != nil {
+						return err
+					}
+				}
+				return nil
+			}, nil
+		}, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			txSelf := self.WithQuerier(tx).(*actionService)
 
-		for _, registerFunc := range registerFuncs {
-			if err := registerFunc(); err != nil {
+			actions, err := txSelf.GetCurrentActive()
+			if err != nil {
 				return err
 			}
-		}
 
-		return nil
-	})
+			for {
+				anyRunnable := false
+
+				for _, action := range actions {
+					if invocation, runFunc, err := txSelf.Invoke(action); err != nil {
+						return err
+					} else {
+						anyRunnable = anyRunnable || invocation != nil
+						if runFunc != nil {
+							runFuncs = append(runFuncs, runFunc)
+						}
+					}
+				}
+
+				if !anyRunnable {
+					break
+				}
+			}
+
+			return nil
+		})
 }

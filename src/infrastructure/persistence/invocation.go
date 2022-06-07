@@ -192,3 +192,12 @@ func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map
 
 	return nil
 }
+
+func (self *invocationRepository) End(id uuid.UUID) (err error) {
+	_, err = self.db.Exec(
+		context.Background(),
+		`UPDATE invocation SET finished_at = STATEMENT_TIMESTAMP() WHERE id = $1`,
+		id,
+	)
+	return
+}

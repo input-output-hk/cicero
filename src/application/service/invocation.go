@@ -26,6 +26,7 @@ type InvocationService interface {
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
 	GetOutputById(uuid.UUID) (domain.OutputDefinition, error)
 	Save(*domain.Invocation, map[string]*domain.Fact) error
+	End(uuid.UUID) error
 	GetLog(domain.Invocation) (LokiLog, error)
 }
 
@@ -158,6 +159,15 @@ func (self invocationService) Save(invocation *domain.Invocation, inputs map[str
 		return errors.WithMessagef(err, "Could not insert Invocation")
 	}
 	self.logger.Trace().Str("id", invocation.Id.String()).Msg("Created Invocation")
+	return nil
+}
+
+func (self invocationService) End(id uuid.UUID) error {
+	self.logger.Trace().Stringer("id", id).Msg("Ending Invocation")
+	if err := self.invocationRepository.End(id); err != nil {
+		return errors.WithMessagef(err, "Could not end Invocation")
+	}
+	self.logger.Trace().Stringer("id", id).Msg("Ended Invocation")
 	return nil
 }
 
