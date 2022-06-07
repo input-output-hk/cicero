@@ -335,12 +335,6 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 }
 
 func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) error {
-	modifyTime := time.Unix(
-		timestamp/int64(time.Second),
-		timestamp%int64(time.Second),
-	).UTC()
-	run.FinishedAt = &modifyTime
-
 	return self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
@@ -378,6 +372,12 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 				}
 			}
 		}
+
+		modifyTime := time.Unix(
+			timestamp/int64(time.Second),
+			timestamp%int64(time.Second),
+		).UTC()
+		run.FinishedAt = &modifyTime
 
 		return txSelf.RunService.End(run)
 	})
