@@ -77,10 +77,10 @@ func (e *EvaluationError) Unwrap() error {
 	return (*exec.ExitError)(e)
 }
 
-func (e evaluationService) evaluate(src string, args, extraEnv []string, invocationId *uuid.UUID) ([]byte, error) {
+func (e evaluationService) evaluate(src string, args, extraEnv []string, invocationId *uuid.UUID) ([]byte, []byte, error) {
 	fetchUrl, evaluator, err := parseSource(src)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cacheDir := config.GetenvStr("CICERO_CACHE_DIR")
@@ -92,7 +92,7 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string, invocat
 
 	dst, err := filepath.Abs(cacheDir + "/" + base64.RawURLEncoding.EncodeToString([]byte(src)))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for {
@@ -100,11 +100,11 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string, invocat
 		if err != nil {
 			if strings.Contains(err.Error(), "git exited with 128: ") && strings.Contains(err.Error(), "fatal: Not possible to fast-forward, aborting.\n\n") {
 				if err := os.RemoveAll(dst); err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				continue
 			}
-			return nil, err
+			return nil, nil, err
 		}
 		if result.Dst != dst {
 			panic("go-getter did not download to the given directory. This should never happen™")
@@ -112,7 +112,7 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string, invocat
 		break
 	}
 
-	tryEval := func(evaluator string) ([]byte, error) {
+	tryEval := func(evaluator string) ([]byte, []byte, error) {
 		cmd := exec.Command("cicero-evaluator-"+evaluator, args...)
 		cmd.Env = append(os.Environ(), extraEnv...) //nolint:gocritic // false positive
 		cmd.Dir = dst
@@ -124,16 +124,19 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string, invocat
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			return nil, err
+		var stderrBuf bytes.Buffer
+		var stderr io.Reader
+		if stderr_, err := cmd.StderrPipe(); err != nil {
+			return nil, nil, err
+		} else {
+			stderr = io.TeeReader(stderr_, &stderrBuf)
 		}
 
 		if err := cmd.Start(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		go func() {
@@ -187,35 +190,35 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string, invocat
 				evalErr := EvaluationError(*errExit)
 				err = errors.WithMessage(&evalErr, "Failed to evaluate")
 			}
-			return nil, err
+			return nil, stderrBuf.Bytes(), err
 		} else {
-			return result, scanErr
+			return result, stderrBuf.Bytes(), scanErr
 		}
 	}
 
 	if evaluator != "" {
-		if output, err := tryEval(evaluator); err != nil {
-			return nil, errors.WithMessagef(err, "Evaluator %q specified in source failed", evaluator)
+		if output, stderr, err := tryEval(evaluator); err != nil {
+			return nil, stderr, errors.WithMessagef(err, "Evaluator %q specified in source failed. Stderr: %s", evaluator, string(stderr))
 		} else {
-			return output, nil
+			return output, stderr, nil
 		}
 	} else {
 		e.logger.Debug().Msg("No evaluator given in source, trying all")
 		var evalErr error
 		for _, evaluator := range e.Evaluators {
-			if output, err := tryEval(evaluator); err != nil {
+			if output, stderr, err := tryEval(evaluator); err != nil {
 				format := ""
 				if evalErr != nil {
 					format = "\n" + format
 				}
-				format += "Evaluator %q failed: %w"
-				evalErr = fmt.Errorf(format, evaluator, err)
+				format += "Evaluator %q failed: %w. Stderr: %s"
+				evalErr = fmt.Errorf(format, evaluator, err, string(stderr))
 			} else {
-				return output, nil
+				return output, stderr, nil
 			}
 		}
 		e.logger.Err(evalErr).Msg("No evaluator succeeded.")
-		return nil, errors.WithMessage(evalErr, "No evaluator succeeded.")
+		return nil, nil, errors.WithMessage(evalErr, "No evaluator succeeded.")
 	}
 }
 
@@ -240,7 +243,7 @@ func promtailEntry(line, fd string, invocationId *uuid.UUID) promtail.Entry {
 func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
 	var def domain.ActionDefinition
 
-	if output, err := e.evaluate(src,
+	if output, stderr, err := e.evaluate(src,
 		[]string{"eval", "meta", "io"},
 		[]string{
 			"CICERO_ACTION_NAME=" + name,
@@ -250,7 +253,7 @@ func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domai
 	); err != nil {
 		return def, err
 	} else if err := json.Unmarshal(output, &def); err != nil {
-		e.logger.Err(err).Str("output", string(output)).Send()
+		e.logger.Err(err).Str("output", string(output)).Str("stderr", string(stderr)).Send()
 		return def, errors.WithMessage(err, "While unmarshaling evaluator output")
 	}
 
@@ -271,7 +274,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 		"CICERO_ACTION_INPUTS=" + string(inputsJson),
 	}
 
-	output, err := e.evaluate(src, []string{"eval", "job"}, extraEnv, &invocationId)
+	output, stderr, err := e.evaluate(src, []string{"eval", "job"}, extraEnv, &invocationId)
 	if err != nil {
 		return def, err
 	}
@@ -287,7 +290,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 
 	err = json.Unmarshal(output, &freeformDef)
 	if err != nil {
-		return def, errors.WithMessagef(err, "While unmarshaling evaluator output %s into freeform definition", string(output))
+		return def, errors.WithMessagef(err, "While unmarshaling evaluator output %s into freeform definition. Stderr: %s", string(output), string(stderr))
 	}
 
 	if freeformDef.Job != nil {
@@ -377,15 +380,15 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 }
 
 func (e evaluationService) ListActions(src string) ([]string, error) {
-	output, err := e.evaluate(src, []string{"list"}, nil, nil)
+	output, stderr, err := e.evaluate(src, []string{"list"}, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	var names []string
 	if err := json.Unmarshal(output, &names); err != nil {
-		e.logger.Err(err).Str("output", string(output)).Msg("Could not unmarshal action names")
-		return nil, errors.WithMessagef(err, "While unmarshaling action names:\n%s", string(output))
+		e.logger.Err(err).Str("output", string(output)).Str("stderr", string(stderr)).Msg("Could not unmarshal action names")
+		return nil, errors.WithMessagef(err, "While unmarshaling action names:\n%s\nStderr: %s", string(output), string(stderr))
 	}
 
 	return names, nil
