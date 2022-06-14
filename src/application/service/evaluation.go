@@ -306,8 +306,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 			} else {
 				for _, tg := range job.TaskGroups {
 					for _, t := range tg.Tasks {
-						switch t.Driver {
-						case "nix":
+						if t.Driver == "nix" {
 							if _, found := t.Config["console"]; !found {
 								t.Config["console"] = "pipe"
 							}

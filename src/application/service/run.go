@@ -233,13 +233,11 @@ func (self runService) GetRunAllocationsWithLogs(run domain.Run) ([]AllocationWi
 	}
 
 	for i := uint(0); i < numMsgs; i++ {
-		select {
-		case msg := <-logs:
-			if msg.err != nil {
-				return nil, err
-			}
-			allocsWithLog[msg.idx].TaskLogs[msg.taskName] = msg.log
+		msg := <-logs
+		if msg.err != nil {
+			return nil, err
 		}
+		allocsWithLog[msg.idx].TaskLogs[msg.taskName] = msg.log
 	}
 
 	wg.Wait()
