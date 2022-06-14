@@ -4,6 +4,8 @@ if [[ -n "${CICERO_EVALUATOR_NIX_VERBOSE:-}" ]]; then
 	set -x
 fi
 
+export NIX_CONFIG="${NIX_CONFIG:-}\nextra-experimental-features = nix-command flakes"
+
 function usage {
 	{
 		echo "Usage: $(basename "$0") [list] [eval <attrs...>]"
