@@ -12,6 +12,7 @@ import (
 
 	"github.com/input-output-hk/cicero/src/config/mocks"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 func TestShouldGetActionById(t *testing.T) {
@@ -52,25 +53,19 @@ func TestShouldSaveAction(t *testing.T) {
 	dateTime := time.Now().UTC()
 	actionId := uuid.New()
 	action := domain.Action{
-		ID:     actionId,
-		Name:   "Name",
-		Source: "Source",
+		ID:        actionId,
+		Name:      "Name",
+		Source:    "Source",
+		CreatedAt: time.Time{},
+		Active:    false,
 		ActionDefinition: domain.ActionDefinition{
-			Meta: map[string]interface{}{},
-			InOut: domain.InOutDefinition{
-				Inputs: domain.InputDefinitions{
-					"a": domain.InputDefinition{
-						Not:      false,
-						Optional: false,
-						Match:    domain.InOutCUEString(""),
-					},
-				},
-			},
+			Meta:  map[string]interface{}{},
+			InOut: `inputs: a: match: {}`,
 		},
 	}
 
 	// given
-	ioStr, err := action.InOut.CUEString().Format(cueformat.Simplify(), cueformat.UseSpaces(0))
+	ioStr, err := util.CUEString(action.InOut).Format(cueformat.Simplify(), cueformat.UseSpaces(0))
 	if err != nil {
 		t.Fatalf("an error %q was not expected when formatting the IO CUE", err)
 	}
