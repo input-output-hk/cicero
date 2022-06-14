@@ -1,11 +1,11 @@
 {
   flake,
-  buildGoModule,
+  buildGo117Module,
   go-mockery,
 }: let
   final = package "sha256-np1hs97ZMyR9RzmWYLkT61kmytmkBuhtcUMoTvmei0E=";
   package = vendorSha256:
-    buildGoModule rec {
+    buildGo117Module rec {
       pname = "cicero";
       version = "2022.04.27.001";
       inherit vendorSha256;
