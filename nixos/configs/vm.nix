@@ -15,7 +15,7 @@
     "${builtins.getFlake github:GTrunSec/nixpkgs/26ad08f8c4e718b3a5a5e7a35bfc1745c4245eb9}/nixos/modules/services/networking/nomad.nix"
   ];
 
-  disabledModules = [ "services/networking/nomad.nix" ];
+  disabledModules = ["services/networking/nomad.nix"];
 
   nix-driver-nomad.enable = false;
 

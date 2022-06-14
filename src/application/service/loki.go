@@ -31,13 +31,13 @@ type LokiLine struct {
 }
 
 type lokiService struct {
-	logger zerolog.Logger
+	logger     zerolog.Logger
 	prometheus prometheus.Client
 }
 
 func NewLokiService(prometheusClient prometheus.Client, logger *zerolog.Logger) LokiService {
 	return &lokiService{
-		logger: logger.With().Str("component", "LokiService").Logger(),
+		logger:     logger.With().Str("component", "LokiService").Logger(),
 		prometheus: prometheusClient,
 	}
 }
@@ -124,7 +124,7 @@ Page:
 			break Page
 		}
 
-		var numEntries int64 
+		var numEntries int64
 		for _, stream := range streams {
 			if stop, err := callback(stream); err != nil {
 				return err

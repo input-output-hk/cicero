@@ -8,8 +8,8 @@ import (
 	promtailClient "github.com/grafana/loki/clients/pkg/promtail/client"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
 	prometheus "github.com/prometheus/client_golang/api"
+	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/application"
 	"github.com/input-output-hk/cicero/src/application/component"
