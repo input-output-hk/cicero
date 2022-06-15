@@ -77,22 +77,26 @@ func (e *EvaluationError) Unwrap() error {
 	return (*exec.ExitError)(e)
 }
 
-func (e evaluationService) evaluate(src string, args, extraEnv []string, invocationId *uuid.UUID) ([]byte, []byte, error) {
-	fetchUrl, evaluator, err := parseSource(src)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func (e evaluationService) cacheDir(src string) (string, error) {
 	cacheDir := config.GetenvStr("CICERO_CACHE_DIR")
 	if cacheDir == "" {
-		e.logger.Debug().Err(err).Msg("Falling back to XDG cache directory")
+		e.logger.Debug().Msg("Falling back to XDG cache directory")
 		cacheDir = xdg.CacheHome + "/cicero"
 	}
 	cacheDir += "/sources"
 
-	dst, err := filepath.Abs(cacheDir + "/" + base64.RawURLEncoding.EncodeToString([]byte(src)))
+	return filepath.Abs(cacheDir + "/" + base64.RawURLEncoding.EncodeToString([]byte(src)))
+}
+
+func (e evaluationService) fetchSource(src string) (string, string, error) {
+	dst, err := e.cacheDir(src)
 	if err != nil {
-		return nil, nil, err
+		return dst, "", err
+	}
+
+	fetchUrl, evaluator, err := parseSource(src)
+	if err != nil {
+		return dst, evaluator, err
 	}
 
 	for {
@@ -100,11 +104,11 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string, invocat
 		if err != nil {
 			if strings.Contains(err.Error(), "git exited with 128: ") && strings.Contains(err.Error(), "fatal: Not possible to fast-forward, aborting.\n\n") {
 				if err := os.RemoveAll(dst); err != nil {
-					return nil, nil, err
+					return dst, evaluator, err
 				}
 				continue
 			}
-			return nil, nil, err
+			return dst, evaluator, err
 		}
 		if result.Dst != dst {
 			panic("go-getter did not download to the given directory. This should never happen™")
@@ -112,10 +116,14 @@ func (e evaluationService) evaluate(src string, args, extraEnv []string, invocat
 		break
 	}
 
+	return dst, evaluator, err
+}
+
+func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []string, invocationId *uuid.UUID) ([]byte, []byte, error) {
 	tryEval := func(evaluator string) ([]byte, []byte, error) {
 		cmd := exec.Command("cicero-evaluator-"+evaluator, args...)
 		cmd.Env = append(os.Environ(), extraEnv...) //nolint:gocritic // false positive
-		cmd.Dir = dst
+		cmd.Dir = src
 
 		e.logger.Debug().
 			Stringer("command", cmd).
@@ -243,7 +251,13 @@ func promtailEntry(line, fd string, invocationId *uuid.UUID) promtail.Entry {
 func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
 	var def domain.ActionDefinition
 
-	if output, stderr, err := e.evaluate(src,
+	dst, evaluator, err := e.fetchSource(src)
+	if err != nil {
+		return def, err
+	}
+
+	if output, stderr, err := e.evaluate(
+		dst, evaluator,
 		[]string{"eval", "meta", "io"},
 		[]string{
 			"CICERO_ACTION_NAME=" + name,
@@ -263,6 +277,11 @@ func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domai
 func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error) {
 	var def *nomad.Job
 
+	dst, evaluator, err := e.fetchSource(src)
+	if err != nil {
+		return def, err
+	}
+
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
 		return def, errors.WithMessagef(err, "Could not marshal inputs to JSON: %v", inputs)
@@ -274,12 +293,12 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 		"CICERO_ACTION_INPUTS=" + string(inputsJson),
 	}
 
-	output, stderr, err := e.evaluate(src, []string{"eval", "job"}, extraEnv, &invocationId)
+	output, stderr, err := e.evaluate(dst, evaluator, []string{"eval", "job"}, extraEnv, &invocationId)
 	if err != nil {
 		return def, err
 	}
 
-	output, err = e.transform(output, src, extraEnv)
+	output, err = e.transform(output, dst, extraEnv)
 	if err != nil {
 		return def, err
 	}
@@ -380,7 +399,12 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 }
 
 func (e evaluationService) ListActions(src string) ([]string, error) {
-	output, stderr, err := e.evaluate(src, []string{"list"}, nil, nil)
+	dst, evaluator, err := e.fetchSource(src)
+	if err != nil {
+		return nil, err
+	}
+
+	output, stderr, err := e.evaluate(dst, evaluator, []string{"list"}, nil, nil)
 	if err != nil {
 		return nil, err
 	}
