@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,7 +19,7 @@ import (
 )
 
 type LokiService interface {
-	QueryRangeLog(string, time.Time, *time.Time, string) (LokiLog, error)
+	QueryRangeLog(string, time.Time, *time.Time) (LokiLog, error)
 	QueryRange(string, time.Time, *time.Time, func(loghttp.Stream) (bool, error)) error
 }
 
@@ -26,8 +27,8 @@ type LokiLog []LokiLine
 
 type LokiLine struct {
 	Time   time.Time
-	Source string
 	Text   string
+	Labels map[string]string
 }
 
 type lokiService struct {
@@ -42,14 +43,14 @@ func NewLokiService(prometheusClient prometheus.Client, logger *zerolog.Logger) 
 	}
 }
 
-func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.Time, fdLabel string) (LokiLog, error) {
+func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.Time) (LokiLog, error) {
 	const linesToFetch = 10000
 
 	log := LokiLog{}
 
 	if err := self.QueryRange(query, start, end, func(stream loghttp.Stream) (bool, error) {
 		callbackLog := new(LokiLog)
-		callbackLog.FromStream(stream, fdLabel)
+		callbackLog.FromStream(stream)
 
 		log = append(log, *callbackLog...)
 
@@ -147,14 +148,13 @@ Page:
 	return nil
 }
 
-func (self *LokiLog) FromStream(stream loghttp.Stream, fdLabel string) {
-	fd, ok := stream.Labels.Map()[fdLabel]
-	if !ok {
-		return
-	}
-
+func (self *LokiLog) FromStream(stream loghttp.Stream) {
 	for _, entry := range stream.Entries {
-		line := LokiLine{Time: entry.Timestamp, Source: fd, Text: entry.Line}
+		line := LokiLine{
+			Time:   entry.Timestamp,
+			Text:   entry.Line,
+			Labels: stream.Labels.Map(),
+		}
 		lines := strings.Split(entry.Line, "\r")
 		for _, l := range lines {
 			if sane, err := ansi.Strip([]byte(l)); err == nil {
@@ -189,5 +189,5 @@ func (self *LokiLog) Deduplicate() {
 func (self LokiLine) Equal(o LokiLine) bool {
 	return self.Time.Equal(o.Time) &&
 		self.Text == o.Text &&
-		self.Source == o.Source
+		reflect.DeepEqual(self.Labels, o.Labels)
 }

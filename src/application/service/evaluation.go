@@ -29,6 +29,7 @@ import (
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type EvaluationService interface {
@@ -120,6 +121,8 @@ func (e evaluationService) fetchSource(src string) (string, string, error) {
 }
 
 func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []string, invocationId *uuid.UUID) ([]byte, []byte, error) {
+	const lokiLabel = "eval"
+
 	tryEval := func(evaluator string) ([]byte, []byte, error) {
 		cmd := exec.Command("cicero-evaluator-"+evaluator, args...)
 		cmd.Env = append(os.Environ(), extraEnv...) //nolint:gocritic // false positive
@@ -135,31 +138,23 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 			return nil, nil, err
 		}
 
-		var stderrBuf bytes.Buffer
-		var stderr io.Reader
-		if stderr_, err := cmd.StderrPipe(); err != nil {
+		stderr, stderrBuf, err := util.BufStderr(cmd)
+		if err != nil {
 			return nil, nil, err
-		} else {
-			stderr = io.TeeReader(stderr_, &stderrBuf)
 		}
+
+		e.pipeToLoki(lokiLabel, nil, &stderr, invocationId)
 
 		if err := cmd.Start(); err != nil {
 			return nil, nil, err
 		}
-
-		go func() {
-			scanner := bufio.NewScanner(stderr)
-			for scanner.Scan() {
-				e.promtailChan <- promtailEntry(scanner.Text(), "stderr", invocationId)
-			}
-		}()
 
 		var scanErr error
 		var result []byte
 		scanner := bufio.NewScanner(stdout)
 	Scan:
 		for scanner.Scan() {
-			e.promtailChan <- promtailEntry(scanner.Text(), "stdout", invocationId)
+			e.promtailChan <- promtailEntry(lokiLabel, scanner.Text(), "stdout", invocationId)
 
 			var msg map[string]interface{}
 			if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
@@ -206,33 +201,41 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 
 	if evaluator != "" {
 		if output, stderr, err := tryEval(evaluator); err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiLabel, "error", invocationId)
 			return nil, stderr, errors.WithMessagef(err, "Evaluator %q specified in source failed. Stderr: %s", evaluator, string(stderr))
 		} else {
 			return output, stderr, nil
 		}
 	} else {
 		e.logger.Debug().Msg("No evaluator given in source, trying all")
-		var evalErr error
+		var evalErrs error
 		for _, evaluator := range e.Evaluators {
 			if output, stderr, err := tryEval(evaluator); err != nil {
-				format := ""
-				if evalErr != nil {
-					format = "\n" + format
+				var evalErr *EvaluationError
+				if errors.As(err, &evalErr) {
+					format := ""
+					if evalErr != nil {
+						format = "\n" + format
+					}
+					format += "Evaluator %q failed: %w. Stderr: %s"
+					evalErrs = fmt.Errorf(format, evaluator, *evalErr, string(stderr))
+				} else {
+					e.promtailChan <- promtailEntry(err.Error(), lokiLabel, "error", invocationId)
+					return output, stderr, err
 				}
-				format += "Evaluator %q failed: %w. Stderr: %s"
-				evalErr = fmt.Errorf(format, evaluator, err, string(stderr))
 			} else {
 				return output, stderr, nil
 			}
 		}
-		e.logger.Err(evalErr).Msg("No evaluator succeeded.")
-		return nil, nil, errors.WithMessage(evalErr, "No evaluator succeeded.")
+		const errMsg = "No evaluator succeeded."
+		e.logger.Err(evalErrs).Msg(errMsg)
+		return nil, nil, errors.WithMessage(evalErrs, errMsg)
 	}
 }
 
-func promtailEntry(line, fd string, invocationId *uuid.UUID) promtail.Entry {
+func promtailEntry(line, label, fd string, invocationId *uuid.UUID) promtail.Entry {
 	labels := map[model.LabelName]model.LabelValue{
-		"cicero": "evaluation",
+		"cicero": model.LabelValue(label),
 		"fd":     model.LabelValue(fd),
 	}
 	if invocationId != nil {
@@ -245,6 +248,26 @@ func promtailEntry(line, fd string, invocationId *uuid.UUID) promtail.Entry {
 			Timestamp: time.Now(),
 			Line:      line,
 		},
+	}
+}
+
+func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, invocationId *uuid.UUID) {
+	if stdout != nil {
+		go func() {
+			scanner := bufio.NewScanner(*stdout)
+			for scanner.Scan() {
+				e.promtailChan <- promtailEntry(scanner.Text(), label, "stdout", invocationId)
+			}
+		}()
+	}
+
+	if stderr != nil {
+		go func() {
+			scanner := bufio.NewScanner(*stderr)
+			for scanner.Scan() {
+				e.promtailChan <- promtailEntry(scanner.Text(), label, "stderr", invocationId)
+			}
+		}()
 	}
 }
 
@@ -298,7 +321,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 		return def, err
 	}
 
-	output, err = e.transform(output, dst, extraEnv)
+	output, err = e.transform(output, dst, extraEnv, invocationId)
 	if err != nil {
 		return def, err
 	}
@@ -359,7 +382,9 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	return def, nil
 }
 
-func (e evaluationService) transform(output []byte, src string, extraEnv []string) ([]byte, error) {
+func (e evaluationService) transform(output []byte, src string, extraEnv []string, invocationId uuid.UUID) ([]byte, error) {
+	const lokiLabel = "eval-transform"
+
 	for _, transformer := range e.Transformers {
 		cmd := exec.Command(transformer)
 		cmd.Env = append(os.Environ(), extraEnv...) //nolint:gocritic // false positive
@@ -367,12 +392,15 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiLabel, "error", &invocationId)
 			return nil, err
 		}
 		if _, err := io.Copy(stdin, bytes.NewReader(output)); err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiLabel, "error", &invocationId)
 			return nil, err
 		}
 		if err := stdin.Close(); err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiLabel, "error", &invocationId)
 			return nil, err
 		}
 
@@ -382,16 +410,29 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 			Str("transformer", transformer).
 			Msg("Running transformer")
 
-		if transformedOutput, err := cmd.Output(); err != nil {
+		stdout, stdoutBuf, stderr, stderrBuf, err := util.BufPipes(cmd)
+		if err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiLabel, "error", &invocationId)
+			return nil, err
+		}
+		e.pipeToLoki(lokiLabel, &stdout, &stderr, &invocationId)
+
+		if err := cmd.Start(); err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiLabel, "error", &invocationId)
+			return nil, err
+		}
+
+		if err := cmd.Wait(); err != nil {
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
 				evalErr := EvaluationError(*errExit)
-				err = errors.WithMessage(&evalErr, "Failed to transform")
+				err = errors.WithMessagef(&evalErr, "Failed to transform\nStderr: %s", stderrBuf.String())
+			} else {
+				e.promtailChan <- promtailEntry(err.Error(), lokiLabel, "error", &invocationId)
 			}
-
 			return nil, err
 		} else {
-			output = transformedOutput
+			output = stdoutBuf.Bytes()
 		}
 	}
 

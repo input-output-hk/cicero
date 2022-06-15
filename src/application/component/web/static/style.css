@@ -198,3 +198,6 @@ dl.inline > dd:not(:last-child)::after {
 .log.stderr {
 	color: red;
 }
+.log.error {
+	font-style: italic;
+}

@@ -541,7 +541,7 @@
 													{{range .}}
 														<tr>
 															<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-															<td><samp class="log {{.Source}}">{{.Text}}</samp></td>
+															<td><samp class="log {{.Labels.source}}">{{.Text}}</samp></td>
 														</tr>
 													{{end}}
 												</table>

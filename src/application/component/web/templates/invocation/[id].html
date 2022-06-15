@@ -109,12 +109,41 @@
 		</div>
 
 		<h2>Logs</h2>
+		{{$i := 0}}
+
+		<h3>Evaluation</h3>
 		<table class="panel log">
-			{{range $.log}}
-				<tr>
-					<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-					<td><samp class="log {{.Source}}">{{.Text}}</samp></td>
-				</tr>
+			{{$break := false}} <!-- TODO use the proper break statement that's new in Go 1.18 -->
+			{{range $ii, $line := $.log}}
+				{{if and (not $break) (not (eq .Labels.cicero "eval"))}}
+					{{$break = true}}
+					{{$i = $ii}}
+				{{end}}
+				{{if not $break}}
+					{{$i = $ii}}
+					<tr>
+						<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+						<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
+					</tr>
+				{{end}}
+			{{end}}
+		</table>
+
+		<h3>Transformation</h3>
+		<table class="panel log">
+			{{$break = false}}
+			{{range $ii, $line := slice $.log $i}}
+				{{if and (not $break) (not (eq .Labels.cicero "eval-transform"))}}
+					{{$break = true}}
+					{{$i = $ii}}
+				{{end}}
+				{{if not $break}}
+					{{$i = $ii}}
+					<tr>
+						<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+						<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
+					</tr>
+				{{end}}
 			{{end}}
 		</table>
 	{{end}}

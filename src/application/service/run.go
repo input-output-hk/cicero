@@ -177,14 +177,14 @@ func (self runService) Cancel(run *domain.Run) error {
 func (self runService) JobLog(nomadJobID uuid.UUID, start time.Time, end *time.Time) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
-		start, end, "source",
+		start, end,
 	)
 }
 
 func (self runService) RunLog(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
-		start, end, "source",
+		start, end,
 	)
 }
 
