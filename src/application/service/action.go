@@ -453,11 +453,12 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 	return invocation, func(db config.PgxIface) (*domain.Run, InvokeRegisterFunc, error) {
 		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, invocation.Id, inputs)
 		if err != nil {
+			if err := (*self.invocationService).WithQuerier(db).End(invocation.Id); err != nil {
+				return nil, nil, err
+			}
+
 			var evalErr *EvaluationError
 			if errors.As(err, &evalErr) {
-				if err := (*self.invocationService).WithQuerier(db).End(invocation.Id); err != nil {
-					return nil, nil, err
-				}
 				return nil, nil, nil
 			}
 			return nil, nil, err
@@ -466,7 +467,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 		var run *domain.Run
 		var registerFunc InvokeRegisterFunc
 
-		return run, registerFunc, db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if err := db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx).(*actionService)
 
 			if err := (*txSelf.invocationService).End(invocation.Id); err != nil {
@@ -527,7 +528,15 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 			}
 
 			return nil
-		})
+		}); err != nil {
+			if err := (*self.invocationService).WithQuerier(db).End(invocation.Id); err != nil {
+				return run, registerFunc, err
+			}
+
+			return run, registerFunc, err
+		}
+
+		return run, registerFunc, nil
 	}, nil
 }
 
