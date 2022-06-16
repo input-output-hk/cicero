@@ -244,14 +244,12 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 }
 
 func promtailEntry(line, label, fd string, invocationId uuid.UUID) promtail.Entry {
-	labels := map[model.LabelName]model.LabelValue{
-		"cicero":     model.LabelValue(label),
-		"fd":         model.LabelValue(fd),
-		"invocation": model.LabelValue(invocationId.String()),
-	}
-
 	return promtail.Entry{
-		Labels: labels,
+		Labels: map[model.LabelName]model.LabelValue{
+			"cicero":     model.LabelValue(label),
+			"fd":         model.LabelValue(fd),
+			"invocation": model.LabelValue(invocationId.String()),
+		},
 		Entry: logproto.Entry{
 			Timestamp: time.Now(),
 			Line:      line,
