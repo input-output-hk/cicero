@@ -120,7 +120,7 @@
           in
             prev.writers.writeDashBin "dev-cicero-transformer" ''
               export postBuildHook=${prev.lib.escapeShellArg post-build-hook}
-              jq ${prev.lib.escapeShellArg filter}
+              jq -c ${prev.lib.escapeShellArg filter}
             '';
         })
         self.overlay
