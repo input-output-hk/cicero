@@ -112,39 +112,47 @@
 		{{$i := 0}}
 
 		<h3>Evaluation</h3>
-		<table class="panel log">
-			{{$break := false}} <!-- TODO use the proper break statement that's new in Go 1.18 -->
-			{{range $ii, $line := $.log}}
-				{{if and (not $break) (not (eq .Labels.cicero "eval"))}}
-					{{$break = true}}
-					{{$i = $ii}}
+		{{with $.log}}
+			<table class="panel log">
+				{{$break := false}} <!-- TODO use the proper break statement that's new in Go 1.18 -->
+				{{range $ii, $line := .}}
+					{{if and (not $break) (not (eq .Labels.cicero "eval"))}}
+						{{$break = true}}
+						{{$i = $ii}}
+					{{end}}
+					{{if not $break}}
+						{{$i = $ii}}
+						<tr>
+							<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+							<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
+						</tr>
+					{{end}}
 				{{end}}
-				{{if not $break}}
-					{{$i = $ii}}
-					<tr>
-						<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-						<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
-					</tr>
-				{{end}}
-			{{end}}
-		</table>
+			</table>
+		{{else}}
+			<em>No log found.</em>
+		{{end}}
 
 		<h3>Transformation</h3>
-		<table class="panel log">
-			{{$break = false}}
-			{{range $ii, $line := slice $.log $i}}
-				{{if and (not $break) (not (eq .Labels.cicero "eval-transform"))}}
-					{{$break = true}}
-					{{$i = $ii}}
+		{{with slice $.log $i}}
+			<table class="panel log">
+				{{$break := false}} <!-- TODO use the proper break statement that's new in Go 1.18 -->
+				{{range $ii, $line := .}}
+					{{if and (not $break) (not (eq .Labels.cicero "eval-transform"))}}
+						{{$break = true}}
+						{{$i = $ii}}
+					{{end}}
+					{{if not $break}}
+						{{$i = $ii}}
+						<tr>
+							<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
+							<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
+						</tr>
+					{{end}}
 				{{end}}
-				{{if not $break}}
-					{{$i = $ii}}
-					<tr>
-						<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-						<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
-					</tr>
-				{{end}}
-			{{end}}
-		</table>
+			</table>
+		{{else}}
+			<em>No log found.</em>
+		{{end}}
 	{{end}}
 {{end}}
