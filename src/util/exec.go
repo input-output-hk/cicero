@@ -6,27 +6,39 @@ import (
 	"os/exec"
 )
 
-func BufStdout(cmd *exec.Cmd) (stdout io.Reader, stdoutBuf bytes.Buffer, err error) {
-	if stdout_, err_ := cmd.StdoutPipe(); err != nil {
-		err = err_
+func BufStdout(cmd *exec.Cmd) (stdout io.ReadCloser, stdoutBuf *bytes.Buffer, err error) {
+	stdout, err = cmd.StdoutPipe()
+	if err != nil {
 		return
-	} else {
-		stdout = io.TeeReader(stdout_, &stdoutBuf)
+	}
+
+	var stdoutBufVal bytes.Buffer
+	stdoutBuf = &stdoutBufVal
+
+	stdout = CompositeReadCloser{
+		io.TeeReader(stdout, stdoutBuf),
+		stdout,
 	}
 	return
 }
 
-func BufStderr(cmd *exec.Cmd) (stderr io.Reader, stderrBuf bytes.Buffer, err error) {
-	if stderr_, err_ := cmd.StderrPipe(); err != nil {
-		err = err_
+func BufStderr(cmd *exec.Cmd) (stderr io.ReadCloser, stderrBuf *bytes.Buffer, err error) {
+	stderr, err = cmd.StderrPipe()
+	if err != nil {
 		return
-	} else {
-		stderr = io.TeeReader(stderr_, &stderrBuf)
+	}
+
+	var stderrBufVal bytes.Buffer
+	stderrBuf = &stderrBufVal
+
+	stderr = CompositeReadCloser{
+		io.TeeReader(stderr, stderrBuf),
+		stderr,
 	}
 	return
 }
 
-func BufPipes(cmd *exec.Cmd) (stdout io.Reader, stdoutBuf bytes.Buffer, stderr io.Reader, stderrBuf bytes.Buffer, err error) {
+func BufPipes(cmd *exec.Cmd) (stdout io.ReadCloser, stdoutBuf *bytes.Buffer, stderr io.ReadCloser, stderrBuf *bytes.Buffer, err error) {
 	stdout, stdoutBuf, err = BufStdout(cmd)
 	if err != nil {
 		return

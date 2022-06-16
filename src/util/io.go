@@ -43,3 +43,16 @@ func (f *skipLeadingWhitespaceReader) Read(p []byte) (int, error) {
 	copy(p, buf)
 	return len(buf), nil
 }
+
+type CompositeReadCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (self CompositeReadCloser) Read(p []byte) (int, error) {
+	return self.r.Read(p)
+}
+
+func (self CompositeReadCloser) Close() error {
+	return self.c.Close()
+}
