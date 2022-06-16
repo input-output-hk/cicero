@@ -160,7 +160,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 	Scan:
 		for scanner.Scan() {
 			if invocationId != nil {
-				e.promtailChan <- promtailEntry(lokiLabel, scanner.Text(), "stdout", *invocationId)
+				e.promtailChan <- promtailEntry(scanner.Text(), lokiLabel, "stdout", *invocationId)
 			}
 
 			var msg map[string]interface{}
