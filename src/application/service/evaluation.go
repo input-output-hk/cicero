@@ -358,52 +358,68 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	}
 
 	if freeformDef.Job != nil {
-		if job, err := json.Marshal(*freeformDef.Job); err != nil {
+		job, err := json.Marshal(*freeformDef.Job)
+		if err != nil {
 			e.promtailChan <- promtailEntry(err.Error(), "eval-transform", "error", invocationId)
 			return def, err
-		} else {
-			// escape HCL variable interpolation
-			job = bytes.ReplaceAll(job, []byte("${"), []byte("$${"))
-
-			if job, err := jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
-				Body:    []byte(`{"job":` + string(job) + "}"),
-				AllowFS: false,
-				Strict:  true,
-			}); err != nil {
-				e.promtailChan <- promtailEntry(err.Error(), "eval-transform", "error", invocationId)
-				return def, err
-			} else {
-				for _, tg := range job.TaskGroups {
-					for _, t := range tg.Tasks {
-						if t.Driver == "nix" {
-							if _, found := t.Config["console"]; !found {
-								t.Config["console"] = "pipe"
-							}
-
-							if pkgsI, found := t.Config["packages"]; found {
-								keys := map[string]bool{}
-								for _, pkg := range pkgsI.([]interface{}) {
-									keys[pkg.(string)] = true
-								}
-
-								uniq := []string{}
-								for key := range keys {
-									uniq = append(uniq, key)
-								}
-
-								sort.Strings(uniq)
-
-								t.Config["packages"] = uniq
-							}
-						}
-					}
-				}
-				def = job
-			}
 		}
+
+		// escape HCL variable interpolation
+		job = bytes.ReplaceAll(job, []byte("${"), []byte("$${"))
+
+		def, err = jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
+			Body:    []byte(`{"job":` + string(job) + "}"),
+			AllowFS: false,
+			Strict:  true,
+		})
+		if err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), "eval-transform", "error", invocationId)
+			return def, err
+		}
+
+		setJobDefaults(def)
 	}
 
 	return def, nil
+}
+
+func setJobDefaults(job *nomad.Job) {
+	if job.Type == nil {
+		jobType := nomad.JobTypeBatch
+		job.Type = &jobType
+	}
+
+	for _, group := range job.TaskGroups {
+		if group.RestartPolicy.Attempts == nil {
+			attempts := 0
+			group.RestartPolicy.Attempts = &attempts
+		}
+
+		for _, task := range group.Tasks {
+			if task.Driver == "nix" {
+				if _, found := task.Config["console"]; !found {
+					task.Config["console"] = "pipe"
+				}
+
+				// deduplicate and sort packages
+				if pkgsI, found := task.Config["packages"]; found {
+					keys := map[string]bool{}
+					for _, pkg := range pkgsI.([]interface{}) {
+						keys[pkg.(string)] = true
+					}
+
+					uniq := []string{}
+					for key := range keys {
+						uniq = append(uniq, key)
+					}
+
+					sort.Strings(uniq)
+
+					task.Config["packages"] = uniq
+				}
+			}
+		}
+	}
 }
 
 func (e evaluationService) transform(output []byte, src string, extraEnv []string, invocationId uuid.UUID) ([]byte, error) {
