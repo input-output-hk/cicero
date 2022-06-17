@@ -17,8 +17,6 @@
 
   disabledModules = ["services/networking/nomad.nix"];
 
-  nix-driver-nomad.enable = false;
-
   nixpkgs.overlays = [
     self.inputs.spongix.overlay
     self.inputs.follower.overlay
