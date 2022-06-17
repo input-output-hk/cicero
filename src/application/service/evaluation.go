@@ -229,7 +229,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 						format = "\n" + format
 					}
 					format += "Evaluator %q failed: %w. Stderr: %s"
-					evalErrs = fmt.Errorf(format, evaluator, *evalErr, string(stderr))
+					evalErrs = fmt.Errorf(format, evaluator, evalErr, string(stderr))
 				} else {
 					return output, stderr, err
 				}
