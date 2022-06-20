@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
@@ -319,11 +318,11 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 
 	run, err := self.RunService.GetByNomadJobIdWithLock(id, "FOR NO KEY UPDATE")
 	if err != nil {
-		if pgxscan.NotFound(err) {
-			logger.Trace().Msg("Ignoring event (no such Run)")
-			return nil, nil
-		}
-		return &run, err
+		return run, err
+	}
+	if run == nil {
+		logger.Trace().Msg("Ignoring event (no such Run)")
+		return nil, nil
 	}
 
 	if run.FinishedAt != nil {
@@ -331,7 +330,7 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 		return nil, nil
 	}
 
-	return &run, nil
+	return run, nil
 }
 
 func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) error {

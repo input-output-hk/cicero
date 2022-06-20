@@ -3,7 +3,6 @@ package persistence
 import (
 	"context"
 
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 
 	"github.com/input-output-hk/cicero/src/config"
@@ -23,24 +22,32 @@ func (a runRepository) WithQuerier(querier config.PgxIface) repository.RunReposi
 	return &runRepository{querier}
 }
 
-func (a runRepository) GetByNomadJobId(id uuid.UUID) (domain.Run, error) {
+func (a runRepository) GetByNomadJobId(id uuid.UUID) (*domain.Run, error) {
 	return a.GetByNomadJobIdWithLock(id, "")
 }
 
-func (a runRepository) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run domain.Run, err error) {
-	return run, pgxscan.Get(
-		context.Background(), a.DB, &run,
+func (a runRepository) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (*domain.Run, error) {
+	run, err := get(
+		a.DB, &domain.Run{},
 		`SELECT * FROM run WHERE nomad_job_id = $1 `+lock,
 		id,
 	)
+	if run == nil {
+		return nil, err
+	}
+	return run.(*domain.Run), err
 }
 
-func (a runRepository) GetByInvocationId(invocationId uuid.UUID) (run *domain.Run, err error) {
-	return run, pgxscan.Get(
-		context.Background(), a.DB, run,
+func (a runRepository) GetByInvocationId(invocationId uuid.UUID) (*domain.Run, error) {
+	run, err := get(
+		a.DB, &domain.Run{},
 		`SELECT * FROM run WHERE invocation_id = $1`,
 		invocationId,
 	)
+	if run == nil {
+		return nil, err
+	}
+	return run.(*domain.Run), err
 }
 
 func (a runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Run, error) {
@@ -54,9 +61,9 @@ func (a runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*do
 	)
 }
 
-func (a runRepository) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
-	return run, pgxscan.Get(
-		context.Background(), a.DB, &run,
+func (a runRepository) GetLatestByActionId(id uuid.UUID) (*domain.Run, error) {
+	run, err := get(
+		a.DB, &domain.Run{},
 		`SELECT DISTINCT ON (invocation.action_id) run.*
 		FROM run
 		JOIN invocation ON
@@ -65,6 +72,10 @@ func (a runRepository) GetLatestByActionId(id uuid.UUID) (run domain.Run, err er
 		ORDER BY invocation.action_id, run.created_at DESC`,
 		id,
 	)
+	if run == nil {
+		return nil, err
+	}
+	return run.(*domain.Run), err
 }
 
 func (a runRepository) GetAll(page *repository.Page) ([]*domain.Run, error) {

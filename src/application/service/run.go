@@ -28,11 +28,11 @@ import (
 type RunService interface {
 	WithQuerier(config.PgxIface) RunService
 
-	GetByNomadJobId(uuid.UUID) (domain.Run, error)
-	GetByNomadJobIdWithLock(uuid.UUID, string) (domain.Run, error)
+	GetByNomadJobId(uuid.UUID) (*domain.Run, error)
+	GetByNomadJobIdWithLock(uuid.UUID, string) (*domain.Run, error)
 	GetByInvocationId(uuid.UUID) (*domain.Run, error)
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
-	GetLatestByActionId(uuid.UUID) (domain.Run, error)
+	GetLatestByActionId(uuid.UUID) (*domain.Run, error)
 	GetAll(*repository.Page) ([]*domain.Run, error)
 	Save(*domain.Run) error
 	Update(*domain.Run) error
@@ -84,14 +84,14 @@ func (self runService) WithQuerier(querier config.PgxIface) RunService {
 	}
 }
 
-func (self runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
+func (self runService) GetByNomadJobId(id uuid.UUID) (run *domain.Run, err error) {
 	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
 	return
 }
 
-func (self runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run domain.Run, err error) {
+func (self runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run *domain.Run, err error) {
 	self.logger.Trace().Str("nomad-job-id", id.String()).Str("lock", lock).Msg("Getting Run by Nomad Job ID with lock")
 	run, err = self.runRepository.GetByNomadJobIdWithLock(id, lock)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q with lock %q", id, lock)
@@ -99,9 +99,9 @@ func (self runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run d
 }
 
 func (self runService) GetByInvocationId(invocationId uuid.UUID) (run *domain.Run, err error) {
-	self.logger.Trace().Str("invocation-id", invocationId.String()).Msg("Getting Runs by input Fact IDs")
+	self.logger.Trace().Str("invocation-id", invocationId.String()).Msg("Getting Run by Invocation ID")
 	run, err = self.runRepository.GetByInvocationId(invocationId)
-	err = errors.WithMessagef(err, "Could not select Runs by Invocation ID %q", invocationId)
+	err = errors.WithMessagef(err, "Could not select Run by Invocation ID %q", invocationId)
 	return
 }
 
@@ -112,7 +112,7 @@ func (self runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs 
 	return
 }
 
-func (self runService) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
+func (self runService) GetLatestByActionId(id uuid.UUID) (run *domain.Run, err error) {
 	self.logger.Trace().Str("action-id", id.String()).Msg("Getting latest Run by Action ID")
 	run, err = self.runRepository.GetLatestByActionId(id)
 	err = errors.WithMessagef(err, "Could not select latest Run by Action ID %q", id)

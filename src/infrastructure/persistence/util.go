@@ -47,3 +47,16 @@ func fetchPage(
 
 	return nil
 }
+
+// target must be a non-nil pointer.
+func get(db config.PgxIface, target interface{}, sql string, args ...interface{}) (interface{}, error) {
+	err := pgxscan.Get(
+		context.Background(), db, target,
+		sql, args...,
+	)
+	if pgxscan.NotFound(err) {
+		err = nil
+		target = nil
+	}
+	return target, err
+}

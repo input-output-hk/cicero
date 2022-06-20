@@ -395,9 +395,8 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 					defer wg.Done()
 
 					run, err := self.RunService.GetByInvocationId(id)
-					if err != nil && !pgxscan.NotFound(err) {
+					if err != nil {
 						errChan <- err
-						return
 					} else {
 						entries[i].Run = run
 					}
@@ -536,11 +535,9 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 
 	var run *domain.Run
 	if run_, err := self.RunService.GetByInvocationId(id); err != nil {
-		if !pgxscan.NotFound(err) {
-			self.ServerError(w, err)
-			return
-		}
-	} else {
+		self.ServerError(w, err)
+		return
+	} else if run_ != nil {
 		run = run_
 	}
 
@@ -591,7 +588,11 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 
 	run, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
-		self.NotFound(w, errors.WithMessagef(err, "Failed to find Run %q", id))
+		self.ServerError(w, errors.WithMessagef(err, "Failed to find Run %q", id))
+		return
+	}
+	if run == nil {
+		self.NotFound(w, nil)
 		return
 	}
 
@@ -607,7 +608,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	allocsWithLogs, err := self.RunService.GetRunAllocationsWithLogs(run)
+	allocsWithLogs, err := self.RunService.GetRunAllocationsWithLogs(*run)
 	if err != nil {
 		self.NotFound(w, err)
 		return
@@ -665,7 +666,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		"Run": struct {
 			domain.Run
 			Action domain.Action
-		}{run, action},
+		}{*run, action},
 		"inputs":                inputs,
 		"output":                output,
 		"facts":                 facts,
@@ -736,9 +737,9 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 
 				go func(i int, id uuid.UUID) {
 					defer wg.Done()
-					if run, err := self.RunService.GetByInvocationId(id); err != nil && !pgxscan.NotFound(err) {
+					if run, err := self.RunService.GetByInvocationId(id); err != nil {
 						errChan <- err
-					} else if err == nil {
+					} else {
 						entries[i].Run = run
 					}
 				}(i, invocation.Id)
@@ -861,13 +862,13 @@ func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, &ok, page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 	} else {
-		runs := make([]*domain.Run, len(invocations))
-		for i, invocation := range invocations {
+		runs := []*domain.Run{}
+		for _, invocation := range invocations {
 			if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil {
 				self.ServerError(w, err)
 				return
-			} else {
-				runs[i] = run
+			} else if run != nil {
+				runs = append(runs, run)
 			}
 		}
 
@@ -925,9 +926,9 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) getRun(req *http.Request) (domain.Run, error) {
+func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
-		return domain.Run{}, err
+		return nil, err
 	} else {
 		return self.RunService.GetByNomadJobId(id)
 	}
@@ -935,7 +936,9 @@ func (self *Web) getRun(req *http.Request) (domain.Run, error) {
 
 func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
 	if run, err := self.getRun(req); err != nil {
-		self.NotFound(w, errors.WithMessage(err, "Could not find Run"))
+		self.ServerError(w, err)
+	} else if run == nil {
+		self.NotFound(w, nil)
 	} else {
 		self.json(w, run, http.StatusOK)
 	}
@@ -969,7 +972,9 @@ func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
-		self.NotFound(w, err)
+		self.ServerError(w, err)
+	} else if run == nil {
+		self.NotFound(w, nil)
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.NotFound(w, errors.WithMessage(err, "Could not get Run's Invocation's inputs"))
 	} else {
@@ -981,11 +986,9 @@ func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
-		if pgxscan.NotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
-		} else {
-			self.ServerError(w, err)
-		}
+		self.ServerError(w, err)
+	} else if run == nil {
+		self.NotFound(w, nil)
 	} else if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
 		if pgxscan.NotFound(err) {
 			w.WriteHeader(http.StatusNotFound)
@@ -999,9 +1002,12 @@ func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
 	if run, err := self.getRun(req); err != nil {
-		self.NotFound(w, err)
+		self.ServerError(w, err)
 		return
-	} else if err := self.RunService.Cancel(&run); err != nil {
+	} else if run == nil {
+		self.NotFound(w, nil)
+		return
+	} else if err := self.RunService.Cancel(run); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", run.NomadJobID))
 		return
 	}
@@ -1012,11 +1018,11 @@ func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	run, err := self.getRun(req)
 	if err != nil {
-		if pgxscan.NotFound(err) {
-			self.NotFound(w, err)
-		} else {
-			self.ClientError(w, err) //TODO: review 5XX error in openAPi documentation
-		}
+		self.ServerError(w, err)
+		return
+	}
+	if run == nil {
+		self.NotFound(w, nil)
 		return
 	}
 
@@ -1114,18 +1120,14 @@ func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
+	} else if run == nil {
+		self.NotFound(w, err)
+	} else if log, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
-		run, err := self.RunService.GetByNomadJobId(id)
-		if err != nil {
-			self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
-			return
-		}
-
-		if log, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
-		} else {
-			self.json(w, log, http.StatusOK)
-		}
+		self.json(w, log, http.StatusOK)
 	}
 }
 
@@ -1260,11 +1262,17 @@ func (self *Web) Error(w http.ResponseWriter, err error) {
 	}
 
 	self.Logger.
+		Error().
 		Err(err).
 		Int("status", status).
 		Msg("Handler error")
 
-	http.Error(w, err.Error(), status)
+	var msg string
+	if err != nil {
+		msg = err.Error()
+	}
+
+	http.Error(w, msg, status)
 }
 
 func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {
