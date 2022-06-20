@@ -30,7 +30,7 @@ type RunService interface {
 
 	GetByNomadJobId(uuid.UUID) (domain.Run, error)
 	GetByNomadJobIdWithLock(uuid.UUID, string) (domain.Run, error)
-	GetByInvocationId(uuid.UUID) (domain.Run, error)
+	GetByInvocationId(uuid.UUID) (*domain.Run, error)
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (domain.Run, error)
 	GetAll(*repository.Page) ([]*domain.Run, error)
@@ -98,7 +98,7 @@ func (self runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run d
 	return
 }
 
-func (self runService) GetByInvocationId(invocationId uuid.UUID) (run domain.Run, err error) {
+func (self runService) GetByInvocationId(invocationId uuid.UUID) (run *domain.Run, err error) {
 	self.logger.Trace().Str("invocation-id", invocationId.String()).Msg("Getting Runs by input Fact IDs")
 	run, err = self.runRepository.GetByInvocationId(invocationId)
 	err = errors.WithMessagef(err, "Could not select Runs by Invocation ID %q", invocationId)

@@ -35,10 +35,10 @@ func (a runRepository) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run d
 	)
 }
 
-func (a runRepository) GetByInvocationId(invocationId uuid.UUID) (run domain.Run, err error) {
+func (a runRepository) GetByInvocationId(invocationId uuid.UUID) (run *domain.Run, err error) {
 	return run, pgxscan.Get(
-		context.Background(), a.DB, &run,
-		`SELECT * FROM run WHERE invocation_id = $1 `,
+		context.Background(), a.DB, run,
+		`SELECT * FROM run WHERE invocation_id = $1`,
 		invocationId,
 	)
 }

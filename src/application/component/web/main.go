@@ -399,7 +399,7 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 						errChan <- err
 						return
 					} else {
-						entries[i].Run = &run
+						entries[i].Run = run
 					}
 				}(i, invocation.Id)
 			}
@@ -541,7 +541,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	} else {
-		run = &run_
+		run = run_
 	}
 
 	var inputs map[string]domain.Fact
@@ -739,7 +739,7 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 					if run, err := self.RunService.GetByInvocationId(id); err != nil && !pgxscan.NotFound(err) {
 						errChan <- err
 					} else if err == nil {
-						entries[i].Run = &run
+						entries[i].Run = run
 					}
 				}(i, invocation.Id)
 			}
@@ -867,7 +867,7 @@ func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 				self.ServerError(w, err)
 				return
 			} else {
-				runs[i] = &run
+				runs[i] = run
 			}
 		}
 
