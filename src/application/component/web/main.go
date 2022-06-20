@@ -394,16 +394,13 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 				go func(i int, id uuid.UUID) {
 					defer wg.Done()
 
-					var runPtr *domain.Run
 					run, err := self.RunService.GetByInvocationId(id)
 					if err != nil && !pgxscan.NotFound(err) {
 						errChan <- err
 						return
 					} else {
-						runPtr = &run
+						entries[i].Run = &run
 					}
-
-					entries[i].Run = runPtr
 				}(i, invocation.Id)
 			}
 
