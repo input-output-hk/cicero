@@ -24,12 +24,16 @@ func (self *invocationRepository) WithQuerier(querier config.PgxIface) repositor
 	return &invocationRepository{querier}
 }
 
-func (self *invocationRepository) GetById(id uuid.UUID) (invocation domain.Invocation, err error) {
-	return invocation, pgxscan.Get(
-		context.Background(), self.db, &invocation,
+func (self *invocationRepository) GetById(id uuid.UUID) (*domain.Invocation, error) {
+	invocation, err := get(
+		self.db, &domain.Invocation{},
 		`SELECT * FROM invocation WHERE id = $1`,
 		id,
 	)
+	if invocation == nil {
+		return nil, err
+	}
+	return invocation.(*domain.Invocation), err
 }
 
 func (self *invocationRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Invocation, error) {
@@ -41,12 +45,16 @@ func (self *invocationRepository) GetByActionId(id uuid.UUID, page *repository.P
 	)
 }
 
-func (self *invocationRepository) GetLatestByActionId(id uuid.UUID) (invocation domain.Invocation, err error) {
-	return invocation, pgxscan.Get(
-		context.Background(), self.db, &invocation,
+func (self *invocationRepository) GetLatestByActionId(id uuid.UUID) (*domain.Invocation, error) {
+	invocation, err := get(
+		self.db, &domain.Invocation{},
 		`SELECT DISTINCT ON (action_id) * FROM invocation WHERE action_id = $1 ORDER BY action_id, created_at DESC`,
 		id,
 	)
+	if invocation == nil {
+		return nil, err
+	}
+	return invocation.(*domain.Invocation), err
 }
 
 func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId map[string]uuid.UUID, err error) {

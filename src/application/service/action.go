@@ -252,10 +252,8 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 
 	// Not runnable if the inputs are the same as last invocation.
 	if invocation, err := (*self.invocationService).GetLatestByActionId(action.ID); err != nil {
-		if !pgxscan.NotFound(err) {
-			return false, nil, err
-		}
-	} else {
+		return false, nil, err
+	} else if invocation != nil {
 		var inputFactIds map[string]uuid.UUID
 		if inputFactIds, err = (*self.invocationService).GetInputFactIdsById(invocation.Id); err != nil {
 			if !pgxscan.NotFound(err) {

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/davidebianchi/gswagger/apirouter"
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	nomad "github.com/hashicorp/nomad/api"
@@ -526,7 +525,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log, err := self.InvocationService.GetLog(invocation)
+	log, err := self.InvocationService.GetLog(*invocation)
 	if err != nil {
 		self.ServerError(w, err)
 		return
@@ -633,7 +632,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	output, err := self.InvocationService.GetOutputById(run.InvocationId)
-	if err != nil && !pgxscan.NotFound(err) {
+	if err != nil {
 		self.ServerError(w, err)
 		return
 	}
@@ -958,11 +957,9 @@ func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Reque
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 	} else if output, err := self.InvocationService.GetOutputById(id); err != nil {
-		if pgxscan.NotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
-		} else {
-			self.ServerError(w, err)
-		}
+		self.ServerError(w, err)
+	} else if output == nil {
+		w.WriteHeader(http.StatusNotFound)
 	} else {
 		self.json(w, output, http.StatusOK)
 	}
@@ -990,11 +987,9 @@ func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 	} else if run == nil {
 		self.NotFound(w, nil)
 	} else if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
-		if pgxscan.NotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
-		} else {
-			self.ServerError(w, err)
-		}
+		self.ServerError(w, err)
+	} else if output == nil {
+		w.WriteHeader(http.StatusNotFound)
 	} else {
 		self.json(w, output, http.StatusOK)
 	}

@@ -10,9 +10,9 @@ import (
 type InvocationRepository interface {
 	WithQuerier(config.PgxIface) InvocationRepository
 
-	GetById(uuid.UUID) (domain.Invocation, error)
+	GetById(uuid.UUID) (*domain.Invocation, error)
 	GetByActionId(uuid.UUID, *Page) ([]*domain.Invocation, error)
-	GetLatestByActionId(uuid.UUID) (domain.Invocation, error)
+	GetLatestByActionId(uuid.UUID) (*domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
 	GetAll(*Page) ([]*domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, *bool, *Page) ([]*domain.Invocation, error)

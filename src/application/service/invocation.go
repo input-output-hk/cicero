@@ -18,9 +18,9 @@ type InvocationService interface {
 	WithQuerier(config.PgxIface) InvocationService
 	withQuerier(config.PgxIface, InvocationServiceCyclicDependencies) InvocationService
 
-	GetById(uuid.UUID) (domain.Invocation, error)
+	GetById(uuid.UUID) (*domain.Invocation, error)
 	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Invocation, error)
-	GetLatestByActionId(uuid.UUID) (domain.Invocation, error)
+	GetLatestByActionId(uuid.UUID) (*domain.Invocation, error)
 	GetAll(*repository.Page) ([]*domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, *bool, *repository.Page) ([]*domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
@@ -85,7 +85,7 @@ func (self invocationService) withQuerier(querier config.PgxIface, cyclicDeps In
 	return &result
 }
 
-func (self invocationService) GetById(id uuid.UUID) (invocation domain.Invocation, err error) {
+func (self invocationService) GetById(id uuid.UUID) (invocation *domain.Invocation, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Invocation by ID")
 	invocation, err = self.invocationRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Invocation for ID %q", id)
@@ -99,7 +99,7 @@ func (self invocationService) GetByActionId(id uuid.UUID, page *repository.Page)
 	return
 }
 
-func (self invocationService) GetLatestByActionId(id uuid.UUID) (invocation domain.Invocation, err error) {
+func (self invocationService) GetLatestByActionId(id uuid.UUID) (invocation *domain.Invocation, err error) {
 	self.logger.Trace().Str("action-id", id.String()).Msg("Getting latest Invocation by Action ID")
 	invocation, err = self.invocationRepository.GetLatestByActionId(id)
 	err = errors.WithMessagef(err, "Could not select latest Invocation by Action ID %q", id)
