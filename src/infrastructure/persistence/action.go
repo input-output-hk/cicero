@@ -18,13 +18,11 @@ type actionRepository struct {
 }
 
 func NewActionRepository(db config.PgxIface) repository.ActionRepository {
-	return &actionRepository{DB: db}
+	return &actionRepository{db}
 }
 
 func (a *actionRepository) WithQuerier(querier config.PgxIface) repository.ActionRepository {
-	return &actionRepository{
-		DB: querier,
-	}
+	return &actionRepository{querier}
 }
 
 func (a *actionRepository) GetById(id uuid.UUID) (*domain.Action, error) {
