@@ -27,11 +27,11 @@ type ActionService interface {
 	GetById(uuid.UUID) (*domain.Action, error)
 	GetByInvocationId(uuid.UUID) (*domain.Action, error)
 	GetByRunId(uuid.UUID) (*domain.Action, error)
-	GetByName(string, *repository.Page) ([]*domain.Action, error)
+	GetByName(string, *repository.Page) ([]domain.Action, error)
 	GetLatestByName(string) (*domain.Action, error)
-	GetAll() ([]*domain.Action, error)
-	GetCurrent() ([]*domain.Action, error)
-	GetCurrentActive() ([]*domain.Action, error)
+	GetAll() ([]domain.Action, error)
+	GetCurrent() ([]domain.Action, error)
+	GetCurrentActive() ([]domain.Action, error)
 	Save(*domain.Action) error
 	Update(*domain.Action) error
 	IsRunnable(*domain.Action) (bool, map[string]*domain.Fact, error)
@@ -120,7 +120,7 @@ func (self actionService) GetByInvocationId(id uuid.UUID) (action *domain.Action
 	return
 }
 
-func (self actionService) GetByName(name string, page *repository.Page) (actions []*domain.Action, err error) {
+func (self actionService) GetByName(name string, page *repository.Page) (actions []domain.Action, err error) {
 	self.logger.Trace().Str("name", name).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Actions by name")
 	actions, err = self.actionRepository.GetByName(name, page)
 	err = errors.WithMessagef(err, "Could not select Actions for name %q with offset %d and limit %d", name, page.Offset, page.Limit)
@@ -134,7 +134,7 @@ func (self actionService) GetLatestByName(name string) (action *domain.Action, e
 	return
 }
 
-func (self actionService) GetAll() ([]*domain.Action, error) {
+func (self actionService) GetAll() ([]domain.Action, error) {
 	self.logger.Trace().Msg("Getting all Actions")
 	return self.actionRepository.GetAll()
 }
@@ -157,14 +157,14 @@ func (self actionService) Update(action *domain.Action) error {
 	return nil
 }
 
-func (self actionService) GetCurrent() (actions []*domain.Action, err error) {
+func (self actionService) GetCurrent() (actions []domain.Action, err error) {
 	self.logger.Trace().Msg("Getting current Actions")
 	actions, err = self.actionRepository.GetCurrent()
 	err = errors.WithMessagef(err, "Could not select current Actions")
 	return
 }
 
-func (self actionService) GetCurrentActive() (actions []*domain.Action, err error) {
+func (self actionService) GetCurrentActive() (actions []domain.Action, err error) {
 	self.logger.Trace().Msg("Getting current active Actions")
 	actions, err = self.actionRepository.GetCurrentActive()
 	err = errors.WithMessagef(err, "Could not select current active Actions")
@@ -570,7 +570,9 @@ func (self actionService) InvokeCurrentActive() (func(config.PgxIface) (InvokeRe
 				anyRunnable := false
 
 				for _, action := range actions {
-					if invocation, runFunc, err := txSelf.Invoke(action); err != nil {
+					// copy so we don't point to loop variable
+					action := action
+					if invocation, runFunc, err := txSelf.Invoke(&action); err != nil {
 						return err
 					} else {
 						anyRunnable = anyRunnable || invocation != nil

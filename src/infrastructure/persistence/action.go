@@ -76,8 +76,8 @@ func (a *actionRepository) GetByRunId(id uuid.UUID) (*domain.Action, error) {
 	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetByName(name string, page *repository.Page) ([]*domain.Action, error) {
-	actions := make([]*domain.Action, page.Limit)
+func (a *actionRepository) GetByName(name string, page *repository.Page) ([]domain.Action, error) {
+	actions := make([]domain.Action, page.Limit)
 	return actions, fetchPage(
 		a.DB, page, &actions,
 		`*`, `action WHERE name = $1`, `created_at DESC`,
@@ -97,7 +97,7 @@ func (a *actionRepository) GetLatestByName(name string) (*domain.Action, error) 
 	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {
+func (a *actionRepository) GetAll() (actions []domain.Action, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT * FROM action ORDER BY created_at DESC`,
@@ -132,7 +132,7 @@ func (a *actionRepository) Update(action *domain.Action) (err error) {
 	return
 }
 
-func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
+func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT DISTINCT ON (name) * FROM action ORDER BY name, created_at DESC`,
@@ -140,7 +140,7 @@ func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
 	return
 }
 
-func (a *actionRepository) GetCurrentActive() (actions []*domain.Action, err error) {
+func (a *actionRepository) GetCurrentActive() (actions []domain.Action, err error) {
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT DISTINCT ON (name) * FROM action WHERE active ORDER BY name, created_at DESC`,

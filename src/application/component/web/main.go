@@ -339,7 +339,7 @@ func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	var actions []*domain.Action
+	var actions []domain.Action
 	var err error
 
 	_, active := req.URL.Query()["active"]
@@ -439,7 +439,7 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if err := render("action/version.html", w, struct {
 		ActionID uuid.UUID
-		Actions  []*domain.Action
+		Actions  []domain.Action
 		*repository.Page
 	}{
 		ActionID: id,
@@ -1051,7 +1051,7 @@ func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 
 // XXX respond with map[string]Action instead of []Action?
 func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	var actions []*domain.Action
+	var actions []domain.Action
 	var err error
 
 	if _, active := req.URL.Query()["active"]; active {
