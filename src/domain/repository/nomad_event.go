@@ -13,7 +13,7 @@ type NomadEventRepository interface {
 
 	Save(*domain.NomadEvent) error
 	Update(*domain.NomadEvent) error
-	GetByHandled(bool) ([]*domain.NomadEvent, error)
+	GetByHandled(bool) ([]domain.NomadEvent, error)
 	GetLastNomadEventIndex() (uint64, error)
 	GetEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
 	GetLatestEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)

@@ -17,7 +17,7 @@ type NomadEventService interface {
 
 	Save(*domain.NomadEvent) error
 	Update(*domain.NomadEvent) error
-	GetByHandled(bool) ([]*domain.NomadEvent, error)
+	GetByHandled(bool) ([]domain.NomadEvent, error)
 	GetLastNomadEventIndex() (uint64, error)
 	GetEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
 	GetLatestEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
@@ -62,7 +62,7 @@ func (n nomadEventService) Update(event *domain.NomadEvent) (err error) {
 	return
 }
 
-func (n nomadEventService) GetByHandled(handled bool) (events []*domain.NomadEvent, err error) {
+func (n nomadEventService) GetByHandled(handled bool) (events []domain.NomadEvent, err error) {
 	n.logger.Trace().Bool("handled", handled).Msg("Get nomad events by handled flag")
 	if events, err = n.nomadEventRepository.GetByHandled(handled); err != nil {
 		err = errors.WithMessagef(err, "Could not get nomad events by handled flag %t", handled)

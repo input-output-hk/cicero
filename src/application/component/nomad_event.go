@@ -46,7 +46,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	} else {
 		self.Logger.Debug().Int("num-unhandled", len(events)).Msg("Handling unhandled events")
 		for _, event := range events {
-			if err := self.processNomadEvent(ctx, event); err != nil {
+			if err := self.processNomadEvent(ctx, &event); err != nil {
 				return err
 			}
 		}
