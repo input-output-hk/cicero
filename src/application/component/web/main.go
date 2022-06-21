@@ -522,6 +522,10 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, err)
 		return
 	}
+	if invocation == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
 
 	log, err := self.InvocationService.GetLog(*invocation)
 	if err != nil {
