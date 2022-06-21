@@ -1236,6 +1236,10 @@ type HandlerError struct {
 	StatusCode int
 }
 
+func (self HandlerError) HasError() bool {
+	return self.error != nil
+}
+
 func (self *Web) ServerError(w http.ResponseWriter, err error) {
 	self.Error(w, HandlerError{err, http.StatusInternalServerError})
 }
@@ -1254,15 +1258,18 @@ func (self *Web) BadRequest(w http.ResponseWriter, err error) {
 
 func (self *Web) Error(w http.ResponseWriter, err error) {
 	status := 500
-	if _, ok := err.(HandlerError); ok {
+	e := self.Logger.Error()
+
+	if handlerErr, ok := err.(HandlerError); ok {
 		status = err.(HandlerError).StatusCode
+		if handlerErr.HasError() {
+			e = e.Err(err)
+		} else {
+			err = nil
+		}
 	}
 
-	self.Logger.
-		Error().
-		Err(err).
-		Int("status", status).
-		Msg("Handler error")
+	e.Int("status", status).Msg("Handler error")
 
 	var msg string
 	if err != nil {
