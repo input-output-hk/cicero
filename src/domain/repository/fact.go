@@ -14,10 +14,10 @@ import (
 type FactRepository interface {
 	WithQuerier(config.PgxIface) FactRepository
 
-	GetById(uuid.UUID) (domain.Fact, error)
+	GetById(uuid.UUID) (*domain.Fact, error)
 	GetByRunId(uuid.UUID) ([]*domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
-	GetLatestByCue(cue.Value) (domain.Fact, error)
+	GetLatestByCue(cue.Value) (*domain.Fact, error)
 	GetByCue(cue.Value) ([]*domain.Fact, error)
 	Save(*domain.Fact, io.Reader) error
 }

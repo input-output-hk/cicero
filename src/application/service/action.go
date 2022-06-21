@@ -212,11 +212,11 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 				return err
 			default:
 				if !input.Not {
-					inputs[name] = &fact
+					inputs[name] = fact
 				}
 
 				// Match candidate fact.
-				if matchErr, err := matchFact(action.InOut.Input(name, inputs).Match, &fact); err != nil {
+				if matchErr, err := matchFact(action.InOut.Input(name, inputs).Match, fact); err != nil {
 					return err
 				} else if (matchErr == nil) == input.Not {
 					if !input.Optional || input.Not {

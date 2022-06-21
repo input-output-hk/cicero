@@ -21,13 +21,13 @@ type FactService interface {
 	WithQuerier(config.PgxIface) FactService
 	withQuerier(config.PgxIface, FactServiceCyclicDependencies) FactService
 
-	GetById(uuid.UUID) (domain.Fact, error)
+	GetById(uuid.UUID) (*domain.Fact, error)
 	GetByRunId(uuid.UUID) ([]*domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
-	GetLatestByCue(cue.Value) (domain.Fact, error)
+	GetLatestByCue(cue.Value) (*domain.Fact, error)
 	GetByCue(cue.Value) ([]*domain.Fact, error)
 	Save(*domain.Fact, io.Reader) error
-	GetInvocationInputFacts(map[string]uuid.UUID) (map[string]domain.Fact, error)
+	GetInvocationInputFacts(map[string]uuid.UUID) (map[string]*domain.Fact, error)
 }
 
 type FactServiceCyclicDependencies struct {
@@ -72,7 +72,7 @@ func (self factService) withQuerier(querier config.PgxIface, cyclicDeps FactServ
 	return &result
 }
 
-func (self factService) GetById(id uuid.UUID) (fact domain.Fact, err error) {
+func (self factService) GetById(id uuid.UUID) (fact *domain.Fact, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Fact by ID")
 	fact, err = self.factRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Fact with ID %q", id)
@@ -128,7 +128,7 @@ func (self factService) Save(fact *domain.Fact, binary io.Reader) error {
 	return nil
 }
 
-func (self factService) GetLatestByCue(value cue.Value) (fact domain.Fact, err error) {
+func (self factService) GetLatestByCue(value cue.Value) (fact *domain.Fact, err error) {
 	self.logger.Trace().Interface("cue", value).Msg("Getting latest Facts by CUE")
 	fact, err = self.factRepository.GetLatestByCue(value)
 	err = errors.WithMessagef(err, "Could not select latest Facts by CUE %q", value)
@@ -144,12 +144,12 @@ func (self factService) GetByCue(value cue.Value) (facts []*domain.Fact, err err
 
 // XXX Could probably be done entirely in the DB with a single SQL query
 // XXX Should this be `InvocationService.GetInputsById()`?
-func (self factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UUID) (map[string]domain.Fact, error) {
-	inputs := map[string]domain.Fact{}
+func (self factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UUID) (map[string]*domain.Fact, error) {
+	inputs := map[string]*domain.Fact{}
 
 	type Res struct {
 		input string
-		fact  domain.Fact
+		fact  *domain.Fact
 		err   error
 	}
 	res := make(chan *Res, len(inputFactIds))

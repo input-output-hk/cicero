@@ -143,13 +143,7 @@ func (self invocationService) GetOutputById(id uuid.UUID) (domain.OutputDefiniti
 	} else if inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds); err != nil {
 		return domain.OutputDefinition{}, err
 	} else {
-		// XXX decide on map[string]*Fact vs map[string]Fact
-		// and refactor everywhere (where applicable)
-		inputsPtr := map[string]*domain.Fact{}
-		for k, v := range inputs {
-			inputsPtr[k] = &v
-		}
-		return action.InOut.Output(inputsPtr), nil
+		return action.InOut.Output(inputs), nil
 	}
 }
 

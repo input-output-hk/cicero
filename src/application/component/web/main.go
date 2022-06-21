@@ -541,7 +541,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		run = run_
 	}
 
-	var inputs map[string]domain.Fact
+	var inputs map[string]*domain.Fact
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
 		return
@@ -621,7 +621,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		allocsWithLogsByGroup[alloc.TaskGroup] = append(allocsWithLogsByGroup[alloc.TaskGroup], alloc)
 	}
 
-	var inputs map[string]domain.Fact
+	var inputs map[string]*domain.Fact
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
 		return

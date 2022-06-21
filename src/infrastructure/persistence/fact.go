@@ -30,13 +30,16 @@ func (a *factRepository) WithQuerier(querier config.PgxIface) repository.FactRep
 	return &factRepository{querier}
 }
 
-func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &fact,
+func (a *factRepository) GetById(id uuid.UUID) (*domain.Fact, error) {
+	fact, err := get(
+		a.DB, &domain.Fact{},
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE id = $1`,
 		id,
 	)
-	return
+	if fact == nil {
+		return nil, err
+	}
+	return fact.(*domain.Fact), err
 }
 
 func (a *factRepository) GetByRunId(id uuid.UUID) (facts []*domain.Fact, err error) {
@@ -68,14 +71,17 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	return
 }
 
-func (a *factRepository) GetLatestByCue(value cue.Value) (fact domain.Fact, err error) {
+func (a *factRepository) GetLatestByCue(value cue.Value) (*domain.Fact, error) {
 	where, args := sqlWhereCue(value, nil, 0)
-	err = pgxscan.Get(
-		context.Background(), a.DB, &fact,
+	fact, err := get(
+		a.DB, &domain.Fact{},
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
 		args...,
 	)
-	return
+	if fact == nil {
+		return nil, err
+	}
+	return fact.(*domain.Fact), err
 }
 
 func (a *factRepository) GetByCue(value cue.Value) (facts []*domain.Fact, err error) {
