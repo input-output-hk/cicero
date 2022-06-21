@@ -934,11 +934,12 @@ func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
 }
 
 func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
-	if run, err := self.getRun(req); err != nil {
+	switch run, err := self.getRun(req); {
+	case err != nil:
 		self.ServerError(w, err)
-	} else if run == nil {
+	case run == nil:
 		self.NotFound(w, nil)
-	} else {
+	default:
 		self.json(w, run, http.StatusOK)
 	}
 }
