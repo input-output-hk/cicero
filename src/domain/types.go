@@ -123,7 +123,7 @@ func (self *TrustedInOutCUEString) UnmarshalJSON(data []byte) error {
 	return self.Validate()
 }
 
-func (self TrustedInOutCUEString) Inputs(inputs map[string]*Fact) InputDefinitions {
+func (self TrustedInOutCUEString) Inputs(inputs map[string]Fact) InputDefinitions {
 	if r, err := InOutCUEString(self).Inputs(inputs); err != nil {
 		panic(err.Error())
 	} else {
@@ -131,7 +131,7 @@ func (self TrustedInOutCUEString) Inputs(inputs map[string]*Fact) InputDefinitio
 	}
 }
 
-func (self TrustedInOutCUEString) Input(name string, inputs map[string]*Fact) InputDefinition {
+func (self TrustedInOutCUEString) Input(name string, inputs map[string]Fact) InputDefinition {
 	if r, err := InOutCUEString(self).Input(name, inputs); err != nil {
 		panic(err.Error())
 	} else {
@@ -147,7 +147,7 @@ func (self TrustedInOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) *flow.C
 	}
 }
 
-func (self TrustedInOutCUEString) Output(inputs map[string]*Fact) OutputDefinition {
+func (self TrustedInOutCUEString) Output(inputs map[string]Fact) OutputDefinition {
 	if r, err := InOutCUEString(self).Output(inputs); err != nil {
 		panic(err.Error())
 	} else {
@@ -155,7 +155,7 @@ func (self TrustedInOutCUEString) Output(inputs map[string]*Fact) OutputDefiniti
 	}
 }
 
-func (self InOutCUEString) Inputs(inputs map[string]*Fact) (InputDefinitions, error) {
+func (self InOutCUEString) Inputs(inputs map[string]Fact) (InputDefinitions, error) {
 	defs := InputDefinitions{}
 
 	value := self.valueWithInputs(inputs)
@@ -175,7 +175,7 @@ func (self InOutCUEString) Inputs(inputs map[string]*Fact) (InputDefinitions, er
 	return defs, nil
 }
 
-func (self InOutCUEString) Input(name string, inputs map[string]*Fact) (InputDefinition, error) {
+func (self InOutCUEString) Input(name string, inputs map[string]Fact) (InputDefinition, error) {
 	def := InputDefinition{}
 
 	value := self.valueWithInputs(inputs).LookupPath(cue.MakePath(cue.Str("inputs"), cue.Str(name)))
@@ -248,7 +248,7 @@ func (self InOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) (*flow.Control
 	), nil
 }
 
-func (self InOutCUEString) Output(inputs map[string]*Fact) (OutputDefinition, error) {
+func (self InOutCUEString) Output(inputs map[string]Fact) (OutputDefinition, error) {
 	value := self.valueWithInputs(inputs)
 	return OutputDefinition{
 		Success: value.LookupPath(cue.MakePath(cue.Str("output"), cue.Str("success"))),
@@ -256,7 +256,7 @@ func (self InOutCUEString) Output(inputs map[string]*Fact) (OutputDefinition, er
 	}, nil
 }
 
-func (self InOutCUEString) valueWithInputs(inputs map[string]*Fact) cue.Value {
+func (self InOutCUEString) valueWithInputs(inputs map[string]Fact) cue.Value {
 	cueStr := util.CUEString(self)
 
 	if inputs != nil {

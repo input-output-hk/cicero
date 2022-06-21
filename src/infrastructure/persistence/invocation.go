@@ -161,7 +161,7 @@ func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recurs
 	)
 }
 
-func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map[string]*domain.Fact) error {
+func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map[string]domain.Fact) error {
 	ctx := context.Background()
 
 	if err := self.db.BeginFunc(ctx, func(tx pgx.Tx) error {

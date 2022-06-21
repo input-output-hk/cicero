@@ -36,7 +36,7 @@ import (
 type EvaluationService interface {
 	ListActions(src string) ([]string, error)
 	EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error)
-	EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error)
+	EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]domain.Fact) (*nomad.Job, error)
 }
 
 const (
@@ -326,7 +326,7 @@ func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domai
 	return def, nil
 }
 
-func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]*domain.Fact) (*nomad.Job, error) {
+func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]domain.Fact) (*nomad.Job, error) {
 	var def *nomad.Job
 
 	dst, evaluator, err := e.fetchSource(src)

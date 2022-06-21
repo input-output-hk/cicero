@@ -24,8 +24,8 @@ type InvocationService interface {
 	GetAll(*repository.Page) ([]domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, *bool, *repository.Page) ([]domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
-	GetOutputById(uuid.UUID) (domain.OutputDefinition, error)
-	Save(*domain.Invocation, map[string]*domain.Fact) error
+	GetOutputById(uuid.UUID) (*domain.OutputDefinition, error)
+	Save(*domain.Invocation, map[string]domain.Fact) error
 	End(uuid.UUID) error
 	GetLog(domain.Invocation) (LokiLog, error)
 }
@@ -134,20 +134,21 @@ func (self invocationService) GetInputFactIdsById(id uuid.UUID) (inputFactIds ma
 	return
 }
 
-func (self invocationService) GetOutputById(id uuid.UUID) (domain.OutputDefinition, error) {
+func (self invocationService) GetOutputById(id uuid.UUID) (*domain.OutputDefinition, error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Evaluating output for ID")
 	if action, err := (*self.actionService).GetByInvocationId(id); err != nil {
-		return domain.OutputDefinition{}, err
+		return nil, err
 	} else if inputFactIds, err := self.GetInputFactIdsById(id); err != nil {
-		return domain.OutputDefinition{}, err
+		return nil, err
 	} else if inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds); err != nil {
-		return domain.OutputDefinition{}, err
+		return nil, err
 	} else {
-		return action.InOut.Output(inputs), nil
+		output := action.InOut.Output(inputs)
+		return &output, nil
 	}
 }
 
-func (self invocationService) Save(invocation *domain.Invocation, inputs map[string]*domain.Fact) error {
+func (self invocationService) Save(invocation *domain.Invocation, inputs map[string]domain.Fact) error {
 	self.logger.Trace().Msg("Saving new Invocation")
 	if err := self.invocationRepository.Save(invocation, inputs); err != nil {
 		return errors.WithMessagef(err, "Could not insert Invocation")

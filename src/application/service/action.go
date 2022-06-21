@@ -34,7 +34,7 @@ type ActionService interface {
 	GetCurrentActive() ([]domain.Action, error)
 	Save(*domain.Action) error
 	Update(*domain.Action) error
-	IsRunnable(*domain.Action) (bool, map[string]*domain.Fact, error)
+	IsRunnable(*domain.Action) (bool, map[string]domain.Fact, error)
 	Create(string, string) (*domain.Action, error)
 	// Returns a nil pointer for the first return value if the Action was not runnable.
 	Invoke(*domain.Action) (*domain.Invocation, InvokeRunFunc, error)
@@ -171,7 +171,7 @@ func (self actionService) GetCurrentActive() (actions []domain.Action, err error
 	return
 }
 
-func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*domain.Fact, error) {
+func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]domain.Fact, error) {
 	logger := self.logger.With().
 		Str("name", action.Name).
 		Str("id", action.ID.String()).
@@ -179,7 +179,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 
 	logger.Debug().Msg("Checking whether Action is runnable")
 
-	inputs := map[string]*domain.Fact{}
+	inputs := map[string]domain.Fact{}
 
 	{ // Select and match candidate facts.
 		dbConnMutex := &sync.Mutex{}
@@ -201,18 +201,18 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 			defer dbConnMutex.Unlock()
 
 			switch fact, err := self.factRepository.GetLatestByCue(tValue); {
-			case pgxscan.NotFound(err):
+			case err != nil:
+				return err
+			case fact == nil:
 				if !input.Not && !input.Optional {
 					inputLogger.Debug().
 						Bool("runnable", false).
 						Msg("No fact found for required input")
 					return errNotRunnable
 				}
-			case err != nil:
-				return err
 			default:
 				if !input.Not {
-					inputs[name] = fact
+					inputs[name] = *fact
 				}
 
 				// Match candidate fact.
@@ -256,10 +256,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 	} else if invocation != nil {
 		var inputFactIds map[string]uuid.UUID
 		if inputFactIds, err = (*self.invocationService).GetInputFactIdsById(invocation.Id); err != nil {
-			if !pgxscan.NotFound(err) {
-				return false, nil, err
-			}
-			inputFactIds = map[string]uuid.UUID{}
+			return false, nil, err
 		}
 
 		inputFactsChanged := false
@@ -280,7 +277,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 
 			switch {
 			case input.Optional && oldFactId == nil:
-				if inputs[name] != nil {
+				if _, exists := inputs[name]; exists {
 					if logger.Debug().Enabled() {
 						logger.Debug().
 							Str("input", name).
@@ -293,10 +290,10 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]*d
 					break InputFactsChanged
 				}
 			case input.Optional && oldFactId != nil:
-				if inputs[name] == nil || *oldFactId != inputs[name].ID {
+				if _, exists := inputs[name]; !exists || *oldFactId != inputs[name].ID {
 					if logger.Debug().Enabled() {
 						var newFactIdToLog *string
-						if inputs[name] != nil {
+						if !exists {
 							newFactIdToLogValue := inputs[name].ID.String()
 							newFactIdToLog = &newFactIdToLogValue
 						}
@@ -416,7 +413,7 @@ func (self actionService) Create(source, name string) (*domain.Action, error) {
 
 func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, InvokeRunFunc, error) {
 	var invocation *domain.Invocation
-	var inputs map[string]*domain.Fact
+	var inputs map[string]domain.Fact
 	var runnable bool
 
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
