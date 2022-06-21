@@ -7,7 +7,6 @@ import (
 	"cuelang.org/go/cue"
 	cueliteral "cuelang.org/go/cue/literal"
 	"cuelang.org/go/tools/flow"
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
@@ -25,11 +24,11 @@ type ActionService interface {
 	WithQuerier(config.PgxIface) ActionService
 	withQuerier(config.PgxIface, ActionServiceCyclicDependencies) ActionService
 
-	GetById(uuid.UUID) (domain.Action, error)
-	GetByInvocationId(uuid.UUID) (domain.Action, error)
-	GetByRunId(uuid.UUID) (domain.Action, error)
+	GetById(uuid.UUID) (*domain.Action, error)
+	GetByInvocationId(uuid.UUID) (*domain.Action, error)
+	GetByRunId(uuid.UUID) (*domain.Action, error)
 	GetByName(string, *repository.Page) ([]*domain.Action, error)
-	GetLatestByName(string) (domain.Action, error)
+	GetLatestByName(string) (*domain.Action, error)
 	GetAll() ([]*domain.Action, error)
 	GetCurrent() ([]*domain.Action, error)
 	GetCurrentActive() ([]*domain.Action, error)
@@ -100,21 +99,21 @@ func (self actionService) withQuerier(querier config.PgxIface, cyclicDeps Action
 	return &result
 }
 
-func (self actionService) GetById(id uuid.UUID) (action domain.Action, err error) {
+func (self actionService) GetById(id uuid.UUID) (action *domain.Action, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by ID")
 	action, err = self.actionRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for ID %q", id)
 	return
 }
 
-func (self actionService) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
+func (self actionService) GetByRunId(id uuid.UUID) (action *domain.Action, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Run ID")
 	action, err = self.actionRepository.GetByRunId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Run ID %q", id)
 	return
 }
 
-func (self actionService) GetByInvocationId(id uuid.UUID) (action domain.Action, err error) {
+func (self actionService) GetByInvocationId(id uuid.UUID) (action *domain.Action, err error) {
 	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Invocation ID")
 	action, err = self.actionRepository.GetByInvocationId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Invocation ID %q", id)
@@ -128,7 +127,7 @@ func (self actionService) GetByName(name string, page *repository.Page) (actions
 	return
 }
 
-func (self actionService) GetLatestByName(name string) (action domain.Action, err error) {
+func (self actionService) GetLatestByName(name string) (action *domain.Action, err error) {
 	self.logger.Trace().Str("name", name).Msg("Getting latest Action by name")
 	action, err = self.actionRepository.GetLatestByName(name)
 	err = errors.WithMessagef(err, "Could not select latest Action for name %q", name)
@@ -400,11 +399,11 @@ func (self actionService) Create(source, name string) (*domain.Action, error) {
 		txSelf := self.WithQuerier(tx).(*actionService)
 
 		// deactivate previous version for convenience
-		if prev, err := txSelf.GetLatestByName(action.Name); err != nil && !pgxscan.NotFound(err) {
+		if prev, err := txSelf.GetLatestByName(action.Name); err != nil {
 			return err
-		} else if err == nil && prev.Active {
+		} else if prev != nil && prev.Active {
 			prev.Active = false
-			if err := txSelf.Update(&prev); err != nil {
+			if err := txSelf.Update(prev); err != nil {
 				return err
 			}
 		}

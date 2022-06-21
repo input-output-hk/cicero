@@ -27,18 +27,21 @@ func (a *actionRepository) WithQuerier(querier config.PgxIface) repository.Actio
 	}
 }
 
-func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &action,
+func (a *actionRepository) GetById(id uuid.UUID) (*domain.Action, error) {
+	action, err := get(
+		a.DB, &domain.Action{},
 		`SELECT * FROM action WHERE id = $1`,
 		id,
 	)
-	return
+	if action == nil {
+		return nil, err
+	}
+	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetByInvocationId(id uuid.UUID) (action domain.Action, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &action,
+func (a *actionRepository) GetByInvocationId(id uuid.UUID) (*domain.Action, error) {
+	action, err := get(
+		a.DB, &domain.Action{},
 		`SELECT * FROM action WHERE EXISTS (
 			SELECT NULL
 			FROM invocation
@@ -48,12 +51,15 @@ func (a *actionRepository) GetByInvocationId(id uuid.UUID) (action domain.Action
 		)`,
 		id,
 	)
-	return
+	if action == nil {
+		return nil, err
+	}
+	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &action,
+func (a *actionRepository) GetByRunId(id uuid.UUID) (*domain.Action, error) {
+	action, err := get(
+		a.DB, &domain.Action{},
 		`SELECT * FROM action WHERE EXISTS (
 			SELECT NULL
 			FROM run
@@ -64,7 +70,10 @@ func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err e
 		)`,
 		id,
 	)
-	return
+	if action == nil {
+		return nil, err
+	}
+	return action.(*domain.Action), err
 }
 
 func (a *actionRepository) GetByName(name string, page *repository.Page) ([]*domain.Action, error) {
@@ -76,13 +85,16 @@ func (a *actionRepository) GetByName(name string, page *repository.Page) ([]*dom
 	)
 }
 
-func (a *actionRepository) GetLatestByName(name string) (action domain.Action, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &action,
+func (a *actionRepository) GetLatestByName(name string) (*domain.Action, error) {
+	action, err := get(
+		a.DB, &domain.Action{},
 		`SELECT DISTINCT ON (name) * FROM action WHERE name = $1 ORDER BY name, created_at DESC`,
 		name,
 	)
-	return
+	if action == nil {
+		return nil, err
+	}
+	return action.(*domain.Action), err
 }
 
 func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {

@@ -457,7 +457,7 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
-	} else if _, inputs, err := self.ActionService.IsRunnable(&action); err != nil {
+	} else if _, inputs, err := self.ActionService.IsRunnable(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
 		return
 	} else if err := render("action/[id].html", w, map[string]interface{}{
@@ -666,7 +666,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		"Run": struct {
 			domain.Run
 			Action domain.Action
-		}{*run, action},
+		}{*run, *action},
 		"inputs":                inputs,
 		"output":                output,
 		"facts":                 facts,
@@ -731,7 +731,7 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 					if action, err := self.ActionService.GetByInvocationId(id); err != nil {
 						errChan <- err
 					} else {
-						entries[i].Action = &action
+						entries[i].Action = action
 					}
 				}(i, invocation.Id)
 
@@ -1107,7 +1107,7 @@ func (self *Web) ApiActionIdPatch(w http.ResponseWriter, req *http.Request) {
 			action.Active = active
 		}
 
-		if err := self.ActionService.Update(&action); err != nil {
+		if err := self.ActionService.Update(action); err != nil {
 			self.ServerError(w, err)
 			return
 		}
