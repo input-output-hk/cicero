@@ -388,7 +388,9 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 
 			wg.Add(len(invocations))
 			for i, invocation := range invocations {
-				entries[i].Invocation = invocation
+				// copy so we don't point to loop variable
+				invocation := invocation
+				entries[i].Invocation = &invocation
 
 				go func(i int, id uuid.UUID) {
 					defer wg.Done()
@@ -719,7 +721,9 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 
 			wg.Add(len(invocations) * 2)
 			for i, invocation := range invocations {
-				entries[i].Invocation = invocation
+				// copy so we don't point to loop variable
+				invocation := invocation
+				entries[i].Invocation = &invocation
 
 				go func(i int, id uuid.UUID) {
 					defer wg.Done()

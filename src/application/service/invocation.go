@@ -19,10 +19,10 @@ type InvocationService interface {
 	withQuerier(config.PgxIface, InvocationServiceCyclicDependencies) InvocationService
 
 	GetById(uuid.UUID) (*domain.Invocation, error)
-	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Invocation, error)
+	GetByActionId(uuid.UUID, *repository.Page) ([]domain.Invocation, error)
 	GetLatestByActionId(uuid.UUID) (*domain.Invocation, error)
-	GetAll(*repository.Page) ([]*domain.Invocation, error)
-	GetByInputFactIds([]*uuid.UUID, bool, *bool, *repository.Page) ([]*domain.Invocation, error)
+	GetAll(*repository.Page) ([]domain.Invocation, error)
+	GetByInputFactIds([]*uuid.UUID, bool, *bool, *repository.Page) ([]domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
 	GetOutputById(uuid.UUID) (domain.OutputDefinition, error)
 	Save(*domain.Invocation, map[string]*domain.Fact) error
@@ -92,7 +92,7 @@ func (self invocationService) GetById(id uuid.UUID) (invocation *domain.Invocati
 	return
 }
 
-func (self invocationService) GetByActionId(id uuid.UUID, page *repository.Page) (invocations []*domain.Invocation, err error) {
+func (self invocationService) GetByActionId(id uuid.UUID, page *repository.Page) (invocations []domain.Invocation, err error) {
 	self.logger.Trace().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Invocation by Action ID")
 	invocations, err = self.invocationRepository.GetByActionId(id, page)
 	err = errors.WithMessagef(err, "Could not select existing Invocation by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
@@ -106,14 +106,14 @@ func (self invocationService) GetLatestByActionId(id uuid.UUID) (invocation *dom
 	return
 }
 
-func (self invocationService) GetAll(page *repository.Page) (invocations []*domain.Invocation, err error) {
+func (self invocationService) GetAll(page *repository.Page) (invocations []domain.Invocation, err error) {
 	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Invocations")
 	invocations, err = self.invocationRepository.GetAll(page)
 	err = errors.WithMessagef(err, "Could not select existing Invocations with offset %d and limit %d", page.Offset, page.Limit)
 	return
 }
 
-func (self invocationService) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok *bool, page *repository.Page) (invocations []*domain.Invocation, err error) {
+func (self invocationService) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok *bool, page *repository.Page) (invocations []domain.Invocation, err error) {
 	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Interface("input-fact-ids", factIds).Bool("recursive", recursive).Interface("ok", ok).Msg("Getting Invocations by input Fact IDs")
 	invocations, err = self.invocationRepository.GetByInputFactIds(factIds, recursive, ok, page)
 	errMsg := "Could not select Invocations by input fact IDs %q (recursively: %t, ok: "

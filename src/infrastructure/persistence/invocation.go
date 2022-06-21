@@ -36,8 +36,8 @@ func (self *invocationRepository) GetById(id uuid.UUID) (*domain.Invocation, err
 	return invocation.(*domain.Invocation), err
 }
 
-func (self *invocationRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Invocation, error) {
-	invocations := make([]*domain.Invocation, page.Limit)
+func (self *invocationRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]domain.Invocation, error) {
+	invocations := make([]domain.Invocation, page.Limit)
 	return invocations, fetchPage(
 		self.db, page, &invocations,
 		`*`, `invocation WHERE action_id = $1`, `created_at DESC`,
@@ -58,6 +58,7 @@ func (self *invocationRepository) GetLatestByActionId(id uuid.UUID) (*domain.Inv
 }
 
 func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId map[string]uuid.UUID, err error) {
+	inputFactId = map[string]uuid.UUID{}
 	inputs := []struct {
 		InputName string    `json:"input_name"`
 		FactId    uuid.UUID `json:"fact_id"`
@@ -74,7 +75,6 @@ func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId
 		return
 	}
 
-	inputFactId = map[string]uuid.UUID{}
 	for _, runInput := range inputs {
 		if _, exists := inputFactId[runInput.InputName]; exists {
 			panic("This should never happen™")
@@ -85,8 +85,8 @@ func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId
 	return
 }
 
-func (self *invocationRepository) GetAll(page *repository.Page) ([]*domain.Invocation, error) {
-	invocations := make([]*domain.Invocation, page.Limit)
+func (self *invocationRepository) GetAll(page *repository.Page) ([]domain.Invocation, error) {
+	invocations := make([]domain.Invocation, page.Limit)
 	return invocations, fetchPage(
 		self.db, page, &invocations,
 		`*`, `invocation`, `created_at DESC`,
@@ -94,7 +94,7 @@ func (self *invocationRepository) GetAll(page *repository.Page) ([]*domain.Invoc
 }
 
 // `ok`: Allows to filter for successful or failed invocations.
-func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok *bool, page *repository.Page) ([]*domain.Invocation, error) {
+func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok *bool, page *repository.Page) ([]domain.Invocation, error) {
 	joins := ``
 	for i := range factIds {
 		iStr := strconv.Itoa(i + 1)
@@ -153,7 +153,7 @@ func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recurs
 		from = `(SELECT invocation.* FROM invocation ` + joins + whereOk + `) AS invocation`
 	}
 
-	invocations := make([]*domain.Invocation, page.Limit)
+	invocations := make([]domain.Invocation, page.Limit)
 	return invocations, fetchPage(
 		self.db, page, &invocations,
 		`invocation.*`, from, `created_at`,
