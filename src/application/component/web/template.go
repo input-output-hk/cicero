@@ -89,6 +89,9 @@ var templateFuncs = template.FuncMap{
 	"derefString": func(ptr *string) string {
 		return *ptr
 	},
+	"addInt": func(a int, b int) int {
+		return a + b
+	},
 	"subInt": func(a int, b int) int {
 		return a - b
 	},
