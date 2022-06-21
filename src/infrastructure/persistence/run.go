@@ -50,8 +50,8 @@ func (a runRepository) GetByInvocationId(invocationId uuid.UUID) (*domain.Run, e
 	return run.(*domain.Run), err
 }
 
-func (a runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Run, error) {
-	runs := make([]*domain.Run, page.Limit)
+func (a runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]domain.Run, error) {
+	runs := make([]domain.Run, page.Limit)
 	return runs, fetchPage(
 		a.DB, page, &runs,
 		`run.*`,
@@ -78,8 +78,8 @@ func (a runRepository) GetLatestByActionId(id uuid.UUID) (*domain.Run, error) {
 	return run.(*domain.Run), err
 }
 
-func (a runRepository) GetAll(page *repository.Page) ([]*domain.Run, error) {
-	runs := make([]*domain.Run, page.Limit)
+func (a runRepository) GetAll(page *repository.Page) ([]domain.Run, error) {
+	runs := make([]domain.Run, page.Limit)
 	return runs, fetchPage(
 		a.DB, page, &runs,
 		`*`, `run`, `created_at DESC`,

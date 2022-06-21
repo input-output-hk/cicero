@@ -31,9 +31,9 @@ type RunService interface {
 	GetByNomadJobId(uuid.UUID) (*domain.Run, error)
 	GetByNomadJobIdWithLock(uuid.UUID, string) (*domain.Run, error)
 	GetByInvocationId(uuid.UUID) (*domain.Run, error)
-	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
+	GetByActionId(uuid.UUID, *repository.Page) ([]domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (*domain.Run, error)
-	GetAll(*repository.Page) ([]*domain.Run, error)
+	GetAll(*repository.Page) ([]domain.Run, error)
 	Save(*domain.Run) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
@@ -105,7 +105,7 @@ func (self runService) GetByInvocationId(invocationId uuid.UUID) (run *domain.Ru
 	return
 }
 
-func (self runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []*domain.Run, err error) {
+func (self runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []domain.Run, err error) {
 	self.logger.Trace().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Run by Action ID")
 	runs, err = self.runRepository.GetByActionId(id, page)
 	err = errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
@@ -119,7 +119,7 @@ func (self runService) GetLatestByActionId(id uuid.UUID) (run *domain.Run, err e
 	return
 }
 
-func (self runService) GetAll(page *repository.Page) (runs []*domain.Run, err error) {
+func (self runService) GetAll(page *repository.Page) (runs []domain.Run, err error) {
 	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Runs")
 	runs, err = self.runRepository.GetAll(page)
 	err = errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
