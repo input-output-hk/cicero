@@ -98,6 +98,7 @@ func (a *actionRepository) GetLatestByName(name string) (*domain.Action, error) 
 }
 
 func (a *actionRepository) GetAll() (actions []domain.Action, err error) {
+	actions = []domain.Action{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT * FROM action ORDER BY created_at DESC`,
@@ -133,6 +134,7 @@ func (a *actionRepository) Update(action *domain.Action) (err error) {
 }
 
 func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
+	actions = []domain.Action{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT DISTINCT ON (name) * FROM action ORDER BY name, created_at DESC`,
@@ -141,6 +143,7 @@ func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
 }
 
 func (a *actionRepository) GetCurrentActive() (actions []domain.Action, err error) {
+	actions = []domain.Action{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT DISTINCT ON (name) * FROM action WHERE active ORDER BY name, created_at DESC`,

@@ -43,6 +43,7 @@ func (a *factRepository) GetById(id uuid.UUID) (*domain.Fact, error) {
 }
 
 func (a *factRepository) GetByRunId(id uuid.UUID) (facts []domain.Fact, err error) {
+	facts = []domain.Fact{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash
@@ -86,6 +87,7 @@ func (a *factRepository) GetLatestByCue(value cue.Value) (*domain.Fact, error) {
 
 func (a *factRepository) GetByCue(value cue.Value) (facts []domain.Fact, err error) {
 	where, args := sqlWhereCue(value, nil, 0)
+	facts = []domain.Fact{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where,

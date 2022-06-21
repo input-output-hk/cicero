@@ -48,6 +48,7 @@ func (n nomadEventRepository) Update(event *domain.NomadEvent) (err error) {
 }
 
 func (n nomadEventRepository) GetByHandled(handled bool) (events []domain.NomadEvent, err error) {
+	events = []domain.NomadEvent{}
 	err = pgxscan.Select(
 		context.Background(),
 		n.DB, &events,
