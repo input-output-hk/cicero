@@ -116,15 +116,15 @@
 			<table class="panel log">
 				{{$break := false}} <!-- TODO use the proper break statement that's new in Go 1.18 -->
 				{{range $ii, $line := .}}
+					{{if and (not $break) (not (eq .Labels.cicero "eval"))}}
+						{{$break = true}}
+					{{end}}
 					{{if not $break}}
+						{{$i = addInt $ii 1}}
 						<tr>
 							<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
 							<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
 						</tr>
-						{{$i = addInt $ii 1}}
-						{{if not (eq .Labels.cicero "eval")}}
-							{{$break = true}}
-						{{end}}
 					{{end}}
 				{{end}}
 			</table>
@@ -137,15 +137,15 @@
 			<table class="panel log">
 				{{$break := false}} <!-- TODO use the proper break statement that's new in Go 1.18 -->
 				{{range $ii, $line := .}}
+					{{if and (not $break) (not (eq .Labels.cicero "eval-transform"))}}
+						{{$break = true}}
+					{{end}}
 					{{if not $break}}
+						{{$i = addInt $ii 1}}
 						<tr>
 							<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
 							<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
 						</tr>
-						{{$i = addInt $ii 1}}
-						{{if not (eq .Labels.cicero "eval-transform")}}
-							{{$break = true}}
-						{{end}}
 					{{end}}
 				{{end}}
 			</table>
