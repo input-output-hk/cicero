@@ -72,7 +72,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{{range $name, $input := (.InOut.Inputs nil)}}
+						{{range $name, $input := .InOut.Inputs nil}}
 							<tr>
 								<td>{{$name}}</td>
 								<td>
@@ -116,8 +116,10 @@
 									</details>
 								</td>
 								<td>
-									{{with index $.inputs $name}}
-										{{template "fact" .}}
+									{{if hasKey $.inputs $name}}
+										{{with index $.inputs $name}}
+											{{template "fact" .}}
+										{{end}}
 									{{end}}
 								</td>
 							</tr>
