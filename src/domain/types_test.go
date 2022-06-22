@@ -15,7 +15,7 @@ func TestValueWithInputs(t *testing.T) {
 		inputs: a: match: _
 		output: success: inputs.a.value
 	`)
-	inputs := map[string]*Fact{
+	inputs := map[string]Fact{
 		"a": {Value: 1},
 	}
 
