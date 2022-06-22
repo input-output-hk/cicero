@@ -131,7 +131,7 @@ func (self TrustedInOutCUEString) Inputs(inputs map[string]Fact) InputDefinition
 	}
 }
 
-func (self TrustedInOutCUEString) Input(name string, inputs map[string]Fact) InputDefinition {
+func (self TrustedInOutCUEString) Input(name string, inputs map[string]Fact) *InputDefinition {
 	if r, err := InOutCUEString(self).Input(name, inputs); err != nil {
 		panic(err.Error())
 	} else {
@@ -166,8 +166,8 @@ func (self InOutCUEString) Inputs(inputs map[string]Fact) (InputDefinitions, err
 		for fields.Next() {
 			if def, err := self.Input(fields.Label(), nil); err != nil {
 				return nil, err
-			} else {
-				defs[fields.Label()] = def
+			} else if def != nil {
+				defs[fields.Label()] = *def
 			}
 		}
 	}
@@ -175,14 +175,14 @@ func (self InOutCUEString) Inputs(inputs map[string]Fact) (InputDefinitions, err
 	return defs, nil
 }
 
-func (self InOutCUEString) Input(name string, inputs map[string]Fact) (InputDefinition, error) {
+func (self InOutCUEString) Input(name string, inputs map[string]Fact) (*InputDefinition, error) {
 	def := InputDefinition{}
 
 	value := self.valueWithInputs(inputs).LookupPath(cue.MakePath(cue.Str("inputs"), cue.Str(name)))
 
 	if v := value.LookupPath(cue.MakePath(cue.Str("not"))); v.Exists() {
 		if not, err := v.Bool(); err != nil {
-			return def, err
+			return nil, err
 		} else {
 			def.Not = not
 		}
@@ -192,7 +192,7 @@ func (self InOutCUEString) Input(name string, inputs map[string]Fact) (InputDefi
 
 	if v := value.LookupPath(cue.MakePath(cue.Str("optional"))); v.Exists() {
 		if optional, err := v.Bool(); err != nil {
-			return def, err
+			return nil, err
 		} else {
 			def.Optional = optional
 		}
@@ -201,12 +201,12 @@ func (self InOutCUEString) Input(name string, inputs map[string]Fact) (InputDefi
 	}
 
 	if v := value.LookupPath(cue.MakePath(cue.Str("match"))); !v.Exists() {
-		return def, fmt.Errorf(`input %q must have a "match" field`, name)
+		return nil, fmt.Errorf(`input %q must have a "match" field`, name)
 	} else {
 		def.Match = v
 	}
 
-	return def, nil
+	return &def, nil
 }
 
 func (self InOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) (*flow.Controller, error) {
