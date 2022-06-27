@@ -3,7 +3,7 @@
     "github-event": {
       pusher: {}
       deleted: false
-      ref: "refs/heads/\(repository.default_branch)"
+      ref: string
       repository: {
         name: string
         owner: login: string
