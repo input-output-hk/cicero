@@ -54,11 +54,11 @@ function msg {
 	echo "$json"
 }
 
-function evaluate {
-	echo >&2 'Getting current system…'
-	system=$(nix eval --impure --raw --expr __currentSystem)
-	echo >&2 "Got current system: $system"
+echo >&2 'Getting current system…'
+system=$(nix eval --impure --raw --expr __currentSystem)
+echo >&2 "Got current system: $system"
 
+function evaluate {
 	echo >&2 'Evaluating…'
 	nix eval --no-write-lock-file --json \
 		${CICERO_EVALUATOR_NIX_STACKTRACE:+--show-trace} \
@@ -117,7 +117,7 @@ eval)
 			    inputs = __fromJSON vars.inputs;
 			  };
 
-			  inherit (vars) name;
+			  inherit (vars) name system;
 			  attrs =
 			    let requestedAttrs = __filter __isString (__split "[[:space:]]" vars.attrs); in
 			    requestedAttrs ++
@@ -129,12 +129,21 @@ eval)
 			--argstr id "${CICERO_ACTION_ID:-}" \
 			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
 			--argstr ociRegistry "${CICERO_EVALUATOR_NIX_OCI_REGISTRY:-}" \
+			--argstr system "$system" \
 			--argstr attrs "${*}"
 	)
 
 	result=$(evaluate --apply "$(
 		cat <<-EOF
+			with $vars;
+
+			let
+			  # in a separate let-block so it cannot access all the stuff below
+			  allArgs = args // ${CICERO_EVALUATOR_NIX_EXTRA_ARGS:-"{}"};
+			in
+
 			actions:
+
 			let
 			  mapAttrs' = fn: attrs: __listToAttrs (
 			    __filter
@@ -145,27 +154,23 @@ eval)
 			      )
 			  );
 
-			  vars = $vars;
-
-			  actionFn = actions.\${vars.name};
+			  actionFn = actions.\${name};
 			  actionFnArgs =
 			    # If the action takes named args
 			    # provide only those requested (like callPackage).
 			    # If it does not simply provide everything.
-			    let
-			      args = __functionArgs actionFn;
-			      varsArgs = vars.args // ${CICERO_EVALUATOR_NIX_EXTRA_ARGS:-"{}"};
-			    in
-			    if args == {} then varsArgs else mapAttrs' (k: v: {
-			      name = if varsArgs.\${k} or null == null then null else k;
-			      value = varsArgs.\${k} or null;
-			    }) args;
+			    let fnArgs = __functionArgs actionFn; in
+			    if fnArgs == {} then allArgs else mapAttrs' (k: v: {
+			      name = if allArgs.\${k} or null == null then null else k;
+			      value = allArgs.\${k} or null;
+			    }) fnArgs;
 			  action = actionFn actionFnArgs;
 			in
-			  mapAttrs' (k: value: {
-			    name = if __elem k vars.attrs then k else null;
-			    inherit value;
-			  }) action
+
+			mapAttrs' (k: value: {
+			  name = if __elem k attrs then k else null;
+			  inherit value;
+			}) action
 		EOF
 	)")
 
