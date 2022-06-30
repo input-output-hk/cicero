@@ -20,6 +20,7 @@ function usage {
 		echo -e '\t- CICERO_EVALUATOR_NIX_OCI_REGISTRY'
 		echo
 		echo 'The following env vars are optional:'
+		echo -e '\t- CICERO_EVALUATOR_NIX_EXTRA_ARGS'
 		echo -e '\t- CICERO_EVALUATOR_NIX_VERBOSE'
 		echo -e '\t- CICERO_EVALUATOR_NIX_STACKTRACE'
 	} >&2
@@ -111,8 +112,7 @@ eval)
 		nix-instantiate --eval --strict \
 			--expr '{...} @ vars: {
 			  args = __mapAttrs (k: v: if v == "" then null else v) {
-			    id = vars.id;
-			    ociRegistry = vars.ociRegistry;
+			    inherit (vars) id ociRegistry;
 			  } // {
 			    inputs = __fromJSON vars.inputs;
 			  };
@@ -152,10 +152,13 @@ eval)
 			    # If the action takes named args
 			    # provide only those requested (like callPackage).
 			    # If it does not simply provide everything.
-			    let args = __functionArgs actionFn; in
-			    if args == {} then vars.args else mapAttrs' (k: v: {
-			      name = if vars.args.\${k} or null == null then null else k;
-			      value = vars.args.\${k} or null;
+			    let
+			      args = __functionArgs actionFn;
+			      varsArgs = vars.args // ${CICERO_EVALUATOR_NIX_EXTRA_ARGS:-"{}"};
+			    in
+			    if args == {} then varsArgs else mapAttrs' (k: v: {
+			      name = if varsArgs.\${k} or null == null then null else k;
+			      value = varsArgs.\${k} or null;
 			    }) args;
 			  action = actionFn actionFnArgs;
 			in
