@@ -169,11 +169,12 @@ Res:
 	for {
 		select {
 		case result := <-res:
-			if result.err != nil {
+			switch {
+			case result.err != nil:
 				return nil, result.err
-			} else if result.fact == nil {
+			case result.fact == nil:
 				return nil, errors.New("no fact with given ID found")
-			} else {
+			default:
 				inputs[result.input] = *result.fact
 			}
 		default:
