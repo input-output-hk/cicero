@@ -11,4 +11,5 @@
 /src/mocks/
 /.spongix
 dist-newstyle
+/book
 /nixos.qcow2

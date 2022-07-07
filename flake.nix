@@ -143,6 +143,8 @@
             inherit (nix2container.packages.${prev.system}) skopeo-nix2container;
           };
           webhook-trigger = prev.callPackage pkgs/trigger {};
+          handbook = prev.callPackage ./pkgs/handbook {};
+          handbook-entrypoint = final.callPackage ./pkgs/handbook/entrypoint.nix {};
           cicero-api = (final.extend haskell-nix.overlay).callPackage pkgs/cicero-api {
             inherit supportedSystems;
             src = ./.;

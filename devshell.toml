@@ -96,4 +96,5 @@ packages = [
   "curlie",
   "diffutils",
   "jq",
+  "mdbook",
 ]
