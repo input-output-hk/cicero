@@ -221,7 +221,7 @@ func (self InOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) (*flow.Control
 			// not really necessary but makes sense
 			continue
 		}
-		cueStr += `inputs: `
+		cueStr += "\ninputs: "
 		cueStr = util.CUEString(cueliteral.Label.Append([]byte(cueStr), name))
 		cueStr += `: value: inputs.`
 		cueStr = util.CUEString(cueliteral.Label.Append([]byte(cueStr), name))
