@@ -1,6 +1,7 @@
 package util
 
 import (
+	"strings"
 	"sync"
 
 	"cuelang.org/go/cue"
@@ -43,6 +44,7 @@ func (self *CUEString) FromValue(value cue.Value, options ...cueformat.Option) e
 		return err
 	} else {
 		*self = CUEString(syntax)
+		self.removeDestructiveBottomComments()
 	}
 	return nil
 }
@@ -63,6 +65,17 @@ func (self CUEString) Format(options ...cueformat.Option) (result CUEString, err
 	var b []byte
 	b, err = cueformat.Source([]byte(result), options...)
 	result = CUEString(b)
+	result.removeDestructiveBottomComments()
 
 	return
+}
+
+// CUE inserts a comment after every bottom literal
+// but unfortunately has a few edge cases in which
+// it does not properly add a newline after it, or
+// when it does breaks up the expression that the
+// bottom literal was in, thereby destroying syntax.
+// TODO file upstream bug
+func (self *CUEString) removeDestructiveBottomComments() {
+	*self = CUEString(strings.ReplaceAll(string(*self), "// explicit error (_|_ literal) in source\n", ""))
 }
