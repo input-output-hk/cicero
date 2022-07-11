@@ -319,7 +319,7 @@ func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domai
 	); err != nil {
 		return def, err
 	} else if err := json.Unmarshal(output, &def); err != nil {
-		e.logger.Err(err).Str("output", string(output)).Str("stderr", string(stderr)).Send()
+		e.logger.Err(err).RawJSON("output", output).Str("stderr", string(stderr)).Send()
 		return def, errors.WithMessage(err, "While unmarshaling evaluator output")
 	}
 
