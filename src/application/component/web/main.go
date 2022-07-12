@@ -929,18 +929,23 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) getRun(req *http.Request) (*domain.Run, error) {
+// Returns (_, false) if an error occurred.
+// The error is already sent to the client.
+func (self *Web) getRun(w http.ResponseWriter, req *http.Request) (*domain.Run, bool) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
-		return nil, err
+		self.ClientError(w, err)
+		return nil, true
+	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.ServerError(w, err)
+		return run, true
 	} else {
-		return self.RunService.GetByNomadJobId(id)
+		return run, false
 	}
 }
 
 func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
-	switch run, err := self.getRun(req); {
-	case err != nil:
-		self.ServerError(w, err)
+	switch run, ok := self.getRun(w, req); {
+	case !ok:
 	case run == nil:
 		w.WriteHeader(http.StatusNotFound)
 	default:
@@ -1004,8 +1009,7 @@ func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
-	if run, err := self.getRun(req); err != nil {
-		self.ServerError(w, err)
+	if run, ok := self.getRun(w, req); !ok {
 		return
 	} else if run == nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -1019,9 +1023,8 @@ func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
-	run, err := self.getRun(req)
-	if err != nil {
-		self.ServerError(w, err)
+	run, ok := self.getRun(w, req)
+	if !ok {
 		return
 	}
 	if run == nil {
