@@ -344,16 +344,19 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 	}
 
 	// Filter input facts. We only provide keys requested by the CUE expression.
+	/* FIXME Removes everything if CUE's builtin `or` function is used.
 	for name, input := range action.InOut.Inputs(inputs) {
 		if entry, exists := inputs[name]; exists {
 			filterFields(&entry.Value, input.Match)
 		}
 	}
+	*/
 
 	logger.Debug().Bool("runnable", true).Send()
 	return true, inputs, nil
 }
 
+//nolint:unused
 func filterFields(factValue *interface{}, filter cue.Value) {
 	if value, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
 		if filter.Kind().IsAnyOf(cue.StructKind) {
