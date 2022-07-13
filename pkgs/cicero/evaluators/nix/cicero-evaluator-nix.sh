@@ -23,6 +23,7 @@ function usage {
 		echo -e '\t- CICERO_EVALUATOR_NIX_EXTRA_ARGS'
 		echo -e '\t- CICERO_EVALUATOR_NIX_VERBOSE'
 		echo -e '\t- CICERO_EVALUATOR_NIX_STACKTRACE'
+		echo -e '\t- CICERO_EVALUATOR_NIX_OCI_REGISTRY_SKOPEO_COPY_ARGS'
 	} >&2
 }
 
@@ -86,7 +87,9 @@ function prepare {
 			for image in $outputs; do
 				echo >&2 "Pushing $image to $name…"
 				msg "${msgPairs[@]}" step=push image="$image"
-				>&2 skopeo --insecure-policy copy nix:"$image" "$name"
+				#shellcheck disable=SC2086
+				>&2 skopeo --insecure-policy copy ${CICERO_EVALUATOR_NIX_OCI_REGISTRY_SKOPEO_COPY_ARGS:-} \
+					nix:"$image" "$name"
 			done
 			;;
 		*)
