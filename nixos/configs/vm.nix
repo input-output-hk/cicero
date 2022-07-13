@@ -38,6 +38,8 @@
       # we can only mount directories, not single files.
       # See `systemd.services.create-netrc` below.
       "/etc/nix/host".target = /etc/nix;
+
+      ${config.services.dockerRegistry.storagePath}.target = "${pwd}/.docker-registry";
     };
   };
 
@@ -78,6 +80,7 @@
         config.services.loki.configuration.server.http_listen_port
         config.services.spongix.port
         config.services.postgresql.port
+        config.services.dockerRegistry.port
       ];
 
     cores =
@@ -109,6 +112,10 @@
       dockerSocket.enable = true;
       defaultNetwork.dnsname.enable = true;
     };
+
+    containers.registries.insecure = [
+      "127.0.0.1:${toString config.services.dockerRegistry.port}"
+    ];
   };
 
   environment = {
@@ -202,6 +209,7 @@
     postgresql.port = 15432;
     loki.configuration.server.http_listen_port = lib.mkForce 13100;
     victoriametrics.listenAddress = ":18428";
+    dockerRegistry.port = 15000;
   };
 
   systemd.services = {
@@ -302,6 +310,12 @@
       User = "root";
       Group = "root";
       DynamicUser = false;
+    };
+
+    # for file permissions in mounted directory from host
+    docker-registry.serviceConfig = builtins.mapAttrs (k: lib.mkForce) {
+      User = "root";
+      Group = "root";
     };
   };
 }

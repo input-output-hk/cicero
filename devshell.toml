@@ -24,7 +24,11 @@ value = "http://127.0.0.1:14646"
 
 [[env]]
 name = "CICERO_EVALUATOR_NIX_OCI_REGISTRY"
-value = "docker://127.0.0.1:17745"
+value = "docker://127.0.0.1:15000"
+
+[[env]]
+name = "CICERO_EVALUATOR_NIX_OCI_REGISTRY_SKOPEO_COPY_ARGS"
+value = "--dest-tls-verify=false"
 
 [[commands]]
 package = "go"
