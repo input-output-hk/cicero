@@ -176,6 +176,7 @@ func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, arg
 Kind:
 	switch value.Kind() {
 	case cue.StructKind:
+		emptyStruct := true
 		for iter, _ := value.Fields(); iter.Next(); {
 			selector := iter.Selector()
 
@@ -183,15 +184,24 @@ Kind:
 				continue
 			}
 
+			emptyStruct = false
+
 			if fieldClause, fieldArgs := sqlWhereCue(iter.Value(), append(path, iter.Label()), argNum); fieldClause != "" {
 				appendClause(and()+fieldClause, fieldArgs)
 			}
 		}
+		if emptyStruct {
+			appendClause(and()+"TRUE", []interface{}{})
+		}
 	case cue.ListKind:
 		list, _ := value.List()
-		for i := 0; list.Next(); i += 1 {
+		i := 0
+		for ; list.Next(); i += 1 {
 			itemClause, itemArgs := sqlWhereCue(list.Value(), append(path, strconv.Itoa(i)), argNum)
 			appendClause(and()+itemClause, itemArgs)
+		}
+		if i == 0 {
+			appendClause(and()+"TRUE", []interface{}{})
 		}
 	case cue.StringKind:
 		str, _ := value.String()
@@ -205,6 +215,16 @@ Kind:
 			for i, val := range vals {
 				if i > 0 {
 					clause += ` OR `
+				}
+				appendClause(sqlWhereCue(val, path, argNum))
+			}
+			clause += `)`
+			break Kind
+		case cue.AndOp:
+			clause = `(`
+			for i, val := range vals {
+				if i > 0 {
+					clause += ` AND `
 				}
 				appendClause(sqlWhereCue(val, path, argNum))
 			}
