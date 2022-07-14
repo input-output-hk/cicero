@@ -456,6 +456,8 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
+	} else if action == nil {
+		self.NotFound(w, nil)
 	} else if _, inputs, err := self.ActionService.IsRunnable(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
 	} else if err := render("action/[id].html", w, map[string]interface{}{
