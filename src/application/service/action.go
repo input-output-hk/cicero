@@ -218,16 +218,24 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 				// Match candidate fact.
 				if matchErr, err := matchFact(action.InOut.Input(name, inputs).Match, fact); err != nil {
 					return err
-				} else if (matchErr == nil) == input.Not {
-					if !input.Optional || input.Not {
+				} else {
+					switch {
+					case matchErr == nil && input.Not:
+						inputLogger.Debug().
+							Bool("runnable", false).
+							Str("fact", fact.ID.String()).
+							Msg("Fact matches negated input")
+						delete(inputs, name)
+						return errNotRunnable
+					case matchErr != nil && !input.Not && !input.Optional:
 						inputLogger.Debug().
 							Bool("runnable", false).
 							Str("fact", fact.ID.String()).
 							AnErr("mismatch", matchErr).
-							Msg("Fact does not match")
+							Msg("Fact does not match required input")
+						delete(inputs, name)
 						return errNotRunnable
 					}
-					delete(inputs, name)
 				}
 
 				// Fill the CUE expression with the fact's value
