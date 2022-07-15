@@ -22,7 +22,7 @@
   }:
     lib.escapeShellArg (
       if config.action.facts != {}
-      then "github:${config.preset.github-ci.repo}/${config.action.facts."GitHub event".value.sha or rev}"
+      then "github:${config.preset.github-ci.repo}/${config.preset.github-ci.lib.getRevision "GitHub event" rev}"
       else "."
     );
 in {
