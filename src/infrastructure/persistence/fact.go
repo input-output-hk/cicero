@@ -137,7 +137,8 @@ func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, arg
 			v = "null"
 			cast = "jsonb"
 		case cue.StringKind:
-			panic("you likely want to use appendTextEquals instead")
+			v, _ = arg.String()
+			cast = "text"
 		default:
 			panic("arg must be concrete scalar")
 		}
