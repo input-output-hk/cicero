@@ -91,7 +91,7 @@
                 datacenters = ["dc1"];
                 ciceroWebUrl = "http://127.0.0.1:18080";
                 nixConfig = ''
-                  substituters = http://127.0.0.1:17745?compression=none
+                  substituters = http://10.0.2.15:17745?compression=none
                   extra-trusted-public-keys = spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=
                   post-build-hook = /local/post-build-hook
                 '';
@@ -101,7 +101,7 @@
                   export IFS=' '
                   if [[ -n "$OUT_PATHS" ]]; then
                     echo 'Uploading to cache: '"$OUT_PATHS"
-                    exec nix copy --to 'http://127.0.0.1:17745?compression=none' $OUT_PATHS
+                    exec nix copy --to 'http://10.0.2.15:17745?compression=none' $OUT_PATHS
                   fi
                 '';
               };
