@@ -86,50 +86,60 @@
             schemathesis = final.callPackage pkgs/schemathesis.nix {};
             treefmt-cue = final.callPackage pkgs/treefmt-cue.nix {};
             dev-cicero-transformer = let
-              post-build-hook = ''
-                #! /bin/bash
-                set -euf
-                export IFS=' '
-                if [[ -n "$OUT_PATHS" ]]; then
-                  echo 'Uploading to cache: '"$OUT_PATHS"
-                  exec nix copy --to 'http://127.0.0.1:17745?compression=none' $OUT_PATHS
-                fi
-              '';
-
-              filter = ''
-                .job[]?.datacenters |= . + ["dc1"] |
-                .job[]?.group[]?.restart.attempts = 0 |
-                .job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"] |
-                .job[]?.group[]?.task[]? |= if .driver != "nix" then . else (
-                  if .config?.nixos then . else (
-                    .env |= . + {
-                      CICERO_WEB_URL: "http://127.0.0.1:18080",
-                      CICERO_API_URL: "http://127.0.0.1:18080",
-                      NIX_CONFIG: (
-                        "substituters = http://127.0.0.1:17745?compression=none\n" +
-                        "extra-trusted-public-keys = spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=\n" +
-                        "post-build-hook = /local/post-build-hook\n" +
-                        .NIX_CONFIG
-                      ),
-                    } |
-                    .template |= . + [{
-                      destination: "local/post-build-hook",
-                      perms: "544",
-                      data: env.postBuildHook,
-                    }] |
-                    .config.packages |=
-                      # only add bash if needed to avoid conflicts in profile
-                      if any(endswith("#bash"))
-                      then .
-                      else . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"]
-                      end
-                  ) end
-                ) end
-              '';
+              args = {
+                nixpkgsRev = nixpkgs.rev;
+                datacenters = ["dc1"];
+                ciceroWebUrl = "http://127.0.0.1:18080";
+                nixConfig = ''
+                  substituters = http://127.0.0.1:17745?compression=none
+                  extra-trusted-public-keys = spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=
+                  post-build-hook = /local/post-build-hook
+                '';
+                postBuildHook = ''
+                  #! /bin/bash
+                  set -euf
+                  export IFS=' '
+                  if [[ -n "$OUT_PATHS" ]]; then
+                    echo 'Uploading to cache: '"$OUT_PATHS"
+                    exec nix copy --to 'http://127.0.0.1:17745?compression=none' $OUT_PATHS
+                  fi
+                '';
+              };
             in
               prev.writers.writeDashBin "dev-cicero-transformer" ''
-                export postBuildHook=${prev.lib.escapeShellArg post-build-hook}
-                jq -c ${prev.lib.escapeShellArg filter}
+                jq --compact-output \
+                  --argjson args ${nixpkgs.lib.escapeShellArg (builtins.toJSON args)} \
+                  '
+                    .job[]?.datacenters |= . + $args.datacenters |
+                    .job[]?.group[]?.restart.attempts = 0 |
+                    .job[]?.group[]?.task[]? |= (
+                      .vault.policies |= . + ["cicero"] |
+                      .env |= . + {
+                        CICERO_WEB_URL: $args.ciceroWebUrl,
+                        CICERO_API_URL: $args.ciceroWebUrl,
+                        NIX_CONFIG: ($args.nixConfig + .NIX_CONFIG),
+                      } |
+                      .template |= . + [{
+                        destination: "local/post-build-hook",
+                        perms: "544",
+                        data: $args.postBuildHook,
+                      }] |
+                      if .driver != "nix" or .config?.nixos then . else
+                        .config.packages |=
+                          # only add bash if needed to avoid conflicts in profile
+                          if any(endswith("#bash") or endswith("#bashInteractive"))
+                          then .
+                          else . + ["github:NixOS/nixpkgs/\($args.nixpkgsRev)#bash"]
+                          end
+                      end |
+                      # logs do not work with podman driver
+                      # TODO remove once fixed
+                      if .driver != "podman" then . else
+                        .driver = "docker" |
+                        .config.image |= ltrimstr("docker://")
+                      end
+                    )
+                  '
               '';
           })
           self.overlay
