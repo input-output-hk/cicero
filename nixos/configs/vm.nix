@@ -210,110 +210,114 @@
     dockerRegistry.port = 15000;
   };
 
-  systemd.services = {
-    create-netrc = rec {
-      serviceConfig.Type = "oneshot";
-      wantedBy = ["multi-user.target"];
-      before = wantedBy;
-      script = ''
-        set -xuo pipefail
+  systemd = {
+    enableUnifiedCgroupHierarchy = false;
 
-        rm -f /etc/nix/netrc
+    services = {
+      create-netrc = rec {
+        serviceConfig.Type = "oneshot";
+        wantedBy = ["multi-user.target"];
+        before = wantedBy;
+        script = ''
+          set -xuo pipefail
 
-        if [[ -e /etc/nix/host/netrc ]]; then
-          # ignore failure in case the host does not have /etc/nix/netrc
-          cat /etc/nix/host/netrc >> /etc/nix/netrc || :
-        fi
+          rm -f /etc/nix/netrc
 
-        if [[ -f ${lib.escapeShellArg (builtins.getEnv "HOME")}/.netrc ]]; then
-          # ignore failure in case ~/.netrc is a link to /etc/nix/netrc
-          cat ${lib.escapeShellArg (builtins.getEnv "HOME")}/.netrc >> /etc/nix/netrc || :
-        fi
+          if [[ -e /etc/nix/host/netrc ]]; then
+            # ignore failure in case the host does not have /etc/nix/netrc
+            cat /etc/nix/host/netrc >> /etc/nix/netrc || :
+          fi
 
-        if [[ -n ${lib.escapeShellArg (builtins.getEnv "NETRC")} ]]; then
-          printf "%s\n" ${lib.escapeShellArg (builtins.getEnv "NETRC")} >> /etc/nix/netrc
-        fi
-      '';
-    };
+          if [[ -f ${lib.escapeShellArg (builtins.getEnv "HOME")}/.netrc ]]; then
+            # ignore failure in case ~/.netrc is a link to /etc/nix/netrc
+            cat ${lib.escapeShellArg (builtins.getEnv "HOME")}/.netrc >> /etc/nix/netrc || :
+          fi
 
-    vault = {
-      after = ["create-netrc.service"];
-
-      path = with pkgs; [vault netcat];
-
-      environment = rec {
-        VAULT_DEV_ROOT_TOKEN_ID = "root";
-        VAULT_DEV_LISTEN_ADDRESS = config.services.vault.address;
-
-        VAULT_ADDR = "http://${VAULT_DEV_LISTEN_ADDRESS}";
-        VAULT_TOKEN = VAULT_DEV_ROOT_TOKEN_ID;
-
-        REGISTRY_AUTH_FILE = "${builtins.getEnv "HOME"}/.docker/config.json";
-      };
-
-      serviceConfig = {
-        WorkingDirectory = "~";
-        ExecStart = lib.mkForce "${config.services.vault.package}/bin/vault server -dev -dev-no-store-token";
-        ExecStartPost = pkgs.writers.writeBash "init" ''
-          set -xeuo pipefail
-
-          while ! nc -z ${lib.escapeShellArgs (
-            lib.splitString ":" config.services.vault.address
-          )} &> /dev/null; do
-            >&2 echo 'Waiting for Vault…'
-            sleep 1
-          done
-
-          cat <<EOF | vault policy write cicero -
-          path "auth/token/lookup" {
-            capabilities = ["update"]
-          }
-          path "auth/token/lookup-self" {
-            capabilities = ["read"]
-          }
-          path "auth/token/renew-self" {
-            capabilities = ["update"]
-          }
-          path "kv/data/cicero/*" {
-            capabilities = ["read", "list"]
-          }
-          path "kv/metadata/cicero/*" {
-            capabilities = ["read", "list"]
-          }
-          path "nomad/creds/cicero" {
-            capabilities = ["read", "update"]
-          }
-          EOF
-
-          vault secrets enable -version=2 kv
-
-          vault kv put kv/cicero/github webhooks=correct-horse-battery-staple
-
-          if [[ -e /etc/nix/netrc ]]; then
-            token=$(
-              grep -E 'machine[[:space:]]+github.com' /etc/nix/netrc -A 2 \
-              | grep password \
-              | cut -d ' ' -f 2
-            )
-            if [[ -n "$token" ]]; then
-              vault kv patch kv/cicero/github token="$token"
-            fi
+          if [[ -n ${lib.escapeShellArg (builtins.getEnv "NETRC")} ]]; then
+            printf "%s\n" ${lib.escapeShellArg (builtins.getEnv "NETRC")} >> /etc/nix/netrc
           fi
         '';
       };
-    };
 
-    # for file permissions in mounted directory from host
-    spongix.serviceConfig = builtins.mapAttrs (k: lib.mkForce) {
-      User = "root";
-      Group = "root";
-      DynamicUser = false;
-    };
+      vault = {
+        after = ["create-netrc.service"];
 
-    # for file permissions in mounted directory from host
-    docker-registry.serviceConfig = builtins.mapAttrs (k: lib.mkForce) {
-      User = "root";
-      Group = "root";
+        path = with pkgs; [vault netcat];
+
+        environment = rec {
+          VAULT_DEV_ROOT_TOKEN_ID = "root";
+          VAULT_DEV_LISTEN_ADDRESS = config.services.vault.address;
+
+          VAULT_ADDR = "http://${VAULT_DEV_LISTEN_ADDRESS}";
+          VAULT_TOKEN = VAULT_DEV_ROOT_TOKEN_ID;
+
+          REGISTRY_AUTH_FILE = "${builtins.getEnv "HOME"}/.docker/config.json";
+        };
+
+        serviceConfig = {
+          WorkingDirectory = "~";
+          ExecStart = lib.mkForce "${config.services.vault.package}/bin/vault server -dev -dev-no-store-token";
+          ExecStartPost = pkgs.writers.writeBash "init" ''
+            set -xeuo pipefail
+
+            while ! nc -z ${lib.escapeShellArgs (
+              lib.splitString ":" config.services.vault.address
+            )} &> /dev/null; do
+              >&2 echo 'Waiting for Vault…'
+              sleep 1
+            done
+
+            cat <<EOF | vault policy write cicero -
+            path "auth/token/lookup" {
+              capabilities = ["update"]
+            }
+            path "auth/token/lookup-self" {
+              capabilities = ["read"]
+            }
+            path "auth/token/renew-self" {
+              capabilities = ["update"]
+            }
+            path "kv/data/cicero/*" {
+              capabilities = ["read", "list"]
+            }
+            path "kv/metadata/cicero/*" {
+              capabilities = ["read", "list"]
+            }
+            path "nomad/creds/cicero" {
+              capabilities = ["read", "update"]
+            }
+            EOF
+
+            vault secrets enable -version=2 kv
+
+            vault kv put kv/cicero/github webhooks=correct-horse-battery-staple
+
+            if [[ -e /etc/nix/netrc ]]; then
+              token=$(
+                grep -E 'machine[[:space:]]+github.com' /etc/nix/netrc -A 2 \
+                | grep password \
+                | cut -d ' ' -f 2
+              )
+              if [[ -n "$token" ]]; then
+                vault kv patch kv/cicero/github token="$token"
+              fi
+            fi
+          '';
+        };
+      };
+
+      # for file permissions in mounted directory from host
+      spongix.serviceConfig = builtins.mapAttrs (k: lib.mkForce) {
+        User = "root";
+        Group = "root";
+        DynamicUser = false;
+      };
+
+      # for file permissions in mounted directory from host
+      docker-registry.serviceConfig = builtins.mapAttrs (k: lib.mkForce) {
+        User = "root";
+        Group = "root";
+      };
     };
   };
 }
