@@ -22,8 +22,11 @@
     };
     data-merge.url = "github:divnix/data-merge";
     poetry2nix = {
-      url = "github:nix-community/poetry2nix/fetched-projectdir-test";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/poetry2nix";
+      inputs = {
+        flake-utils.follows = "utils";
+        nixpkgs.follows = "nixpkgs";
+      };
     };
     spongix = {
       url = "github:input-output-hk/spongix";
