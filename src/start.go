@@ -29,6 +29,8 @@ type StartCmd struct {
 	Transformers        []string `arg:"--transform"`
 
 	WebListen string `arg:"--web-listen,env:CICERO_WEB_LISTEN" default:":8080"`
+
+	LogDb bool `arg:"--log-db"`
 }
 
 func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
@@ -62,7 +64,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	}
 
 	var db config.PgxIface
-	if db_, err := config.DBConnection(logger); err != nil {
+	if db_, err := config.DBConnection(logger, cmd.LogDb); err != nil {
 		logger.Fatal().Err(err).Send()
 		return err
 	} else {
