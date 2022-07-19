@@ -674,11 +674,11 @@
         "utils": "utils_2"
       },
       "locked": {
-        "lastModified": 1649836589,
-        "narHash": "sha256-0mKWIfF7RtkwiJv2NlWKisdyivsSlHMTAQ3P72RSD3k=",
+        "lastModified": 1658244176,
+        "narHash": "sha256-oM+7WdbXcTiDEfuuiiVLlJi/MTRgSBwFdzVkFWsC8so=",
         "owner": "input-output-hk",
         "repo": "nomad-follower",
-        "rev": "18cafe87df773e61a6ce300d9ff91dee4aeae053",
+        "rev": "bd8cc28c94ba8bd48c4d4be5ab14f3904328dde3",
         "type": "github"
       },
       "original": {
