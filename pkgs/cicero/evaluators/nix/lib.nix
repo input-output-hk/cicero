@@ -119,34 +119,34 @@ in rec {
   };
 
   /*
-    Chains are a concise way to write jobs.
-   Put simply chains are a fold-right of wrappers.
-   
-   Each "step/link/part" (no name defined) of a chain
-   is a function that takes the action that this job
-   is being defined for as its first argument
-   and the next "step/link/part" as its second argument.
-   These argument are supplied automatically when called
-   by the `chain` function.
-   It returns the job as an attribute set.
-   
-   Most "steps/links/parts" are created from a builder function
-   that takes some specific arguments which are usually given
-   directly in the action definition.
-   
-   This simple contract sometimes allows to use other functions
-   that are not primarily meant to be used in a chain, or use
-   functions that are meant for chains by themselves.
-   */
+   Chains are a concise way to write jobs.
+  Put simply chains are a fold-right of wrappers.
+
+  Each "step/link/part" (no name defined) of a chain
+  is a function that takes the action that this job
+  is being defined for as its first argument
+  and the next "step/link/part" as its second argument.
+  These argument are supplied automatically when called
+  by the `chain` function.
+  It returns the job as an attribute set.
+
+  Most "steps/links/parts" are created from a builder function
+  that takes some specific arguments which are usually given
+  directly in the action definition.
+
+  This simple contract sometimes allows to use other functions
+  that are not primarily meant to be used in a chain, or use
+  functions that are meant for chains by themselves.
+  */
   chains = {
     /*
-      The main entrypoint to chains.
-     
-     For simplicity, plain attribute sets
-     are also allowed. They will simply be merged
-     with the next (if any) "step/link/part"
-     using `data-merge.merge`.
-     */
+     The main entrypoint to chains.
+
+    For simplicity, plain attribute sets
+    are also allowed. They will simply be merged
+    with the next (if any) "step/link/part"
+    using `data-merge.merge`.
+    */
     chain = action: steps:
       lib.foldr
       (
@@ -166,20 +166,20 @@ in rec {
 
     tasks = {
       /*
-        Like `tasks.script` but the second argument is
-       a function that takes the command of the
-       next script and returns the new script.
-       
-       Example:
-       
-       ```nix
-       wrapScript "bash" (inner: ''
-       echo 'Running …'
-       time ${lib.escapeShellArgs inner}
-       echo '… finished.'
-       '')
-       ```
-       */
+       Like `tasks.script` but the second argument is
+      a function that takes the command of the
+      next script and returns the new script.
+
+      Example:
+
+      ```nix
+      wrapScript "bash" (inner: ''
+      echo 'Running …'
+      time ${lib.escapeShellArgs inner}
+      echo '… finished.'
+      '')
+      ```
+      */
       wrapScript = language: outerFn: action: inner: let
         outer = script language (outerFn inner.config.command or []);
       in
@@ -198,16 +198,16 @@ in rec {
         };
 
       /*
-        Allow a script to dynamically generate a result fact.
-       
-       If the inner program writes a JSON file to `/local/cicero/post-fact/success/fact`
-       and exits successfully, a fact with that value will be created via the API
-       (with `/local/cicero/post-fact/success/artifact` as the artifact if it exists).
-       
-       Same for the failure case and `/local/cicero/post-fact/failure/{fact,artifact}`.
-       
-       Assumes `CICERO_API_URL` is set pointing to Cicero accessible from inside the cluster.
-       */
+       Allow a script to dynamically generate a result fact.
+
+      If the inner program writes a JSON file to `/local/cicero/post-fact/success/fact`
+      and exits successfully, a fact with that value will be created via the API
+      (with `/local/cicero/post-fact/success/artifact` as the artifact if it exists).
+
+      Same for the failure case and `/local/cicero/post-fact/failure/{fact,artifact}`.
+
+      Assumes `CICERO_API_URL` is set pointing to Cicero accessible from inside the cluster.
+      */
       postFact = action: inner:
         data-merge.merge
         (wrapScript "bash"

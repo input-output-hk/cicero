@@ -1,42 +1,42 @@
 self:
 /*
-  An action is a function of the form:
- 
- ```nix
- { name, id }: {
- io = ''
-   inputs: {
-     # require last fact with `count` of at least 1
-     tick: match: count: >0
- 
-     # stop at 10 (no `over_nine` input will be created)
-     over_nine: {
-       not: true
-       match: count: >9
-     }
- 
-     # has no influence on runnability
-     double: {
-       optional: true
-       match: double: true
-     }
-   }
- 
-   output: {
-     # this is the default
-     success: null
- 
-     failure: count: inputs.tick.value.count
-   }
- '';
- 
- job = { tick, double ? false }:
- # `tick` is the latest fact that matches
- # `double` is provided if found
- …; # nomad HCL job spec in JSON format
- }
- ```
- */
+ An action is a function of the form:
+
+```nix
+{ name, id }: {
+io = ''
+  inputs: {
+    # require last fact with `count` of at least 1
+    tick: match: count: >0
+
+    # stop at 10 (no `over_nine` input will be created)
+    over_nine: {
+      not: true
+      match: count: >9
+    }
+
+    # has no influence on runnability
+    double: {
+      optional: true
+      match: double: true
+    }
+  }
+
+  output: {
+    # this is the default
+    success: null
+
+    failure: count: inputs.tick.value.count
+  }
+'';
+
+job = { tick, double ? false }:
+# `tick` is the latest fact that matches
+# `double` is provided if found
+…; # nomad HCL job spec in JSON format
+}
+```
+*/
 let
   inherit (self.inputs.nixpkgs) lib;
   inherit (builtins) mapAttrs;

@@ -10,7 +10,10 @@
     inclusive.url = "github:input-output-hk/nix-inclusive";
     nixpkgs.url = "github:NixOS/nixpkgs/release-22.05";
     nix.url = "github:NixOS/nix/2.8-maintenance";
-    alejandra.url = "github:kamadorueda/alejandra";
+    alejandra = {
+      url = "github:kamadorueda/alejandra";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     utils.url = "github:numtide/flake-utils";
     driver = {
       url = "github:input-output-hk/nomad-driver-nix";
