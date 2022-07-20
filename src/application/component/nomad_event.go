@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -121,7 +121,7 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 	// Save the event if it's not already in the DB.
 	switch {
 	case event.Uid == [16]byte{}:
-		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(ctx, self.Db, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx)
 
 			if err := txSelf.NomadEventService.Save(event); err != nil {
@@ -158,7 +158,7 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 		return errAlreadyHandled
 	}
 
-	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, self.Db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
 		if err := txSelf.handleNomadEvent(ctx, &event.Event); err != nil {
@@ -334,15 +334,15 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 }
 
 func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) error {
-	return self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, self.Db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
-		switch run.Status {
+		switch *run.Status {
 		default:
 			panic(`endRun() called on Run with status "` + run.Status.String() + `"`)
 		case domain.RunStatusCanceled:
 		case domain.RunStatusRunning:
-			run.Status = status
+			run.Status = &status
 
 			if output, err := txSelf.InvocationService.GetOutputById(run.InvocationId); err != nil {
 				return err
@@ -351,7 +351,7 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 					RunId: &run.NomadJobID,
 				}
 
-				switch run.Status {
+				switch *run.Status {
 				case domain.RunStatusSucceeded:
 					if output.Success.Exists() {
 						fact.Value = output.Success

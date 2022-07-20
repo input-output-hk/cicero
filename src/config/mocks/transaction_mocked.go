@@ -1,8 +1,9 @@
 package mocks
 
+/* FIXME
 import (
 	"context"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock"
 	"testing"
 )
@@ -21,3 +22,4 @@ func BuildTransaction(ctx context.Context, t *testing.T) (pgxmock.PgxConnIface, 
 	defer func() { _ = tx.Rollback(ctx) }()
 	return db, tx
 }
+*/

@@ -7,7 +7,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -96,7 +96,7 @@ func (self factService) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadSe
 func (self factService) Save(fact *domain.Fact, binary io.Reader) error {
 	var runFunc func(config.PgxIface) (InvokeRegisterFunc, error)
 
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*factService)
 
 		self.logger.Trace().Msg("Saving new Fact")

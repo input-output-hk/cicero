@@ -26,6 +26,10 @@ func (n nomadEventRepository) WithQuerier(querier config.PgxIface) repository.No
 }
 
 func (n nomadEventRepository) Save(event *domain.NomadEvent) error {
+	filterKeys := event.FilterKeys
+	if filterKeys == nil {
+		filterKeys = []string{}
+	}
 	return n.DB.QueryRow(
 		context.Background(),
 		`INSERT INTO nomad_event (topic, "type", "key", filter_keys, "index", payload)
@@ -34,7 +38,7 @@ func (n nomadEventRepository) Save(event *domain.NomadEvent) error {
 			-- just for RETURNING to work, would otherwise DO NOTHING
 			SET topic = EXCLUDED.topic
 		RETURNING uid, handled`,
-		event.Topic, event.Type, event.Key, event.FilterKeys, event.Index, event.Payload,
+		event.Topic, event.Type, event.Key, filterKeys, event.Index, event.Payload,
 	).Scan(&event.Uid, &event.Handled)
 }
 

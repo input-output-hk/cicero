@@ -59,7 +59,7 @@ type Run struct {
 	InvocationId uuid.UUID  `json:"invocation_id"`
 	CreatedAt    time.Time  `json:"created_at"`
 	FinishedAt   *time.Time `json:"finished_at"`
-	Status       RunStatus  `json:"status"`
+	Status       *RunStatus `json:"status"`
 }
 
 type RunStatus int8

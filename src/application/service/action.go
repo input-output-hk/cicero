@@ -9,7 +9,7 @@ import (
 	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -401,7 +401,7 @@ func (self actionService) Create(source, name string) (*domain.Action, error) {
 		action.ActionDefinition = def
 	}
 
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*actionService)
 
 		// deactivate previous version for convenience
@@ -427,7 +427,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 	var inputs map[string]domain.Fact
 	var runnable bool
 
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*actionService)
 
 		if runnable_, inputs_, err := txSelf.IsRunnable(action); err != nil {
@@ -472,16 +472,17 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 		var run *domain.Run
 		var registerFunc InvokeRegisterFunc
 
-		if err := db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(context.Background(), db, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx).(*actionService)
 
 			if err := (*txSelf.invocationService).End(invocation.Id); err != nil {
 				return err
 			}
 
+			statusRunning := domain.RunStatusRunning
 			tmpRun := domain.Run{
 				InvocationId: invocation.Id,
-				Status:       domain.RunStatusRunning,
+				Status:       &statusRunning,
 			}
 
 			if err := txSelf.runService.Save(&tmpRun); err != nil {
@@ -506,7 +507,10 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 
 				tmpRun.CreatedAt = tmpRun.CreatedAt.UTC()
 				tmpRun.FinishedAt = &tmpRun.CreatedAt
-				tmpRun.Status = domain.RunStatusSucceeded
+				{
+					statusSucceeded := domain.RunStatusSucceeded
+					tmpRun.Status = &statusSucceeded
+				}
 
 				err := txSelf.runService.Update(&tmpRun)
 				err = errors.WithMessage(err, "Could not update decision Run")
@@ -566,7 +570,7 @@ func (self actionService) InvokeCurrentActive() (func(config.PgxIface) (InvokeRe
 				}
 				return nil
 			}, nil
-		}, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		}, pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx).(*actionService)
 
 			actions, err := txSelf.GetCurrentActive()

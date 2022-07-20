@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -1154,7 +1154,7 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	} else if err := pgx.BeginFunc(context.Background(), self.Db, func(tx pgx.Tx) error {
 		if binary, err := self.FactService.GetBinaryById(tx, id); err != nil {
 			return errors.WithMessage(err, "Failed to get binary")
 		} else {

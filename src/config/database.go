@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgtype"
-	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgconn"
+	// "github.com/jackc/pgx/v5/pgtype"
+	pgxUUID "github.com/vgarvardt/pgx-google-uuid/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 )
 
@@ -16,7 +16,7 @@ type PgxIface interface {
 	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...interface{}) pgx.Row
 	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
-	BeginFunc(context.Context, func(pgx.Tx) error) error
+	Begin(context.Context) (pgx.Tx, error)
 	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
 }
 
@@ -37,20 +37,17 @@ func DBConnection(logger *zerolog.Logger, logDb bool) (PgxIface, error) {
 		return nil, err
 	}
 	if logDb {
-		dbconfig.ConnConfig.Logger = wrapLogger(logger)
+		// TODO fix logging using https://github.com/jackc/pgx-zerolog
+		// dbconfig.ConnConfig.Logger = wrapLogger(logger)
 	}
 
 	//TODO: log configuration
 	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-		conn.ConnInfo().RegisterDataType(pgtype.DataType{
-			Value: &pgtypeuuid.UUID{},
-			Name:  "uuid",
-			OID:   pgtype.UUIDOID,
-		})
+		pgxUUID.Register(conn.TypeMap())
 		return nil
 	}
 
-	return pgxpool.ConnectConfig(context.Background(), dbconfig)
+	return pgxpool.NewConfig(context.Background(), dbconfig)
 }
 
 func wrapLogger(original *zerolog.Logger) pgLogger {

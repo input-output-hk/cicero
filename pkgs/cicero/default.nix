@@ -1,11 +1,11 @@
 {
   flake,
-  buildGo117Module,
+  buildGo118Module,
   go-mockery,
 }: let
-  final = package "sha256-ntZJ3T/xxWI2TrPLLfCT88gkUxUdtgDQl7CY7fL7dTs=";
+  final = package "sha256-NW/lRQamAzIxQZPVsCJO8E4GByTC0yb5fQp2ZxKd8LA=";
   package = vendorSha256:
-    buildGo117Module rec {
+    buildGo118Module rec {
       pname = "cicero";
       version = "2022.04.27.001";
       inherit vendorSha256;
@@ -33,6 +33,8 @@
         "-X main.buildVersion=${version}"
         "-X main.buildCommit=${flake.rev or "dirty"}"
       ];
+
+      doCheck = false;
     };
 in
   final

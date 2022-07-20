@@ -10,7 +10,7 @@ import (
 	"github.com/direnv/direnv/v2/sri"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 
 	"github.com/input-output-hk/cicero/src/config"
@@ -270,7 +270,7 @@ Kind:
 
 func (a *factRepository) Save(fact *domain.Fact, binary io.Reader) error {
 	ctx := context.Background()
-	return a.DB.BeginFunc(ctx, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
 		var binaryOid *uint32
 		if binary != nil {
 			los := tx.LargeObjects()
