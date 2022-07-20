@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"io"
-	"sync"
 
 	"cuelang.org/go/cue"
 	"github.com/google/uuid"
@@ -147,38 +146,16 @@ func (self factService) GetByCue(value cue.Value) (facts []domain.Fact, err erro
 func (self factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UUID) (map[string]domain.Fact, error) {
 	inputs := map[string]domain.Fact{}
 
-	type Res struct {
-		input string
-		fact  *domain.Fact
-		err   error
-	}
-	res := make(chan *Res, len(inputFactIds))
-
-	wg := &sync.WaitGroup{}
-	wg.Add(len(inputFactIds))
 	for input, id := range inputFactIds {
-		go func(input string, id uuid.UUID) {
-			defer wg.Done()
-			fact, err := self.GetById(id)
-			res <- &Res{input, fact, err}
-		}(input, id)
-	}
-	wg.Wait()
+		fact, err := self.GetById(id)
 
-Res:
-	for {
-		select {
-		case result := <-res:
-			switch {
-			case result.err != nil:
-				return nil, result.err
-			case result.fact == nil:
-				return nil, errors.New("no fact with given ID found")
-			default:
-				inputs[result.input] = *result.fact
-			}
+		switch {
+		case err != nil:
+			return nil, err
+		case fact == nil:
+			return nil, errors.New("no fact with given ID found")
 		default:
-			break Res
+			inputs[input] = *fact
 		}
 	}
 
