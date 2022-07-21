@@ -345,7 +345,7 @@ func (self runService) metrics(allocs []*nomad.Allocation, to *time.Time, queryP
 }
 
 func (self runService) CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error) {
-	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
+	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*\.scope"})`, func(f float64) template.HTML {
 		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
 	})
 }
@@ -358,7 +358,7 @@ const (
 )
 
 func (self runService) MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error) {
-	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
+	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*\.scope"}`, func(f float64) template.HTML {
 		switch {
 		case f >= tib:
 			return template.HTML(strconv.FormatFloat(f/tib, 'f', 1, 64) + " TiB")
