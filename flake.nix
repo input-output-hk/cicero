@@ -86,7 +86,8 @@
           (final: prev: {
             nixos-shell = nixos-shell.defaultPackage.${prev.system};
             alejandra = alejandra.defaultPackage.${prev.system};
-            go = prev.go_1_17;
+            go = prev.go_1_18;
+            go-mockery = prev.callPackage pkgs/mockery.nix {};
             gouml = final.callPackage pkgs/gouml.nix {};
             gocritic = final.callPackage pkgs/gocritic.nix {};
             schemathesis = final.callPackage pkgs/schemathesis.nix {};
