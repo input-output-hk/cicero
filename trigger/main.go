@@ -128,7 +128,17 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = http.Post(apiAddr+"/fact", "text/json", buf)
+	response, err := http.Post(apiAddr+"/fact", "text/json", buf)
+	if err == nil && response.StatusCode >= 400 {
+		errMsg := fmt.Sprintf("received %d response", response.StatusCode)
+
+		errBody, errBodyErr := io.ReadAll(response.Body)
+		if fail(w, errors.WithMessage(errBodyErr, errMsg+" and failed to read its body"), 500) {
+			return
+		}
+
+		err = errors.New(errMsg + ": " + string(errBody))
+	}
 	if fail(w, errors.WithMessage(err, "creating fact"), 500) {
 		return
 	}
