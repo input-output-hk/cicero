@@ -216,6 +216,8 @@
               ln -s $out/bin/env $out/usr/bin/env
             '';
           });
+
+          nomad-driver-podman = prev.callPackage pkgs/nomad-driver-podman.nix {};
         }
         // nixpkgs.lib.mapAttrs'
         (k: nixpkgs.lib.nameValuePair "cicero-evaluator-nix-run-${k}")
@@ -231,6 +233,13 @@
           modules = [
             nixos/configs/vm.nix
             nixos-shell.nixosModules.nixos-shell
+            {
+              nixpkgs.overlays = [
+                (_: prev: {
+                  inherit (self.outputs.packages.${prev.system}) nomad-driver-podman;
+                })
+              ];
+            }
           ];
         };
 
