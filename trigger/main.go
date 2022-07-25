@@ -20,11 +20,12 @@ import (
 )
 
 type Config struct {
-	Host       string `arg:"--host" default:"0.0.0.0"`
-	Port       int    `arg:"--port, env:NOMAD_PORT_http" default:"8099"`
-	SecretPath string `arg:"--secret-file, required"`
-	ResolvConf string `arg:"--resolv-conf" default:"/etc/resolv.conf"`
-	LogLevel   string `arg:"--log-level" default:"info"`
+	Host         string `arg:"--host" default:"0.0.0.0"`
+	Port         int    `arg:"--port, env:NOMAD_PORT_http" default:"8099"`
+	SecretPath   string `arg:"--secret-file, required"`
+	CiceroApiUrl string `arg:"--cicero-api-url"`
+	ResolvConf   string `arg:"--resolv-conf" default:"/etc/resolv.conf"`
+	LogLevel     string `arg:"--log-level" default:"info"`
 }
 
 func main() {
@@ -54,7 +55,7 @@ func main() {
 		Addr:         fmt.Sprintf("%s:%d", config.Host, config.Port),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
-		Handler:      handler{clientConfig, secret, log},
+		Handler:      handler{clientConfig, secret, log, config.CiceroApiUrl},
 	}
 
 	log.Info().Str("addr", server.Addr).Msg("Starting server")
@@ -67,6 +68,7 @@ type handler struct {
 	clientConfig *dns.ClientConfig
 	secret       []byte
 	log          zerolog.Logger
+	ciceroApiUrl string
 }
 
 func fail(w http.ResponseWriter, err error, status int) bool {
@@ -100,9 +102,13 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	apiAddr, err := h.lookupSRV("_cicero._tcp.service.consul")
-	if fail(w, errors.WithMessage(err, "Looking up DNS"), 500) {
-		return
+	apiAddr := h.ciceroApiUrl
+	if apiAddr == "" {
+		apiAddr, err = h.lookupSRV("_cicero._tcp.service.consul")
+		if fail(w, errors.WithMessage(err, "Looking up DNS"), 500) {
+			return
+		}
+		apiAddr = fmt.Sprintf("http://%s/api", apiAddr)
 	}
 
 	event := map[string]interface{}{}
@@ -122,7 +128,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = http.Post(fmt.Sprintf("http://%s/fact", apiAddr), "text/json", buf)
+	_, err = http.Post(apiAddr+"/fact", "text/json", buf)
 	if fail(w, errors.WithMessage(err, "creating fact"), 500) {
 		return
 	}

@@ -41,6 +41,7 @@ func TestServer(t *testing.T) {
 		secret,
 		zerolog.Nop(),
 		// zerolog.New(os.Stderr).With().Timestamp().Logger(),
+		"",
 	}
 
 	mock := apitest.NewMock().
