@@ -22,8 +22,9 @@ import (
 type Config struct {
 	Host       string `arg:"--host" default:"0.0.0.0"`
 	Port       int    `arg:"--port, env:NOMAD_PORT_http" default:"8099"`
-	SecretPath string `arg:"--secret-file,required"`
+	SecretPath string `arg:"--secret-file, required"`
 	ResolvConf string `arg:"--resolv-conf" default:"/etc/resolv.conf"`
+	LogLevel   string `arg:"--log-level" default:"info"`
 }
 
 func main() {
@@ -31,6 +32,12 @@ func main() {
 	arg.MustParse(&config)
 
 	log := zerolog.New(os.Stderr).With().Timestamp().Logger()
+
+	if level, err := zerolog.ParseLevel(config.LogLevel); err != nil {
+		log.Fatal().Err(err).Msg("parsing log level")
+	} else {
+		zerolog.SetGlobalLevel(level)
+	}
 
 	clientConfig, err := dns.ClientConfigFromFile(config.ResolvConf)
 	if err != nil {
