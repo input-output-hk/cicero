@@ -41,7 +41,7 @@ type LoggerConfig struct {
 	MaxAge int
 }
 
-func buildLoggerConfig(level zerolog.Level) (*LoggerConfig, error) {
+func buildLoggerConfig() (*LoggerConfig, error) {
 	var conf LoggerConfig
 
 	if v, err := GetenvBool("CONSOLE_LOGGING_ENABLED"); err != nil {
@@ -97,7 +97,7 @@ func buildLoggerConfig(level zerolog.Level) (*LoggerConfig, error) {
 }
 
 func ConfigureLogger(level zerolog.Level) *zerolog.Logger {
-	config, err := buildLoggerConfig(level)
+	config, err := buildLoggerConfig()
 	if err != nil {
 		log.Fatal().Err(err).Msg("can't get logger config")
 		return nil
