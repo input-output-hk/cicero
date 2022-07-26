@@ -1,6 +1,6 @@
 {
   "cicero/ci" = {
-    task = "schemathesis";
+    task = "build";
     io = ''
       _lib: github: {
         #repo: "input-output-hk/cicero"

@@ -160,33 +160,6 @@
           devShell = pkgs.devshell.fromTOML ./devshell.toml;
           devShells.cicero-api = selfPkgs.cicero-api.project.shell;
           inherit (selfPkgs.cicero-api) apps;
-
-          # We cannot use pkgs.nixosTest because
-          # it gives us no way to inject specialArgs
-          # and _module.args lead to infinite recursion with self.
-          checks.schemathesis =
-            (import "${nixpkgs}/nixos/lib/testing-python.nix" {
-              inherit system pkgs;
-              extraConfigurations = [{nixpkgs = {inherit pkgs;};}];
-              specialArgs = {inherit self;};
-            })
-            .makeTest {
-              name = "schemathesis";
-              nodes.main = {pkgs, ...}: {
-                imports = [nixos/configs/cicero.nix];
-
-                environment = {
-                  # Do not try to connect to Nomad as we have none running.
-                  etc."cicero/start.args".text = "web";
-
-                  systemPackages = [pkgs.schemathesis];
-                };
-              };
-              testScript = ''
-                main.wait_for_unit("cicero")
-                main.succeed("schemathesis run http://127.0.0.1:8080/documentation/cicero.json --validate-schema=false --hypothesis-suppress-health-check=too_slow")
-              '';
-            };
         }
         // tullia.fromSimple system {
           tasks = import tullia/tasks.nix self;

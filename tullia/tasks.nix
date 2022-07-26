@@ -49,22 +49,6 @@ in {
 
       command.text = "nix build -L ${flakeUrl args}";
 
-      memory = 1024 * 2;
-      nomad.resources.cpu = 1000;
-    };
-  };
-
-  schemathesis = args: {
-    imports = [common];
-
-    config = {
-      after = ["build"];
-
-      command.text = ''
-        system=$(nix eval --raw --impure --expr __currentSystem)
-        nix build -L ${flakeUrl args}#checks."$system".schemathesis
-      '';
-
       env.NIX_CONFIG = ''
         extra-system-features = kvm
       '';
