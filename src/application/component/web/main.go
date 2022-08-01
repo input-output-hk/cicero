@@ -163,6 +163,16 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/invocation/{id}",
+		self.ApiInvocationIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Invocation{}, "OK")),
+	); err != nil {
+		return err
+	}
 	if route, err := r.AddRoute(http.MethodGet,
 		"/api/invocation",
 		self.ApiInvocationByInputGet,
@@ -909,11 +919,35 @@ func (self *Web) getRun(req *http.Request) (domain.Run, error) {
 	}
 }
 
+// Returns (_, false) if an error occurred.
+// The error is already sent to the client.
+func (self *Web) getInvocation(w http.ResponseWriter, req *http.Request) (*domain.Invocation, bool) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, err)
+		return nil, false
+	} else if invocation, err := self.InvocationService.GetById(id); err != nil {
+		self.ServerError(w, err)
+		return &invocation, false
+	} else {
+		return &invocation, true
+	}
+}
+
 func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
 	if run, err := self.getRun(req); err != nil {
 		self.NotFound(w, errors.WithMessage(err, "Could not find Run"))
 	} else {
 		self.json(w, run, http.StatusOK)
+	}
+}
+
+func (self *Web) ApiInvocationIdGet(w http.ResponseWriter, req *http.Request) {
+	switch invocation, ok := self.getInvocation(w, req); {
+	case !ok:
+	case invocation == nil:
+		w.WriteHeader(http.StatusNotFound)
+	default:
+		self.json(w, invocation, http.StatusOK)
 	}
 }
 
