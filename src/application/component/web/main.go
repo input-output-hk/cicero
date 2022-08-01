@@ -936,12 +936,12 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 func (self *Web) getRun(w http.ResponseWriter, req *http.Request) (*domain.Run, bool) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
-		return nil, true
+		return nil, false
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
 		self.ServerError(w, err)
-		return run, true
-	} else {
 		return run, false
+	} else {
+		return run, true
 	}
 }
 
