@@ -13,17 +13,20 @@ import Control.Exception
 
 import Action
 import Fact
+import Invocation
 import Run
 
 data Command
   = CmdFact !FactCommand
   | CmdAction !ActionCommand
+  | CmdInvocation !InvocationCommand
   | CmdRun !RunCommand
 
 commandParser :: Parser Command
 commandParser = hsubparser
   ( command "fact" (CmdFact <$> factCommandInfo)
  <> command "action" (CmdAction <$> actionCommandInfo)
+ <> command "invocation" (CmdInvocation <$> invocationCommandInfo)
  <> command "run" (CmdRun <$> runCommandInfo)
   )
 
@@ -61,6 +64,7 @@ argsInfo = info (argsParser <**> helper)
 getHandler :: Command -> Client ClientM API -> ClientEnv -> IO ()
 getHandler (CmdAction acmd) apiClient = Action.handler acmd apiClient.action
 getHandler (CmdFact fcmd) apiClient = Fact.handler fcmd apiClient.fact
+getHandler (CmdInvocation icmd) apiClient = Invocation.handler icmd apiClient.invocation
 getHandler (CmdRun rcmd) apiClient = Run.handler rcmd apiClient.run
 
 main :: IO ()

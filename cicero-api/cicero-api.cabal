@@ -10,6 +10,7 @@ library
     IOHK.Cicero.API
     IOHK.Cicero.API.Action
     IOHK.Cicero.API.Fact
+    IOHK.Cicero.API.Invocation
     IOHK.Cicero.API.Run
   build-depends:
     base ^>= 4.16.0.0,
@@ -25,7 +26,7 @@ library
 
 executable cicero-cli
   main-is: Main.hs
-  other-modules: Fact, Action, Run
+  other-modules: Action, Fact, Invocation, Run
   hs-source-dirs: cli
   build-depends:
     base ^>= 4.16.0.0,
