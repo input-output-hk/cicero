@@ -57,6 +57,7 @@ type Invocation struct {
 type Run struct {
 	NomadJobID   uuid.UUID  `json:"nomad_job_id"`
 	InvocationId uuid.UUID  `json:"invocation_id"`
+	ActionId     uuid.UUID  `json:"action_id"`
 	CreatedAt    time.Time  `json:"created_at"`
 	FinishedAt   *time.Time `json:"finished_at"`
 	Status       RunStatus  `json:"status"`

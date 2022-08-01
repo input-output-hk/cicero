@@ -29,7 +29,7 @@ func (a runRepository) GetByNomadJobId(id uuid.UUID) (*domain.Run, error) {
 func (a runRepository) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (*domain.Run, error) {
 	run, err := get(
 		a.DB, &domain.Run{},
-		`SELECT * FROM run WHERE nomad_job_id = $1 `+lock,
+		`SELECT r.*, i.action_id FROM run r WHERE r.nomad_job_id = $1 JOIN invocation i ON i.id = r.invocation_id `+lock,
 		id,
 	)
 	if run == nil {
