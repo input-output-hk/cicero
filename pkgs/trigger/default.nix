@@ -1,28 +1,32 @@
 {
-  lib,
-  rustPlatform,
-  fetchFromGitHub,
-}:
-rustPlatform.buildRustPackage rec {
-  pname = "trigger";
-  version = "1.1.2";
+  flake,
+  buildGo118Module,
+  glibc,
+}: let
+  final = package "sha256-nEmRypgTG6WNY3t1BljPiHuwK1UDlhKRFRiP2ldacjU=";
+  package = vendorSha256:
+    buildGo118Module rec {
+      pname = "trigger";
+      version = "2022.05.19.001";
+      inherit vendorSha256;
 
-  src = fetchFromGitHub {
-    owner = "RedL0tus";
-    repo = "trigger";
-    rev = version;
-    hash = "sha256-Ut/lRIIUT5mq4ZQhbzKOsfdWmao9wbFVXiOym2M3e8o=";
-  };
+      passthru.invalidHash =
+        package "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
-  cargoPatches = [./Cargo.lock.patch];
+      src = flake.inputs.inclusive.lib.inclusive ../../. [
+        ../../go.mod
+        ../../go.sum
+        ../../trigger
+      ];
 
-  cargoHash = "sha256-1QFM0G0if57BZ0kmSvDzV5nH4DiD7l/FqgFEjHhZeu0=";
+      CGO_ENABLED = 0;
 
-  meta = with lib;
-    src.meta
-    // {
-      description = "Yet another GitHub/GitLab webhook listener";
-      license = licenses.mit;
-      maintainers = with maintainers; [dermetfan];
+      ldflags = [
+        "-s"
+        "-w"
+        "-X main.buildVersion=${version}"
+        "-X main.buildCommit=${flake.rev or "dirty"}"
+      ];
     };
-}
+in
+  final

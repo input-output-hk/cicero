@@ -48,26 +48,12 @@
 								<td>{{.CreatedAt}}</td>
 								<td colspan="3">
 									<a target="_parent" href="/invocation/{{.Id}}">Invocation</a>
-									failed:
-									{{$maxChars := 110}}
-									{{$hasStderr := false}}
-									{{with .EvalStderr}}
-										{{with derefString .}}
-											<samp class="log stderr">
-												{{if gt (len .) $maxChars}}…{{end}}
-												{{slice . (maxInt 0 (subInt (len .) $maxChars))}}
-											</samp>
-											{{$hasStderr = true}}
-										{{end}}
+									{{if .FinishedAt}}
+										failed
+									{{else}}
+										running…
 									{{end}}
-									{{if not $hasStderr}}
-										{{with derefString .EvalStdout}}
-											<samp class="log">
-												{{if gt (len .) $maxChars}}…{{end}}
-												{{slice . (maxInt 0 (subInt (len .) $maxChars))}}
-											</samp>
-										{{end}}
-									{{end}}
+									<!-- XXX show last line of invocation log output here? -->
 								</td>
 							{{end}}
 						{{end}}

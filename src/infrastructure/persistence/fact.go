@@ -30,16 +30,20 @@ func (a *factRepository) WithQuerier(querier config.PgxIface) repository.FactRep
 	return &factRepository{querier}
 }
 
-func (a *factRepository) GetById(id uuid.UUID) (fact domain.Fact, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &fact,
+func (a *factRepository) GetById(id uuid.UUID) (*domain.Fact, error) {
+	fact, err := get(
+		a.DB, &domain.Fact{},
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE id = $1`,
 		id,
 	)
-	return
+	if fact == nil {
+		return nil, err
+	}
+	return fact.(*domain.Fact), err
 }
 
-func (a *factRepository) GetByRunId(id uuid.UUID) (facts []*domain.Fact, err error) {
+func (a *factRepository) GetByRunId(id uuid.UUID) (facts []domain.Fact, err error) {
+	facts = []domain.Fact{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash
@@ -68,18 +72,22 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	return
 }
 
-func (a *factRepository) GetLatestByCue(value cue.Value) (fact domain.Fact, err error) {
+func (a *factRepository) GetLatestByCue(value cue.Value) (*domain.Fact, error) {
 	where, args := sqlWhereCue(value, nil, 0)
-	err = pgxscan.Get(
-		context.Background(), a.DB, &fact,
+	fact, err := get(
+		a.DB, &domain.Fact{},
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
 		args...,
 	)
-	return
+	if fact == nil {
+		return nil, err
+	}
+	return fact.(*domain.Fact), err
 }
 
-func (a *factRepository) GetByCue(value cue.Value) (facts []*domain.Fact, err error) {
+func (a *factRepository) GetByCue(value cue.Value) (facts []domain.Fact, err error) {
 	where, args := sqlWhereCue(value, nil, 0)
+	facts = []domain.Fact{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &facts,
 		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where,
@@ -129,7 +137,8 @@ func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, arg
 			v = "null"
 			cast = "jsonb"
 		case cue.StringKind:
-			panic("you likely want to use appendTextEquals instead")
+			v, _ = arg.String()
+			cast = "text"
 		default:
 			panic("arg must be concrete scalar")
 		}
@@ -168,6 +177,7 @@ func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, arg
 Kind:
 	switch value.Kind() {
 	case cue.StructKind:
+		emptyStruct := true
 		for iter, _ := value.Fields(); iter.Next(); {
 			selector := iter.Selector()
 
@@ -175,15 +185,24 @@ Kind:
 				continue
 			}
 
+			emptyStruct = false
+
 			if fieldClause, fieldArgs := sqlWhereCue(iter.Value(), append(path, iter.Label()), argNum); fieldClause != "" {
 				appendClause(and()+fieldClause, fieldArgs)
 			}
 		}
+		if emptyStruct {
+			appendClause(and()+"TRUE", []interface{}{})
+		}
 	case cue.ListKind:
 		list, _ := value.List()
-		for i := 0; list.Next(); i += 1 {
+		i := 0
+		for ; list.Next(); i += 1 {
 			itemClause, itemArgs := sqlWhereCue(list.Value(), append(path, strconv.Itoa(i)), argNum)
 			appendClause(and()+itemClause, itemArgs)
+		}
+		if i == 0 {
+			appendClause(and()+"TRUE", []interface{}{})
 		}
 	case cue.StringKind:
 		str, _ := value.String()
@@ -197,6 +216,16 @@ Kind:
 			for i, val := range vals {
 				if i > 0 {
 					clause += ` OR `
+				}
+				appendClause(sqlWhereCue(val, path, argNum))
+			}
+			clause += `)`
+			break Kind
+		case cue.AndOp:
+			clause = `(`
+			for i, val := range vals {
+				if i > 0 {
+					clause += ` AND `
 				}
 				appendClause(sqlWhereCue(val, path, argNum))
 			}

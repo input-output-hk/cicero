@@ -8,18 +8,14 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/grafana/loki/pkg/loghttp"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
-	"github.com/pborman/ansi"
 	"github.com/pkg/errors"
-	prometheus "github.com/prometheus/client_golang/api"
 	"github.com/rs/zerolog"
 
 	"github.com/input-output-hk/cicero/src/application"
@@ -32,134 +28,114 @@ import (
 type RunService interface {
 	WithQuerier(config.PgxIface) RunService
 
-	GetByNomadJobId(uuid.UUID) (domain.Run, error)
-	GetByNomadJobIdWithLock(uuid.UUID, string) (domain.Run, error)
-	GetByInvocationId(uuid.UUID) (domain.Run, error)
-	GetOutputByNomadJobId(uuid.UUID) (domain.RunOutput, error)
-	GetByActionId(uuid.UUID, *repository.Page) ([]*domain.Run, error)
-	GetLatestByActionId(uuid.UUID) (domain.Run, error)
-	GetAll(*repository.Page) ([]*domain.Run, error)
-	Save(*domain.Run, *domain.RunOutput) error
+	GetByNomadJobId(uuid.UUID) (*domain.Run, error)
+	GetByNomadJobIdWithLock(uuid.UUID, string) (*domain.Run, error)
+	GetByInvocationId(uuid.UUID) (*domain.Run, error)
+	GetByActionId(uuid.UUID, *repository.Page) ([]domain.Run, error)
+	GetLatestByActionId(uuid.UUID) (*domain.Run, error)
+	GetAll(*repository.Page) ([]domain.Run, error)
+	Save(*domain.Run) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	JobLogs(id uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error)
-	RunLogs(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error)
-	CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
-	MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error)
-	GrafanaUrls(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string]*url.URL, error)
+	JobLog(id uuid.UUID, start time.Time, end *time.Time) (LokiLog, error)
+	RunLog(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error)
+	GetRunAllocationsWithLogs(domain.Run) ([]AllocationWithLogs, error)
+	CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
+	MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
+	GrafanaUrls(allocs []*nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
+}
+
+type AllocationWithLogs struct {
+	*nomad.Allocation
+	TaskLogs map[string]LokiLog
 }
 
 type runService struct {
 	logger              zerolog.Logger
 	runRepository       repository.RunRepository
-	runOutputRepository repository.RunOutputRepository
-	prometheus          prometheus.Client
+	lokiService         LokiService
 	victoriaMetricsAddr string
+	nomadEventService   NomadEventService
 	nomadClient         application.NomadClient
 	db                  config.PgxIface
 }
 
-func NewRunService(db config.PgxIface, prometheusAddr, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
-	impl := runService{
+func NewRunService(db config.PgxIface, lokiService LokiService, nomadEventService NomadEventService, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
+	return &runService{
 		logger:              logger.With().Str("component", "RunService").Logger(),
 		runRepository:       persistence.NewRunRepository(db),
-		runOutputRepository: persistence.NewRunOutputRepository(db),
 		nomadClient:         nomadClient,
+		nomadEventService:   nomadEventService,
+		lokiService:         lokiService,
 		victoriaMetricsAddr: victoriaMetricsAddr,
 		db:                  db,
 	}
-
-	if prom, err := prometheus.NewClient(prometheus.Config{
-		Address: prometheusAddr,
-	}); err != nil {
-		impl.logger.Fatal().Err(err).Msg("Failed to create new prometheus client")
-		return nil
-	} else {
-		impl.prometheus = prom
-	}
-
-	return &impl
 }
 
-func (self *runService) WithQuerier(querier config.PgxIface) RunService {
+func (self runService) WithQuerier(querier config.PgxIface) RunService {
 	return &runService{
-		logger:              self.logger,
-		runRepository:       self.runRepository.WithQuerier(querier),
-		runOutputRepository: self.runOutputRepository.WithQuerier(querier),
-		prometheus:          self.prometheus,
-		nomadClient:         self.nomadClient,
-		db:                  querier,
+		logger:            self.logger,
+		runRepository:     self.runRepository.WithQuerier(querier),
+		nomadEventService: self.nomadEventService.WithQuerier(querier),
+		lokiService:       self.lokiService,
+		nomadClient:       self.nomadClient,
+		db:                querier,
 	}
 }
 
-func (self *runService) GetByNomadJobId(id uuid.UUID) (run domain.Run, err error) {
+func (self runService) GetByNomadJobId(id uuid.UUID) (run *domain.Run, err error) {
 	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
 	return
 }
 
-func (self *runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run domain.Run, err error) {
+func (self runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run *domain.Run, err error) {
 	self.logger.Trace().Str("nomad-job-id", id.String()).Str("lock", lock).Msg("Getting Run by Nomad Job ID with lock")
 	run, err = self.runRepository.GetByNomadJobIdWithLock(id, lock)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q with lock %q", id, lock)
 	return
 }
 
-func (self *runService) GetByInvocationId(invocationId uuid.UUID) (run domain.Run, err error) {
-	self.logger.Trace().Str("invocation-id", invocationId.String()).Msg("Getting Runs by input Fact IDs")
+func (self runService) GetByInvocationId(invocationId uuid.UUID) (run *domain.Run, err error) {
+	self.logger.Trace().Str("invocation-id", invocationId.String()).Msg("Getting Run by Invocation ID")
 	run, err = self.runRepository.GetByInvocationId(invocationId)
-	err = errors.WithMessagef(err, "Could not select Runs by Invocation ID %q", invocationId)
+	err = errors.WithMessagef(err, "Could not select Run by Invocation ID %q", invocationId)
 	return
 }
 
-func (self *runService) GetOutputByNomadJobId(id uuid.UUID) (output domain.RunOutput, err error) {
-	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run Output by Nomad Job ID")
-	output, err = self.runOutputRepository.GetByRunId(id)
-	err = errors.WithMessagef(err, "Could not select existing Run Output by Nomad Job ID %q", id)
-	return
-}
-
-func (self *runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []*domain.Run, err error) {
+func (self runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []domain.Run, err error) {
 	self.logger.Trace().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Run by Action ID")
 	runs, err = self.runRepository.GetByActionId(id, page)
 	err = errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
 	return
 }
 
-func (self *runService) GetLatestByActionId(id uuid.UUID) (run domain.Run, err error) {
+func (self runService) GetLatestByActionId(id uuid.UUID) (run *domain.Run, err error) {
 	self.logger.Trace().Str("action-id", id.String()).Msg("Getting latest Run by Action ID")
 	run, err = self.runRepository.GetLatestByActionId(id)
 	err = errors.WithMessagef(err, "Could not select latest Run by Action ID %q", id)
 	return
 }
 
-func (self *runService) GetAll(page *repository.Page) (runs []*domain.Run, err error) {
+func (self runService) GetAll(page *repository.Page) (runs []domain.Run, err error) {
 	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Runs")
 	runs, err = self.runRepository.GetAll(page)
 	err = errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
 	return
 }
 
-func (self *runService) Save(run *domain.Run, output *domain.RunOutput) error {
+func (self runService) Save(run *domain.Run) error {
 	self.logger.Trace().Msg("Saving new Run")
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		if err := self.runRepository.WithQuerier(tx).Save(run); err != nil {
-			return errors.WithMessagef(err, "Could not insert Run")
-		}
-		if err := self.runOutputRepository.WithQuerier(tx).Save(run.NomadJobID, output); err != nil {
-			return errors.WithMessagef(err, "Could not insert Run Output")
-		}
-		return nil
-	}); err != nil {
-		return err
+	if err := self.runRepository.Save(run); err != nil {
+		return errors.WithMessagef(err, "Could not insert Run")
 	}
 	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Created Run")
 	return nil
 }
 
-func (self *runService) Update(run *domain.Run) error {
+func (self runService) Update(run *domain.Run) error {
 	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Updating Run")
 	if err := self.runRepository.Update(run); err != nil {
 		return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
@@ -168,14 +144,11 @@ func (self *runService) Update(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) End(run *domain.Run) error {
+func (self runService) End(run *domain.Run) error {
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Ending Run")
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if err := self.runRepository.WithQuerier(tx).Update(run); err != nil {
 			return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
-		}
-		if err := self.runOutputRepository.WithQuerier(tx).Delete(run.NomadJobID); err != nil {
-			return errors.WithMessagef(err, "Could not delete Run Output with ID %q", run.NomadJobID)
 		}
 		if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
 			return errors.WithMessagef(err, "Could not deregister Nomad job with ID %q", run.NomadJobID)
@@ -188,11 +161,10 @@ func (self *runService) End(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) Cancel(run *domain.Run) error {
+func (self runService) Cancel(run *domain.Run) error {
 	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopping Run")
-	// Nomad does not know whether the job simply ran to finish
-	// or was stopped manually. Delete output to avoid publishing it.
-	if err := self.runOutputRepository.Delete(run.NomadJobID); err != nil {
+	run.Status = domain.RunStatusCanceled
+	if err := self.Update(run); err != nil {
 		return err
 	}
 	if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
@@ -202,123 +174,81 @@ func (self *runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self *runService) JobLogs(nomadJobID uuid.UUID, start time.Time, end *time.Time) (domain.LokiLog, error) {
-	return self.LokiQueryRange(
+func (self runService) JobLog(nomadJobID uuid.UUID, start time.Time, end *time.Time) (LokiLog, error) {
+	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
 		start, end,
 	)
 }
 
-func (self *runService) RunLogs(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (domain.LokiLog, error) {
-	return self.LokiQueryRange(
+func (self runService) RunLog(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error) {
+	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
 		start, end,
 	)
 }
 
-func (self *runService) LokiQueryRange(query string, start time.Time, end *time.Time) (domain.LokiLog, error) {
-	linesToFetch := 10000
-	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
-	var limit int64 = 5000
-	output := domain.LokiLog{}
-
-	if end == nil {
-		now := time.Now().UTC()
-		end = &now
+func (self runService) GetRunAllocationsWithLogs(run domain.Run) ([]AllocationWithLogs, error) {
+	allocs, err := self.nomadEventService.GetLatestEventAllocationByJobId(run.NomadJobID)
+	if err != nil {
+		return nil, err
 	}
 
-	endLater := end.Add(1 * time.Minute)
-	end = &endLater
+	allocsWithLog := make([]AllocationWithLogs, len(allocs))
 
-done:
-	for {
-		req, err := http.NewRequest(
-			"GET",
-			self.prometheus.URL("/loki/api/v1/query_range", nil).String(),
-			http.NoBody,
-		)
-		if err != nil {
-			return nil, err
+	type logsMsg struct {
+		idx      int
+		taskName string
+		log      LokiLog
+		err      error
+	}
+
+	logs := make(chan logsMsg)
+	var numMsgs uint
+
+	wg := &sync.WaitGroup{}
+
+	for i, alloc := range allocs {
+		alloc := alloc
+
+		allocsWithLog[i] = AllocationWithLogs{
+			Allocation: &alloc,
+			TaskLogs:   map[string]LokiLog{},
 		}
 
-		q := req.URL.Query()
-		q.Set("query", query)
-		q.Set("limit", strconv.FormatInt(limit, 10))
-		q.Set("start", strconv.FormatInt(start.UnixNano(), 10))
-		q.Set("end", strconv.FormatInt(end.UnixNano(), 10))
-		q.Set("direction", "FORWARD")
-		req.URL.RawQuery = q.Encode()
-
-		done, body, err := self.prometheus.Do(context.Background(), req)
-		if err != nil {
-			return nil, errors.WithMessage(err, "Failed to talk with loki")
-		}
-
-		if done.StatusCode/100 != 2 {
-			return nil, fmt.Errorf("Error response %d from Loki: %s", done.StatusCode, string(body))
-		}
-
-		response := loghttp.QueryResponse{}
-
-		err = json.Unmarshal(body, &response)
-		if err != nil {
-			return nil, err
-		}
-
-		streams, ok := response.Data.Result.(loghttp.Streams)
-		if !ok {
-			return nil, fmt.Errorf("Unexpected loki result type: %s", response.Data.Result.Type())
-		}
-
-		if len(streams) == 0 {
-			break done
-		}
-
-		entryCount := int64(0)
-		for _, stream := range streams {
-			source, ok := stream.Labels.Map()["source"]
-			if !ok {
-				continue
-			}
-
-			for _, entry := range stream.Entries {
-				line := domain.LokiLine{Time: entry.Timestamp, Source: source, Text: entry.Line}
-				lines := strings.Split(entry.Line, "\r")
-				for _, l := range lines {
-					if sane, err := ansi.Strip([]byte(l)); err == nil {
-						line.Text = string(sane)
-					} else {
-						line.Text = l
-					}
-					output = append(output, line)
+		numMsgs += uint(len(alloc.TaskResources))
+		wg.Add(len(alloc.TaskResources))
+		for taskName := range alloc.TaskResources {
+			go func(i int, taskName string) {
+				defer wg.Done()
+				log, err := self.RunLog(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
+				logs <- logsMsg{
+					idx:      i,
+					taskName: taskName,
+					log:      log,
+					err:      err,
 				}
-
-				if (len(output)) >= linesToFetch {
-					break done
-				}
-			}
-
-			entryCount += int64(len(stream.Entries))
-		}
-
-		if entryCount >= limit {
-			start = output[len(output)-1].Time
-		} else {
-			break done
+			}(i, taskName)
 		}
 	}
 
-	sort.Slice(output, func(i, j int) bool {
-		return output[i].Time.Before(output[j].Time)
-	})
+	for i := uint(0); i < numMsgs; i++ {
+		msg := <-logs
+		if msg.err != nil {
+			return nil, err
+		}
+		allocsWithLog[msg.idx].TaskLogs[msg.taskName] = msg.log
+	}
 
-	return output, nil
+	wg.Wait()
+
+	return allocsWithLog, nil
 }
 
-func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs, to *time.Time) (map[string]*url.URL, error) {
+func (self runService) GrafanaUrls(allocs []*nomad.Allocation, to *time.Time) (map[string]*url.URL, error) {
 	grafanaUrls := map[string]*url.URL{}
 
-	for allocName, alloc := range allocs {
+	for _, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000) // there's no UnixNano
 		if to == nil {
 			t := time.UnixMicro(alloc.ModifyTime / 1000)
@@ -336,12 +266,12 @@ func (self *runService) GrafanaUrls(allocs map[string]domain.AllocationWithLogs,
 		guQuery.Set("from", strconv.FormatInt(from.UnixMilli(), 10))
 		guQuery.Set("to", strconv.FormatInt(to.UnixMilli(), 10))
 		grafanaUrl.RawQuery = guQuery.Encode()
-		grafanaUrls[allocName] = grafanaUrl
+		grafanaUrls[alloc.ID] = grafanaUrl
 	}
 	return grafanaUrls, nil
 }
 
-func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
+func (self runService) metrics(allocs []*nomad.Allocation, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
 	vmUrl, err := url.Parse(self.victoriaMetricsAddr + "/api/v1/query_range")
 	if err != nil {
 		return nil, err
@@ -349,7 +279,7 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to 
 	query := vmUrl.Query()
 
 	metrics := map[string][]*VMMetric{}
-	for allocName, alloc := range allocs {
+	for _, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000)
 		if to == nil {
 			t := time.UnixMicro(alloc.ModifyTime / 1000)
@@ -397,14 +327,14 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to 
 				}
 
 				vm := &VMMetric{Time: t, Size: f, Label: labelFunc(f)}
-				metrics[allocName] = append(metrics[allocName], vm)
+				metrics[alloc.ID] = append(metrics[alloc.ID], vm)
 			}
 		}
 
-		for i, vm := range metrics[allocName] {
+		for i, vm := range metrics[alloc.ID] {
 			vm.Size = ((100 / max) * vm.Size) / 100
 			if i > 0 {
-				vm.Start = metrics[allocName][i-1].Size
+				vm.Start = metrics[alloc.ID][i-1].Size
 			} else {
 				vm.Start = vm.Size
 			}
@@ -414,7 +344,7 @@ func (self *runService) metrics(allocs map[string]domain.AllocationWithLogs, to 
 	return metrics, nil
 }
 
-func (self *runService) CPUMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
 		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
 	})
@@ -427,7 +357,7 @@ const (
 	tib = gib * 1024
 )
 
-func (self *runService) MemMetrics(allocs map[string]domain.AllocationWithLogs, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error) {
 	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
 		switch {
 		case f >= tib:
