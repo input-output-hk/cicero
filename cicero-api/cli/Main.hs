@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE OverloadedRecordDot #-}
+{-# LANGUAGE LambdaCase #-}
 module Main where
 
 import IOHK.Cicero.API
@@ -8,8 +9,12 @@ import Servant.Client.Core.BaseUrl
 import Data.Proxy
 import Network.HTTP.Client hiding (Proxy)
 import Network.HTTP.Client.TLS
+import Data.ByteString.Char8 as BS
 import Options.Applicative
 import Control.Exception
+import System.Console.Haskeline
+import Servant.API.BasicAuth
+import Servant.Client.Core.BasicAuth
 
 import Action
 import Fact
@@ -32,6 +37,7 @@ commandParser = hsubparser
 
 data Args = Args
   { ciceroURL :: !BaseUrl
+  , ciceroUser :: !(Maybe ByteString)
   , cmd :: !Command
   }
 
@@ -53,6 +59,11 @@ argsParser = Args
        <> showDefaultWith showBaseUrl
        <> (value $ BaseUrl Http "localhost" 8080 "")
         )
+  <*> (optional $ option str
+        ( long "user"
+       <> metavar "USER"
+       <> help "User name for BASIC authentication with the cicero server"
+        ))
   <*> commandParser
 
 argsInfo :: ParserInfo Args
@@ -70,7 +81,19 @@ getHandler (CmdRun rcmd) apiClient = Run.handler rcmd apiClient.run
 main :: IO ()
 main = do
   args <- execParser argsInfo
+  auth <- case args.ciceroUser of
+    Nothing -> pure Nothing
+    Just u -> runInputT defaultSettings (getPassword Nothing ("password for " ++ (BS.unpack u) ++ ":")) >>= \case
+      Just s -> pure . Just . BasicAuthData u $ BS.pack s
+      Nothing -> fail "no password provided"
   manager <- newManager tlsManagerSettings
+  let
+    cEnv = mkClientEnv manager args.ciceroURL
+    cEnv' = case auth of
+      Nothing -> cEnv
+      Just ba -> cEnv
+        { makeClientRequest = \u -> defaultMakeClientRequest u . basicAuthReq ba
+        }
   getHandler args.cmd
     (client $ Proxy @API)
-    (mkClientEnv manager args.ciceroURL)
+    cEnv'
