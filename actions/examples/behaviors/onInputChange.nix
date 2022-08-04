@@ -6,9 +6,9 @@
   ...
 } @ args:
 std.behavior.onInputChange "run" name args {
-  inputs.run = ''
+  io = ''
     // arbitrary value that triggers this run
-    "${name}": _
+    inputs: run: match: "${name}": _
   '';
 
   job = {run}:

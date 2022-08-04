@@ -8,9 +8,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     inclusive.url = "github:input-output-hk/nix-inclusive";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nix.url = "github:NixOS/nix/2.8.0";
-    alejandra.url = "github:kamadorueda/alejandra";
+    nixpkgs.url = "github:NixOS/nixpkgs/release-22.05";
+    nix.url = "github:NixOS/nix/2.8-maintenance";
+    alejandra = {
+      url = "github:kamadorueda/alejandra";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     utils.url = "github:numtide/flake-utils";
     driver = {
       url = "github:input-output-hk/nomad-driver-nix";
@@ -22,8 +25,11 @@
     };
     data-merge.url = "github:divnix/data-merge";
     poetry2nix = {
-      url = "github:nix-community/poetry2nix/fetched-projectdir-test";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:nix-community/poetry2nix";
+      inputs = {
+        flake-utils.follows = "utils";
+        nixpkgs.follows = "nixpkgs";
+      };
     };
     spongix = {
       url = "github:input-output-hk/spongix";
@@ -34,7 +40,17 @@
     };
     haskell-nix = {
       url = "github:input-output-hk/haskell.nix";
-      inputs.nixpkgs-unstable.follows = "nixpkgs";
+    };
+    nix2container = {
+      url = "github:nlewo/nix2container";
+      inputs.flake-utils.follows = "utils";
+    };
+    tullia = {
+      url = "github:input-output-hk/tullia";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        nix2container.follows = "nix2container";
+      };
     };
   };
 
@@ -51,89 +67,113 @@
     haskell-nix,
     nix,
     alejandra,
+    nix2container,
+    tullia,
     ...
   }: let
     supportedSystems = ["x86_64-linux"];
   in
     utils.lib.eachSystem supportedSystems
-    (system: let
-      pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
-        devshell.overlay
-        poetry2nix.overlay
-        follower.overlay
-        spongix.overlay
-        nix.overlay
-        (final: prev: {
-          nixos-shell = nixos-shell.defaultPackage.${prev.system};
-          alejandra = alejandra.defaultPackage.${prev.system};
-          go = prev.go_1_17;
-          gouml = final.callPackage pkgs/gouml.nix {};
-          gocritic = final.callPackage pkgs/gocritic.nix {};
-          schemathesis = final.callPackage pkgs/schemathesis.nix {};
-          treefmt-cue = final.callPackage pkgs/treefmt-cue.nix {};
-          dev-cicero-transformer = let
-            post-build-hook = ''
-              #! /bin/bash
-              set -euf
-              export IFS=' '
-              if [[ -n "$OUT_PATHS" ]]; then
-                echo 'Uploading to cache: '"$OUT_PATHS"
-                exec nix copy --to 'http://127.0.0.1:17745?compression=none' $OUT_PATHS
-              fi
-            '';
-
-            filter = ''
-              .job[]?.datacenters |= . + ["dc1"] |
-              .job[]?.group[]?.restart.attempts = 0 |
-              .job[]?.group[]?.task[]?.vault.policies |= . + ["cicero"] |
-              .job[]?.group[]?.task[]? |= if .config?.nixos then . else (
-                .env |= . + {
-                  CICERO_WEB_URL: "http://127.0.0.1:18080",
-                  CICERO_API_URL: "http://127.0.0.1:18080",
-                  NIX_CONFIG: (
-                    "substituters = http://127.0.0.1:17745?compression=none\n" +
-                    "extra-trusted-public-keys = spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=\n" +
-                    "post-build-hook = /local/post-build-hook\n" +
-                    .NIX_CONFIG
-                  ),
-                } |
-                .template |= . + [{
-                  destination: "local/post-build-hook",
-                  perms: "544",
-                  data: env.postBuildHook,
-                }] |
-                .config.packages |=
-                  # only add bash if needed to avoid conflicts in profile
-                  if any(endswith("#bash"))
-                  then .
-                  else . + ["github:NixOS/nixpkgs/${nixpkgs.rev}#bash"]
-                  end
-              ) end
-            '';
-          in
-            prev.writers.writeDashBin "dev-cicero-transformer" ''
-              export postBuildHook=${prev.lib.escapeShellArg post-build-hook}
-              jq ${prev.lib.escapeShellArg filter}
-            '';
-        })
-        self.overlay
-      ]);
-      selfPkgs = self.packages.${system};
-    in {
-      packages = self.overlay (pkgs // selfPkgs) pkgs;
-      defaultPackage = selfPkgs.cicero;
-      hydraJobs = selfPkgs;
-      devShell = pkgs.devshell.fromTOML ./devshell.toml;
-      devShells.cicero-api = selfPkgs.cicero-api.project.shell;
-      inherit (selfPkgs.cicero-api) apps;
-    })
+    (
+      system: let
+        pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
+          devshell.overlay
+          poetry2nix.overlay
+          follower.overlay
+          spongix.overlay
+          nix.overlay
+          (final: prev: {
+            nixos-shell = nixos-shell.defaultPackage.${prev.system};
+            alejandra = alejandra.defaultPackage.${prev.system};
+            go = prev.go_1_18;
+            go-mockery = prev.callPackage pkgs/mockery.nix {};
+            gouml = final.callPackage pkgs/gouml.nix {};
+            gocritic = final.callPackage pkgs/gocritic.nix {};
+            schemathesis = final.callPackage pkgs/schemathesis.nix {};
+            treefmt-cue = final.callPackage pkgs/treefmt-cue.nix {};
+            dev-cicero-transformer = let
+              args = {
+                nixpkgsRev = nixpkgs.rev;
+                datacenters = ["dc1"];
+                ciceroWebUrl = "http://127.0.0.1:18080";
+                nixConfig = ''
+                  substituters = http://10.0.2.15:17745?compression=none
+                  extra-trusted-public-keys = spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=
+                  post-build-hook = /local/post-build-hook
+                '';
+                postBuildHook = ''
+                  #! /bin/bash
+                  set -euf
+                  export IFS=' '
+                  if [[ -n "$OUT_PATHS" ]]; then
+                    echo 'Uploading to cache: '"$OUT_PATHS"
+                    exec nix copy --to 'http://10.0.2.15:17745?compression=none' $OUT_PATHS
+                  fi
+                '';
+              };
+            in
+              prev.writers.writeDashBin "dev-cicero-transformer" ''
+                jq --compact-output \
+                  --argjson args ${nixpkgs.lib.escapeShellArg (builtins.toJSON args)} \
+                  '
+                    .job[]?.datacenters |= . + $args.datacenters |
+                    .job[]?.group[]?.restart.attempts = 0 |
+                    .job[]?.group[]?.task[]? |= (
+                      .vault.policies |= . + ["cicero"] |
+                      .env |= . + {
+                        CICERO_WEB_URL: $args.ciceroWebUrl,
+                        CICERO_API_URL: $args.ciceroWebUrl,
+                        NIX_CONFIG: ($args.nixConfig + .NIX_CONFIG),
+                      } |
+                      .template |= . + [{
+                        destination: "local/post-build-hook",
+                        perms: "544",
+                        data: $args.postBuildHook,
+                      }] |
+                      if .driver != "nix" or .config?.nixos then . else
+                        .config.packages |=
+                          # only add bash if needed to avoid conflicts in profile
+                          if any(endswith("#bash") or endswith("#bashInteractive"))
+                          then .
+                          else . + ["github:NixOS/nixpkgs/\($args.nixpkgsRev)#bash"]
+                          end
+                      end |
+                      # logs do not work with podman driver
+                      # TODO remove once fixed
+                      if .driver != "podman" then . else
+                        .driver = "docker" |
+                        .config.image |= ltrimstr("docker://")
+                      end
+                    )
+                  '
+              '';
+          })
+          self.overlay
+        ]);
+        selfPkgs = self.packages.${system};
+      in
+        {
+          packages = self.overlay (pkgs // selfPkgs) pkgs;
+          defaultPackage = selfPkgs.cicero;
+          hydraJobs = selfPkgs;
+          devShell = pkgs.devshell.fromTOML ./devshell.toml;
+          devShells.cicero-api = selfPkgs.cicero-api.project.shell;
+          inherit (selfPkgs.cicero-api) apps;
+        }
+        // tullia.fromSimple system {
+          tasks = import tullia/tasks.nix self;
+          actions = import tullia/actions.nix;
+        }
+    )
     // {
       overlay = final: prev:
         {
           cicero = prev.callPackage pkgs/cicero {flake = self;};
           cicero-entrypoint = prev.callPackage pkgs/cicero/entrypoint.nix {};
-          cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix {};
-          webhook-trigger = prev.callPackage pkgs/trigger {};
+          cicero-evaluator-nix = prev.callPackage pkgs/cicero/evaluators/nix {
+            inherit (nix2container.packages.${prev.system}) skopeo-nix2container;
+          };
+          webhook-trigger = prev.callPackage pkgs/trigger {flake = self;};
           cicero-api = (final.extend haskell-nix.overlay).callPackage pkgs/cicero-api {
             inherit supportedSystems;
             src = ./.;
@@ -148,6 +188,8 @@
               ln -s $out/bin/env $out/usr/bin/env
             '';
           });
+
+          nomad-driver-podman = prev.callPackage pkgs/nomad-driver-podman.nix {};
         }
         // nixpkgs.lib.mapAttrs'
         (k: nixpkgs.lib.nameValuePair "cicero-evaluator-nix-run-${k}")
@@ -163,6 +205,13 @@
           modules = [
             nixos/configs/vm.nix
             nixos-shell.nixosModules.nixos-shell
+            {
+              nixpkgs.overlays = [
+                (_: prev: {
+                  inherit (self.outputs.packages.${prev.system}) nomad-driver-podman;
+                })
+              ];
+            }
           ];
         };
 
@@ -180,15 +229,5 @@
       };
 
       lib = import ./lib.nix self;
-
-      ciceroActions =
-        self.lib.callActionsWithExtraArgs
-        rec {
-          inherit (self.lib) std;
-          inherit (nixpkgs) lib;
-          actionLib = import ./action-lib.nix {inherit std lib;};
-          nixpkgsRev = nixpkgs.rev;
-        }
-        ./actions;
     };
 }

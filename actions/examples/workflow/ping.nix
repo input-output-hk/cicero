@@ -7,14 +7,12 @@
     actionLib,
     ...
   } @ args: {
-    inputs.state = ''
+    io = ''
       // set to whatever else to trigger
-      "${workflow}": !="ping" & !="pong" & !="ping-pong"
-    '';
+      inputs: state: match: "${workflow}": !="ping" & !="pong" & !="ping-pong"
 
-    output = _: {
-      success.${workflow} = "ping";
-    };
+      output: success: "${workflow}": "ping"
+    '';
 
     job = {state}:
       actionLib.simpleJob args (std.script "bash" ''

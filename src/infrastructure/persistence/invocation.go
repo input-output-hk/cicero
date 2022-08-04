@@ -24,16 +24,20 @@ func (self *invocationRepository) WithQuerier(querier config.PgxIface) repositor
 	return &invocationRepository{querier}
 }
 
-func (self *invocationRepository) GetById(id uuid.UUID) (invocation domain.Invocation, err error) {
-	return invocation, pgxscan.Get(
-		context.Background(), self.db, &invocation,
+func (self *invocationRepository) GetById(id uuid.UUID) (*domain.Invocation, error) {
+	invocation, err := get(
+		self.db, &domain.Invocation{},
 		`SELECT * FROM invocation WHERE id = $1`,
 		id,
 	)
+	if invocation == nil {
+		return nil, err
+	}
+	return invocation.(*domain.Invocation), err
 }
 
-func (self *invocationRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]*domain.Invocation, error) {
-	invocations := make([]*domain.Invocation, page.Limit)
+func (self *invocationRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]domain.Invocation, error) {
+	invocations := make([]domain.Invocation, page.Limit)
 	return invocations, fetchPage(
 		self.db, page, &invocations,
 		`*`, `invocation WHERE action_id = $1`, `created_at DESC`,
@@ -41,15 +45,20 @@ func (self *invocationRepository) GetByActionId(id uuid.UUID, page *repository.P
 	)
 }
 
-func (self *invocationRepository) GetLatestByActionId(id uuid.UUID) (invocation domain.Invocation, err error) {
-	return invocation, pgxscan.Get(
-		context.Background(), self.db, &invocation,
+func (self *invocationRepository) GetLatestByActionId(id uuid.UUID) (*domain.Invocation, error) {
+	invocation, err := get(
+		self.db, &domain.Invocation{},
 		`SELECT DISTINCT ON (action_id) * FROM invocation WHERE action_id = $1 ORDER BY action_id, created_at DESC`,
 		id,
 	)
+	if invocation == nil {
+		return nil, err
+	}
+	return invocation.(*domain.Invocation), err
 }
 
 func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId map[string]uuid.UUID, err error) {
+	inputFactId = map[string]uuid.UUID{}
 	inputs := []struct {
 		InputName string    `json:"input_name"`
 		FactId    uuid.UUID `json:"fact_id"`
@@ -66,7 +75,6 @@ func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId
 		return
 	}
 
-	inputFactId = map[string]uuid.UUID{}
 	for _, runInput := range inputs {
 		if _, exists := inputFactId[runInput.InputName]; exists {
 			panic("This should never happen™")
@@ -77,8 +85,8 @@ func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId
 	return
 }
 
-func (self *invocationRepository) GetAll(page *repository.Page) ([]*domain.Invocation, error) {
-	invocations := make([]*domain.Invocation, page.Limit)
+func (self *invocationRepository) GetAll(page *repository.Page) ([]domain.Invocation, error) {
+	invocations := make([]domain.Invocation, page.Limit)
 	return invocations, fetchPage(
 		self.db, page, &invocations,
 		`*`, `invocation`, `created_at DESC`,
@@ -86,7 +94,7 @@ func (self *invocationRepository) GetAll(page *repository.Page) ([]*domain.Invoc
 }
 
 // `ok`: Allows to filter for successful or failed invocations.
-func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok *bool, page *repository.Page) ([]*domain.Invocation, error) {
+func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok *bool, page *repository.Page) ([]domain.Invocation, error) {
 	joins := ``
 	for i := range factIds {
 		iStr := strconv.Itoa(i + 1)
@@ -145,7 +153,7 @@ func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recurs
 		from = `(SELECT invocation.* FROM invocation ` + joins + whereOk + `) AS invocation`
 	}
 
-	invocations := make([]*domain.Invocation, page.Limit)
+	invocations := make([]domain.Invocation, page.Limit)
 	return invocations, fetchPage(
 		self.db, page, &invocations,
 		`invocation.*`, from, `created_at`,
@@ -153,7 +161,7 @@ func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recurs
 	)
 }
 
-func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map[string]*domain.Fact) error {
+func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map[string]domain.Fact) error {
 	ctx := context.Background()
 
 	if err := self.db.BeginFunc(ctx, func(tx pgx.Tx) error {
@@ -193,11 +201,11 @@ func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map
 	return nil
 }
 
-func (self *invocationRepository) Update(invocation *domain.Invocation) (err error) {
+func (self *invocationRepository) End(id uuid.UUID) (err error) {
 	_, err = self.db.Exec(
 		context.Background(),
-		`UPDATE invocation SET eval_stdout = $2, eval_stderr = $3 WHERE id = $1`,
-		invocation.Id, invocation.EvalStdout, invocation.EvalStderr,
+		`UPDATE invocation SET finished_at = STATEMENT_TIMESTAMP() WHERE id = $1`,
+		id,
 	)
 	return
 }

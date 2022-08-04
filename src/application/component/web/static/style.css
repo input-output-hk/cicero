@@ -33,6 +33,22 @@ table td.numerical {
 	text-align: end;
 }
 
+table.log {
+	width: 100%;
+}
+table.log > tbody > tr > td:first-child {
+	border-right: 2px solid var(--border);
+	padding-right: .5em;
+	width: 0; /* forced to correct width by `white-space: nowrap` below */
+
+	white-space: nowrap;
+	user-select: none;
+	vertical-align: baseline;
+}
+table.log > tbody > tr > td:nth-child(2) {
+	padding-left: .5em;
+}
+
 .content-flex {
 	display: flex;
 	flex-wrap: wrap;
@@ -181,4 +197,7 @@ dl.inline > dd:not(:last-child)::after {
 }
 .log.stderr {
 	color: red;
+}
+.log.error {
+	font-style: italic;
 }

@@ -169,38 +169,40 @@ if #env == "prod" {
 						#! /bin/bash
 						/bin/jq '
 							.job[]?.datacenters |= . + ["eu-central-1", "us-east-2"] |
-							.job[]?.group[]?.task[]? |= if .config?.nixos then . else (
-								.env |= . + {
-									CICERO_WEB_URL: "https://cicero.infra.aws.iohkdev.io",
-									NIX_CONFIG: (
-										"extra-substituters = http://spongix.service.consul:7745?compression=none\n" +
-										"extra-trusted-public-keys =" +
-											" infra-production-0:T7ZxFWDaNjyEiiYDe6uZn0eq+77gORGkdec+kYwaB1M=" +
-											" hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" +
-											"\n" +
-										"post-build-hook = /local/post-build-hook\n" +
-										.NIX_CONFIG
-									),
-								} |
-								.config.packages |=
-									# only add bash if needed to avoid conflicts in profile
-									if any(endswith("#bash"))
-									then .
-									else . + ["github:NixOS/nixpkgs/\(nixpkgsRev)#bash"]
-									end |
-								.template |= . + [{
-									destination: "local/post-build-hook",
-									perms: "544",
-									data: (
-										"#! /bin/bash\\n" +
-										"set -euf\\n" +
-										"export IFS=\\\" \\\"\\n" +
-										"if [[ -n \\\"$OUT_PATHS\\\" ]]; then\\n" +
-										"\\techo \\\"Uploading to cache: $OUT_PATHS\\\"\\n" +
-										"\\texec nix copy --to \\\"http://spongix.service.consul:7745?compression=none\\\" $OUT_PATHS\\n" +
-										"fi"
-									),
-								}]
+							.job[]?.group[]?.task[]? |= if .driver != "nix" then . else (
+								if .config?.nixos then . else (
+									.env |= . + {
+										CICERO_WEB_URL: "https://cicero.infra.aws.iohkdev.io",
+										NIX_CONFIG: (
+											"extra-substituters = http://spongix.service.consul:7745?compression=none\n" +
+											"extra-trusted-public-keys =" +
+												" infra-production-0:T7ZxFWDaNjyEiiYDe6uZn0eq+77gORGkdec+kYwaB1M=" +
+												" hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" +
+												"\n" +
+											"post-build-hook = /local/post-build-hook\n" +
+											.NIX_CONFIG
+										),
+									} |
+									.config.packages |=
+										# only add bash if needed to avoid conflicts in profile
+										if any(endswith("#bash"))
+										then .
+										else . + ["github:NixOS/nixpkgs/\(nixpkgsRev)#bash"]
+										end |
+									.template |= . + [{
+										destination: "local/post-build-hook",
+										perms: "544",
+										data: (
+											"#! /bin/bash\\n" +
+											"set -euf\\n" +
+											"export IFS=\\\" \\\"\\n" +
+											"if [[ -n \\\"$OUT_PATHS\\\" ]]; then\\n" +
+											"\\techo \\\"Uploading to cache: $OUT_PATHS\\\"\\n" +
+											"\\texec nix copy --to \\\"http://spongix.service.consul:7745?compression=none\\\" $OUT_PATHS\\n" +
+											"fi"
+										),
+									}]
+								) end
 							) end
 						'
 						"""

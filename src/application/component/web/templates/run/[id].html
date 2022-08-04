@@ -16,14 +16,18 @@
 					</thead>
 					<tbody>
 						<tr>
+							<th>Status</th>
+							<td>{{.Status}}</td>
+						</tr>
+						<tr>
 							<th>Nomad Job ID</th>
 							<td>{{.NomadJobID}}</td>
 						</tr>
 						<tr>
 							<th>Action</th>
 							<td>
-								<a href="/action/{{.ActionId}}">
-									{{.ActionName}}
+								<a href="/action/{{.Action.ID}}">
+									{{.Action.Name}}
 								</a>
 							</td>
 						</tr>
@@ -42,8 +46,8 @@
 						<tr>
 							<th>Finished at</th>
 							<td>
-								{{if .FinishedAt}}
-									{{.FinishedAt}}
+								{{with .FinishedAt}}
+									{{.}}
 								{{else}}
 									<form
 										method="POST"
@@ -152,13 +156,7 @@
 									</td>
 								{{else}}
 									<td colspan="2">
-										<em>
-											<p>This Run has no output.</p>
-											<p>
-												If this Run declares an output
-												this means it was canceled.
-											</p>
-										</em>
+										<em>This Run has no output.</em>
 									</td>
 								{{end}}
 							</tr>
@@ -169,8 +167,8 @@
 		</div>
 
 		<h2>Task Groups</h2>
-		<div class="tabs border" style="--num-tabs: {{len .allocs}}">
-			{{range $groupName, $wrapper := .allocs}}
+		<div class="tabs border" style="--num-tabs: {{len .allocsWithLogsByGroup}}">
+			{{range $groupName, $allocs := .allocsWithLogsByGroup}}
 				<input id="tab-group-{{$groupName}}" type="radio" name="tab-group" checked/>
 				<label for="tab-group-{{$groupName}}"><h3>{{$groupName}}</h3></label>
 				<div style="padding: 1em">
@@ -189,7 +187,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{{range $wrapper}}
+							{{range $allocs}}
 								<tr>
 									<td class="allocation-label">
 										<label for="allocation-{{.ID}}">
@@ -217,8 +215,8 @@
 					</table>
 
 					<div id="allocation">
-						{{range $i, $alloc := $wrapper}}
-							<input id="allocation-{{.ID}}" type="radio" name="allocation"
+						{{range $i, $alloc := $allocs}}
+							<input id="allocation-{{.ID}}" type="radio" name="allocation" value="{{.ID}}"
 								{{if eq $i 0}}checked{{end}}
 							/>
 							<div>
@@ -400,7 +398,7 @@
 												</tbody>
 											</table>
 
-											<h3>Event Logs</h3>
+											<h3>Event Log</h3>
 											<table class="panel log">
 												{{range .Events}}
 													<tr>
@@ -531,16 +529,18 @@
 												{{end}}
 											</table>
 
-											<h3>Task Logs</h3>
-											{{if (index $alloc.Logs $taskName)}}
+											<h3>Task Log</h3>
+											{{with index $alloc.TaskLogs $taskName}}
 												<table class="panel log">
-													{{range (index $alloc.Logs $taskName)}}
+													{{range .}}
 														<tr>
 															<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-															<td><samp class="log {{.Source}}">{{.Text}}</samp></td>
+															<td><samp class="log {{.Labels.source}}">{{.Text}}</samp></td>
 														</tr>
 													{{end}}
 												</table>
+											{{else}}
+												<em>No log found.</em>
 											{{end}}
 										</div>
 									{{end}}
@@ -556,24 +556,6 @@
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/charts.css/dist/charts.min.css">
 
 	<style>
-	#{{$scope}} table.log {
-		width: 100%;
-	}
-
-	#{{$scope}} table.log > tbody > tr > td:first-child {
-		border-right: 2px solid var(--border);
-		padding-right: .5em;
-		width: 0; /* forced to correct width by `white-space: nowrap` below */
-
-		white-space: nowrap;
-		user-select: none;
-		vertical-align: baseline;
-	}
-
-	#{{$scope}} table.log > tbody > tr > td:nth-child(2) {
-		padding-left: .5em;
-	}
-
 	#{{$scope}} label {
 		cursor: pointer;
 	}

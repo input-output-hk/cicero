@@ -10,5 +10,6 @@
 .hypothesis/
 /src/mocks/
 /.spongix
+/.docker-registry
 dist-newstyle
 /nixos.qcow2
