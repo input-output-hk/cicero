@@ -12,7 +12,7 @@
 }: rec {
   project = haskell-nix.cabalProject' {
     inherit src;
-    compiler-nix-name = "ghc921";
+    compiler-nix-name = "ghc924";
     shell.tools.cabal = {};
     materialized = let
       materialized = ./. + "/materialized-${system}";
