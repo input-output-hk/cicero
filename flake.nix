@@ -40,7 +40,6 @@
     };
     haskell-nix = {
       url = "github:input-output-hk/haskell.nix";
-      inputs.nixpkgs-unstable.follows = "nixpkgs";
     };
     nix2container = {
       url = "github:nlewo/nix2container";

@@ -3,7 +3,7 @@
   supportedSystems,
   src,
   writeShellScript,
-  nix_2_5,
+  nix,
   jq,
   coreutils,
   git,
@@ -12,7 +12,7 @@
 }: rec {
   project = haskell-nix.cabalProject' {
     inherit src;
-    compiler-nix-name = "ghc921";
+    compiler-nix-name = "ghc924";
     shell.tools.cabal = {};
     materialized = let
       materialized = ./. + "/materialized-${system}";
@@ -29,7 +29,7 @@
     program =
       (writeShellScript "updateAllMaterialized" ''
         set -eEuo pipefail
-        export PATH="${lib.makeBinPath [nix_2_5 jq coreutils git]}"
+        export PATH="${lib.makeBinPath [nix jq coreutils git]}"
         export NIX_CONFIG="
           allow-import-from-derivation = true
           experimental-features = flakes nix-command
