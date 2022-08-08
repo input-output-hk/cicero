@@ -111,7 +111,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	evaluationService := service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, promtailClient.Chan(), logger)
 
 	*invocationService = service.NewInvocationService(db, lokiService, actionService, factService, logger)
-	*actionService = service.NewActionService(db, nomadClientWrapper, invocationService, runService, evaluationService, logger)
+	*actionService = service.NewActionService(db, nomadClientWrapper, invocationService, factService, runService, evaluationService, logger)
 	*factService = service.NewFactService(db, actionService, logger)
 
 	supervisor := cmd.newSupervisor(logger)

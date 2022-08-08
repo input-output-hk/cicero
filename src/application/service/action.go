@@ -34,6 +34,7 @@ type ActionService interface {
 	GetCurrentActive() ([]domain.Action, error)
 	Save(*domain.Action) error
 	Update(*domain.Action) error
+	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, map[string]cue.Value, bool, error)
 	IsRunnable(*domain.Action) (bool, map[string]domain.Fact, error)
 	Create(string, string) (*domain.Action, error)
 	// Returns a nil pointer for the first return value if the Action was not runnable.
@@ -46,12 +47,12 @@ type InvokeRegisterFunc func() error
 
 type ActionServiceCyclicDependencies struct {
 	invocationService *InvocationService
+	factService       *FactService
 }
 
 type actionService struct {
 	logger            zerolog.Logger
 	actionRepository  repository.ActionRepository
-	factRepository    repository.FactRepository
 	evaluationService EvaluationService
 	runService        RunService
 	nomadClient       application.NomadClient
@@ -59,17 +60,17 @@ type actionService struct {
 	ActionServiceCyclicDependencies
 }
 
-func NewActionService(db config.PgxIface, nomadClient application.NomadClient, invocationService *InvocationService, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
+func NewActionService(db config.PgxIface, nomadClient application.NomadClient, invocationService *InvocationService, factService *FactService, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
 	return &actionService{
 		logger:            logger.With().Str("component", "ActionService").Logger(),
 		actionRepository:  persistence.NewActionRepository(db),
-		factRepository:    persistence.NewFactRepository(db),
 		evaluationService: evaluationService,
 		nomadClient:       nomadClient,
 		runService:        runService,
 		db:                db,
 		ActionServiceCyclicDependencies: ActionServiceCyclicDependencies{
 			invocationService: invocationService,
+			factService:       factService,
 		},
 	}
 }
@@ -82,7 +83,6 @@ func (self actionService) withQuerier(querier config.PgxIface, cyclicDeps Action
 	result := actionService{
 		logger:                          self.logger,
 		actionRepository:                self.actionRepository.WithQuerier(querier),
-		factRepository:                  self.factRepository.WithQuerier(querier),
 		runService:                      self.runService.WithQuerier(querier),
 		evaluationService:               self.evaluationService,
 		nomadClient:                     self.nomadClient,
@@ -94,6 +94,13 @@ func (self actionService) withQuerier(querier config.PgxIface, cyclicDeps Action
 		r := ActionService(result)
 		result.invocationService = new(InvocationService)
 		*result.invocationService = (*self.invocationService).withQuerier(querier, InvocationServiceCyclicDependencies{actionService: &r})
+	}
+	if result.factService == nil {
+		r := ActionService(result)
+		result.factService = new(FactService)
+		*result.factService = (*self.factService).withQuerier(querier, FactServiceCyclicDependencies{
+			actionService: &r,
+		})
 	}
 
 	return &result
@@ -171,6 +178,96 @@ func (self actionService) GetCurrentActive() (actions []domain.Action, err error
 	return
 }
 
+func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]domain.Fact, map[string]cue.Value, bool, error) {
+	logger := self.logger.With().
+		Str("name", action.Name).
+		Str("id", action.ID.String()).
+		Logger()
+
+	inputs := map[string]domain.Fact{}
+	inputMatchWithDeps := map[string]cue.Value{}
+
+	dbConnMutex := &sync.Mutex{}
+	valuePath := cue.MakePath(cue.Str("value"))
+
+	errNotRunnable := errors.New("not runnable")
+	if err := action.InOut.InputsFlow(func(t *flow.Task) error {
+		name := t.Path().Selectors()[1].String() // inputs: <name>: …
+		if name_, err := cueliteral.Unquote(name); err == nil {
+			name = name_
+		}
+		input := action.InOut.Inputs(nil)[name]
+		tValue := t.Value().LookupPath(valuePath)
+		inputLogger := logger.With().Str("input", name).Logger()
+
+		// A transaction happens on exactly one connection so
+		// we cannot use more connections to run queries in parallel.
+		dbConnMutex.Lock()
+		defer dbConnMutex.Unlock()
+
+		switch fact, err := (*self.factService).GetLatestByCue(tValue); {
+		case err != nil:
+			return err
+		case fact == nil:
+			if !input.Not && !input.Optional {
+				inputLogger.Debug().
+					Bool("runnable", false).
+					Msg("No fact found for required input")
+				return errNotRunnable
+			}
+		default:
+			if !input.Not {
+				inputs[name] = *fact
+			}
+
+			// Match candidate fact.
+			// XXX Is `action.InOut.Input(name, inputs).Match` the same as `tValue`?
+			match := action.InOut.Input(name, inputs).Match
+			inputMatchWithDeps[name] = match.Eval()
+			if _, matchErr, err := (*self.factService).Match(fact, match); err != nil {
+				return err
+			} else {
+				switch {
+				case matchErr == nil && input.Not:
+					inputLogger.Debug().
+						Bool("runnable", false).
+						Str("fact", fact.ID.String()).
+						Msg("Fact matches negated input")
+					delete(inputs, name)
+					return errNotRunnable
+				case matchErr != nil && !input.Not && !input.Optional:
+					inputLogger.Debug().
+						Bool("runnable", false).
+						Str("fact", fact.ID.String()).
+						AnErr("mismatch", matchErr).
+						Msg("Fact does not match required input")
+					delete(inputs, name)
+					return errNotRunnable
+				}
+			}
+
+			// Fill the CUE expression with the fact's value
+			// so it can be referenced by its dependents.
+			if _, exists := inputs[name]; exists {
+				if err := t.Fill(struct {
+					Value interface{} `json:"value"`
+				}{fact.Value}); err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	}).Run(context.Background()); err != nil {
+		if errors.Is(err, errNotRunnable) {
+			return inputs, inputMatchWithDeps, false, nil
+		}
+		return nil, nil, false, err
+	}
+
+	return inputs, inputMatchWithDeps, true, nil
+}
+
 func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]domain.Fact, error) {
 	logger := self.logger.With().
 		Str("name", action.Name).
@@ -179,83 +276,15 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 
 	logger.Debug().Msg("Checking whether Action is runnable")
 
-	inputs := map[string]domain.Fact{}
-
-	{ // Select and match candidate facts.
-		dbConnMutex := &sync.Mutex{}
-		errNotRunnable := errors.New("not runnable")
-		valuePath := cue.MakePath(cue.Str("value"))
-
-		if err := action.InOut.InputsFlow(func(t *flow.Task) error {
-			name := t.Path().Selectors()[1].String() // inputs: <name>: …
-			if name_, err := cueliteral.Unquote(name); err == nil {
-				name = name_
-			}
-			input := action.InOut.Inputs(nil)[name]
-			tValue := t.Value().LookupPath(valuePath)
-			inputLogger := logger.With().Str("input", name).Logger()
-
-			// A transaction happens on exactly one connection so
-			// we cannot use more connections to run queries in parallel.
-			dbConnMutex.Lock()
-			defer dbConnMutex.Unlock()
-
-			switch fact, err := self.factRepository.GetLatestByCue(tValue); {
-			case err != nil:
-				return err
-			case fact == nil:
-				if !input.Not && !input.Optional {
-					inputLogger.Debug().
-						Bool("runnable", false).
-						Msg("No fact found for required input")
-					return errNotRunnable
-				}
-			default:
-				if !input.Not {
-					inputs[name] = *fact
-				}
-
-				// Match candidate fact.
-				if matchErr, err := matchFact(action.InOut.Input(name, inputs).Match, fact); err != nil {
-					return err
-				} else {
-					switch {
-					case matchErr == nil && input.Not:
-						inputLogger.Debug().
-							Bool("runnable", false).
-							Str("fact", fact.ID.String()).
-							Msg("Fact matches negated input")
-						delete(inputs, name)
-						return errNotRunnable
-					case matchErr != nil && !input.Not && !input.Optional:
-						inputLogger.Debug().
-							Bool("runnable", false).
-							Str("fact", fact.ID.String()).
-							AnErr("mismatch", matchErr).
-							Msg("Fact does not match required input")
-						delete(inputs, name)
-						return errNotRunnable
-					}
-				}
-
-				// Fill the CUE expression with the fact's value
-				// so it can be referenced by its dependents.
-				if _, exists := inputs[name]; exists {
-					if err := t.Fill(struct {
-						Value interface{} `json:"value"`
-					}{fact.Value}); err != nil {
-						return err
-					}
-				}
-			}
-
-			return nil
-		}).Run(context.Background()); err != nil {
-			if errors.Is(err, errNotRunnable) {
-				return false, inputs, nil
-			}
-			return false, nil, err
-		}
+	// Select and match candidate facts.
+	var inputs map[string]domain.Fact
+	switch inputs_, _, maybeRunnable, err := self.GetSatisfiedInputs(action); {
+	case err != nil:
+		return false, nil, err
+	case !maybeRunnable:
+		return false, inputs_, nil
+	default:
+		inputs = inputs_
 	}
 
 	// Not runnable if the inputs are the same as last invocation.
@@ -378,14 +407,6 @@ func filterFields(factValue *interface{}, filter cue.Value) {
 	}
 }
 
-func matchFact(match cue.Value, fact *domain.Fact) (error, error) {
-	factCue := match.Context().Encode(fact.Value)
-	if err := factCue.Err(); err != nil {
-		return nil, err
-	}
-	return match.Unify(factCue).Validate(cue.Final()), nil
-}
-
 func (self actionService) Create(source, name string) (*domain.Action, error) {
 	action := domain.Action{
 		ID:     uuid.New(),
@@ -494,7 +515,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 						RunId: &tmpRun.NomadJobID,
 						Value: success,
 					}
-					if err := txSelf.factRepository.Save(&fact, nil); err != nil {
+					if err := (*txSelf.factService).Save(&fact, nil); err != nil {
 						return errors.WithMessage(err, "Could not publish fact")
 					}
 					if runFunc, err := txSelf.InvokeCurrentActive(); err != nil {

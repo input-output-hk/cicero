@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"cuelang.org/go/cue"
@@ -27,6 +28,7 @@ type FactService interface {
 	GetByCue(cue.Value) ([]domain.Fact, error)
 	Save(*domain.Fact, io.Reader) error
 	GetInvocationInputFacts(map[string]uuid.UUID) (map[string]domain.Fact, error)
+	Match(*domain.Fact, cue.Value) (cue.Value, error, error)
 }
 
 type FactServiceCyclicDependencies struct {
@@ -128,14 +130,14 @@ func (self factService) Save(fact *domain.Fact, binary io.Reader) error {
 }
 
 func (self factService) GetLatestByCue(value cue.Value) (fact *domain.Fact, err error) {
-	self.logger.Trace().Interface("cue", value).Msg("Getting latest Facts by CUE")
+	self.logger.Trace().Str("cue", fmt.Sprint(value)).Msg("Getting latest Fact by CUE")
 	fact, err = self.factRepository.GetLatestByCue(value)
-	err = errors.WithMessagef(err, "Could not select latest Facts by CUE %q", value)
+	err = errors.WithMessagef(err, "Could not select latest Fact by CUE %q", value)
 	return
 }
 
 func (self factService) GetByCue(value cue.Value) (facts []domain.Fact, err error) {
-	self.logger.Trace().Interface("cue", value).Msg("Getting Facts by CUE")
+	self.logger.Trace().Str("cue", fmt.Sprint(value)).Msg("Getting Facts by CUE")
 	facts, err = self.factRepository.GetByCue(value)
 	err = errors.WithMessagef(err, "Could not select Facts by CUE %q", value)
 	return
@@ -160,4 +162,15 @@ func (self factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UUI
 	}
 
 	return inputs, nil
+}
+
+func (self factService) Match(fact *domain.Fact, match cue.Value) (cue.Value, error, error) {
+	factCue := match.Context().Encode(fact.Value)
+	if err := factCue.Err(); err != nil {
+		return cue.Value{}, nil, err
+	}
+
+	unified := match.Unify(factCue)
+
+	return unified, unified.Validate(cue.Final()), nil
 }

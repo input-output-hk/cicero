@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"cuelang.org/go/cue"
+	cueformat "cuelang.org/go/cue/format"
 	"github.com/davidebianchi/gswagger/apirouter"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -23,6 +26,7 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type Web struct {
@@ -90,6 +94,16 @@ func (self *Web) Start(ctx context.Context) error {
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "source", Description: "source of one or more action definitions", Value: "source"}}),
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, []string{}, "Ok")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/action/match",
+		self.ApiActionMatchPost,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, apiActionMatchResponse{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -255,6 +269,16 @@ func (self *Web) Start(ctx context.Context) error {
 			nil,
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/fact/match/latest",
+		self.ApiFactMatchLatestPost,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -1182,6 +1206,222 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 	} else {
 		self.json(w, fact, http.StatusOK)
 	}
+}
+
+func (self *Web) ApiFactMatchLatestPost(w http.ResponseWriter, req *http.Request) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	match := util.CUEString(body).Value(nil, nil)
+	if matchErr := match.Err(); matchErr != nil {
+		self.ClientError(w, errors.WithMessage(matchErr, "Failed to parse match CUE"))
+		return
+	}
+
+	fact, err := self.FactService.GetLatestByCue(match)
+	if err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
+		return
+	}
+
+	self.json(w, fact, http.StatusOK)
+}
+
+type apiActionMatchResponse struct {
+	Runnable bool                                   `json:"runnable"`
+	Inputs   map[string]apiActionMatchResponseInput `json:"inputs"`
+}
+
+type apiActionMatchResponseInput struct {
+	SatisfiedByFact *string
+
+	MatchWithDeps *cue.Value
+	Matched       *apiActionIoMatchResponseInputMatched
+
+	MatchedAgainstFact map[string]apiActionIoMatchResponseInputMatched
+}
+
+func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
+	result := struct {
+		SatisfiedByFact    *string                                         `json:"satisfiedByFact"`
+		MatchWithDeps      *string                                         `json:"matchWithDeps"`
+		MatchedAgainstFact map[string]apiActionIoMatchResponseInputMatched `json:"matchedAgainstFact"`
+		Matched            *apiActionIoMatchResponseInputMatched           `json:"matched"`
+	}{
+		SatisfiedByFact:    self.SatisfiedByFact,
+		Matched:            self.Matched,
+		MatchedAgainstFact: self.MatchedAgainstFact,
+	}
+
+	if self.MatchWithDeps != nil {
+		matchWithDeps := util.CUEString("")
+		if err := matchWithDeps.FromValue(self.MatchWithDeps.Eval(), cueformat.Simplify()); err != nil {
+			return nil, err
+		}
+		matchWithDepsOnHeap := string(matchWithDeps)
+		result.MatchWithDeps = &matchWithDepsOnHeap
+	}
+
+	return json.Marshal(result)
+}
+
+type apiActionIoMatchResponseInputMatched struct {
+	MatchErr error
+	Unified  cue.Value
+}
+
+func (self apiActionIoMatchResponseInputMatched) MarshalJSON() ([]byte, error) {
+	unified := util.CUEString("")
+	if err := unified.FromValue(self.Unified.Eval(), cueformat.Simplify()); err != nil {
+		return nil, err
+	}
+
+	result := struct {
+		MatchErr *string        `json:"matchError"`
+		Unified  util.CUEString `json:"unified"`
+	}{Unified: unified}
+
+	if self.MatchErr != nil {
+		matchErr := self.MatchErr.Error()
+		result.MatchErr = &matchErr
+	}
+
+	return json.Marshal(result)
+}
+
+func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
+	if err := req.ParseMultipartForm(1024 * 1024); err != nil { // 1 MiB
+		self.ClientError(w, err)
+		return
+	}
+
+	io := domain.TrustedInOutCUEString(req.PostFormValue("io"))
+	if err := io.Validate(); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to validate io"))
+		return
+	}
+
+	formFacts := map[string]domain.Fact{}
+	for formName := range req.PostForm {
+		const factFormPrefix = "fact:"
+		if !strings.HasPrefix(formName, factFormPrefix) {
+			continue
+		}
+
+		fact := domain.Fact{}
+		if err := json.Unmarshal([]byte(req.PostFormValue(formName)), &fact.Value); err != nil {
+			self.ClientError(w, err)
+			return
+		}
+
+		formFacts[strings.TrimPrefix(formName, factFormPrefix)] = fact
+	}
+
+	action := domain.Action{
+		ID:               uuid.New(),
+		Name:             "(none)",
+		Source:           "(none)",
+		ActionDefinition: domain.ActionDefinition{InOut: io},
+	}
+
+	response := apiActionMatchResponse{
+		Inputs: map[string]apiActionMatchResponseInput{},
+	}
+
+	// Match every fact against every input in isolation.
+	for inputName, input := range action.InOut.Inputs(nil) {
+		for factName, fact := range formFacts {
+			unified, matchErr, err := self.FactService.Match(&fact, input.Match)
+			if err != nil {
+				self.ServerError(w, err)
+				return
+			}
+
+			responseInput := response.Inputs[inputName]
+			if responseInput.MatchedAgainstFact == nil {
+				responseInput.MatchedAgainstFact = map[string]apiActionIoMatchResponseInputMatched{}
+			}
+			responseInput.MatchedAgainstFact[factName] = apiActionIoMatchResponseInputMatched{
+				MatchErr: matchErr,
+				Unified:  unified,
+			}
+			response.Inputs[inputName] = responseInput
+		}
+	}
+
+	okErr := errors.New("ok")
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if _, err := tx.Exec(context.Background(), `TRUNCATE action, fact CASCADE`); err != nil {
+			return err
+		}
+
+		actionService := self.ActionService.WithQuerier(tx)
+		factService := self.FactService.WithQuerier(tx)
+
+		// Create action.
+		if err := actionService.Save(&action); err != nil {
+			return err
+		}
+
+		// Mark action inactive to avoid triggering an invocation upon fact creation.
+		action.Active = false
+		if err := actionService.Update(&action); err != nil {
+			return err
+		}
+
+		// Create all facts.
+		factIdToName := map[uuid.UUID]string{}
+		for name, fact := range formFacts {
+			if err := factService.Save(&fact, nil); err != nil {
+				return err
+			}
+			factIdToName[fact.ID] = name
+		}
+
+		if inputs, matchWithDeps, runnable, err := actionService.GetSatisfiedInputs(&action); err != nil {
+			return err
+		} else {
+			response.Runnable = runnable
+
+			for input, fact := range inputs {
+				responseInput := response.Inputs[input]
+
+				{
+					factNameOnHeap := factIdToName[fact.ID]
+					responseInput.SatisfiedByFact = &factNameOnHeap
+				}
+
+				{
+					matchWithDepsOnHeap := matchWithDeps[input]
+					responseInput.MatchWithDeps = &matchWithDepsOnHeap
+				}
+
+				if unified, matchErr, err := factService.Match(&fact, matchWithDeps[input]); err != nil {
+					return err
+				} else {
+					responseInput.Matched = &apiActionIoMatchResponseInputMatched{
+						MatchErr: matchErr,
+						Unified:  unified,
+					}
+				}
+
+				response.Inputs[input] = responseInput
+			}
+		}
+
+		// IMPORTANT
+		// Return an error to roll back the transaction.
+		// We do not actually want to truncate any tables!
+		return okErr
+	}); !errors.Is(err, okErr) {
+		self.ServerError(w, err)
+		return
+	}
+
+	self.json(w, response, http.StatusOK)
 }
 
 func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
