@@ -941,20 +941,20 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 
 	if params.Name != nil {
 		if action, err := self.ActionService.Create(params.Source, *params.Name); err != nil {
-			self.ClientError(w, err) //TODO: checking
+			self.ClientError(w, err)
 			return
 		} else {
 			self.json(w, action, http.StatusOK)
 		}
 	} else {
 		if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
-			self.ClientError(w, errors.WithMessage(err, "Failed to list actions")) //TODO: checking
+			self.ClientError(w, errors.WithMessage(err, "Failed to list actions"))
 			return
 		} else {
 			actions := make([]*domain.Action, len(actionNames))
 			for i, actionName := range actionNames {
 				if action, err := self.ActionService.Create(params.Source, actionName); err != nil {
-					self.ClientError(w, err) //TODO: checking
+					self.ClientError(w, err)
 					return
 				} else {
 					actions[i] = action
