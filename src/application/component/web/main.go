@@ -927,6 +927,7 @@ func (self *Web) ApiInvocationByInputGet(w http.ResponseWriter, req *http.Reques
 	}
 }
 
+// XXX take form body instead of json?
 type apiActionPostBody struct {
 	Source string  `json:"source"`
 	Name   *string `json:"name"`
