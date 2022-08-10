@@ -2,11 +2,15 @@
   "cicero/ci" = {
     task = "build";
     io = ''
-      _lib: github: {
+      let github = {
+        #input: "GitHub event"
         #repo: "input-output-hk/cicero"
-        pull_request: {}
-        push: {}
       }
+
+      #lib: ios: [
+        {#lib.io.github_pr,   github},
+        {#lib.io.github_push, github},
+      ]
     '';
   };
 }
