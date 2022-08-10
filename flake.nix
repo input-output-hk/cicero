@@ -137,12 +137,6 @@
                           then .
                           else . + ["github:NixOS/nixpkgs/\($args.nixpkgsRev)#bash"]
                           end
-                      end |
-                      # logs do not work with podman driver
-                      # TODO remove once fixed
-                      if .driver != "podman" then . else
-                        .driver = "docker" |
-                        .config.image |= ltrimstr("docker://")
                       end
                     )
                   '
