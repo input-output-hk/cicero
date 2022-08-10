@@ -210,7 +210,7 @@ Kind:
 	case cue.BytesKind, cue.IntKind, cue.FloatKind, cue.NumberKind, cue.BoolKind, cue.NullKind:
 		appendComparision("=", value)
 	case cue.BottomKind, cue.TopKind:
-		switch op, vals := value.Expr(); op {
+		switch op, vals := value.Eval().Expr(); op {
 		case cue.OrOp:
 			clause = `(`
 			for i, val := range vals {
