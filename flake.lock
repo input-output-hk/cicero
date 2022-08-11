@@ -2183,11 +2183,11 @@
         "std": "std"
       },
       "locked": {
-        "lastModified": 1660153286,
-        "narHash": "sha256-xWXfIWvrOUUQ103GTl9SkvyBiME+ciYH1OMH+Kv70BQ=",
+        "lastModified": 1660231656,
+        "narHash": "sha256-sx2YDlfCk/BF5Fnre4PXPLNCLAmDfnZPVLGbm1Au8cA=",
         "owner": "input-output-hk",
         "repo": "tullia",
-        "rev": "0fd94ab7644ccb6bd0bbf74c83b19400ba8b880b",
+        "rev": "11435d1eeb1053320969e80c27728d4d4f44e424",
         "type": "github"
       },
       "original": {
