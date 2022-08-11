@@ -223,14 +223,7 @@ func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]
 			}
 
 			// Match candidate fact.
-			var match cue.Value
-			// XXX Is `action.InOut.Input(name, inputs).Match` the same as `tValue`?
-			if inputWithDeps, err := action.InOut.Input(name, inputs); err != nil {
-				return err
-			} else {
-				match = inputWithDeps.Match
-			}
-			if _, matchErr, err := (*self.factService).Match(fact, match); err != nil {
+			if _, matchErr, err := (*self.factService).Match(fact, tValue); err != nil {
 				return err
 			} else {
 				switch {
