@@ -34,7 +34,7 @@ type ActionService interface {
 	GetCurrentActive() ([]domain.Action, error)
 	Save(*domain.Action) error
 	Update(*domain.Action) error
-	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, map[string]cue.Value, bool, error)
+	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, bool, error)
 	IsRunnable(*domain.Action) (bool, map[string]domain.Fact, error)
 	Create(string, string) (*domain.Action, error)
 	// Returns a nil pointer for the first return value if the Action was not runnable.
@@ -178,14 +178,13 @@ func (self actionService) GetCurrentActive() (actions []domain.Action, err error
 	return
 }
 
-func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]domain.Fact, map[string]cue.Value, bool, error) {
+func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]domain.Fact, bool, error) {
 	logger := self.logger.With().
 		Str("name", action.Name).
 		Str("id", action.ID.String()).
 		Logger()
 
 	inputs := map[string]domain.Fact{}
-	inputMatchWithDeps := map[string]cue.Value{}
 
 	dbConnMutex := &sync.Mutex{}
 	valuePath := cue.MakePath(cue.Str("value"))
@@ -231,7 +230,6 @@ func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]
 			} else {
 				match = inputWithDeps.Match
 			}
-			inputMatchWithDeps[name] = match.Eval()
 			if _, matchErr, err := (*self.factService).Match(fact, match); err != nil {
 				return err
 			} else {
@@ -267,15 +265,15 @@ func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]
 
 		return nil
 	}); err != nil {
-		return nil, nil, false, err
-	} else if flow.Run(context.Background()); err != nil {
+		return nil, false, err
+	} else if err := flow.Run(context.Background()); err != nil {
 		if errors.Is(err, errNotRunnable) {
-			return inputs, inputMatchWithDeps, false, nil
+			return inputs, false, nil
 		}
-		return nil, nil, false, err
+		return nil, false, err
 	}
 
-	return inputs, inputMatchWithDeps, true, nil
+	return inputs, true, nil
 }
 
 func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]domain.Fact, error) {
@@ -288,7 +286,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 
 	// Select and match candidate facts.
 	var inputs map[string]domain.Fact
-	switch inputs_, _, maybeRunnable, err := self.GetSatisfiedInputs(action); {
+	switch inputs_, maybeRunnable, err := self.GetSatisfiedInputs(action); {
 	case err != nil:
 		return false, nil, err
 	case !maybeRunnable:
