@@ -143,8 +143,8 @@ func (self invocationService) GetOutputById(id uuid.UUID) (*domain.OutputDefinit
 	} else if inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds); err != nil {
 		return nil, err
 	} else {
-		output := action.InOut.Output(inputs)
-		return &output, nil
+		output, err := action.InOut.Output(inputs)
+		return &output, err
 	}
 }
 
