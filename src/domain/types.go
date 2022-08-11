@@ -177,12 +177,12 @@ func (self InOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) (*flow.Control
 	), nil
 }
 
-func (self InOutCUEString) Output(inputs map[string]Fact) (OutputDefinition, error) {
+func (self InOutCUEString) Output(inputs map[string]Fact) OutputDefinition {
 	value := self.valueWithInputs(inputs)
 	return OutputDefinition{
 		Success: value.LookupPath(cue.MakePath(cue.Str("output"), cue.Str("success"))),
 		Failure: value.LookupPath(cue.MakePath(cue.Str("output"), cue.Str("failure"))),
-	}, nil
+	}
 }
 
 func (self InOutCUEString) valueWithInputs(inputs map[string]Fact) cue.Value {
