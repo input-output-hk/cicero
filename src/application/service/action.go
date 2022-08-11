@@ -191,12 +191,15 @@ func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]
 	valuePath := cue.MakePath(cue.Str("value"))
 
 	errNotRunnable := errors.New("not runnable")
-	if err := action.InOut.InputsFlow(func(t *flow.Task) error {
+	if flow, err := action.InOut.InputsFlow(func(t *flow.Task) error {
 		name := t.Path().Selectors()[1].String() // inputs: <name>: …
 		if name_, err := cueliteral.Unquote(name); err == nil {
 			name = name_
 		}
-		input := action.InOut.Inputs(nil)[name]
+		input, err := action.InOut.Input(name, nil)
+		if err != nil {
+			return err
+		}
 		tValue := t.Value().LookupPath(valuePath)
 		inputLogger := logger.With().Str("input", name).Logger()
 
@@ -221,8 +224,13 @@ func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]
 			}
 
 			// Match candidate fact.
+			var match cue.Value
 			// XXX Is `action.InOut.Input(name, inputs).Match` the same as `tValue`?
-			match := action.InOut.Input(name, inputs).Match
+			if inputWithDeps, err := action.InOut.Input(name, inputs); err != nil {
+				return err
+			} else {
+				match = inputWithDeps.Match
+			}
 			inputMatchWithDeps[name] = match.Eval()
 			if _, matchErr, err := (*self.factService).Match(fact, match); err != nil {
 				return err
@@ -258,7 +266,9 @@ func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]
 		}
 
 		return nil
-	}).Run(context.Background()); err != nil {
+	}); err != nil {
+		return nil, nil, false, err
+	} else if flow.Run(context.Background()); err != nil {
 		if errors.Is(err, errNotRunnable) {
 			return inputs, inputMatchWithDeps, false, nil
 		}
@@ -298,73 +308,77 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 
 		inputFactsChanged := false
 
-	InputFactsChanged:
-		for name, input := range action.InOut.Inputs(inputs) {
-			if _, exists := inputs[name]; !exists {
-				// We only care about inputs that are
-				// passed into the evaluation.
-				continue
-			}
+		if inputsWithDeps, err := action.InOut.Inputs(inputs); err != nil {
+			return false, nil, err
+		} else {
+		InputFactsChanged:
+			for name, input := range inputsWithDeps {
+				if _, exists := inputs[name]; !exists {
+					// We only care about inputs that are
+					// passed into the evaluation.
+					continue
+				}
 
-			var oldFactId *uuid.UUID
-			if _, hasOldFact := inputFactIds[name]; hasOldFact {
-				var oldFactIdOnHeap = inputFactIds[name]
-				oldFactId = &oldFactIdOnHeap
-			}
+				var oldFactId *uuid.UUID
+				if _, hasOldFact := inputFactIds[name]; hasOldFact {
+					var oldFactIdOnHeap = inputFactIds[name]
+					oldFactId = &oldFactIdOnHeap
+				}
 
-			switch {
-			case input.Optional && oldFactId == nil:
-				if _, exists := inputs[name]; exists {
+				switch {
+				case input.Optional && oldFactId == nil:
+					if _, exists := inputs[name]; exists {
+						if logger.Debug().Enabled() {
+							logger.Debug().
+								Str("input", name).
+								Bool("input-optional", true).
+								Interface("old-fact", nil).
+								Str("new-fact", inputs[name].ID.String()).
+								Msg("input satisfied by new Fact")
+						}
+						inputFactsChanged = true
+						break InputFactsChanged
+					}
+				case input.Optional && oldFactId != nil:
+					if _, exists := inputs[name]; !exists || *oldFactId != inputs[name].ID {
+						if logger.Debug().Enabled() {
+							var newFactIdToLog *string
+							if !exists {
+								newFactIdToLogValue := inputs[name].ID.String()
+								newFactIdToLog = &newFactIdToLogValue
+							}
+							logger.Debug().
+								Str("input", name).
+								Bool("input-optional", true).
+								Str("old-fact", oldFactId.String()).
+								Interface("new-fact", newFactIdToLog).
+								Msg("input satisfied by new Fact or absence of one")
+						}
+						inputFactsChanged = true
+						break InputFactsChanged
+					}
+				case oldFactId == nil:
+					// A previous Invocation would not have been done
+					// if a non-optional input was not satisfied.
+					// We are not looking at a negated input here
+					// because those are never passed into the evaluation.
+					panic("This should never happen™")
+				case *oldFactId != inputs[name].ID:
 					if logger.Debug().Enabled() {
 						logger.Debug().
 							Str("input", name).
-							Bool("input-optional", true).
-							Interface("old-fact", nil).
+							Str("old-fact", oldFactId.String()).
 							Str("new-fact", inputs[name].ID.String()).
 							Msg("input satisfied by new Fact")
 					}
 					inputFactsChanged = true
 					break InputFactsChanged
 				}
-			case input.Optional && oldFactId != nil:
-				if _, exists := inputs[name]; !exists || *oldFactId != inputs[name].ID {
-					if logger.Debug().Enabled() {
-						var newFactIdToLog *string
-						if !exists {
-							newFactIdToLogValue := inputs[name].ID.String()
-							newFactIdToLog = &newFactIdToLogValue
-						}
-						logger.Debug().
-							Str("input", name).
-							Bool("input-optional", true).
-							Str("old-fact", oldFactId.String()).
-							Interface("new-fact", newFactIdToLog).
-							Msg("input satisfied by new Fact or absence of one")
-					}
-					inputFactsChanged = true
-					break InputFactsChanged
-				}
-			case oldFactId == nil:
-				// A previous Invocation would not have been done
-				// if a non-optional input was not satisfied.
-				// We are not looking at a negated input here
-				// because those are never passed into the evaluation.
-				panic("This should never happen™")
-			case *oldFactId != inputs[name].ID:
-				if logger.Debug().Enabled() {
-					logger.Debug().
-						Str("input", name).
-						Str("old-fact", oldFactId.String()).
-						Str("new-fact", inputs[name].ID.String()).
-						Msg("input satisfied by new Fact")
-				}
-				inputFactsChanged = true
-				break InputFactsChanged
-			}
 
-			logger.Debug().
-				Str("input", name).
-				Msg("input satisfied by same Fact(s) as last Invocation")
+				logger.Debug().
+					Str("input", name).
+					Msg("input satisfied by same Fact(s) as last Invocation")
+			}
 		}
 
 		if !inputFactsChanged {
@@ -510,7 +524,9 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 			}
 
 			if job == nil { // An action that has no job is called a decision.
-				if success := action.InOut.Output(inputs).Success; success.Exists() {
+				if output, err := action.InOut.Output(inputs); err != nil {
+					return err
+				} else if success := output.Success; success.Exists() {
 					fact := domain.Fact{
 						RunId: &tmpRun.NomadJobID,
 						Value: success,

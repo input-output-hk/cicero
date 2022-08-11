@@ -1299,11 +1299,7 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	io := domain.TrustedInOutCUEString(req.PostFormValue("io"))
-	if err := io.Validate(); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Failed to validate io"))
-		return
-	}
+	io := domain.InOutCUEString(req.PostFormValue("io"))
 
 	formFacts := map[string]domain.Fact{}
 	for formName := range req.PostForm {
@@ -1333,23 +1329,28 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Match every fact against every input in isolation.
-	for inputName, input := range action.InOut.Inputs(nil) {
-		for factName, fact := range formFacts {
-			unified, matchErr, err := self.FactService.Match(&fact, input.Match)
-			if err != nil {
-				self.ServerError(w, err)
-				return
-			}
+	if inputs, err := action.InOut.Inputs(nil); err != nil {
+		self.ClientError(w, err)
+		return
+	} else {
+		for inputName, input := range inputs {
+			for factName, fact := range formFacts {
+				unified, matchErr, err := self.FactService.Match(&fact, input.Match)
+				if err != nil {
+					self.ServerError(w, err)
+					return
+				}
 
-			responseInput := response.Inputs[inputName]
-			if responseInput.MatchedAgainstFact == nil {
-				responseInput.MatchedAgainstFact = map[string]apiActionIoMatchResponseInputMatched{}
+				responseInput := response.Inputs[inputName]
+				if responseInput.MatchedAgainstFact == nil {
+					responseInput.MatchedAgainstFact = map[string]apiActionIoMatchResponseInputMatched{}
+				}
+				responseInput.MatchedAgainstFact[factName] = apiActionIoMatchResponseInputMatched{
+					MatchErr: matchErr,
+					Unified:  unified,
+				}
+				response.Inputs[inputName] = responseInput
 			}
-			responseInput.MatchedAgainstFact[factName] = apiActionIoMatchResponseInputMatched{
-				MatchErr: matchErr,
-				Unified:  unified,
-			}
-			response.Inputs[inputName] = responseInput
 		}
 	}
 

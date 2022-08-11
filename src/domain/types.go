@@ -27,10 +27,8 @@ type Action struct {
 
 type ActionDefinition struct {
 	Meta  map[string]interface{} `json:"meta"`
-	InOut TrustedInOutCUEString  `json:"io" db:"io"`
+	InOut InOutCUEString         `json:"io" db:"io"`
 }
-
-type TrustedInOutCUEString InOutCUEString
 
 type InOutCUEString util.CUEString
 
@@ -84,75 +82,6 @@ type NomadEvent struct {
 	nomad.Event
 	Uid     util.MD5Sum
 	Handled bool
-}
-
-// XXX This just calls all methods to see if they return an error.
-// Instead it should check the value using `cue.Value.Subsume` or something.
-func (self TrustedInOutCUEString) Validate() error {
-	if err := util.CUEString(self).Value(nil, nil).Err(); err != nil {
-		return err
-	}
-
-	str := InOutCUEString(self)
-
-	if _, err := str.Inputs(nil); err != nil {
-		return err
-	}
-
-	if _, err := str.InputsFlow(func(t *flow.Task) error {
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	if _, err := str.Output(nil); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (self *TrustedInOutCUEString) UnmarshalJSON(data []byte) error {
-	var str util.CUEString
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
-	}
-
-	*self = TrustedInOutCUEString(str)
-
-	return self.Validate()
-}
-
-func (self TrustedInOutCUEString) Inputs(inputs map[string]Fact) InputDefinitions {
-	if r, err := InOutCUEString(self).Inputs(inputs); err != nil {
-		panic(err.Error())
-	} else {
-		return r
-	}
-}
-
-func (self TrustedInOutCUEString) Input(name string, inputs map[string]Fact) *InputDefinition {
-	if r, err := InOutCUEString(self).Input(name, inputs); err != nil {
-		panic(err.Error())
-	} else {
-		return r
-	}
-}
-
-func (self TrustedInOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) *flow.Controller {
-	if r, err := InOutCUEString(self).InputsFlow(runnerFunc); err != nil {
-		panic(err.Error())
-	} else {
-		return r
-	}
-}
-
-func (self TrustedInOutCUEString) Output(inputs map[string]Fact) OutputDefinition {
-	if r, err := InOutCUEString(self).Output(inputs); err != nil {
-		panic(err.Error())
-	} else {
-		return r
-	}
 }
 
 func (self InOutCUEString) Inputs(inputs map[string]Fact) (InputDefinitions, error) {
