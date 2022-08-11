@@ -1232,8 +1232,73 @@ func (self *Web) ApiFactMatchLatestPost(w http.ResponseWriter, req *http.Request
 }
 
 type apiActionMatchResponse struct {
-	Runnable bool                                   `json:"runnable"`
-	Inputs   map[string]apiActionMatchResponseInput `json:"inputs"`
+	Runnable bool
+	Inputs   map[string]apiActionMatchResponseInput
+	Output   domain.OutputDefinition
+}
+
+func (self apiActionMatchResponse) MarshalJSON() ([]byte, error) {
+	type outputUnified struct {
+		Unified util.CUEString `json:"unified"`
+		UnifyErr *string `json:"unifyError"`
+
+		Concrete *string `json:"concrete"`
+		ConcreteErr *string `json:"concreteError"`
+	}
+	type output struct {
+		Success outputUnified `json:"success"`
+		Failure outputUnified `json:"failure"`
+	}
+
+	result := struct {
+		Runnable bool                                   `json:"runnable"`
+		Inputs   map[string]apiActionMatchResponseInput `json:"inputs"`
+		Output   output                                 `json:"output"`
+	}{
+		Runnable: self.Runnable,
+		Inputs:   self.Inputs,
+		Output: output{
+			Success: outputUnified {
+				Unified: util.CUEString(""),
+			},
+			Failure: outputUnified {
+				Unified: util.CUEString(""),
+			},
+		},
+	}
+
+	if err := result.Output.Success.Unified.FromValue(self.Output.Success.Eval(), cueformat.Simplify()); err != nil {
+		return nil, err
+	}
+	if err := result.Output.Failure.Unified.FromValue(self.Output.Failure.Eval(), cueformat.Simplify()); err != nil {
+		return nil, err
+	}
+
+	if concrete, err := json.Marshal(self.Output.Success); err != nil {
+		errOnHeap := errors.Unwrap(err).Error()
+		result.Output.Success.ConcreteErr = &errOnHeap
+	} else {
+		concreteOnHeap := string(concrete)
+		result.Output.Success.Concrete = &concreteOnHeap
+	}
+	if concrete, err := json.Marshal(self.Output.Failure); err != nil {
+		errOnHeap := errors.Unwrap(err).Error()
+		result.Output.Failure.ConcreteErr = &errOnHeap
+	} else {
+		concreteOnHeap := string(concrete)
+		result.Output.Failure.Concrete = &concreteOnHeap
+	}
+
+	if err := self.Output.Success.Err(); err != nil {
+		errOnHeap := err.Error()
+		result.Output.Success.UnifyErr = &errOnHeap
+	}
+	if err := self.Output.Failure.Err(); err != nil {
+		errOnHeap := err.Error()
+		result.Output.Failure.UnifyErr = &errOnHeap
+	}
+
+	return json.Marshal(result)
 }
 
 type apiActionMatchResponseInput struct {
@@ -1387,6 +1452,7 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 			return err
 		} else {
 			response.Runnable = runnable
+			response.Output = action.InOut.Output(inputs)
 
 			for input, fact := range inputs {
 				responseInput := response.Inputs[input]
