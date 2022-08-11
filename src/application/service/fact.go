@@ -172,5 +172,5 @@ func (self factService) Match(fact *domain.Fact, match cue.Value) (cue.Value, er
 
 	unified := match.Unify(factCue)
 
-	return unified, unified.Validate(cue.Final()), nil
+	return unified, unified.Validate(), nil
 }
