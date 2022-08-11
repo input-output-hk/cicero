@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
+	cueerrors "cuelang.org/go/cue/errors"
 	cueformat "cuelang.org/go/cue/format"
 	"github.com/davidebianchi/gswagger/apirouter"
 	"github.com/google/uuid"
@@ -1238,16 +1239,9 @@ type apiActionMatchResponse struct {
 }
 
 func (self apiActionMatchResponse) MarshalJSON() ([]byte, error) {
-	type outputUnified struct {
-		Unified util.CUEString `json:"unified"`
-		UnifyErr *string `json:"unifyError"`
-
-		Concrete *string `json:"concrete"`
-		ConcreteErr *string `json:"concreteError"`
-	}
 	type output struct {
-		Success outputUnified `json:"success"`
-		Failure outputUnified `json:"failure"`
+		Success apiActionIoMatchResponseUnified `json:"success"`
+		Failure apiActionIoMatchResponseUnified `json:"failure"`
 	}
 
 	result := struct {
@@ -1258,46 +1252,16 @@ func (self apiActionMatchResponse) MarshalJSON() ([]byte, error) {
 		Runnable: self.Runnable,
 		Inputs:   self.Inputs,
 		Output: output{
-			Success: outputUnified {
-				Unified: util.CUEString(""),
+			Success: apiActionIoMatchResponseUnified{
+				Unified: self.Output.Success,
+				Error:   self.Output.Success.Validate(cue.Concrete(true)),
 			},
-			Failure: outputUnified {
-				Unified: util.CUEString(""),
+			Failure: apiActionIoMatchResponseUnified{
+				Unified: self.Output.Failure,
+				Error:   self.Output.Failure.Validate(cue.Concrete(true)),
 			},
 		},
 	}
-
-	if err := result.Output.Success.Unified.FromValue(self.Output.Success.Eval(), cueformat.Simplify()); err != nil {
-		return nil, err
-	}
-	if err := result.Output.Failure.Unified.FromValue(self.Output.Failure.Eval(), cueformat.Simplify()); err != nil {
-		return nil, err
-	}
-
-	if concrete, err := json.Marshal(self.Output.Success); err != nil {
-		errOnHeap := errors.Unwrap(err).Error()
-		result.Output.Success.ConcreteErr = &errOnHeap
-	} else {
-		concreteOnHeap := string(concrete)
-		result.Output.Success.Concrete = &concreteOnHeap
-	}
-	if concrete, err := json.Marshal(self.Output.Failure); err != nil {
-		errOnHeap := errors.Unwrap(err).Error()
-		result.Output.Failure.ConcreteErr = &errOnHeap
-	} else {
-		concreteOnHeap := string(concrete)
-		result.Output.Failure.Concrete = &concreteOnHeap
-	}
-
-	if err := self.Output.Success.Err(); err != nil {
-		errOnHeap := err.Error()
-		result.Output.Success.UnifyErr = &errOnHeap
-	}
-	if err := self.Output.Failure.Err(); err != nil {
-		errOnHeap := err.Error()
-		result.Output.Failure.UnifyErr = &errOnHeap
-	}
-
 	return json.Marshal(result)
 }
 
@@ -1305,17 +1269,17 @@ type apiActionMatchResponseInput struct {
 	SatisfiedByFact *string
 
 	MatchWithDeps *cue.Value
-	Matched       *apiActionIoMatchResponseInputMatched
+	Matched       *apiActionIoMatchResponseUnified
 
-	MatchedAgainstFact map[string]apiActionIoMatchResponseInputMatched
+	MatchedAgainstFact map[string]apiActionIoMatchResponseUnified
 }
 
 func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
 	result := struct {
-		SatisfiedByFact    *string                                         `json:"satisfiedByFact"`
-		MatchWithDeps      *string                                         `json:"matchWithDeps"`
-		MatchedAgainstFact map[string]apiActionIoMatchResponseInputMatched `json:"matchedAgainstFact"`
-		Matched            *apiActionIoMatchResponseInputMatched           `json:"matched"`
+		SatisfiedByFact    *string                                    `json:"satisfiedByFact"`
+		MatchWithDeps      *string                                    `json:"matchWithDeps"`
+		MatchedAgainstFact map[string]apiActionIoMatchResponseUnified `json:"matchedAgainstFact"`
+		Matched            *apiActionIoMatchResponseUnified           `json:"matched"`
 	}{
 		SatisfiedByFact:    self.SatisfiedByFact,
 		Matched:            self.Matched,
@@ -1334,25 +1298,27 @@ func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
 	return json.Marshal(result)
 }
 
-type apiActionIoMatchResponseInputMatched struct {
-	MatchErr error
-	Unified  cue.Value
+type apiActionIoMatchResponseUnified struct {
+	Unified cue.Value
+	Error   error
 }
 
-func (self apiActionIoMatchResponseInputMatched) MarshalJSON() ([]byte, error) {
+func (self apiActionIoMatchResponseUnified) MarshalJSON() ([]byte, error) {
 	unified := util.CUEString("")
 	if err := unified.FromValue(self.Unified.Eval(), cueformat.Simplify()); err != nil {
 		return nil, err
 	}
 
 	result := struct {
-		MatchErr *string        `json:"matchError"`
-		Unified  util.CUEString `json:"unified"`
+		Unified util.CUEString `json:"unified"`
+		Errors  []string       `json:"errors"`
 	}{Unified: unified}
 
-	if self.MatchErr != nil {
-		matchErr := self.MatchErr.Error()
-		result.MatchErr = &matchErr
+	if errors := cueerrors.Errors(self.Error); errors != nil {
+		result.Errors = make([]string, len(errors))
+		for i, err := range errors {
+			result.Errors[i] = err.Error()
+		}
 	}
 
 	return json.Marshal(result)
@@ -1400,7 +1366,7 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 	} else {
 		for inputName, input := range inputs {
 			for factName, fact := range formFacts {
-				unified, matchErr, err := self.FactService.Match(&fact, input.Match)
+				unified, unifiedErr, err := self.FactService.Match(&fact, input.Match)
 				if err != nil {
 					self.ServerError(w, err)
 					return
@@ -1408,12 +1374,9 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 
 				responseInput := response.Inputs[inputName]
 				if responseInput.MatchedAgainstFact == nil {
-					responseInput.MatchedAgainstFact = map[string]apiActionIoMatchResponseInputMatched{}
+					responseInput.MatchedAgainstFact = map[string]apiActionIoMatchResponseUnified{}
 				}
-				responseInput.MatchedAgainstFact[factName] = apiActionIoMatchResponseInputMatched{
-					MatchErr: matchErr,
-					Unified:  unified,
-				}
+				responseInput.MatchedAgainstFact[factName] = apiActionIoMatchResponseUnified{unified, unifiedErr}
 				response.Inputs[inputName] = responseInput
 			}
 		}
@@ -1448,35 +1411,38 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 			factIdToName[fact.ID] = name
 		}
 
-		if inputs, matchWithDeps, runnable, err := actionService.GetSatisfiedInputs(&action); err != nil {
+		if satisfied, runnable, err := actionService.GetSatisfiedInputs(&action); err != nil {
 			return err
 		} else {
 			response.Runnable = runnable
-			response.Output = action.InOut.Output(inputs)
+			response.Output = action.InOut.Output(satisfied)
 
-			for input, fact := range inputs {
-				responseInput := response.Inputs[input]
+			if inputs, err := action.InOut.Inputs(satisfied); err != nil {
+				return err
+			} else {
+				for inputName, input := range inputs {
+					responseInput := response.Inputs[inputName]
 
-				{
-					factNameOnHeap := factIdToName[fact.ID]
-					responseInput.SatisfiedByFact = &factNameOnHeap
-				}
-
-				{
-					matchWithDepsOnHeap := matchWithDeps[input]
-					responseInput.MatchWithDeps = &matchWithDepsOnHeap
-				}
-
-				if unified, matchErr, err := factService.Match(&fact, matchWithDeps[input]); err != nil {
-					return err
-				} else {
-					responseInput.Matched = &apiActionIoMatchResponseInputMatched{
-						MatchErr: matchErr,
-						Unified:  unified,
+					{
+						matchWithDepsOnHeap := input.Match.Eval()
+						responseInput.MatchWithDeps = &matchWithDepsOnHeap
 					}
-				}
 
-				response.Inputs[input] = responseInput
+					if fact, isSatisfied := satisfied[inputName]; isSatisfied {
+						{
+							factNameOnHeap := factIdToName[fact.ID]
+							responseInput.SatisfiedByFact = &factNameOnHeap
+						}
+
+						if unified, unifiedErr, err := factService.Match(&fact, input.Match); err != nil {
+							return err
+						} else {
+							responseInput.Matched = &apiActionIoMatchResponseUnified{unified, unifiedErr}
+						}
+					}
+
+					response.Inputs[inputName] = responseInput
+				}
 			}
 		}
 
