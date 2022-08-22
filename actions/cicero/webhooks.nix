@@ -8,8 +8,8 @@
 } @ args: let
   pkg = pkg: "github:NixOS/nixpkgs/${nixpkgsRev}#${pkg}";
 in {
-  inputs.start = ''
-    "${name}": {
+  io = ''
+    inputs: start: match: "${name}": {
       sha: string
       clone_url?: string
       environment?: string

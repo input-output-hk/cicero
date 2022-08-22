@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
@@ -22,6 +21,7 @@ type NomadEventConsumer struct {
 	FactService       service.FactService
 	NomadEventService service.NomadEventService
 	RunService        service.RunService
+	InvocationService service.InvocationService
 	Db                config.PgxIface
 	NomadClient       application.NomadClient
 }
@@ -32,6 +32,7 @@ func (self *NomadEventConsumer) WithQuerier(querier config.PgxIface) *NomadEvent
 		FactService:       self.FactService.WithQuerier(querier),
 		NomadEventService: self.NomadEventService.WithQuerier(querier),
 		RunService:        self.RunService.WithQuerier(querier),
+		InvocationService: self.InvocationService.WithQuerier(querier),
 		Db:                querier,
 		NomadClient:       self.NomadClient,
 	}
@@ -45,7 +46,7 @@ func (self *NomadEventConsumer) Start(ctx context.Context) error {
 	} else {
 		self.Logger.Debug().Int("num-unhandled", len(events)).Msg("Handling unhandled events")
 		for _, event := range events {
-			if err := self.processNomadEvent(ctx, event); err != nil {
+			if err := self.processNomadEvent(ctx, &event); err != nil {
 				return err
 			}
 		}
@@ -240,7 +241,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(ctx context.Context, 
 		return err
 	}
 
-	return self.endRun(ctx, run, allocation.ModifyTime, false)
+	return self.endRun(ctx, run, allocation.ModifyTime, domain.RunStatusFailed)
 }
 
 func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *nomad.Event) error {
@@ -305,7 +306,7 @@ func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *
 		}
 	}
 
-	return self.endRun(ctx, run, modifyTime, true)
+	return self.endRun(ctx, run, modifyTime, domain.RunStatusSucceeded)
 }
 
 func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*domain.Run, error) {
@@ -317,11 +318,11 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 
 	run, err := self.RunService.GetByNomadJobIdWithLock(id, "FOR NO KEY UPDATE")
 	if err != nil {
-		if pgxscan.NotFound(err) {
-			logger.Trace().Msg("Ignoring event (no such Run)")
-			return nil, nil
-		}
-		return &run, err
+		return run, err
+	}
+	if run == nil {
+		logger.Trace().Msg("Ignoring event (no such Run)")
+		return nil, nil
 	}
 
 	if run.FinishedAt != nil {
@@ -329,49 +330,54 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 		return nil, nil
 	}
 
-	return &run, nil
+	return run, nil
 }
 
-func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, success bool) error {
-	modifyTime := time.Unix(
-		timestamp/int64(time.Second),
-		timestamp%int64(time.Second),
-	).UTC()
-	run.FinishedAt = &modifyTime
+func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) error {
+	return self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
 
-	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-		if output, err := self.RunService.GetOutputByNomadJobId(run.NomadJobID); err != nil && !pgxscan.NotFound(err) {
-			return err
-		} else {
-			fact := domain.Fact{
-				RunId: &run.NomadJobID,
-			}
+		switch run.Status {
+		default:
+			panic(`endRun() called on Run with status "` + run.Status.String() + `"`)
+		case domain.RunStatusCanceled:
+		case domain.RunStatusRunning:
+			run.Status = status
 
-			if success {
-				if output.Success != nil {
-					fact.Value = output.Success
-				}
+			if output, err := txSelf.InvocationService.GetOutputById(run.InvocationId); err != nil {
+				return err
 			} else {
-				if output.Failure != nil {
-					fact.Value = output.Failure
+				fact := domain.Fact{
+					RunId: &run.NomadJobID,
 				}
-			}
 
-			if fact.Value != nil {
-				if err := self.FactService.Save(&fact, nil); err != nil {
-					return err
+				switch run.Status {
+				case domain.RunStatusSucceeded:
+					if output.Success.Exists() {
+						fact.Value = output.Success
+					}
+				case domain.RunStatusFailed:
+					if output.Failure.Exists() {
+						fact.Value = output.Failure
+					}
+				default:
+					panic("should have been caught in switch above")
+				}
+
+				if fact.Value != nil {
+					if err := txSelf.FactService.Save(&fact, nil); err != nil {
+						return err
+					}
 				}
 			}
 		}
 
-		return errors.WithMessagef(
-			self.RunService.End(run),
-			"Failed to end Run with ID %q",
-			run.NomadJobID,
-		)
-	}); err != nil {
-		return err
-	}
+		modifyTime := time.Unix(
+			timestamp/int64(time.Second),
+			timestamp%int64(time.Second),
+		).UTC()
+		run.FinishedAt = &modifyTime
 
-	return nil
+		return txSelf.RunService.End(run)
+	})
 }

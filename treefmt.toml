@@ -6,6 +6,7 @@ includes = ["*.go"]
 [formatter.nix]
 command = "alejandra"
 includes = ["*.nix"]
+excludes = ["materialized-*"]
 
 [formatter.cue]
 command = "treefmt-cue"

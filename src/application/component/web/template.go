@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/input-output-hk/cicero/src/domain"
@@ -89,6 +90,9 @@ var templateFuncs = template.FuncMap{
 	"derefString": func(ptr *string) string {
 		return *ptr
 	},
+	"addInt": func(a int, b int) int {
+		return a + b
+	},
 	"subInt": func(a int, b int) int {
 		return a - b
 	},
@@ -97,5 +101,13 @@ var templateFuncs = template.FuncMap{
 			return b
 		}
 		return a
+	},
+	"hasKey": func(m interface{}, key interface{}) bool {
+		for _, k := range reflect.ValueOf(m).MapKeys() {
+			if k.Interface() == key {
+				return true
+			}
+		}
+		return false
 	},
 }

@@ -3,10 +3,7 @@
   pkgs,
   ...
 }: {
-  imports = [
-    self.nixosModule
-    self.inputs.driver.nixosModules.nix-driver-nomad
-  ];
+  imports = [self.nixosModule];
 
   nixpkgs.overlays = [self.overlay];
 

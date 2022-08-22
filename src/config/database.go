@@ -26,7 +26,7 @@ var (
 	_ PgxIface = pgx.Tx(nil)
 )
 
-func DBConnection(logger *zerolog.Logger) (PgxIface, error) {
+func DBConnection(logger *zerolog.Logger, logDb bool) (PgxIface, error) {
 	url := GetenvStr("DATABASE_URL")
 	if url == "" {
 		return nil, errors.New("Environment variable DATABASE_URL not set or empty")
@@ -36,7 +36,9 @@ func DBConnection(logger *zerolog.Logger) (PgxIface, error) {
 	if err != nil {
 		return nil, err
 	}
-	// dbconfig.ConnConfig.Logger = wrapLogger(logger)
+	if logDb {
+		dbconfig.ConnConfig.Logger = wrapLogger(logger)
+	}
 
 	//TODO: log configuration
 	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
@@ -51,15 +53,12 @@ func DBConnection(logger *zerolog.Logger) (PgxIface, error) {
 	return pgxpool.ConnectConfig(context.Background(), dbconfig)
 }
 
-//nolint:unused,deadcode
 func wrapLogger(original *zerolog.Logger) pgLogger {
 	return pgLogger{original}
 }
 
-//nolint:unused
 type pgLogger struct{ original *zerolog.Logger }
 
-//nolint:unused,deadcode
 func (l pgLogger) Log(ctx context.Context, level pgx.LogLevel, msg string, data map[string]interface{}) {
 	var event *zerolog.Event
 	switch level {
@@ -75,6 +74,7 @@ func (l pgLogger) Log(ctx context.Context, level pgx.LogLevel, msg string, data 
 		event = l.original.Error()
 	}
 
+	event = event.Str("lib", "pgx")
 	for k, v := range data {
 		event.Interface(k, v)
 	}

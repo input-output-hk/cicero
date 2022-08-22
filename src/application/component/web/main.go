@@ -6,14 +6,17 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
+	"cuelang.org/go/cue"
+	cueformat "cuelang.org/go/cue/format"
 	"github.com/davidebianchi/gswagger/apirouter"
-	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -23,6 +26,7 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type Web struct {
@@ -49,16 +53,6 @@ func (self *Web) Start(ctx context.Context) error {
 	}
 
 	// sorted alphabetically, please keep it this way
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/current/{name}/definition",
-		self.ApiActionCurrentNameDefinitionGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "name", Description: "name of an action", Value: "actionName"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "OK")),
-	); err != nil {
-		return err
-	}
 	if _, err := r.AddRoute(http.MethodGet,
 		"/api/action/current/{name}",
 		self.ApiActionCurrentNameGet,
@@ -103,13 +97,13 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/{id}/definition",
-		self.ApiActionIdDefinitionGet,
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/action/match",
+		self.ApiActionMatchPost,
 		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of the action", Value: "UUID"}}),
 			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "Ok")),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, apiActionMatchResponse{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -163,6 +157,16 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/invocation/{id}",
+		self.ApiInvocationIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Invocation{}, "OK")),
+	); err != nil {
+		return err
+	}
 	if route, err := r.AddRoute(http.MethodGet,
 		"/api/invocation",
 		self.ApiInvocationByInputGet,
@@ -197,12 +201,12 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	if _, err := r.AddRoute(http.MethodGet,
-		"/api/run/{id}/logs",
-		self.ApiRunIdLogsGet,
+		"/api/run/{id}/log",
+		self.ApiRunIdLogGet,
 		apidoc.BuildSwaggerDef(
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
 			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, map[string]domain.LokiLog{"logs": {}}, "OK")),
+			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -265,6 +269,16 @@ func (self *Web) Start(ctx context.Context) error {
 			nil,
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/fact/match/latest",
+		self.ApiFactMatchLatestPost,
+		apidoc.BuildSwaggerDef(
+			nil,
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -359,7 +373,7 @@ func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	var actions []*domain.Action
+	var actions []domain.Action
 	var err error
 
 	_, active := req.URL.Query()["active"]
@@ -394,29 +408,48 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Invocations by Action ID: %q", id))
 		return
 	} else {
-		type Entry struct {
+		type entry struct {
 			Invocation *domain.Invocation
 			Run        *domain.Run
 		}
 
-		entries := make([]Entry, len(invocations))
-		// XXX parallelize
-		for i, invocation := range invocations {
-			if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil && !pgxscan.NotFound(err) {
+		entries := make([]entry, len(invocations))
+
+		{
+			errChan := make(chan error, len(invocations))
+
+			wg := &sync.WaitGroup{}
+
+			wg.Add(len(invocations))
+			for i, invocation := range invocations {
+				// copy so we don't point to loop variable
+				invocation := invocation
+				entries[i].Invocation = &invocation
+
+				go func(i int, id uuid.UUID) {
+					defer wg.Done()
+
+					run, err := self.RunService.GetByInvocationId(id)
+					if err != nil {
+						errChan <- err
+					} else {
+						entries[i].Run = run
+					}
+				}(i, invocation.Id)
+			}
+
+			wg.Wait()
+
+			select {
+			case err := <-errChan:
 				self.ServerError(w, err)
 				return
-			} else {
-				var runPtr *domain.Run
-				if err == nil {
-					runPtr = &run
-				}
-
-				entries[i] = Entry{invocation, runPtr}
+			default:
 			}
 		}
 
 		if err := render("action/runs.html", w, struct {
-			Entries []Entry
+			Entries []entry
 			*repository.Page
 		}{entries, page}); err != nil {
 			self.ServerError(w, err)
@@ -440,7 +473,7 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if err := render("action/version.html", w, struct {
 		ActionID uuid.UUID
-		Actions  []*domain.Action
+		Actions  []domain.Action
 		*repository.Page
 	}{
 		ActionID: id,
@@ -455,19 +488,17 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
-		return
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
-		return
-	} else if _, inputs, err := self.ActionService.IsRunnable(&action); err != nil {
+	} else if action == nil {
+		self.NotFound(w, nil)
+	} else if _, inputs, err := self.ActionService.IsRunnable(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
-		return
 	} else if err := render("action/[id].html", w, map[string]interface{}{
 		"Action": action,
 		"inputs": inputs,
 	}); err != nil {
 		self.ServerError(w, err)
-		return
 	}
 }
 
@@ -527,15 +558,24 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, err)
 		return
 	}
+	if invocation == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	log, err := self.InvocationService.GetLog(*invocation)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+	log.Deduplicate()
 
 	var run *domain.Run
 	if run_, err := self.RunService.GetByInvocationId(id); err != nil {
-		if !pgxscan.NotFound(err) {
-			self.ServerError(w, err)
-			return
-		}
-	} else {
-		run = &run_
+		self.ServerError(w, err)
+		return
+	} else if run_ != nil {
+		run = run_
 	}
 
 	var inputs map[string]domain.Fact
@@ -553,6 +593,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		"Invocation": invocation,
 		"Run":        run,
 		"inputs":     inputs,
+		"log":        log,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -584,7 +625,11 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 
 	run, err := self.RunService.GetByNomadJobId(id)
 	if err != nil {
-		self.NotFound(w, errors.WithMessagef(err, "Failed to find Run %q", id))
+		self.ServerError(w, errors.WithMessagef(err, "Failed to find Run %q", id))
+		return
+	}
+	if run == nil {
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
@@ -600,20 +645,17 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	allocs, err := self.NomadEventService.GetEventAllocByNomadJobId(id)
+	allocsWithLogs, err := self.RunService.GetRunAllocationsWithLogs(*run)
 	if err != nil {
-		self.NotFound(w, errors.WithMessagef(err, "Failed to find allocs for Nomad job %q", id))
+		self.ServerError(w, err)
 		return
 	}
 
-	allocsByGroup := map[string][]domain.AllocationWithLogs{}
-	for _, alloc := range allocs {
-		allocsByGroup[alloc.TaskGroup] = append(allocsByGroup[alloc.TaskGroup], alloc)
-	}
-	for _, allocs := range allocsByGroup {
-		sort.Slice(allocs, func(i, j int) bool {
-			return allocs[i].CreateTime > allocs[j].CreateTime
-		})
+	allocs := []*nomad.Allocation{}
+	allocsWithLogsByGroup := map[string][]service.AllocationWithLogs{}
+	for _, alloc := range allocsWithLogs {
+		allocs = append(allocs, alloc.Allocation)
+		allocsWithLogsByGroup[alloc.TaskGroup] = append(allocsWithLogsByGroup[alloc.TaskGroup], alloc)
 	}
 
 	var inputs map[string]domain.Fact
@@ -627,14 +669,14 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		inputs = inputs_
 	}
 
-	output, err := self.RunService.GetOutputByNomadJobId(id)
-	if err != nil && !pgxscan.NotFound(err) {
+	output, err := self.InvocationService.GetOutputById(run.InvocationId)
+	if err != nil {
 		self.ServerError(w, err)
 		return
 	}
 
 	facts, err := self.FactService.GetByRunId(id)
-	if err != nil && !pgxscan.NotFound(err) {
+	if err != nil {
 		self.ServerError(w, err)
 		return
 	}
@@ -660,15 +702,14 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	if err := render("run/[id].html", w, map[string]interface{}{
 		"Run": struct {
 			domain.Run
-			ActionId   uuid.UUID
-			ActionName string
-		}{run, invocation.ActionId, action.Name},
-		"inputs":      inputs,
-		"output":      output,
-		"facts":       facts,
-		"allocs":      allocsByGroup,
-		"metrics":     service.GroupMetrics(cpuMetrics, memMetrics),
-		"grafanaUrls": grafanaUrls,
+			Action domain.Action
+		}{*run, *action},
+		"inputs":                inputs,
+		"output":                output,
+		"facts":                 facts,
+		"allocsWithLogsByGroup": allocsWithLogsByGroup,
+		"metrics":               service.GroupMetrics(cpuMetrics, memMetrics),
+		"grafanaUrls":           grafanaUrls,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -705,33 +746,56 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, err)
 		return
 	} else {
-		type Entry struct {
+		type entry struct {
 			Run        *domain.Run
 			Invocation *domain.Invocation
 			Action     *domain.Action
 		}
 
-		entries := make([]Entry, len(invocations))
-		// XXX parallelize
-		for i, invocation := range invocations {
-			if action, err := self.ActionService.GetByInvocationId(invocation.Id); err != nil {
-				self.ServerError(w, err)
-				return
-			} else if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil && !pgxscan.NotFound(err) {
-				self.ServerError(w, err)
-				return
-			} else {
-				var runPtr *domain.Run
-				if err == nil {
-					runPtr = &run
-				}
+		entries := make([]entry, len(invocations))
 
-				entries[i] = Entry{runPtr, invocation, &action}
+		{
+			errChan := make(chan error, len(invocations)*2)
+
+			wg := &sync.WaitGroup{}
+
+			wg.Add(len(invocations) * 2)
+			for i, invocation := range invocations {
+				// copy so we don't point to loop variable
+				invocation := invocation
+				entries[i].Invocation = &invocation
+
+				go func(i int, id uuid.UUID) {
+					defer wg.Done()
+					if action, err := self.ActionService.GetByInvocationId(id); err != nil {
+						errChan <- err
+					} else {
+						entries[i].Action = action
+					}
+				}(i, invocation.Id)
+
+				go func(i int, id uuid.UUID) {
+					defer wg.Done()
+					if run, err := self.RunService.GetByInvocationId(id); err != nil {
+						errChan <- err
+					} else {
+						entries[i].Run = run
+					}
+				}(i, invocation.Id)
+			}
+
+			wg.Wait()
+
+			select {
+			case err := <-errChan:
+				self.ServerError(w, err)
+				return
+			default:
 			}
 		}
 
 		if err := render("run/index.html", w, struct {
-			Entries []Entry
+			Entries []entry
 			*repository.Page
 		}{entries, page}); err != nil {
 			self.ServerError(w, err)
@@ -837,13 +901,13 @@ func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, &ok, page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 	} else {
-		runs := make([]*domain.Run, len(invocations))
-		for i, invocation := range invocations {
+		runs := []*domain.Run{}
+		for _, invocation := range invocations {
 			if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil {
 				self.ServerError(w, err)
 				return
-			} else {
-				runs[i] = &run
+			} else if run != nil {
+				runs = append(runs, run)
 			}
 		}
 
@@ -863,6 +927,7 @@ func (self *Web) ApiInvocationByInputGet(w http.ResponseWriter, req *http.Reques
 	}
 }
 
+// XXX take form body instead of json?
 type apiActionPostBody struct {
 	Source string  `json:"source"`
 	Name   *string `json:"name"`
@@ -877,20 +942,20 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 
 	if params.Name != nil {
 		if action, err := self.ActionService.Create(params.Source, *params.Name); err != nil {
-			self.ClientError(w, err) //TODO: checking
+			self.ClientError(w, err)
 			return
 		} else {
 			self.json(w, action, http.StatusOK)
 		}
 	} else {
 		if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
-			self.ClientError(w, errors.WithMessage(err, "Failed to list actions")) //TODO: checking
+			self.ClientError(w, errors.WithMessage(err, "Failed to list actions"))
 			return
 		} else {
 			actions := make([]*domain.Action, len(actionNames))
 			for i, actionName := range actionNames {
 				if action, err := self.ActionService.Create(params.Source, actionName); err != nil {
-					self.ClientError(w, err) //TODO: checking
+					self.ClientError(w, err)
 					return
 				} else {
 					actions[i] = action
@@ -901,19 +966,51 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) getRun(req *http.Request) (domain.Run, error) {
+// Returns (_, false) if an error occurred.
+// The error is already sent to the client.
+func (self *Web) getRun(w http.ResponseWriter, req *http.Request) (*domain.Run, bool) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
-		return domain.Run{}, err
+		self.ClientError(w, err)
+		return nil, false
+	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.ServerError(w, err)
+		return run, false
 	} else {
-		return self.RunService.GetByNomadJobId(id)
+		return run, true
+	}
+}
+
+// Returns (_, false) if an error occurred.
+// The error is already sent to the client.
+func (self *Web) getInvocation(w http.ResponseWriter, req *http.Request) (*domain.Invocation, bool) {
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, err)
+		return nil, false
+	} else if invocation, err := self.InvocationService.GetById(id); err != nil {
+		self.ServerError(w, err)
+		return invocation, false
+	} else {
+		return invocation, true
 	}
 }
 
 func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
-	if run, err := self.getRun(req); err != nil {
-		self.NotFound(w, errors.WithMessage(err, "Could not find Run"))
-	} else {
+	switch run, ok := self.getRun(w, req); {
+	case !ok:
+	case run == nil:
+		w.WriteHeader(http.StatusNotFound)
+	default:
 		self.json(w, run, http.StatusOK)
+	}
+}
+
+func (self *Web) ApiInvocationIdGet(w http.ResponseWriter, req *http.Request) {
+	switch invocation, ok := self.getInvocation(w, req); {
+	case !ok:
+	case invocation == nil:
+		w.WriteHeader(http.StatusNotFound)
+	default:
+		self.json(w, invocation, http.StatusOK)
 	}
 }
 
@@ -921,43 +1018,64 @@ func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Reque
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
-		self.NotFound(w, errors.WithMessage(err, "Could not get Invocation's inputs"))
+		self.ServerError(w, errors.WithMessage(err, "Could not get Invocation's inputs"))
 	} else {
 		self.json(w, inputs, http.StatusOK)
 	}
 }
 
+func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Request) {
+	//nolint:gocritic // IMHO if-else chain is better than switch here
+	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
+		self.ClientError(w, err)
+	} else if output, err := self.InvocationService.GetOutputById(id); err != nil {
+		self.ServerError(w, err)
+	} else if output == nil {
+		w.WriteHeader(http.StatusNotFound)
+	} else {
+		self.json(w, output, http.StatusOK)
+	}
+}
+
 func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
+	//nolint:gocritic // IMHO if-else chain is better than switch here
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
-		self.NotFound(w, err)
+		self.ServerError(w, err)
+	} else if run == nil {
+		w.WriteHeader(http.StatusNotFound)
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
-		self.NotFound(w, errors.WithMessage(err, "Could not get Run's Invocation's inputs"))
+		self.ServerError(w, errors.WithMessage(err, "Could not get Run's Invocation's inputs"))
 	} else {
 		self.json(w, inputs, http.StatusOK)
 	}
 }
 
 func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
+	//nolint:gocritic // IMHO if-else chain is better than switch here
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
-	} else if output, err := self.RunService.GetOutputByNomadJobId(id); err != nil {
-		if pgxscan.NotFound(err) {
-			w.WriteHeader(http.StatusNotFound)
-		} else {
-			self.ServerError(w, err)
-		}
+	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.ServerError(w, err)
+	} else if run == nil {
+		w.WriteHeader(http.StatusNotFound)
+	} else if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
+		self.ServerError(w, err)
+	} else if output == nil {
+		w.WriteHeader(http.StatusNotFound)
 	} else {
 		self.json(w, output, http.StatusOK)
 	}
 }
 
 func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
-	if run, err := self.getRun(req); err != nil {
-		self.NotFound(w, err)
+	if run, ok := self.getRun(w, req); !ok {
 		return
-	} else if err := self.RunService.Cancel(&run); err != nil {
+	} else if run == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	} else if err := self.RunService.Cancel(run); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", run.NomadJobID))
 		return
 	}
@@ -966,13 +1084,12 @@ func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
-	run, err := self.getRun(req)
-	if err != nil {
-		if pgxscan.NotFound(err) {
-			self.NotFound(w, err)
-		} else {
-			self.ClientError(w, err) //TODO: review 5XX error in openAPi documentation
-		}
+	run, ok := self.getRun(w, req)
+	if !ok {
+		return
+	}
+	if run == nil {
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
@@ -1006,7 +1123,7 @@ func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 
 // XXX respond with map[string]Action instead of []Action?
 func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
-	var actions []*domain.Action
+	var actions []domain.Action
 	var err error
 
 	if _, active := req.URL.Query()["active"]; active {
@@ -1034,19 +1151,6 @@ func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Reques
 	}
 }
 
-func (self *Web) ApiActionCurrentNameDefinitionGet(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	if name, err := url.PathUnescape(vars["name"]); err != nil {
-		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
-	} else if action, err := self.ActionService.GetLatestByName(name); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Failed to get action"))
-	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
-	} else {
-		self.json(w, actionDef, http.StatusOK)
-	}
-}
-
 func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
@@ -1070,7 +1174,7 @@ func (self *Web) ApiActionIdPatch(w http.ResponseWriter, req *http.Request) {
 			action.Active = active
 		}
 
-		if err := self.ActionService.Update(&action); err != nil {
+		if err := self.ActionService.Update(action); err != nil {
 			self.ServerError(w, err)
 			return
 		}
@@ -1079,35 +1183,18 @@ func (self *Web) ApiActionIdPatch(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (self *Web) ApiActionIdDefinitionGet(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else if action, err := self.ActionService.GetById(id); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
-	} else if actionDef, err := self.EvaluationService.EvaluateAction(action.Source, action.Name, action.ID); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to evaluate action"))
+	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
+	} else if run == nil {
+		w.WriteHeader(http.StatusNotFound)
+	} else if log, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt); err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
-		self.json(w, actionDef, http.StatusOK)
-	}
-}
-
-func (self *Web) ApiRunIdLogsGet(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	if id, err := uuid.Parse(vars["id"]); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
-	} else {
-		run, err := self.RunService.GetByNomadJobId(id)
-		if err != nil {
-			self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
-			return
-		}
-
-		if logs, err := self.RunService.JobLogs(id, run.CreatedAt, run.FinishedAt); err != nil {
-			self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
-		} else {
-			self.json(w, map[string]domain.LokiLog{"logs": logs}, http.StatusOK)
-		}
+		self.json(w, log, http.StatusOK)
 	}
 }
 
@@ -1120,6 +1207,222 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 	} else {
 		self.json(w, fact, http.StatusOK)
 	}
+}
+
+func (self *Web) ApiFactMatchLatestPost(w http.ResponseWriter, req *http.Request) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	match := util.CUEString(body).Value(nil, nil)
+	if matchErr := match.Err(); matchErr != nil {
+		self.ClientError(w, errors.WithMessage(matchErr, "Failed to parse match CUE"))
+		return
+	}
+
+	fact, err := self.FactService.GetLatestByCue(match)
+	if err != nil {
+		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
+		return
+	}
+
+	self.json(w, fact, http.StatusOK)
+}
+
+type apiActionMatchResponse struct {
+	Runnable bool                                   `json:"runnable"`
+	Inputs   map[string]apiActionMatchResponseInput `json:"inputs"`
+}
+
+type apiActionMatchResponseInput struct {
+	SatisfiedByFact *string
+
+	MatchWithDeps *cue.Value
+	Matched       *apiActionIoMatchResponseInputMatched
+
+	MatchedAgainstFact map[string]apiActionIoMatchResponseInputMatched
+}
+
+func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
+	result := struct {
+		SatisfiedByFact    *string                                         `json:"satisfiedByFact"`
+		MatchWithDeps      *string                                         `json:"matchWithDeps"`
+		MatchedAgainstFact map[string]apiActionIoMatchResponseInputMatched `json:"matchedAgainstFact"`
+		Matched            *apiActionIoMatchResponseInputMatched           `json:"matched"`
+	}{
+		SatisfiedByFact:    self.SatisfiedByFact,
+		Matched:            self.Matched,
+		MatchedAgainstFact: self.MatchedAgainstFact,
+	}
+
+	if self.MatchWithDeps != nil {
+		matchWithDeps := util.CUEString("")
+		if err := matchWithDeps.FromValue(self.MatchWithDeps.Eval(), cueformat.Simplify()); err != nil {
+			return nil, err
+		}
+		matchWithDepsOnHeap := string(matchWithDeps)
+		result.MatchWithDeps = &matchWithDepsOnHeap
+	}
+
+	return json.Marshal(result)
+}
+
+type apiActionIoMatchResponseInputMatched struct {
+	MatchErr error
+	Unified  cue.Value
+}
+
+func (self apiActionIoMatchResponseInputMatched) MarshalJSON() ([]byte, error) {
+	unified := util.CUEString("")
+	if err := unified.FromValue(self.Unified.Eval(), cueformat.Simplify()); err != nil {
+		return nil, err
+	}
+
+	result := struct {
+		MatchErr *string        `json:"matchError"`
+		Unified  util.CUEString `json:"unified"`
+	}{Unified: unified}
+
+	if self.MatchErr != nil {
+		matchErr := self.MatchErr.Error()
+		result.MatchErr = &matchErr
+	}
+
+	return json.Marshal(result)
+}
+
+func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
+	if err := req.ParseMultipartForm(1024 * 1024); err != nil { // 1 MiB
+		self.ClientError(w, err)
+		return
+	}
+
+	io := domain.TrustedInOutCUEString(req.PostFormValue("io"))
+	if err := io.Validate(); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to validate io"))
+		return
+	}
+
+	formFacts := map[string]domain.Fact{}
+	for formName := range req.PostForm {
+		const factFormPrefix = "fact:"
+		if !strings.HasPrefix(formName, factFormPrefix) {
+			continue
+		}
+
+		fact := domain.Fact{}
+		if err := json.Unmarshal([]byte(req.PostFormValue(formName)), &fact.Value); err != nil {
+			self.ClientError(w, err)
+			return
+		}
+
+		formFacts[strings.TrimPrefix(formName, factFormPrefix)] = fact
+	}
+
+	action := domain.Action{
+		ID:               uuid.New(),
+		Name:             "(none)",
+		Source:           "(none)",
+		ActionDefinition: domain.ActionDefinition{InOut: io},
+	}
+
+	response := apiActionMatchResponse{
+		Inputs: map[string]apiActionMatchResponseInput{},
+	}
+
+	// Match every fact against every input in isolation.
+	for inputName, input := range action.InOut.Inputs(nil) {
+		for factName, fact := range formFacts {
+			unified, matchErr, err := self.FactService.Match(&fact, input.Match)
+			if err != nil {
+				self.ServerError(w, err)
+				return
+			}
+
+			responseInput := response.Inputs[inputName]
+			if responseInput.MatchedAgainstFact == nil {
+				responseInput.MatchedAgainstFact = map[string]apiActionIoMatchResponseInputMatched{}
+			}
+			responseInput.MatchedAgainstFact[factName] = apiActionIoMatchResponseInputMatched{
+				MatchErr: matchErr,
+				Unified:  unified,
+			}
+			response.Inputs[inputName] = responseInput
+		}
+	}
+
+	okErr := errors.New("ok")
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if _, err := tx.Exec(context.Background(), `TRUNCATE action, fact CASCADE`); err != nil {
+			return err
+		}
+
+		actionService := self.ActionService.WithQuerier(tx)
+		factService := self.FactService.WithQuerier(tx)
+
+		// Create action.
+		if err := actionService.Save(&action); err != nil {
+			return err
+		}
+
+		// Mark action inactive to avoid triggering an invocation upon fact creation.
+		action.Active = false
+		if err := actionService.Update(&action); err != nil {
+			return err
+		}
+
+		// Create all facts.
+		factIdToName := map[uuid.UUID]string{}
+		for name, fact := range formFacts {
+			if err := factService.Save(&fact, nil); err != nil {
+				return err
+			}
+			factIdToName[fact.ID] = name
+		}
+
+		if inputs, matchWithDeps, runnable, err := actionService.GetSatisfiedInputs(&action); err != nil {
+			return err
+		} else {
+			response.Runnable = runnable
+
+			for input, fact := range inputs {
+				responseInput := response.Inputs[input]
+
+				{
+					factNameOnHeap := factIdToName[fact.ID]
+					responseInput.SatisfiedByFact = &factNameOnHeap
+				}
+
+				{
+					matchWithDepsOnHeap := matchWithDeps[input]
+					responseInput.MatchWithDeps = &matchWithDepsOnHeap
+				}
+
+				if unified, matchErr, err := factService.Match(&fact, matchWithDeps[input]); err != nil {
+					return err
+				} else {
+					responseInput.Matched = &apiActionIoMatchResponseInputMatched{
+						MatchErr: matchErr,
+						Unified:  unified,
+					}
+				}
+
+				response.Inputs[input] = responseInput
+			}
+		}
+
+		// IMPORTANT
+		// Return an error to roll back the transaction.
+		// We do not actually want to truncate any tables!
+		return okErr
+	}); !errors.Is(err, okErr) {
+		self.ServerError(w, err)
+		return
+	}
+
+	self.json(w, response, http.StatusOK)
 }
 
 func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
@@ -1147,9 +1450,6 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 	} else if fact, err := self.FactService.GetByRunId(id); err != nil {
 		self.ServerError(w, err)
 	} else {
-		if fact == nil {
-			fact = []*domain.Fact{}
-		}
 		self.json(w, fact, http.StatusOK)
 	}
 }
@@ -1219,6 +1519,10 @@ type HandlerError struct {
 	StatusCode int
 }
 
+func (self HandlerError) HasError() bool {
+	return self.error != nil
+}
+
 func (self *Web) ServerError(w http.ResponseWriter, err error) {
 	self.Error(w, HandlerError{err, http.StatusInternalServerError})
 }
@@ -1237,16 +1541,25 @@ func (self *Web) BadRequest(w http.ResponseWriter, err error) {
 
 func (self *Web) Error(w http.ResponseWriter, err error) {
 	status := 500
-	if _, ok := err.(HandlerError); ok {
+	e := self.Logger.Error()
+
+	if handlerErr, ok := err.(HandlerError); ok {
 		status = err.(HandlerError).StatusCode
+		if handlerErr.HasError() {
+			e = e.Err(err)
+		} else {
+			err = nil
+		}
 	}
 
-	self.Logger.
-		Err(err).
-		Int("status", status).
-		Msg("Handler error")
+	e.Int("status", status).Msg("Handler error")
 
-	http.Error(w, err.Error(), status)
+	var msg string
+	if err != nil {
+		msg = err.Error()
+	}
+
+	http.Error(w, msg, status)
 }
 
 func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {

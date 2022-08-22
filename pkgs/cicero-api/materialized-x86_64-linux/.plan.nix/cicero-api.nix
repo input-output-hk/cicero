@@ -48,6 +48,7 @@
           "IOHK/Cicero/API"
           "IOHK/Cicero/API/Action"
           "IOHK/Cicero/API/Fact"
+          "IOHK/Cicero/API/Invocation"
           "IOHK/Cicero/API/Run"
           ];
         hsSourceDirs = [ "src" ];
@@ -65,11 +66,13 @@
             (hsPkgs."aeson" or (errorHandler.buildDepError "aeson"))
             (hsPkgs."http-client" or (errorHandler.buildDepError "http-client"))
             (hsPkgs."uuid" or (errorHandler.buildDepError "uuid"))
+            (hsPkgs."haskeline" or (errorHandler.buildDepError "haskeline"))
+            (hsPkgs."servant" or (errorHandler.buildDepError "servant"))
             (hsPkgs."unix" or (errorHandler.buildDepError "unix"))
             (hsPkgs."cicero-api" or (errorHandler.buildDepError "cicero-api"))
             ];
           buildable = true;
-          modules = [ "Fact" "Action" "Run" ];
+          modules = [ "Action" "Fact" "Invocation" "Run" ];
           hsSourceDirs = [ "cli" ];
           mainPath = [ "Main.hs" ];
           };

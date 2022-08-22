@@ -1,9 +1,6 @@
 package service
 
 import (
-	"encoding/json"
-	"sync"
-
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/pkg/errors"
@@ -20,34 +17,32 @@ type NomadEventService interface {
 
 	Save(*domain.NomadEvent) error
 	Update(*domain.NomadEvent) error
-	GetByHandled(bool) ([]*domain.NomadEvent, error)
+	GetByHandled(bool) ([]domain.NomadEvent, error)
 	GetLastNomadEventIndex() (uint64, error)
-	GetEventAllocByNomadJobId(id uuid.UUID) (map[string]domain.AllocationWithLogs, error)
+	GetEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
+	GetLatestEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
 }
 
 type nomadEventService struct {
 	logger               zerolog.Logger
 	nomadEventRepository repository.NomadEventRepository
-	runService           RunService
 }
 
-func NewNomadEventService(db config.PgxIface, runService RunService, logger *zerolog.Logger) NomadEventService {
+func NewNomadEventService(db config.PgxIface, logger *zerolog.Logger) NomadEventService {
 	return &nomadEventService{
 		logger:               logger.With().Str("component", "NomadEventService").Logger(),
 		nomadEventRepository: persistence.NewNomadEventRepository(db),
-		runService:           runService,
 	}
 }
 
-func (n *nomadEventService) WithQuerier(querier config.PgxIface) NomadEventService {
+func (n nomadEventService) WithQuerier(querier config.PgxIface) NomadEventService {
 	return &nomadEventService{
 		logger:               n.logger,
 		nomadEventRepository: n.nomadEventRepository.WithQuerier(querier),
-		runService:           n.runService.WithQuerier(querier),
 	}
 }
 
-func (n *nomadEventService) Save(event *domain.NomadEvent) (err error) {
+func (n nomadEventService) Save(event *domain.NomadEvent) (err error) {
 	n.logger.Trace().Bytes("uid", event.Uid[:]).Uint64("index", event.Index).Msg("Saving nomad event")
 	if err = n.nomadEventRepository.Save(event); err != nil {
 		err = errors.WithMessagef(err, "Could not save nomad event")
@@ -57,7 +52,7 @@ func (n *nomadEventService) Save(event *domain.NomadEvent) (err error) {
 	return
 }
 
-func (n *nomadEventService) Update(event *domain.NomadEvent) (err error) {
+func (n nomadEventService) Update(event *domain.NomadEvent) (err error) {
 	n.logger.Trace().Bytes("uid", event.Uid[:]).Bool("handled", event.Handled).Msg("Updating nomad event")
 	if err = n.nomadEventRepository.Update(event); err != nil {
 		err = errors.WithMessagef(err, "Could not update nomad event")
@@ -67,7 +62,7 @@ func (n *nomadEventService) Update(event *domain.NomadEvent) (err error) {
 	return
 }
 
-func (n *nomadEventService) GetByHandled(handled bool) (events []*domain.NomadEvent, err error) {
+func (n nomadEventService) GetByHandled(handled bool) (events []domain.NomadEvent, err error) {
 	n.logger.Trace().Bool("handled", handled).Msg("Get nomad events by handled flag")
 	if events, err = n.nomadEventRepository.GetByHandled(handled); err != nil {
 		err = errors.WithMessagef(err, "Could not get nomad events by handled flag %t", handled)
@@ -77,73 +72,27 @@ func (n *nomadEventService) GetByHandled(handled bool) (events []*domain.NomadEv
 	return
 }
 
-func (n *nomadEventService) GetLastNomadEventIndex() (uint64, error) {
+func (n nomadEventService) GetLastNomadEventIndex() (uint64, error) {
 	n.logger.Trace().Msg("Get last nomad event index")
 	return n.nomadEventRepository.GetLastNomadEventIndex()
 }
 
-func (n *nomadEventService) GetEventAllocByNomadJobId(nomadJobId uuid.UUID) (map[string]domain.AllocationWithLogs, error) {
-	n.logger.Trace().Str("nomad-job-id", nomadJobId.String()).Msg("Getting EventAlloc by nomad job id")
-
-	allocs := map[string]domain.AllocationWithLogs{}
-	results, err := n.nomadEventRepository.GetEventAllocByNomadJobId(nomadJobId)
+func (n nomadEventService) GetEventAllocationByJobId(jobId uuid.UUID) (results []nomad.Allocation, err error) {
+	n.logger.Trace().Stringer("job-id", jobId).Msg("Get AllocationUpdated event's Allocation by job ID")
+	results, err = n.nomadEventRepository.GetEventAllocationByJobId(jobId)
 	if err != nil {
-		return nil, err
+		return
 	}
+	n.logger.Trace().Stringer("job-id", jobId).Msg("Got AllocationUpdated event's Allocation by job ID")
+	return
+}
 
-	run, err := n.runService.GetByNomadJobId(nomadJobId)
+func (n nomadEventService) GetLatestEventAllocationByJobId(jobId uuid.UUID) (results []nomad.Allocation, err error) {
+	n.logger.Trace().Stringer("job-id", jobId).Msg("Get latest AllocationUpdated event's Allocation by job ID")
+	results, err = n.nomadEventRepository.GetLatestEventAllocationByJobId(jobId)
 	if err != nil {
-		return nil, err
+		return
 	}
-
-	wg := &sync.WaitGroup{}
-	res := make(chan domain.AllocationWithLogs, len(results))
-
-	for _, result := range results {
-		wg.Add(1)
-		go func(result map[string]interface{}) {
-			defer wg.Done()
-			alloc := &nomad.Allocation{}
-			err = json.Unmarshal([]byte(result["alloc"].(string)), alloc)
-			if err != nil {
-				res <- domain.AllocationWithLogs{Err: err}
-				return
-			}
-
-			logs := map[string]domain.LokiLog{}
-
-			for taskName := range alloc.TaskResources {
-				taskLogs, err := n.runService.RunLogs(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
-				if err != nil {
-					res <- domain.AllocationWithLogs{Err: err}
-					return
-				}
-				logs[taskName] = taskLogs
-			}
-
-			res <- domain.AllocationWithLogs{Allocation: alloc, Logs: logs}
-		}(result)
-	}
-
-	wg.Wait()
-
-	for i := 0; i < len(results); i++ {
-		select {
-		case result := <-res:
-			if result.Err != nil {
-				return nil, err
-			}
-			if a, found := allocs[result.ID]; found {
-				if a.ModifyIndex < result.ModifyIndex {
-					allocs[result.ID] = result
-				}
-			} else {
-				allocs[result.ID] = result
-			}
-		default:
-		}
-	}
-
-	n.logger.Trace().Str("nomad-job-id", nomadJobId.String()).Msg("Got EventAlloc by nomad job id")
-	return allocs, nil
+	n.logger.Trace().Stringer("job-id", jobId).Msg("Got latest AllocationUpdated event's Allocation by job ID")
+	return
 }

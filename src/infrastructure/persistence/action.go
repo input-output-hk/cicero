@@ -2,14 +2,15 @@ package persistence
 
 import (
 	"context"
-	"encoding/json"
 
+	cueformat "cuelang.org/go/cue/format"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type actionRepository struct {
@@ -17,27 +18,28 @@ type actionRepository struct {
 }
 
 func NewActionRepository(db config.PgxIface) repository.ActionRepository {
-	return &actionRepository{DB: db}
+	return &actionRepository{db}
 }
 
 func (a *actionRepository) WithQuerier(querier config.PgxIface) repository.ActionRepository {
-	return &actionRepository{
-		DB: querier,
-	}
+	return &actionRepository{querier}
 }
 
-func (a *actionRepository) GetById(id uuid.UUID) (action domain.Action, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &action,
+func (a *actionRepository) GetById(id uuid.UUID) (*domain.Action, error) {
+	action, err := get(
+		a.DB, &domain.Action{},
 		`SELECT * FROM action WHERE id = $1`,
 		id,
 	)
-	return
+	if action == nil {
+		return nil, err
+	}
+	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetByInvocationId(id uuid.UUID) (action domain.Action, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &action,
+func (a *actionRepository) GetByInvocationId(id uuid.UUID) (*domain.Action, error) {
+	action, err := get(
+		a.DB, &domain.Action{},
 		`SELECT * FROM action WHERE EXISTS (
 			SELECT NULL
 			FROM invocation
@@ -47,12 +49,15 @@ func (a *actionRepository) GetByInvocationId(id uuid.UUID) (action domain.Action
 		)`,
 		id,
 	)
-	return
+	if action == nil {
+		return nil, err
+	}
+	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &action,
+func (a *actionRepository) GetByRunId(id uuid.UUID) (*domain.Action, error) {
+	action, err := get(
+		a.DB, &domain.Action{},
 		`SELECT * FROM action WHERE EXISTS (
 			SELECT NULL
 			FROM run
@@ -63,11 +68,14 @@ func (a *actionRepository) GetByRunId(id uuid.UUID) (action domain.Action, err e
 		)`,
 		id,
 	)
-	return
+	if action == nil {
+		return nil, err
+	}
+	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetByName(name string, page *repository.Page) ([]*domain.Action, error) {
-	actions := make([]*domain.Action, page.Limit)
+func (a *actionRepository) GetByName(name string, page *repository.Page) ([]domain.Action, error) {
+	actions := make([]domain.Action, page.Limit)
 	return actions, fetchPage(
 		a.DB, page, &actions,
 		`*`, `action WHERE name = $1`, `created_at DESC`,
@@ -75,16 +83,20 @@ func (a *actionRepository) GetByName(name string, page *repository.Page) ([]*dom
 	)
 }
 
-func (a *actionRepository) GetLatestByName(name string) (action domain.Action, err error) {
-	err = pgxscan.Get(
-		context.Background(), a.DB, &action,
+func (a *actionRepository) GetLatestByName(name string) (*domain.Action, error) {
+	action, err := get(
+		a.DB, &domain.Action{},
 		`SELECT DISTINCT ON (name) * FROM action WHERE name = $1 ORDER BY name, created_at DESC`,
 		name,
 	)
-	return
+	if action == nil {
+		return nil, err
+	}
+	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {
+func (a *actionRepository) GetAll() (actions []domain.Action, err error) {
+	actions = []domain.Action{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT * FROM action ORDER BY created_at DESC`,
@@ -93,19 +105,19 @@ func (a *actionRepository) GetAll() (actions []*domain.Action, err error) {
 }
 
 func (a *actionRepository) Save(action *domain.Action) error {
-	if inputs, err := json.Marshal(action.Inputs); err != nil {
+	var sql string
+	if action.ID == (uuid.UUID{}) {
+		sql = `INSERT INTO action (    name, source, io) VALUES (    $2, $3, $4) RETURNING id, created_at`
+	} else {
+		sql = `INSERT INTO action (id, name, source, io) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
+	}
+	if inOutStr, err := util.CUEString(action.InOut).Format(cueformat.Simplify(), cueformat.UseSpaces(0)); err != nil {
 		return err
 	} else {
-		var sql string
-		if action.ID == (uuid.UUID{}) {
-			sql = `INSERT INTO action (    name, source, inputs) VALUES (    $2, $3, $4) RETURNING id, created_at`
-		} else {
-			sql = `INSERT INTO action (id, name, source, inputs) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
-		}
 		return a.DB.QueryRow(
 			context.Background(),
 			sql,
-			action.ID, action.Name, action.Source, inputs,
+			action.ID, action.Name, action.Source, inOutStr,
 		).Scan(&action.ID, &action.CreatedAt)
 	}
 }
@@ -119,7 +131,8 @@ func (a *actionRepository) Update(action *domain.Action) (err error) {
 	return
 }
 
-func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
+func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
+	actions = []domain.Action{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT DISTINCT ON (name) * FROM action ORDER BY name, created_at DESC`,
@@ -127,7 +140,8 @@ func (a *actionRepository) GetCurrent() (actions []*domain.Action, err error) {
 	return
 }
 
-func (a *actionRepository) GetCurrentActive() (actions []*domain.Action, err error) {
+func (a *actionRepository) GetCurrentActive() (actions []domain.Action, err error) {
+	actions = []domain.Action{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
 		`SELECT DISTINCT ON (name) * FROM action WHERE active ORDER BY name, created_at DESC`,
