@@ -38,3 +38,4 @@ The [Cicero Readme](https://github.com/input-output-hk/cicero) provides more det
   - [Evaluation and Execution of Cicero Actions](./evaluation-and-execution-of-actions.md)
   - [Debugging Evaluations with cicero-evaluator-nix ](./cicero-evaluator-nix.md)
   - [Facts explained](./facts-explained.md)
+- [Tullia](./tullia.md)
