@@ -446,7 +446,7 @@ func setJobDefaults(job *nomad.Job) {
 	}
 
 	for _, group := range job.TaskGroups {
-		if group.RestartPolicy.Attempts == nil {
+		if *job.Type == nomad.JobTypeBatch && group.RestartPolicy.Attempts == nil {
 			attempts := 0
 			group.RestartPolicy.Attempts = &attempts
 		}
