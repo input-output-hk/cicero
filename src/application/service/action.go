@@ -484,7 +484,9 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 	return invocation, func(db config.PgxIface) (*domain.Run, InvokeRegisterFunc, error) {
 		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, invocation.Id, inputs)
 		if err != nil {
-			if err := (*self.invocationService).WithQuerier(db).End(invocation.Id); err != nil {
+			// XXX Nil pointer when directly calling `(*self.invocationService).WithQuerier(db)` here. Maybe a bug?
+			txSelf := self.WithQuerier(db).(*actionService)
+			if err := (*txSelf.invocationService).End(invocation.Id); err != nil {
 				return nil, nil, err
 			}
 
