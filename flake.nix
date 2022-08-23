@@ -41,16 +41,10 @@
     haskell-nix = {
       url = "github:input-output-hk/haskell.nix";
     };
-    nix2container = {
-      url = "github:nlewo/nix2container";
-      inputs.flake-utils.follows = "utils";
-    };
+    nix2container.follows = "tullia/nix2container";
     tullia = {
       url = "github:input-output-hk/tullia";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        nix2container.follows = "nix2container";
-      };
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
