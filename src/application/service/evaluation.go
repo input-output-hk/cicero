@@ -327,18 +327,16 @@ func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domai
 }
 
 func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]domain.Fact) (*nomad.Job, error) {
-	var def *nomad.Job
-
 	dst, evaluator, err := e.fetchSource(src)
 	if err != nil {
 		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
-		return def, err
+		return nil, err
 	}
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
 		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
-		return def, errors.WithMessagef(err, "Could not marshal inputs to JSON: %v", inputs)
+		return nil, errors.WithMessagef(err, "Could not marshal inputs to JSON: %v", inputs)
 	}
 
 	extraEnv := []string{
@@ -349,46 +347,93 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 
 	output, stderr, err := e.evaluate(dst, evaluator, []string{"eval", "job"}, extraEnv, &invocationId)
 	if err != nil {
-		return def, err
+		return nil, err
 	}
 
-	output, err = e.transform(output, dst, extraEnv, invocationId)
-	if err != nil {
-		return def, err
+	// We support both HCL-JSON (HCL jobspec in JSON equivalent notation)
+	// and Nomad's API JSON Job specification.
+	// So at this point we don't know which one we get.
+	type FreeformDef struct {
+		Job *any `json:"job"`
+		// We are not interested in other fields of the run definition.
 	}
-
-	freeformDef := struct {
-		Job *interface{} `json:"job"`
-	}{}
+	freeformDef := FreeformDef{}
 
 	err = json.Unmarshal(output, &freeformDef)
 	if err != nil {
-		err = errors.WithMessage(err, "While unmarshaling transformer output into freeform definition")
-		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
-		return def, errors.WithMessagef(err, "\nOutput: %s\nStderr: %s", string(output), string(stderr))
+		err = errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
+		return nil, errors.WithMessagef(err, "\nOutput: %s\nStderr: %s", string(output), string(stderr))
 	}
 
-	if freeformDef.Job != nil {
-		job, err := json.Marshal(*freeformDef.Job)
-		if err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
-			return def, err
-		}
+	if freeformDef.Job == nil {
+		return nil, nil
+	}
+
+	// Canonicalize the definition. That is, make sure the job is in API-JSON.
+	if job, err := e.unmarshalJob(*freeformDef.Job, invocationId); err != nil {
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
+		return nil, err
+	} else {
+		var jobIface any = *job
+		freeformDef.Job = &jobIface
+	}
+
+	// Marshal back to JSON to pass through transformers.
+	canonicalizedDefJson, err := json.Marshal(freeformDef)
+	if err != nil {
+		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+		return nil, err
+	}
+
+	if output, err = e.transform(canonicalizedDefJson, dst, extraEnv, invocationId); err != nil {
+		return nil, err
+	}
+
+	type Def struct {
+		Job nomad.Job `json:"job"`
+		// We are not interested in other fields of the run definition.
+	}
+	def := Def{}
+
+	if err := json.Unmarshal(output, &def); err != nil {
+		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+		return nil, err
+	}
+
+	setJobDefaults(&def.Job)
+
+	return &def.Job, nil
+}
+
+// Takes either an API-JSON or HCL-JSON job.
+func (e evaluationService) unmarshalJob(freeformJob any, invocationId uuid.UUID) (*nomad.Job, error) {
+	// Marshal back to JSON so we can try both formats.
+	freeformJobJson, err := json.Marshal(freeformJob)
+	if err != nil {
+		return nil, err
+	}
+
+	def := &nomad.Job{}
+
+	// Try parsing as API-JSON.
+	err = json.Unmarshal(freeformJobJson, def)
+
+	// If that didn't work try parsing as HCL-JSON.
+	if err != nil {
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
 
 		// escape HCL variable interpolation
-		job = bytes.ReplaceAll(job, []byte("${"), []byte("$${"))
+		hclJsonJob := bytes.ReplaceAll(freeformJobJson, []byte("${"), []byte("$${"))
 
 		def, err = jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
-			Body:    []byte(`{"job":` + string(job) + "}"),
+			Body:    []byte(`{"job":` + string(hclJsonJob) + "}"),
 			AllowFS: false,
 			Strict:  true,
 		})
 		if err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 			return def, err
 		}
-
-		setJobDefaults(def)
 	}
 
 	return def, nil
