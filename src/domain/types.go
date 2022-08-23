@@ -93,7 +93,7 @@ func (self InOutCUEString) Inputs(inputs map[string]Fact) (InputDefinitions, err
 		return nil, err
 	} else {
 		for fields.Next() {
-			if def, err := self.Input(fields.Label(), nil); err != nil {
+			if def, err := self.Input(fields.Label(), inputs); err != nil {
 				return nil, err
 			} else if def != nil {
 				defs[fields.Label()] = *def
