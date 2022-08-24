@@ -1411,6 +1411,13 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 			factIdToName[fact.ID] = name
 		}
 
+		// Fetch action from DB to make sure serialization works.
+		if dbAction, err := actionService.GetById(action.ID); err != nil {
+			return err
+		} else {
+			action = *dbAction
+		}
+
 		if satisfied, runnable, err := actionService.GetSatisfiedInputs(&action); err != nil {
 			return err
 		} else {
