@@ -3,14 +3,12 @@ package persistence
 import (
 	"context"
 
-	cueformat "cuelang.org/go/cue/format"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
-	"github.com/input-output-hk/cicero/src/util"
 )
 
 type actionRepository struct {
@@ -111,15 +109,11 @@ func (a *actionRepository) Save(action *domain.Action) error {
 	} else {
 		sql = `INSERT INTO action (id, name, source, io) VALUES ($1, $2, $3, $4) RETURNING id, created_at`
 	}
-	if inOutStr, err := util.CUEString(action.InOut).Format(cueformat.Simplify(), cueformat.UseSpaces(0)); err != nil {
-		return err
-	} else {
-		return a.DB.QueryRow(
-			context.Background(),
-			sql,
-			action.ID, action.Name, action.Source, inOutStr,
-		).Scan(&action.ID, &action.CreatedAt)
-	}
+	return a.DB.QueryRow(
+		context.Background(),
+		sql,
+		action.ID, action.Name, action.Source, action.InOut,
+	).Scan(&action.ID, &action.CreatedAt)
 }
 
 func (a *actionRepository) Update(action *domain.Action) (err error) {
