@@ -114,12 +114,12 @@
                       del(.Namespace) |
                       .Datacenters = $args.datacenters |
                       .TaskGroups[]?.Tasks[]? |= (
-                        .Env |= . + {
+                        .Env += {
                           CICERO_WEB_URL: $args.ciceroWebUrl,
                           CICERO_API_URL: $args.ciceroWebUrl,
                           NIX_CONFIG: ($args.nixConfig + .NIX_CONFIG),
                         } |
-                        .Templates |= . + [{
+                        .Templates += [{
                           DestPath: "local/post-build-hook",
                           Perms: "544",
                           EmbeddedTmpl: $args.postBuildHook,
@@ -127,7 +127,7 @@
                       ) |
                       if .Type != "batch" then . else (
                         .TaskGroups[]?.Tasks[]? |= (
-                          .Vault.Policies |= . + ["cicero"] |
+                          .Vault.Policies += ["cicero"] |
                           if .Driver != "nix" or .Config?.nixos then . else
                             .Config.packages |=
                               # only add bash if needed to avoid conflicts in profile
