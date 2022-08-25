@@ -138,6 +138,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		e.logger.Debug().
 			Stringer("command", cmd).
 			Strs("environment", extraEnv).
+			Str("directory", src).
 			Msg("Running evaluator")
 
 		stdout, err := cmd.StdoutPipe()
