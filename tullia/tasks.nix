@@ -47,7 +47,12 @@ in {
     config = {
       after = ["lint"];
 
-      command.text = "nix build -L ${flakeUrl args}";
+      command.text = ''
+        # Avoid test failures with nixbld user writes to /tmp
+        chmod 1777 /tmp
+
+        nix build -L ${flakeUrl args}
+      '';
 
       env.NIX_CONFIG = ''
         extra-system-features = kvm
