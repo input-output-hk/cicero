@@ -125,7 +125,7 @@
                           EmbeddedTmpl: $args.postBuildHook,
                         }]
                       ) |
-                      if .Type != "batch" then . else (
+                      if .Type != null and .Type != "batch" then . else (
                         .TaskGroups[]?.Tasks[]? |= (
                           .Vault.Policies += ["cicero"] |
                           if .Driver != "nix" or .Config?.nixos then . else
