@@ -4,7 +4,7 @@ if [[ -n "${CICERO_EVALUATOR_NIX_VERBOSE:-}" ]]; then
 	set -x
 fi
 
-export NIX_CONFIG="${NIX_CONFIG:-}\nextra-experimental-features = nix-command flakes"
+export NIX_CONFIG="${NIX_CONFIG:-}"$'\n'"extra-experimental-features = nix-command flakes"
 
 function usage {
 	{
