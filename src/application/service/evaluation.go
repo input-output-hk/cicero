@@ -201,11 +201,22 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 			}
 		}
 
-		err = cmd.Wait()
+		// fill stderrBuf
 		if lokiWg != nil {
-			// fill stderrBuf
 			lokiWg.Wait()
+		} else {
+			for {
+				if _, err := stderr.Read(make([]byte, 512)); err != nil {
+					if err == io.EOF {
+						break
+					}
+					return nil, nil, errors.WithMessage(err, "While reading stderr")
+				}
+			}
 		}
+
+		err = cmd.Wait()
+
 		if err != nil {
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
