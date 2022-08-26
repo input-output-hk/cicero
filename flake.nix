@@ -8,8 +8,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     inclusive.url = "github:input-output-hk/nix-inclusive";
-    nixpkgs.url = "github:NixOS/nixpkgs/release-22.05";
-    nix.url = "github:NixOS/nix/2.8-maintenance";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.05";
     alejandra = {
       url = "github:kamadorueda/alejandra";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -59,7 +58,6 @@
     poetry2nix,
     spongix,
     haskell-nix,
-    nix,
     alejandra,
     nix2container,
     tullia,
@@ -75,7 +73,6 @@
           poetry2nix.overlay
           follower.overlay
           spongix.overlay
-          nix.overlay
           (final: prev: {
             nixos-shell = nixos-shell.defaultPackage.${prev.system};
             alejandra = alejandra.defaultPackage.${prev.system};

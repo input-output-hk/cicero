@@ -20,7 +20,6 @@
   nixpkgs.overlays = [
     self.inputs.spongix.overlay
     self.inputs.follower.overlay
-    self.inputs.nix.overlay
   ];
 
   nixos-shell.mounts = {
