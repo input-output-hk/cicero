@@ -2213,11 +2213,11 @@
         "std": "std"
       },
       "locked": {
-        "lastModified": 1661432472,
-        "narHash": "sha256-fLUIFr673WIeJSpNf9k1wY9xp8HmZL1RfBhs3pKpLCI=",
+        "lastModified": 1661530584,
+        "narHash": "sha256-6/I69khLp3xrYeDES8LVq0raWXkomhgxjA8r9f1EfC8=",
         "owner": "input-output-hk",
         "repo": "tullia",
-        "rev": "85bd4d7e0dacb5d89b67e638ef867e7605e39736",
+        "rev": "7db42148eadaa09686a46155216a475424d8c0a8",
         "type": "github"
       },
       "original": {
