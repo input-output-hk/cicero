@@ -54,7 +54,7 @@ in {
       '';
 
       memory = 1024 * 3;
-      nomad.resources.cpu = 3000;
+      nomad.resources.cpu = 3500;
     };
   };
 }
