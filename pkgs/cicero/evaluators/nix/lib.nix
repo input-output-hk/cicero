@@ -337,7 +337,7 @@ in rec {
                   };
 
                   config.packages = data-merge.append [
-                    "github:NixOS/nix/${self.inputs.nix.rev}#nix"
+                    "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#nix"
                     "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#shadow"
                     "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#cacert"
                     "github:NixOS/nixpkgs/${self.inputs.nixpkgs.rev}#gitMinimal"
