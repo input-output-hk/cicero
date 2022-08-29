@@ -8,18 +8,6 @@
 git clone https://github.com/input-output-hk/cicero.git
 ```
 
-### Fix for Local paths
-
-For local paths to work in Cicero it's necessary to add the following line to nixos/configs/vm.nix
-Afterwards the Qemu VM and Cicero need to be restarted.
-
-```
-   nix = {
-     package = pkgs.nix_2_5;
-	 ...
-   };
-```
-
 ### Provide github token with read:org, repo flags
 
 ```
