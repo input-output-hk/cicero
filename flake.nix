@@ -1,6 +1,11 @@
 {
   description = "Flake for the Cicero framework";
 
+  nixConfig = {
+    extra-substituters = "https://cache.iog.io";
+    extra-trusted-public-keys = ["hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="];
+  };
+
   inputs = {
     devshell.url = "github:numtide/devshell";
     nixos-shell = {
