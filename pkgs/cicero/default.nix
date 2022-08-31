@@ -68,6 +68,8 @@
 
           systemPackages = [pkgs.schemathesis];
         };
+
+        systemd.services.postgresql.serviceConfig.TimeoutStartSec = 300;
       };
       testScript = ''
         main.wait_for_unit("cicero")
