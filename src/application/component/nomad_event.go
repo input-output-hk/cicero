@@ -158,25 +158,17 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 		return errAlreadyHandled
 	}
 
-	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
-		txSelf := self.WithQuerier(tx)
+	if err := self.handleNomadEvent(ctx, &event.Event); err != nil {
+		// FIXME if we crash before unflagging the event will never be handled
+		// save a timestamp and consider it unflagged after a while?
 
-		if err := txSelf.handleNomadEvent(ctx, &event.Event); err != nil {
-			// FIXME if we crash before unflagging the event will never be handled
-			// save a timestamp and consider it unflagged after a while?
+		logger.Err(err).Msg("Error handling nomad event")
 
-			logger.Err(err).Msg("Error handling nomad event")
-
-			event.Handled = false
-			if err := txSelf.NomadEventService.Update(event); err != nil {
-				return err
-			}
-
-			return errors.WithMessage(err, "Error handling nomad event")
+		event.Handled = false
+		if err := self.NomadEventService.Update(event); err != nil {
+			return err
 		}
 
-		return nil
-	}); err != nil {
 		return errors.WithMessagef(err, "Error processing nomad event with index %d and uid %q", event.Index, event.Uid)
 	}
 
@@ -236,12 +228,31 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(ctx context.Context, 
 		return nil
 	}
 
-	run, err := self.getRun(logger, allocation.JobID)
-	if run == nil || err != nil {
+	var runFunc service.InvokeRunFunc
+
+	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
+
+		run, err := txSelf.getRun(logger, allocation.JobID)
+		if run == nil || err != nil {
+			return err
+		}
+
+		runFunc, err = txSelf.endRun(ctx, run, allocation.ModifyTime, domain.RunStatusFailed)
+		return err
+	}); err != nil {
 		return err
 	}
 
-	return self.endRun(ctx, run, allocation.ModifyTime, domain.RunStatusFailed)
+	if runFunc != nil {
+		if _, registerFunc, err := runFunc(self.Db); err != nil {
+			return err
+		} else if err := registerFunc(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *nomad.Event) error {
@@ -285,28 +296,47 @@ func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *
 		panic("should have been caught by switch above")
 	}
 
-	run, err := self.getRun(logger, *job.ID)
-	if run == nil || err != nil {
+	var runFunc service.InvokeRunFunc
+
+	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
+
+		run, err := txSelf.getRun(logger, *job.ID)
+		if run == nil || err != nil {
+			return err
+		}
+
+		allocs, _, err := txSelf.NomadClient.JobsAllocations(*job.ID, false, &nomad.QueryOptions{})
+		if err != nil {
+			return err
+		}
+
+		if len(allocs) == 0 {
+			panic("Found no allocations for this job")
+		}
+
+		modifyTime := allocs[0].ModifyTime
+		for _, alloc := range allocs[1:] {
+			if alloc.ModifyTime > modifyTime {
+				modifyTime = alloc.ModifyTime
+			}
+		}
+
+		runFunc, err = txSelf.endRun(ctx, run, modifyTime, domain.RunStatusSucceeded)
+		return err
+	}); err != nil {
 		return err
 	}
 
-	allocs, _, err := self.NomadClient.JobsAllocations(*job.ID, false, &nomad.QueryOptions{})
-	if err != nil {
-		return err
-	}
-
-	if len(allocs) == 0 {
-		panic("Found no allocations for this job")
-	}
-
-	modifyTime := allocs[0].ModifyTime
-	for _, alloc := range allocs[1:] {
-		if alloc.ModifyTime > modifyTime {
-			modifyTime = alloc.ModifyTime
+	if runFunc != nil {
+		if _, registerFunc, err := runFunc(self.Db); err != nil {
+			return err
+		} else if err := registerFunc(); err != nil {
+			return err
 		}
 	}
 
-	return self.endRun(ctx, run, modifyTime, domain.RunStatusSucceeded)
+	return nil
 }
 
 func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*domain.Run, error) {
@@ -333,7 +363,7 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 	return run, nil
 }
 
-func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) error {
+func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) (service.InvokeRunFunc, error) {
 	var runFunc service.InvokeRunFunc
 
 	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
@@ -382,16 +412,8 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 
 		return txSelf.RunService.End(run)
 	}); err != nil {
-		return err
+		return nil, err
 	}
 
-	if runFunc != nil {
-		if _, registerFunc, err := runFunc(self.Db); err != nil {
-			return err
-		} else if err := registerFunc(); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return runFunc, nil
 }
