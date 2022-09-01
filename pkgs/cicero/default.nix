@@ -69,6 +69,12 @@
           systemPackages = [pkgs.schemathesis];
         };
 
+        # The derivation implementing this accesses /var/log/{b,w}tmp at build time
+        # (should probably be fixed upstream).
+        # Without sandboxing, as is the case in an unprivileged container,
+        # this will fail due to file permissions not being open for the nix build user.
+        services.logrotate.checkConfig = false;
+
         systemd.services.postgresql.serviceConfig.TimeoutStartSec = 300;
       };
       testScript = ''
