@@ -1107,7 +1107,11 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 
 	fact.RunId = &run.NomadJobID
 
-	if err := self.FactService.Save(&fact, binary); err != nil {
+	if _, runFunc, err := self.FactService.Save(&fact, binary); err != nil {
+		self.ServerError(w, err)
+	} else if _, registerFunc, err := runFunc(self.Db); err != nil {
+		self.ServerError(w, err)
+	} else if err := registerFunc(); err != nil {
 		self.ServerError(w, err)
 	} else {
 		self.json(w, fact, http.StatusOK)
@@ -1405,7 +1409,9 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 		// Create all facts.
 		factIdToName := map[uuid.UUID]string{}
 		for name, fact := range formFacts {
-			if err := factService.Save(&fact, nil); err != nil {
+			// Just ignore the returned InvokeRunFunc because we know
+			// that there is only our action in the DB.
+			if _, _, err := factService.Save(&fact, nil); err != nil {
 				return err
 			}
 			factIdToName[fact.ID] = name
@@ -1506,7 +1512,11 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := self.FactService.Save(&fact, binary); err != nil {
+	if _, runFunc, err := self.FactService.Save(&fact, binary); err != nil {
+		self.ServerError(w, err)
+	} else if _, registerFunc, err := runFunc(self.Db); err != nil {
+		self.ServerError(w, err)
+	} else if err := registerFunc(); err != nil {
 		self.ServerError(w, err)
 	} else {
 		self.json(w, fact, http.StatusOK)

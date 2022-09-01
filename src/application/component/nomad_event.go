@@ -334,7 +334,9 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 }
 
 func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) error {
-	return self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+	var runFunc service.InvokeRunFunc
+
+	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
 		switch run.Status {
@@ -365,7 +367,7 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 				}
 
 				if fact.Value != nil {
-					if err := txSelf.FactService.Save(&fact, nil); err != nil {
+					if _, runFunc, err = txSelf.FactService.Save(&fact, nil); err != nil {
 						return err
 					}
 				}
@@ -379,5 +381,17 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 		run.FinishedAt = &modifyTime
 
 		return txSelf.RunService.End(run)
-	})
+	}); err != nil {
+		return err
+	}
+
+	if runFunc != nil {
+		if _, registerFunc, err := runFunc(self.Db); err != nil {
+			return err
+		} else if err := registerFunc(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

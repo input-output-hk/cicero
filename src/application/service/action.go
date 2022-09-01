@@ -39,10 +39,16 @@ type ActionService interface {
 	Create(string, string) (*domain.Action, error)
 	// Returns a nil pointer for the first return value if the Action was not runnable.
 	Invoke(*domain.Action) (*domain.Invocation, InvokeRunFunc, error)
-	InvokeCurrentActive() (func(config.PgxIface) (InvokeRegisterFunc, error), error)
+	InvokeCurrentActive() ([]domain.Invocation, InvokeRunFunc, error)
 }
 
-type InvokeRunFunc func(config.PgxIface) (*domain.Run, InvokeRegisterFunc, error)
+// Evaluates the run definition and ends the invocation.
+// might return multiple runs in case this was a decision action
+// (which success output is always immediately published),
+// that caused multiple actions to get invoked.
+type InvokeRunFunc func(config.PgxIface) ([]domain.Run, InvokeRegisterFunc, error)
+
+// Registers the nomad job.
 type InvokeRegisterFunc func() error
 
 type ActionServiceCyclicDependencies struct {
@@ -481,7 +487,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 		return nil, nil, nil
 	}
 
-	return invocation, func(db config.PgxIface) (*domain.Run, InvokeRegisterFunc, error) {
+	return invocation, func(db config.PgxIface) ([]domain.Run, InvokeRegisterFunc, error) {
 		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, invocation.Id, inputs)
 		if err != nil {
 			// XXX Nil pointer when directly calling `(*self.invocationService).WithQuerier(db)` here. Maybe a bug?
@@ -497,7 +503,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 			return nil, nil, err
 		}
 
-		var run *domain.Run
+		var runs []domain.Run
 		var registerFunc InvokeRegisterFunc
 
 		if err := db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
@@ -507,46 +513,46 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 				return err
 			}
 
-			tmpRun := domain.Run{
+			run := domain.Run{
 				InvocationId: invocation.Id,
 				Status:       domain.RunStatusRunning,
 			}
 
-			if err := txSelf.runService.Save(&tmpRun); err != nil {
+			if err := txSelf.runService.Save(&run); err != nil {
 				return errors.WithMessage(err, "Could not insert Run")
 			}
 
 			if job == nil { // An action that has no job is called a decision.
 				if success := action.InOut.Output(inputs).Success; success.Exists() {
 					fact := domain.Fact{
-						RunId: &tmpRun.NomadJobID,
+						RunId: &run.NomadJobID,
 						Value: success,
 					}
-					if err := (*txSelf.factService).Save(&fact, nil); err != nil {
+					if _, runFunc, err := (*txSelf.factService).Save(&fact, nil); err != nil {
 						return errors.WithMessage(err, "Could not publish fact")
-					}
-					if runFunc, err := txSelf.InvokeCurrentActive(); err != nil {
+					} else if decisionRuns, registerFunc_, err := runFunc(tx); err != nil {
 						return err
-					} else if registerFunc, err = runFunc(tx); err != nil {
-						return err
+					} else {
+						registerFunc = registerFunc_
+						runs = append(runs, decisionRuns...)
 					}
 				}
 
-				tmpRun.CreatedAt = tmpRun.CreatedAt.UTC()
-				tmpRun.FinishedAt = &tmpRun.CreatedAt
-				tmpRun.Status = domain.RunStatusSucceeded
+				run.CreatedAt = run.CreatedAt.UTC()
+				run.FinishedAt = &run.CreatedAt
+				run.Status = domain.RunStatusSucceeded
 
-				err := txSelf.runService.Update(&tmpRun)
+				err := txSelf.runService.Update(&run)
 				err = errors.WithMessage(err, "Could not update decision Run")
 
-				run = &tmpRun
+				runs = append(runs, run)
 				return err
 			}
 
-			runId := tmpRun.NomadJobID.String()
+			runId := run.NomadJobID.String()
 			job.ID = &runId
 
-			run = &tmpRun
+			runs = append(runs, run)
 			registerFunc = func() error {
 				if response, _, err := self.nomadClient.JobsRegister(job, &nomad.WriteOptions{}); err != nil {
 					return errors.WithMessage(err, "Failed to run Action")
@@ -562,31 +568,38 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 
 			return nil
 		}); err != nil {
-			if err := (*self.invocationService).WithQuerier(db).End(invocation.Id); err != nil {
-				return run, registerFunc, err
+			if err2 := (*self.invocationService).WithQuerier(db).End(invocation.Id); err2 != nil {
+				return runs, registerFunc, errors.WithMessagef(err2, "While ending invocation due to error %q", err.Error())
 			}
 
-			return run, registerFunc, err
+			return runs, registerFunc, err
 		}
 
-		return run, registerFunc, nil
+		return runs, registerFunc, nil
 	}, nil
 }
 
-func (self actionService) InvokeCurrentActive() (func(config.PgxIface) (InvokeRegisterFunc, error), error) {
+func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunFunc, error) {
 	runFuncs := []InvokeRunFunc{}
-	return func(db config.PgxIface) (InvokeRegisterFunc, error) {
-			registerFuncs := []InvokeRegisterFunc{}
+	invocations := []domain.Invocation{}
+	return invocations, func(db config.PgxIface) ([]domain.Run, InvokeRegisterFunc, error) {
+			registerFuncs := make([]InvokeRegisterFunc, 0, len(runFuncs))
+			runs := make([]domain.Run, 0, len(runFuncs))
 
 			for _, runFunc := range runFuncs {
-				if _, registerFunc, err := runFunc(db); err != nil {
-					return nil, err
-				} else if registerFunc != nil {
-					registerFuncs = append(registerFuncs, registerFunc)
+				if run, registerFunc, err := runFunc(db); err != nil {
+					return nil, nil, err
+				} else {
+					if run != nil {
+						runs = append(runs, run...)
+					}
+					if registerFunc != nil {
+						registerFuncs = append(registerFuncs, registerFunc)
+					}
 				}
 			}
 
-			return func() error {
+			return runs, func() error {
 				for _, registerFunc := range registerFuncs {
 					if err := registerFunc(); err != nil {
 						return err
@@ -612,6 +625,9 @@ func (self actionService) InvokeCurrentActive() (func(config.PgxIface) (InvokeRe
 						return err
 					} else {
 						anyRunnable = anyRunnable || invocation != nil
+						if invocation != nil {
+							invocations = append(invocations, *invocation)
+						}
 						if runFunc != nil {
 							runFuncs = append(runFuncs, runFunc)
 						}
