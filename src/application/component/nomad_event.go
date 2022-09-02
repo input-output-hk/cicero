@@ -183,6 +183,8 @@ func (self *NomadEventConsumer) handleNomadEvent(ctx context.Context, event *nom
 		return self.handleNomadAllocationEvent(ctx, event)
 	case "Job":
 		return self.handleNomadJobEvent(ctx, event)
+	case "Deployment":
+		return self.handleNomadDeploymentEvent(ctx, event)
 	default:
 		self.Logger.Trace().
 			Str("topic", string(event.Topic)).
@@ -339,6 +341,79 @@ func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *
 	return nil
 }
 
+func (self *NomadEventConsumer) handleNomadDeploymentEvent(ctx context.Context, event *nomad.Event) error {
+	switch event.Type {
+	case "PlanResult":
+	default:
+		self.Logger.Trace().
+			Str("topic", string(event.Topic)).
+			Str("type", string(event.Type)).
+			Msg("Ignoring event")
+		return nil
+	}
+
+	deployment, err := event.Deployment()
+	if err != nil {
+		return errors.WithMessage(err, "Error getting Nomad event's deployment")
+	}
+
+	logger := self.Logger.With().
+		Str("nomad-job-id", deployment.JobID).
+		Logger()
+
+	switch deployment.Status {
+	case nomad.DeploymentStatusSuccessful:
+	default:
+		logger.Trace().
+			Str("status", deployment.Status).
+			Msg("Ignoring deployment event (status is not successful)")
+		return nil
+	}
+
+	job, _, err := self.NomadClient.JobsInfo(deployment.JobID, &nomad.QueryOptions{})
+	if err != nil {
+		return err
+	}
+
+	if job == nil {
+		panic("Found no job for this deployment")
+	}
+
+	if job.Type != nil && *job.Type != nomad.JobTypeService {
+		logger.Trace().
+			Str("nomad-job-type", *job.Type).
+			Msg("Ignoring deployment event (job type is not service)")
+		return nil
+	}
+
+	var runFunc service.InvokeRunFunc
+
+	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx)
+
+		run, err := txSelf.getRun(logger, deployment.JobID)
+		if run == nil || err != nil {
+			return err
+		}
+
+		run.Status = domain.RunStatusSucceeded
+		runFunc, err = txSelf.publishRunOutput(ctx, run)
+		return err
+	}); err != nil {
+		return err
+	}
+
+	if runFunc != nil {
+		if _, registerFunc, err := runFunc(self.Db); err != nil {
+			return err
+		} else if err := registerFunc(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*domain.Run, error) {
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -363,6 +438,37 @@ func (self *NomadEventConsumer) getRun(logger zerolog.Logger, idStr string) (*do
 	return run, nil
 }
 
+func (self *NomadEventConsumer) publishRunOutput(ctx context.Context, run *domain.Run) (service.InvokeRunFunc, error) {
+	output, err := self.InvocationService.GetOutputById(run.InvocationId)
+	if err != nil {
+		return nil, err
+	}
+
+	fact := domain.Fact{
+		RunId: &run.NomadJobID,
+	}
+
+	switch run.Status {
+	case domain.RunStatusSucceeded:
+		if output.Success.Exists() {
+			fact.Value = output.Success
+		}
+	case domain.RunStatusFailed:
+		if output.Failure.Exists() {
+			fact.Value = output.Failure
+		}
+	default:
+		panic("run status is not final in publishRunOutput()")
+	}
+
+	if fact.Value != nil {
+		_, runFunc, err := self.FactService.Save(&fact, nil)
+		return runFunc, err
+	}
+
+	return nil, nil
+}
+
 func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) (service.InvokeRunFunc, error) {
 	var runFunc service.InvokeRunFunc
 
@@ -375,32 +481,10 @@ func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, tim
 		case domain.RunStatusCanceled:
 		case domain.RunStatusRunning:
 			run.Status = status
-
-			if output, err := txSelf.InvocationService.GetOutputById(run.InvocationId); err != nil {
+			if runFunc_, err := txSelf.publishRunOutput(ctx, run); err != nil {
 				return err
 			} else {
-				fact := domain.Fact{
-					RunId: &run.NomadJobID,
-				}
-
-				switch run.Status {
-				case domain.RunStatusSucceeded:
-					if output.Success.Exists() {
-						fact.Value = output.Success
-					}
-				case domain.RunStatusFailed:
-					if output.Failure.Exists() {
-						fact.Value = output.Failure
-					}
-				default:
-					panic("should have been caught in switch above")
-				}
-
-				if fact.Value != nil {
-					if _, runFunc, err = txSelf.FactService.Save(&fact, nil); err != nil {
-						return err
-					}
-				}
+				runFunc = runFunc_
 			}
 		}
 
