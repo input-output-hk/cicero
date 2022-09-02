@@ -1,4 +1,14 @@
-# Tutorial
+# Tutorial(deprecated)
+
+---------------------------------------------------------------------------------
+
+**Disclaimer:**
+
+*Recently the specification of the Cicero Action Language has been updated and moved into a seperate project called [Tullia](https://github.com/input-output-hk/tullia).*
+
+*It's stronlgy advised to skip this chapter and read the [Tullia tutorial](./tullia.md) instead.*
+
+----------------------------------------------------------------------------------
 
 After completing the tutorials listed here, you should be able to write, create & start a Cicero Action by yourself.
 
