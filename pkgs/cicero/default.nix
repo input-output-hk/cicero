@@ -6,7 +6,7 @@
   go-mockery,
   runCommandNoCC,
 }: let
-  simple = package "sha256-nO1yAWrShkdqmRdaJUso7dQTYBD+GU/1uLtwemgZEz8=";
+  simple = package "sha256-IxwyLQ1tDVPztA8GQlCmIMZhFWRfDB1TEu+4UTu28mc=";
 
   package = vendorSha256:
     buildGo118Module rec {
