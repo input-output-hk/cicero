@@ -36,6 +36,11 @@ data RunRoutes mode = RunRoutes
            :> QueryParam "offset" Natural
            :> QueryParam "limit" Natural
            :> Get '[JSON] [RunV2]
+  , createFact :: mode
+               :- Capture "id" RunID
+               :> "fact"
+               :> ReqBody '[OctetStream] CreateFactV1
+               :> Post '[JSON] FactV1
   } deriving stock Generic
 
 data RunV2 = Run
