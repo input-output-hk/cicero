@@ -119,8 +119,8 @@ data FactParseException = FactParseException
 
 instance Exception FactParseException
 
-handler :: FactCommand -> Client ClientM API -> ClientEnv -> IO ()
-handler (CmdCreateFact createArgs) factClient cEnv = do
+createFactHandler :: CreateFactArgs -> (CreateFactV1 -> ClientM FactV1) -> ClientEnv -> IO ()
+createFactHandler createArgs call cEnv = do
   fact <- case createArgs.factSource of
     LiteralFact v -> pure v
     ReadableFact f -> do
@@ -133,9 +133,13 @@ handler (CmdCreateFact createArgs) factClient cEnv = do
   artifact <- case createArgs.artifactSource of
     Nothing -> pure Nothing
     Just f -> Just <$> consume f
-  runClientM (factClient.create (CreateFact { .. })) cEnv >>= \case
+  runClientM (call (CreateFact { .. })) cEnv >>= \case
     Left e -> throw e
     Right res -> hPutStrLn stdout $ encode res
+
+handler :: FactCommand -> Client ClientM API -> ClientEnv -> IO ()
+handler (CmdCreateFact createArgs) factClient cEnv =
+  createFactHandler createArgs factClient.create cEnv
 handler (CmdGetFacts rid) factClient cEnv = runClientM (factClient.getAll rid) cEnv >>= \case
   Left e -> throw e
   Right res -> hPutStrLn stdout $ encode res
