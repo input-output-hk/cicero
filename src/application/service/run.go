@@ -221,7 +221,7 @@ func (self runService) GetRunAllocationsWithLogs(run domain.Run) ([]AllocationWi
 		for taskName := range alloc.TaskResources {
 			go func(i int, taskName string) {
 				defer wg.Done()
-				log, err := self.RunLog(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, run.FinishedAt)
+				log, err := self.RunLog(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, nil)
 				logs <- logsMsg{
 					idx:      i,
 					taskName: taskName,
