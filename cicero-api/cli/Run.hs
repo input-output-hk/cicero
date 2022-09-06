@@ -13,6 +13,8 @@ import Data.ByteString.Lazy.Char8
 import Control.Exception
 import Options.Applicative
 
+import qualified Fact
+
 data GetRunsArgs = GetRunsArgs
   { recursive :: !Bool
   , inputs :: ![ FactID ]
@@ -48,11 +50,34 @@ getRunsInfo = info getRunsArgsParser
  <> header "cicero-cli run get-all — Get information about runs"
   )
 
-data RunCommand = CmdGetRuns !GetRunsArgs
+data CreateFactArgs = CreateFactArgs
+  { run :: !RunID
+  , factArgs :: !Fact.CreateFactArgs
+  }
+
+createFactArgsParser :: Parser CreateFactArgs
+createFactArgsParser = CreateFactArgs
+  <$> option (maybeReader runIdFromString)
+        ( long "run-id"
+       <> metavar "RUN_ID"
+       <> help "the ID of the run to associate the fact with"
+        )
+  <*> Fact.createFactArgsParser
+
+createFactArgsInfo :: ParserInfo CreateFactArgs
+createFactArgsInfo = info createFactArgsParser
+  ( fullDesc
+ <> header "cicero-cli run create-fact — Create a new fact associated with a run"
+  )
+
+data RunCommand
+  = CmdGetRuns !GetRunsArgs
+  | CmdCreateFact !CreateFactArgs
 
 runCommandParser :: Parser RunCommand
 runCommandParser = hsubparser
   ( command "get-all" (CmdGetRuns <$> getRunsInfo)
+ <> command "create-fact" (CmdCreateFact <$> createFactArgsInfo)
   )
 
 runCommandInfo :: ParserInfo RunCommand
@@ -65,3 +90,5 @@ handler :: RunCommand -> Client ClientM API -> ClientEnv -> IO ()
 handler (CmdGetRuns gra) runClient cEnv = runClientM (runClient.getAll gra.recursive gra.inputs gra.offset gra.limit) cEnv >>= \case
   Left e -> throw e
   Right res -> hPutStrLn stdout $ encode res
+handler (CmdCreateFact createArgs) runClient cEnv =
+  Fact.createFactHandler createArgs.factArgs (runClient.createFact createArgs.run) cEnv
