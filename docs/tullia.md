@@ -112,12 +112,12 @@ The [input description](https://github.com/input-output-hk/tullia-example/blob/m
     # for a specific action
     io = ''
 
-    # github, is a set of repository and input information
-    # this set is reused to subscribe to multiple inputs
-    let github = {
-      #input: "GitHub event"
-      #repo: "input-output-hk/tullia-example"
-    }
+      # github, is a set of repository and input information
+      # this set is reused to subscribe to multiple inputs
+      let github = {
+        #input: "GitHub event"
+        #repo: "input-output-hk/tullia-example"
+      }
 
       # lib.merge, ios and lib.io.github*, allow the user
       # to describe inputs & output with less overhead
