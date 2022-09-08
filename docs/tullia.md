@@ -80,8 +80,8 @@ Follow the comments in the provided flake.nix example to get a basic understandi
       # which can be evaluated by a Cicero instance
       tullia.fromSimple system {
 
-        # actions & tasks are loaded as sets from the provided files
-        # Cicero will later on translate those sets into actions
+        # actions & tasks are loaded as sets from the provided nix files
+        # Cicero will later on translate those sets into inputs & actions
         actions = import tullia/actions.nix;
         tasks = import tullia/tasks.nix self;
       }
@@ -106,10 +106,10 @@ The [input description](https://github.com/input-output-hk/tullia-example/blob/m
     # io, contains the actual input description in cuelang
     # The module.nix in Tullia merges the cue in io with tullia's cue-libs(lib/*.cue)
     # into the action..io attribute
-    # module.nix: https://github.com/input-output-hk/tullia/blob/main/nix/module.nix#L994-L1010
-    # action..io: https://github.com/input-output-hk/tullia/blob/main/doc/src/module.md#actionio--path
     # Cicero uses the resulting cue configuration to match & verify incoming inputs(as json)
     # for a specific action
+    # module.nix: https://github.com/input-output-hk/tullia/blob/main/nix/module.nix#L994-L1010
+    # action..io: https://github.com/input-output-hk/tullia/blob/main/doc/src/module.md#actionio--path
     io = ''
 
       # github, is a set of repository and input information
@@ -126,7 +126,7 @@ The [input description](https://github.com/input-output-hk/tullia-example/blob/m
       #lib.merge
       #ios: [
 
-        # This will tell Cicero to only run the 'build' task
+        # The input/output entries in ios will tell Cicero to only run the 'build' task
         # if a github_push or github_pr event for the 'tullia-example' repository happens
         #lib.io.github_push & github,
         #lib.io.github_pr   & github,
@@ -142,15 +142,32 @@ The [tasks](https://github.com/input-output-hk/tullia-example/blob/main/rust/tul
 
 ### Example from [tullia-example/rust/tullia/tasks.nix](https://github.com/input-output-hk/tullia-example/blob/main/rust/tullia/tasks.nix):
 ```nix
+# rev, is used to point to a specific git commit
+# ..., is the self attribute from the flake outputs
 {rev ? "HEAD", ...}: let
+
+  # common environment for nix builds
   common = {
     config,
     lib,
     ...
   }: {
+
+    # presets are loaded by the module.nix in tullia
+    # and are part of the common environment
+    # all presets: https://github.com/input-output-hk/tullia/tree/main/nix/preset
+    # documentation: https://github.com/input-output-hk/tullia/blob/main/doc/src/module.md
     preset = {
+
+      # enables nix in this environment
+      # preset.nix: https://github.com/input-output-hk/tullia/blob/main/nix/preset/nix.nix
       nix.enable = true;
+
+      # github-ci, wrapper for cloning a repository from github
+      # preset.github-ci: https://github.com/input-output-hk/tullia/blob/main/nix/preset/github-ci.nix
       github-ci = __mapAttrs (_: lib.mkDefault) {
+
+        # mkDefault raises priority of each attribute
         enable = config.action.facts != {};
         repo = "input-output-hk/tullia-example";
         sha = config.preset.github-ci.lib.getRevision "GitHub event" rev;
@@ -159,6 +176,8 @@ The [tasks](https://github.com/input-output-hk/tullia-example/blob/main/rust/tul
     };
   };
 
+  # helper function, to determine flakeUrl
+  # if no facts available use current directory
   flakeUrl = {
     config,
     lib,
@@ -170,33 +189,51 @@ The [tasks](https://github.com/input-output-hk/tullia-example/blob/main/rust/tul
       else "."
     );
 in {
+
+  # lint task
   lint = {...}: {
+
+    # common environment for nix builds
     imports = [common];
 
     config = {
+
+      # the actual bash cmd to be executed
       command.text = ''
         nix develop -L -c lint
       '';
 
+      # only this task sets github-ci.clone in it's scope to true
+      # to download the github repository only once
       preset.github-ci.clone = true;
 
+      # settings for the nomad scheduler
       memory = 1024 * 2;
       nomad.resources.cpu = 1000;
     };
   };
 
+  # build task
   build = args: {
+
+    # common environment for nix builds
     imports = [common];
 
     config = {
+
+      # after, will force this task to be run
+      # after the "lint" task
       after = ["lint"];
 
+      # the actual bash cmd to be executed
       command.text = "nix build -L ${flakeUrl args}";
 
+      # enable kvm virtualization for this task
       env.NIX_CONFIG = ''
         extra-system-features = kvm
       '';
 
+      # settings for the nomad scheduler
       memory = 1024 * 3;
       nomad.resources.cpu = 3500;
     };
