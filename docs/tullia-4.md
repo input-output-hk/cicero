@@ -46,24 +46,21 @@ github.com/input-output-hk/tullia-example//rust?ref=yourCommitHash
 
 It would look like this:
 
-#TODO
-![Cicero WebUI New Localpath](./cicero_webui_new_action_localpath.png "Cicero WebUI New Localpath")
+![Cicero WebUI New Tullia](./cicero_webui_new_action_tullia.png "Cicero WebUI New Tullia")
 
 ### Click on "List Actions"
 
 Clicking "List Actions" will start the cicero-evaluator, so the Actions are syntactically evaluated and listed:
 
-#TODO
-![Cicero WebUI List rust](./cicero_webui_list_actions_rust.png "Cicero WebUI List rust")
+![Cicero WebUI List Tullia](./cicero_webui_list_actions_tullia.png "Cicero WebUI List Tullia")
 
-If an error occurs while evaluating Cicero will print the error in it's logs but also will show an error in the WebUI.
+If an error occurs while evaluating, Cicero will print the error in it's logs but also will show an error in the WebUI.
 
 ### Click on the "rust/build" Action
 
 Clicking on "rust/build" will create the corresponding Action in Cicero:
 
-#TODO
-![Cicero WebUI Create Localpath](./cicero_webui_create_action_localpath.png "Cicero WebUI Create Localpath")
+![Cicero WebUI Create Tullia](./cicero_webui_create_action_tullia.png "Cicero WebUI Create Tullia")
 
 Please note that this Action hasn't run yet, which is also indicated by the "Runs" table at the bottom.
 
