@@ -29,7 +29,7 @@ In the actual Cicero [flake.nix](https://github.com/input-output-hk/cicero/blob/
 
 The **ciceroActions** flake output is therefore required to let Cicero know that a flakified repository contains executable Actions.
 
-When a new Path is passed to the Cicero WebUI([Tutorial 1](./tutorial-1.md)) the Cicero Evaluator will automatically search and evaluate all the Actions in that path.
+When a new Path is passed to the Cicero WebUI([How to create an Action](./tullia-4.md)) the Cicero Evaluator will automatically search and evaluate all the Actions in that path.
 
 However, there is also cmdline Tool called cicero-evaluator-nix, which just helps running the evaluation part manually([Debuggin Evaluations](./cicero-evaluator-nix.md)).
 
@@ -80,7 +80,7 @@ job = { tick, ticks, double ? false }:
 
 ## Execution
 
-An Action is only invoked and passed to Nomad as new job when a corresponding Fact is posted to [localhost:8000/api/fact](localhost:8000/api/fact), see ([Tutorial 2](./tutorial-2.md)).
+An Action is only invoked and passed to Nomad as new job when a corresponding Fact is posted to [localhost:8000/api/fact](localhost:8000/api/fact), see ([How to start an Action](./tullia-5.md)).
 
 The [fact.go](https://github.com/input-output-hk/cicero/blob/main/src/application/service/fact.go) code saves a fact, which results in InvokeCurrentActive getting called.
 
