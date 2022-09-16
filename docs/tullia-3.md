@@ -4,14 +4,10 @@ The [tasks](https://github.com/input-output-hk/tullia-example/blob/main/rust/tul
 
 ## Example from [tullia-example/rust/tullia/tasks.nix](https://github.com/input-output-hk/tullia-example/blob/main/rust/tullia/tasks.nix):
 ```nix
-# rev, is used to point to a specific git commit
-# ..., is the self attribute from the flake outputs
-{rev ? "HEAD", ...}: let
-
+let
   # common environment for nix builds
   common = {
     config,
-    lib,
     ...
   }: {
 
@@ -27,29 +23,32 @@ The [tasks](https://github.com/input-output-hk/tullia-example/blob/main/rust/tul
 
       # github-ci, wrapper for cloning a repository from github
       # preset.github-ci: https://github.com/input-output-hk/tullia/blob/main/nix/preset/github-ci.nix
-      github-ci = __mapAttrs (_: lib.mkDefault) {
-
-        # mkDefault raises priority of each attribute
-        enable = config.action.facts != {};
+      github-ci = {
+        enable = config.actionRun.facts != {};
         repo = "input-output-hk/tullia-example";
         sha = config.preset.github-ci.lib.getRevision "GitHub event" rev;
-        clone = false;
       };
     };
+
+    # nomad templates are a convenient way to ship configuration files within a nomad task
+    # https://www.nomadproject.io/docs/job-specification/template
+    # In this example a netrc file is created to enable authentication against github.com
+    nomad.templates = [
+      {
+        destination = "${config.env.HOME}/.netrc";
+        data = ''
+          machine github.com
+          login git
+          password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
+
+          machine api.github.com
+          login git
+          password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
+        '';
+      }
+    ];
   };
 
-  # helper function, to determine flakeUrl
-  # if no facts available use current directory
-  flakeUrl = {
-    config,
-    lib,
-    ...
-  }:
-    lib.escapeShellArg (
-      if config.action.facts != {}
-      then "github:${config.preset.github-ci.repo}/${config.preset.github-ci.lib.getRevision "GitHub event" rev}"
-      else "."
-    );
 in {
 
   # lint task
@@ -58,21 +57,14 @@ in {
     # common environment for nix builds
     imports = [common];
 
-    config = {
+    # the actual bash cmd to be executed
+    command.text = ''
+      nix develop -L ./rust -c clippy-driver rust/src/hello.rs
+    '';
 
-      # the actual bash cmd to be executed
-      command.text = ''
-        nix develop -L -c lint
-      '';
-
-      # only this task sets github-ci.clone in it's scope to true
-      # to download the github repository only once
-      preset.github-ci.clone = true;
-
-      # settings for the nomad scheduler
-      memory = 1024 * 2;
-      nomad.resources.cpu = 1000;
-    };
+    # settings for the nomad scheduler
+    memory = 1024 * 2;
+    nomad.resources.cpu = 1000;
   };
 
   # build task
@@ -81,24 +73,18 @@ in {
     # common environment for nix builds
     imports = [common];
 
-    config = {
+    # after, will force this task to be run
+    # after the "lint" task
+    after = ["lint"];
 
-      # after, will force this task to be run
-      # after the "lint" task
-      after = ["lint"];
+    # the actual bash cmd to be executed
+    command.text = ''
+      nix build -L ./rust
+    '';
 
-      # the actual bash cmd to be executed
-      command.text = "nix build -L ${flakeUrl args}";
-
-      # enable kvm virtualization for this task
-      env.NIX_CONFIG = ''
-        extra-system-features = kvm
-      '';
-
-      # settings for the nomad scheduler
-      memory = 1024 * 3;
-      nomad.resources.cpu = 3500;
-    };
+    # settings for the nomad scheduler
+    memory = 1024 * 3;
+    nomad.resources.cpu = 3500;
   };
 }
 ```
