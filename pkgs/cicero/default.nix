@@ -6,7 +6,7 @@
   go-mockery,
   runCommandNoCC,
 }: let
-  simple = package "sha256-nO1yAWrShkdqmRdaJUso7dQTYBD+GU/1uLtwemgZEz8=";
+  simple = package "sha256-IxwyLQ1tDVPztA8GQlCmIMZhFWRfDB1TEu+4UTu28mc=";
 
   package = vendorSha256:
     buildGo118Module rec {
@@ -68,6 +68,14 @@
 
           systemPackages = [pkgs.schemathesis];
         };
+
+        # The derivation implementing this accesses /var/log/{b,w}tmp at build time
+        # (should probably be fixed upstream).
+        # Without sandboxing, as is the case in an unprivileged container,
+        # this will fail due to file permissions not being open for the nix build user.
+        services.logrotate.checkConfig = false;
+
+        systemd.services.postgresql.serviceConfig.TimeoutStartSec = 300;
       };
       testScript = ''
         main.wait_for_unit("cicero")
