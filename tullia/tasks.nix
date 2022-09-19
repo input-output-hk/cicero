@@ -64,7 +64,7 @@ in {
     config = {
       after = ["build"];
 
-      command.text = "
+      command.text = with common; "
         cue export ./jobs -e jobs.ciceroHandbook \
           ${
           lib.optionalString (cfg ? environment)
