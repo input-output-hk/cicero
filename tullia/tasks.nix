@@ -57,4 +57,27 @@ in {
       nomad.resources.cpu = 3500;
     };
   };
+
+  handbook = args: {
+    imports = [common];
+
+    config = {
+      after = ["build"];
+
+      command.text = "
+        cue export ./jobs -e jobs.ciceroHandbook \
+          ${
+          lib.optionalString (cfg ? environment)
+          "-t env=${lib.escapeShellArg cfg.environment}"
+        } \
+          -t sha=${lib.escapeShellArg cfg.sha} \
+          > job.json
+
+        nomad run job.json
+      ";
+
+      memory = 1024;
+      nomad.resources.cpu = 1000;
+    };
+  };
 }
