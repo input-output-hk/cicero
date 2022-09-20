@@ -58,23 +58,24 @@ in {
     };
   };
 
-  handbook = args: {
+  handbook = {
+    lib,
+    config,
+    ...
+  }: {
     imports = [common];
 
     config = {
       after = ["build"];
 
-      command.text = with common; "
+      command.text = ''
         cue export ./jobs -e jobs.ciceroHandbook \
-          ${
-          lib.optionalString (cfg ? environment)
-          "-t env=${lib.escapeShellArg cfg.environment}"
-        } \
-          -t sha=${lib.escapeShellArg cfg.sha} \
+          -t env=prod \
+          -t sha=${lib.escapeShellArg config.preset.github-ci.clone} \
           > job.json
 
         nomad run job.json
-      ";
+      '';
 
       memory = 1024;
       nomad.resources.cpu = 1000;
