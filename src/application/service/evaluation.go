@@ -164,6 +164,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		var scanErr error
 		var result []byte
 		scanner := bufio.NewScanner(stdout)
+		scanner.Buffer(make([]byte, 1024*64), 1024*1024*3)
 	Scan:
 		for scanner.Scan() {
 			if invocationId != nil {
@@ -200,6 +201,9 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 				}
 			}
 		}
+		if err := scanner.Err(); err != nil {
+			return nil, stderrBuf.Bytes(), errors.WithMessage(err, "While scanning stdout")
+		}
 
 		// fill stderrBuf
 		if lokiWg != nil {
@@ -224,9 +228,9 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 				err = errors.WithMessage(&evalErr, "Failed to evaluate")
 			}
 			return nil, stderrBuf.Bytes(), err
-		} else {
-			return result, stderrBuf.Bytes(), scanErr
 		}
+
+		return result, stderrBuf.Bytes(), scanErr
 	}
 
 	if evaluator != "" {
