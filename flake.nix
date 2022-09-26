@@ -42,9 +42,6 @@
         inclusive.follows = "inclusive";
       };
     };
-    haskell-nix = {
-      url = "github:input-output-hk/haskell.nix";
-    };
     nix2container.follows = "tullia/nix2container";
     tullia = {
       url = "github:input-output-hk/tullia";
@@ -62,7 +59,6 @@
     follower,
     poetry2nix,
     spongix,
-    haskell-nix,
     alejandra,
     nix2container,
     tullia,
@@ -153,8 +149,6 @@
           defaultPackage = selfPkgs.cicero;
           hydraJobs = selfPkgs;
           devShell = pkgs.devshell.fromTOML ./devshell.toml;
-          devShells.cicero-api = selfPkgs.cicero-api.project.shell;
-          inherit (selfPkgs.cicero-api) apps;
         }
         // tullia.fromSimple system {
           tasks = import tullia/tasks.nix self;
@@ -170,11 +164,6 @@
             inherit (nix2container.packages.${prev.system}) skopeo-nix2container;
           };
           webhook-trigger = prev.callPackage pkgs/trigger {flake = self;};
-          cicero-api = (final.extend haskell-nix.overlay).callPackage pkgs/cicero-api {
-            inherit supportedSystems;
-            src = ./.;
-          };
-          inherit (final.cicero-api) cicero-cli;
 
           # a coreutils package that also provides /usr/bin/env
           coreutils-env = prev.coreutils.overrideAttrs (oldAttrs: {
