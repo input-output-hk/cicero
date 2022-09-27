@@ -47,6 +47,12 @@ const (
 	lokiTransform = "eval-transform"
 )
 
+func newScanner(input io.Reader) (scanner *bufio.Scanner) {
+	scanner = bufio.NewScanner(input)
+	scanner.Buffer(make([]byte, 1024*64), 1024*1024*3)
+	return
+}
+
 func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
 	fetchUrl, err = url.Parse(src)
 	if err != nil {
@@ -163,8 +169,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 
 		var scanErr error
 		var result []byte
-		scanner := bufio.NewScanner(stdout)
-		scanner.Buffer(make([]byte, 1024*64), 1024*1024*3)
+		scanner := newScanner(stdout)
 	Scan:
 		for scanner.Scan() {
 			if invocationId != nil {
@@ -295,7 +300,7 @@ func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			scanner := bufio.NewScanner(*stdout)
+			scanner := newScanner(*stdout)
 			for scanner.Scan() {
 				e.promtailChan <- promtailEntry(scanner.Text(), label, lokiFdStdout, invocationId)
 			}
@@ -306,7 +311,7 @@ func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			scanner := bufio.NewScanner(*stderr)
+			scanner := newScanner(*stderr)
 			for scanner.Scan() {
 				e.promtailChan <- promtailEntry(scanner.Text(), label, lokiFdStderr, invocationId)
 			}
@@ -503,20 +508,6 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 		cmd.Env = append(os.Environ(), extraEnv...) //nolint:gocritic // false positive
 		cmd.Dir = src
 
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
-			return nil, err
-		}
-		if _, err := io.Copy(stdin, bytes.NewReader(output)); err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
-			return nil, err
-		}
-		if err := stdin.Close(); err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
-			return nil, err
-		}
-
 		e.logger.Debug().
 			Stringer("command", cmd).
 			Strs("environment", extraEnv).
@@ -535,7 +526,22 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 			lokiWg = e.pipeToLoki(lokiTransform, &stdoutReader, &stderrReader, invocationId)
 		}
 
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			return nil, err
+		}
+
 		if err := cmd.Start(); err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			return nil, err
+		}
+
+		if _, err := io.Copy(stdin, bytes.NewReader(output)); err != nil {
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			return nil, err
+		}
+		if err := stdin.Close(); err != nil {
 			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 			return nil, err
 		}
