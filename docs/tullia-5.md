@@ -8,8 +8,8 @@ Now the next step is to explain how to actually start this Action.
 ```
 nix develop
 ```
-
 ## Use httpie to create a new Fact
+
 
 The creation or update of Facts will trigger the corresponding Actions to run in Cicero.
 
@@ -43,7 +43,6 @@ EOF
 ### Send HTTP Post to Cicero-API
 
 By sending a HTTP POST request via httpie to the Cicero-API "/api/fact" endpoint the Fact gets created or updated.
-
 
 ```
 http -v post :8000/api/fact < /tmp/rust-build.json
