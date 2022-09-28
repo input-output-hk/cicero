@@ -57,28 +57,4 @@ in {
       nomad.resources.cpu = 3500;
     };
   };
-
-  handbook = {
-    lib,
-    config,
-    ...
-  }: {
-    imports = [common];
-
-    config = {
-      after = ["build"];
-
-      command.text = ''
-        cue export ./jobs -e jobs.ciceroHandbook \
-          -t env=prod \
-          -t sha=${lib.escapeShellArg config.preset.github-ci.clone} \
-          > job.json
-
-        nomad run job.json
-      '';
-
-      memory = 1024;
-      nomad.resources.cpu = 1000;
-    };
-  };
 }
