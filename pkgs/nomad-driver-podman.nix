@@ -1,4 +1,4 @@
-# Remove once https://github.com/hashicorp/nomad-driver-podman/pull/183 is merged and arrived in nixpkgs.
+# Remove once https://github.com/hashicorp/nomad-driver-podman/pull/183 arrived in nixpkgs.
 {
   lib,
   fetchFromGitHub,
@@ -9,13 +9,13 @@ buildGo117Module rec {
   version = "0.4.0";
 
   src = fetchFromGitHub {
-    owner = "dermetfan";
+    owner = "hashicorp";
     repo = "nomad-driver-podman";
-    rev = "309618ce0839da6ec6b1d4d90a9666ff19c74151";
-    sha256 = "sha256-WvXyGspfFwcMPtpqhNDu//IMkN+P3xbZSmHVhXDdq0s=";
+    rev = "39a4a50ac151d132bdae58f0458ce57320223c2a";
+    sha256 = "sha256-QzjPcv1tAVtWBwru9yoRiD2aIORVORdPlLWZRFJ6Ows=";
   };
 
-  vendorSha256 = "sha256-5PQIWSGSR5vizWEsResBLd//yWs99o/bj5DVpRMBwhA=";
+  vendorSha256 = "sha256-rGqP7Fzh2zms+GB/XYaoZTnaWQD4GmlJJDYprcH9bZQ=";
 
   subPackages = ["."];
 
