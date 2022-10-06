@@ -10,7 +10,6 @@ nix develop
 ```
 ## Use httpie to create a new Fact
 
-
 The creation or update of Facts will trigger the corresponding Actions to run in Cicero.
 
 A fact can have multiple inputs for providing different arguments for calling the actual Action.
