@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Nix
-	- At least version 2.4 >= and < 2.7
+	- At least version 2.4
 - (Linux with systemd)
 	- You can run Cicero on other platforms but the [Nix actions library](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix) requires [nomad-driver-nix](https://github.com/input-output-hk/nomad-driver-nix).
 
