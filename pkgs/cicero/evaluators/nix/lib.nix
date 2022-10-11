@@ -267,6 +267,7 @@ in rec {
               | curl "$CICERO_API_URL"/api/run/"$NOMAD_JOB_ID"/fact \
                 --output /dev/null --fail \
                 --no-progress-meter \
+                --netrc-optional --netrc-file /secrets/netrc-cicero \
                 --data-binary @-
 
               rm -rf /local/cicero/post-fact
