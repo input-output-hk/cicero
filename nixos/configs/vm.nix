@@ -3,7 +3,6 @@
   config,
   lib,
   pkgs,
-  bigDisk ? false,
   ...
 }: {
   imports = [
@@ -93,7 +92,7 @@
       in
         builtins.floor (kb / 1.5 / 1024)
       else 1024 * 4;
-    diskSize = if bigDisk then 1024 * 60 else 1024 * 20; # nix builds need more inodes
+    diskSize = 1024 * 20; # nix builds need more inodes
 
     useNixStoreImage = true;
     writableStoreUseTmpfs = false;

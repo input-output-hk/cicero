@@ -168,10 +168,11 @@
 
         vm-bigdisk = nixpkgs.lib.makeOverridable nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
-          specialArgs = {inherit self; bigDisk = true;};
+          specialArgs = {inherit self;};
           modules = [
             nixos/configs/vm.nix
             nixos-shell.nixosModules.nixos-shell
+            ({lib, ...}: {virtualisation.diskSize = lib.mkForce 1024 * 60;})
           ];
         };
 
