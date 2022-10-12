@@ -166,6 +166,15 @@
           ];
         };
 
+        vm-bigdisk = nixpkgs.lib.makeOverridable nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          specialArgs = {inherit self; bigDisk = true;};
+          modules = [
+            nixos/configs/vm.nix
+            nixos-shell.nixosModules.nixos-shell
+          ];
+        };
+
         dev = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           specialArgs = {inherit self;};
