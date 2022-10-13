@@ -172,6 +172,7 @@ if #env == "prod" {
 							.job[]?.group[]?.task[]? |= if .config?.nixos then . else (
 								.env |= . + {
 									CICERO_WEB_URL: "https://cicero.infra.aws.iohkdev.io",
+									CICERO_API_URL: "https://cicero.infra.aws.iohkdev.io",
 									NIX_CONFIG: (
 										"extra-substituters = http://spongix.service.consul:7745?compression=none\n" +
 										"extra-trusted-public-keys =" +
@@ -200,6 +201,13 @@ if #env == "prod" {
 										"\\texec nix copy --to \\\"http://spongix.service.consul:7745?compression=none\\\" $OUT_PATHS\\n" +
 										"fi"
 									),
+								}, {
+									destination: "secrets/netrc-cicero",
+									data: (
+										"machine cicero.infra.aws.iohkdev.io\\n" +
+										"login cicero\\n" +
+										"password {{with secret "kv/data/cicero/api"}}{{.Data.data.basic}}{{end}}\\n"
+									),		 
 								}]
 							) end
 						'

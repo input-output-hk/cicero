@@ -36,8 +36,8 @@
   };
 
   nix = {
-    binaryCaches = ["http://127.0.0.1:${toString config.services.spongix.port}"];
-    binaryCachePublicKeys = ["spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI="];
+    binaryCaches = ["http://127.0.0.1:${toString config.services.spongix.port}" "https://cache.iog.io"];
+    binaryCachePublicKeys = ["spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI=" "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="];
     requireSignedBinaryCaches = false; # TODO remove once spongix signs with own key again
     extraOptions = let
       post-build-hook = pkgs.writers.writeBash "post-build-hook" ''
@@ -177,8 +177,8 @@
       enable = true;
       port = 17745;
       cacheDir = "/mnt/spongix";
-      substituters = ["https://cache.nixos.org"];
-      trustedPublicKeys = ["cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="];
+      substituters = ["https://cache.nixos.org" "https://cache.iog.io"];
+      trustedPublicKeys = ["cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="];
       secretKeyFiles."spongix.sec" = builtins.toFile "spongix.sec" "spongix:J5wXSq2iirA2sksFzfsV1fXoNQZFKh4QUOizy6b46sHI18Hb6kxKauM3IxFahvWgSziKE+dUo+QQJaIPG/Uw0g==";
     };
 
