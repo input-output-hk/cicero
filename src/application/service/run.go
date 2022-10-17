@@ -255,7 +255,7 @@ func (self runService) GrafanaUrls(allocs []*nomad.Allocation, to *time.Time) (m
 			to = &t
 		}
 
-		grafanaUrl, err := url.Parse("https://monitoring.infra.aws.iohkdev.io/d/SxGmPry7k/cgroups")
+		grafanaUrl, err := url.Parse("https://monitoring.ci.iog.io/d/SxGmPry7k/cgroups")
 		if err != nil {
 			return nil, err
 		}
