@@ -64,7 +64,7 @@
     tullia,
     ...
   }: let
-    supportedSystems = ["x86_64-linux"];
+    supportedSystems = ["x86_64-linux" "x86_64-darwin"];
   in
     utils.lib.eachSystem supportedSystems
     (
