@@ -172,7 +172,7 @@
           modules = [
             nixos/configs/vm.nix
             nixos-shell.nixosModules.nixos-shell
-            ({lib, ...}: {virtualisation.diskSize = lib.mkForce 1024 * 60;})
+            ({lib, ...}: {virtualisation.diskSize = lib.mkForce (1024 * 60);})
           ];
         };
 
