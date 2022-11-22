@@ -55,6 +55,7 @@ func newScanner(input io.Reader) (scanner *bufio.Scanner) {
 
 func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
 	fetchUrl, err = url.Parse(src)
+	err = errors.WithMessage(err, "While parsing action source")
 	if err != nil {
 		return
 	}
@@ -196,7 +197,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 				case "result":
 					// XXX Take *interface{} to unmarshal result into using json.Decoder instead of returning its []byte?
 					if r, err := json.Marshal(msg["result"]); err != nil {
-						scanErr = err
+						scanErr = errors.WithMessage(err, "While marshaling evaluator result")
 						break Scan
 					} else {
 						result = r
@@ -403,12 +404,13 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	// Marshal back to JSON to pass through transformers.
 	canonicalizedDefJson, err := json.Marshal(freeformDef)
 	if err != nil {
+		err = errors.WithMessage(err, "While marshaling canonicalized freeformDef")
 		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 		return nil, err
 	}
 
 	if output, err = e.transform(canonicalizedDefJson, dst, extraEnv, invocationId); err != nil {
-		return nil, err
+		return nil, errors.WithMessage(err, "While transforming")
 	}
 
 	type Def struct {
@@ -418,6 +420,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	def := Def{}
 
 	if err := json.Unmarshal(output, &def); err != nil {
+		err = errors.WithMessage(err, "While unmarshaling transformer output")
 		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 		return nil, err
 	}
@@ -432,7 +435,7 @@ func (e evaluationService) unmarshalJob(freeformJob any, invocationId uuid.UUID)
 	// Marshal back to JSON so we can try both formats.
 	freeformJobJson, err := json.Marshal(freeformJob)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithMessage(err, "While marshaling freeformJob")
 	}
 
 	def := &nomad.Job{}
