@@ -688,6 +688,12 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	grafanaLokiUrls, err := self.RunService.GrafanaLokiUrls(allocs, run.FinishedAt)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
 	cpuMetrics, err := self.RunService.CPUMetrics(allocs, run.FinishedAt)
 	if err != nil {
 		self.ServerError(w, err)
@@ -711,6 +717,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		"allocsWithLogsByGroup": allocsWithLogsByGroup,
 		"metrics":               service.GroupMetrics(cpuMetrics, memMetrics),
 		"grafanaUrls":           grafanaUrls,
+		"grafanaLokiUrls":       grafanaLokiUrls,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
