@@ -27,6 +27,7 @@ type InvocationService interface {
 	GetOutputById(uuid.UUID) (*domain.OutputDefinition, error)
 	Save(*domain.Invocation, map[string]domain.Fact) error
 	End(uuid.UUID) error
+	Retry(uuid.UUID) (*domain.Invocation, InvokeRunFunc, error)
 	GetLog(domain.Invocation) (LokiLog, error)
 }
 
@@ -146,6 +147,32 @@ func (self invocationService) GetOutputById(id uuid.UUID) (*domain.OutputDefinit
 		output := action.InOut.Output(inputs)
 		return &output, nil
 	}
+}
+
+func (self invocationService) Retry(id uuid.UUID) (*domain.Invocation, InvokeRunFunc, error) {
+	self.logger.Trace().Str("id", id.String()).Msg("Retrying")
+
+	action, err := (*self.actionService).GetByInvocationId(id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	inputFactIds, err := self.GetInputFactIdsById(id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	invocation := &domain.Invocation{ActionId: action.ID}
+	if err := self.Save(invocation, inputs); err != nil {
+		return nil, nil, err
+	}
+
+	return invocation, (*self.actionService).NewInvokeRunFunc(action, invocation, inputs), nil
 }
 
 func (self invocationService) Save(invocation *domain.Invocation, inputs map[string]domain.Fact) error {

@@ -40,6 +40,7 @@ type ActionService interface {
 	// Returns a nil pointer for the first return value if the Action was not runnable.
 	Invoke(*domain.Action) (*domain.Invocation, InvokeRunFunc, error)
 	InvokeCurrentActive() ([]domain.Invocation, InvokeRunFunc, error)
+	NewInvokeRunFunc(*domain.Action, *domain.Invocation, map[string]domain.Fact) InvokeRunFunc
 }
 
 // Evaluates the run definition and ends the invocation.
@@ -487,7 +488,75 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 		return nil, nil, nil
 	}
 
-	return invocation, func(db config.PgxIface) ([]domain.Run, InvokeRegisterFunc, error) {
+	return invocation, self.NewInvokeRunFunc(action, invocation, inputs), nil
+}
+
+func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunFunc, error) {
+	runFuncs := []InvokeRunFunc{}
+	invocations := []domain.Invocation{}
+	return invocations, func(db config.PgxIface) ([]domain.Run, InvokeRegisterFunc, error) {
+			registerFuncs := make([]InvokeRegisterFunc, 0, len(runFuncs))
+			runs := make([]domain.Run, 0, len(runFuncs))
+
+			for _, runFunc := range runFuncs {
+				if run, registerFunc, err := runFunc(db); err != nil {
+					return nil, nil, err
+				} else {
+					if run != nil {
+						runs = append(runs, run...)
+					}
+					if registerFunc != nil {
+						registerFuncs = append(registerFuncs, registerFunc)
+					}
+				}
+			}
+
+			return runs, func() error {
+				for _, registerFunc := range registerFuncs {
+					if err := registerFunc(); err != nil {
+						return err
+					}
+				}
+				return nil
+			}, nil
+		}, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+			txSelf := self.WithQuerier(tx).(*actionService)
+
+			actions, err := txSelf.GetCurrentActive()
+			if err != nil {
+				return err
+			}
+
+			for {
+				anyRunnable := false
+
+				for _, action := range actions {
+					// copy so we don't point to loop variable
+					action := action
+					if invocation, runFunc, err := txSelf.Invoke(&action); err != nil {
+						return err
+					} else {
+						anyRunnable = anyRunnable || invocation != nil
+						if invocation != nil {
+							invocations = append(invocations, *invocation)
+						}
+						if runFunc != nil {
+							runFuncs = append(runFuncs, runFunc)
+						}
+					}
+				}
+
+				if !anyRunnable {
+					break
+				}
+			}
+
+			return nil
+		})
+}
+
+func (self actionService) NewInvokeRunFunc(action *domain.Action, invocation *domain.Invocation, inputs map[string]domain.Fact) InvokeRunFunc {
+	return func(db config.PgxIface) ([]domain.Run, InvokeRegisterFunc, error) {
 		job, err := self.evaluationService.EvaluateRun(action.Source, action.Name, action.ID, invocation.Id, inputs)
 		if err != nil {
 			// XXX Nil pointer when directly calling `(*self.invocationService).WithQuerier(db)` here. Maybe a bug?
@@ -576,69 +645,5 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 		}
 
 		return runs, registerFunc, nil
-	}, nil
-}
-
-func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunFunc, error) {
-	runFuncs := []InvokeRunFunc{}
-	invocations := []domain.Invocation{}
-	return invocations, func(db config.PgxIface) ([]domain.Run, InvokeRegisterFunc, error) {
-			registerFuncs := make([]InvokeRegisterFunc, 0, len(runFuncs))
-			runs := make([]domain.Run, 0, len(runFuncs))
-
-			for _, runFunc := range runFuncs {
-				if run, registerFunc, err := runFunc(db); err != nil {
-					return nil, nil, err
-				} else {
-					if run != nil {
-						runs = append(runs, run...)
-					}
-					if registerFunc != nil {
-						registerFuncs = append(registerFuncs, registerFunc)
-					}
-				}
-			}
-
-			return runs, func() error {
-				for _, registerFunc := range registerFuncs {
-					if err := registerFunc(); err != nil {
-						return err
-					}
-				}
-				return nil
-			}, nil
-		}, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-			txSelf := self.WithQuerier(tx).(*actionService)
-
-			actions, err := txSelf.GetCurrentActive()
-			if err != nil {
-				return err
-			}
-
-			for {
-				anyRunnable := false
-
-				for _, action := range actions {
-					// copy so we don't point to loop variable
-					action := action
-					if invocation, runFunc, err := txSelf.Invoke(&action); err != nil {
-						return err
-					} else {
-						anyRunnable = anyRunnable || invocation != nil
-						if invocation != nil {
-							invocations = append(invocations, *invocation)
-						}
-						if runFunc != nil {
-							runFuncs = append(runFuncs, runFunc)
-						}
-					}
-				}
-
-				if !anyRunnable {
-					break
-				}
-			}
-
-			return nil
-		})
+	}
 }

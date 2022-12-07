@@ -168,6 +168,16 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if _, err := r.AddRoute(http.MethodPost,
+		"/api/invocation/{id}",
+		self.ApiInvocationIdPost,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Invocation{}, "OK")),
+	); err != nil {
+		return err
+	}
 	if _, err := r.AddRoute(http.MethodGet,
 		"/api/invocation/{id}",
 		self.ApiInvocationIdGet,
@@ -337,6 +347,7 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/invocation/{id}", self.InvocationIdPost).Methods(http.MethodPost)
 	muxRouter.HandleFunc("/invocation/{id}", self.InvocationIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdDelete).Methods(http.MethodDelete)
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
@@ -555,6 +566,29 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, "/action/"+action.ID.String(), http.StatusFound)
 		return
 	}
+}
+
+func (self *Web) InvocationIdPost(w http.ResponseWriter, req *http.Request) {
+	id, err := uuid.Parse(mux.Vars(req)["id"])
+	if err != nil {
+		self.ClientError(w, err)
+		return
+	}
+
+	invocation, runFunc, err := self.InvocationService.Retry(id)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, req, "/invocation/"+invocation.Id.String(), http.StatusFound)
+
+	go func() {
+		if runs, registerFunc, err := runFunc(self.Db); err != nil {
+			self.Logger.Err(err).Stringer("invocation", invocation.Id).Msg("While invoking")
+		} else if err := registerFunc(); err != nil {
+			self.Logger.Err(err).Interface("runs", runs).Msg("While registering job(s) for run(s)")
+		}
+	}()
 }
 
 func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
@@ -1053,6 +1087,30 @@ func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Reque
 	} else {
 		self.json(w, output, http.StatusOK)
 	}
+}
+
+// Retries the invocation by duplicating it.
+func (self *Web) ApiInvocationIdPost(w http.ResponseWriter, req *http.Request) {
+	id, err := uuid.Parse(mux.Vars(req)["id"])
+	if err != nil {
+		self.ClientError(w, err)
+		return
+	}
+
+	invocation, runFunc, err := self.InvocationService.Retry(id)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+	self.json(w, invocation, http.StatusOK)
+
+	go func() {
+		if runs, registerFunc, err := runFunc(self.Db); err != nil {
+			self.Logger.Err(err).Stringer("invocation", invocation.Id).Msg("While invoking")
+		} else if err := registerFunc(); err != nil {
+			self.Logger.Err(err).Interface("runs", runs).Msg("While registering job(s) for run(s)")
+		}
+	}()
 }
 
 func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {

@@ -36,7 +36,13 @@
 							<td>
 								<a href="/invocation/{{.InvocationId}}">
 									{{.InvocationId}}
-								</a>
+								</a>&nbsp;<form
+									method="POST"
+									action="/_dispatch/method/POST/invocation/{{.InvocationId}}"
+									style="display: inline-block"
+								>
+									<button>Retry</button>
+								</form>
 							</td>
 						</tr>
 						<tr>

@@ -28,12 +28,14 @@
 						<th>Created at</th>
 						<td>{{.CreatedAt}}</td>
 					</tr>
-					{{if .FinishedAt}}
-						<tr>
-							<th>Finished at</th>
-							<td>{{.FinishedAt}}</td>
-						</tr>
-					{{end}}
+					<tr>
+						<th>Finished at</th>
+						<td>
+							{{with .FinishedAt}}
+								{{.}}
+							{{end}}
+						</td>
+					</tr>
 					<tr>
 						<th>Duration</th>
 						<td>
@@ -41,7 +43,13 @@
 								{{.FinishedAt.Sub .CreatedAt}}
 							{{else}}
 								{{timeNow.Sub .CreatedAt}}
-							{{end}}
+							{{end}}&nbsp;<form
+								method="POST"
+								action="/_dispatch/method/POST/invocation/{{.Id}}"
+								style="display: inline-block"
+							>
+								<button>Retry</button>
+							</form>
 						</td>
 					</tr>
 					{{with $.Run}}
