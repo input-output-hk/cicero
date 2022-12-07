@@ -159,6 +159,16 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	if _, err := r.AddRoute(http.MethodGet,
+		"/api/invocation/{id}/output",
+		self.ApiInvocationIdOutputGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet,
 		"/api/invocation/{id}",
 		self.ApiInvocationIdGet,
 		apidoc.BuildSwaggerDef(
