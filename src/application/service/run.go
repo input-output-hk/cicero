@@ -298,7 +298,7 @@ func (self runService) GrafanaLokiUrls(allocs []*nomad.Allocation, to *time.Time
 					{
 						RefId:      "A",
 						EditorMode: "builder",
-						Expr:       fmt.Sprintf("{nomad_job_id=\"%s\"} |= ``", alloc.ID),
+						Expr:       fmt.Sprintf("{nomad_alloc_id=\"%s\"} |= ``", alloc.ID),
 						QueryType:  "range",
 					},
 				},
