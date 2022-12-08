@@ -18,6 +18,7 @@ function usage {
 		echo 'For eval, the following env vars must be set'
 		echo 'in order to run respective preparation hooks:'
 		echo -e '\t- CICERO_EVALUATOR_NIX_OCI_REGISTRY'
+		echo -e '\t- CICERO_EVALUATOR_NIX_BINARY_CACHE'
 		echo
 		echo 'The following env vars are optional:'
 		echo -e '\t- CICERO_EVALUATOR_NIX_EXTRA_ARGS'
@@ -91,6 +92,20 @@ function prepare {
 				>&2 skopeo --insecure-policy copy ${CICERO_EVALUATOR_NIX_OCI_REGISTRY_SKOPEO_COPY_ARGS:-} \
 					nix:"$image" "$name"
 			done
+			;;
+		nix)
+			local -a derivations
+			readarray -t derivations < <(<<<"$step" jq -r '.derivations[]')
+
+			local -a msgPairs=(prepare type="$type")
+
+			msg "${msgPairs[@]}" step=build derivations="${derivations[*]}"
+			local -a outputs
+			readarray -t outputs < <(nix build --json "${derivations[@]}" | jq -r '.[].outputs[]')
+
+			echo >&2 "Pushing to $CICERO_EVALUATOR_NIX_BINARY_CACHE: ${outputs[*]}…"
+			msg "${msgPairs[@]}" step=push paths="${outputs[*]}"
+			nix copy --to "$CICERO_EVALUATOR_NIX_BINARY_CACHE" "${outputs[@]}"
 			;;
 		*)
 			local error='Unknown type "'"$type"'" in prepare step'
