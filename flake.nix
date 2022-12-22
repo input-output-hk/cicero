@@ -19,6 +19,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     utils.url = "github:numtide/flake-utils";
+    nomad = {
+      url = "github:input-output-hk/nomad/release/1.4.3";
+      inputs.utils.follows = "utils";
+    };
     driver = {
       url = "github:input-output-hk/nomad-driver-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -55,6 +59,7 @@
     utils,
     devshell,
     nixos-shell,
+    nomad,
     driver,
     follower,
     poetry2nix,
@@ -193,6 +198,7 @@
             {
               nixpkgs.overlays = [
                 (_: prev: {
+                  inherit (nomad.packages.${prev.system}) nomad;
                   inherit (self.outputs.packages.${prev.system}) nomad-driver-podman;
                 })
               ];
