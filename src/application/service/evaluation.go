@@ -297,14 +297,22 @@ func promtailEntry(line, label, fd string, invocationId uuid.UUID) promtail.Entr
 func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, invocationId uuid.UUID) *sync.WaitGroup {
 	wg := &sync.WaitGroup{}
 
+	pipeAll := func(input io.Reader, fd string) {
+		scanner := newScanner(input)
+		for scanner.Scan() {
+			e.promtailChan <- promtailEntry(scanner.Text(), label, fd, invocationId)
+		}
+		if err := scanner.Err(); err != nil {
+			err = errors.WithMessage(err, "While scanning "+fd)
+			e.promtailChan <- promtailEntry(err.Error(), label, lokiFdErr, invocationId)
+		}
+	}
+
 	if stdout != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			scanner := newScanner(*stdout)
-			for scanner.Scan() {
-				e.promtailChan <- promtailEntry(scanner.Text(), label, lokiFdStdout, invocationId)
-			}
+			pipeAll(*stdout, lokiFdStdout)
 		}()
 	}
 
@@ -312,10 +320,7 @@ func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			scanner := newScanner(*stderr)
-			for scanner.Scan() {
-				e.promtailChan <- promtailEntry(scanner.Text(), label, lokiFdStderr, invocationId)
-			}
+			pipeAll(*stderr, lokiFdStderr)
 		}()
 	}
 
