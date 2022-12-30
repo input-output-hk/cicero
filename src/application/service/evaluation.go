@@ -159,9 +159,10 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		}
 
 		var lokiWg *sync.WaitGroup
+		var lokiStderrErr *error
 		if invocationId != nil {
 			stderrReader := io.Reader(stderr)
-			lokiWg = e.pipeToLoki(lokiEval, nil, &stderrReader, *invocationId)
+			lokiWg, _, lokiStderrErr = e.pipeToLoki(lokiEval, nil, &stderrReader, *invocationId)
 		}
 
 		if err := cmd.Start(); err != nil {
@@ -214,6 +215,9 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		// fill stderrBuf
 		if lokiWg != nil {
 			lokiWg.Wait()
+			if *lokiStderrErr != nil {
+				return nil, stderrBuf.Bytes(), *lokiStderrErr
+			}
 		} else {
 			for {
 				if _, err := stderr.Read(make([]byte, 512)); err != nil {
@@ -225,9 +229,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 			}
 		}
 
-		err = cmd.Wait()
-
-		if err != nil {
+		if err := cmd.Wait(); err != nil {
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
 				evalErr := EvaluationError(*errExit)
@@ -294,25 +296,25 @@ func promtailEntry(line, label, fd string, invocationId uuid.UUID) promtail.Entr
 
 // Sends stdout and stderr (if not nil) async to Loki.
 // Returns a WaitGroup that finishes when both streams have been read completely.
-func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, invocationId uuid.UUID) *sync.WaitGroup {
-	wg := &sync.WaitGroup{}
+func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, invocationId uuid.UUID) (wg *sync.WaitGroup, stdoutErr, stderrErr *error) {
+	wg = &sync.WaitGroup{}
+	stdoutErr = new(error)
+	stderrErr = new(error)
 
-	pipeAll := func(input io.Reader, fd string) {
+	pipeAll := func(input io.Reader, fd string) error {
 		scanner := newScanner(input)
 		for scanner.Scan() {
 			e.promtailChan <- promtailEntry(scanner.Text(), label, fd, invocationId)
 		}
-		if err := scanner.Err(); err != nil {
-			err = errors.WithMessage(err, "While scanning "+fd)
-			e.promtailChan <- promtailEntry(err.Error(), label, lokiFdErr, invocationId)
-		}
+		// Intentionally not sending the error to promtail here; caller should do that.
+		return errors.WithMessage(scanner.Err(), "While scanning "+fd)
 	}
 
 	if stdout != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pipeAll(*stdout, lokiFdStdout)
+			*stdoutErr = pipeAll(*stdout, lokiFdStdout)
 		}()
 	}
 
@@ -320,11 +322,11 @@ func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			pipeAll(*stderr, lokiFdStderr)
+			*stderrErr = pipeAll(*stderr, lokiFdStderr)
 		}()
 	}
 
-	return wg
+	return
 }
 
 func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
@@ -528,10 +530,12 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 			return nil, err
 		}
 		var lokiWg *sync.WaitGroup
+		var lokiStdoutErr *error
+		var lokiStderrErr *error
 		{
 			stdoutReader := io.Reader(stdout)
 			stderrReader := io.Reader(stderr)
-			lokiWg = e.pipeToLoki(lokiTransform, &stdoutReader, &stderrReader, invocationId)
+			lokiWg, lokiStdoutErr, lokiStderrErr = e.pipeToLoki(lokiTransform, &stdoutReader, &stderrReader, invocationId)
 		}
 
 		stdin, err := cmd.StdinPipe()
@@ -556,6 +560,14 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 
 		err = cmd.Wait()
 		lokiWg.Wait() // fill stdoutBuf and stderrBuf
+
+		if err == nil {
+			err = *lokiStdoutErr
+		}
+		if err == nil {
+			err = *lokiStderrErr
+		}
+
 		if err != nil {
 			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 
@@ -564,10 +576,11 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 				evalErr := EvaluationError(*errExit)
 				err = errors.WithMessagef(&evalErr, "Failed to transform\nStderr: %s", stderrBuf.String())
 			}
+
 			return nil, err
-		} else {
-			output = stdoutBuf.Bytes()
 		}
+
+		output = stdoutBuf.Bytes()
 	}
 
 	return output, nil
