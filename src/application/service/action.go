@@ -502,12 +502,8 @@ func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunF
 				if run, registerFunc, err := runFunc(db); err != nil {
 					return nil, nil, err
 				} else {
-					if run != nil {
-						runs = append(runs, run...)
-					}
-					if registerFunc != nil {
-						registerFuncs = append(registerFuncs, registerFunc)
-					}
+					runs = append(runs, run...)
+					registerFuncs = append(registerFuncs, registerFunc)
 				}
 			}
 
@@ -568,7 +564,9 @@ func (self actionService) NewInvokeRunFunc(action *domain.Action, invocation *do
 			// Do not return an EvaluationError so that the transaction commits and the invocation is ended.
 			var evalErr *EvaluationError
 			if errors.As(err, &evalErr) {
-				return nil, nil, nil
+				// Return a dummy registerFunc because we are not returning an error
+				// so the caller expects to be able to call it.
+				return nil, func() error { return nil }, nil
 			}
 			return nil, nil, err
 		}
