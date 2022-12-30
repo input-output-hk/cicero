@@ -427,7 +427,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	def := Def{}
 
 	if err := json.Unmarshal(output, &def); err != nil {
-		err = errors.WithMessage(err, "While unmarshaling transformer output")
+		err = errors.WithMessagef(err, "While unmarshaling transformer output. Output: %s", output)
 		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 		return nil, err
 	}
