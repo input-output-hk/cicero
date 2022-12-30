@@ -565,6 +565,7 @@ func (self actionService) NewInvokeRunFunc(action *domain.Action, invocation *do
 				return nil, nil, err
 			}
 
+			// Do not return an EvaluationError so that the transaction commits and the invocation is ended.
 			var evalErr *EvaluationError
 			if errors.As(err, &evalErr) {
 				return nil, nil, nil
