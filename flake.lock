@@ -1761,11 +1761,11 @@
         "std": "std"
       },
       "locked": {
-        "lastModified": 1670010705,
-        "narHash": "sha256-6+4sZ5u85obpQeO5VKy61ZX5J2qhqXw5xkTEwyEq5hQ=",
+        "lastModified": 1672428731,
+        "narHash": "sha256-6bGXyJxiEHBqx8o6vfOHDo3fthm6KPmkyi8FTiYtT/s=",
         "owner": "input-output-hk",
         "repo": "tullia",
-        "rev": "e1e9fb1648174b802976f6499a50fbc9c486b234",
+        "rev": "d4e763c5a72a7567693305f0eaee27f2fbc56ae6",
         "type": "github"
       },
       "original": {

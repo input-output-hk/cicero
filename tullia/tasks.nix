@@ -12,6 +12,8 @@
         revision = config.preset.github.lib.readRevision "GitHub event" rev;
       };
     };
+
+    nomad.driver = "exec";
   };
 in {
   lint = {...}: {
@@ -27,13 +29,16 @@ in {
     };
   };
 
-  build = {...}: {
+  build = {config, ...}: {
     imports = [common];
 
     config = {
       after = ["lint"];
 
-      command.text = "nix build -L";
+      command.text = config.preset.github.status.lib.reportBulk {
+        bulk.text = "nix eval .#defaultPackage --apply __attrNames --json | nix-systems -i";
+        each.text = ''nix build -L .#defaultPackage."$1"'';
+      };
 
       env.NIX_CONFIG = ''
         extra-system-features = kvm
