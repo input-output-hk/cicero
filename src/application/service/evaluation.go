@@ -558,8 +558,8 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 			return nil, err
 		}
 
-		err = cmd.Wait()
 		lokiWg.Wait() // fill stdoutBuf and stderrBuf
+		err = cmd.Wait()
 
 		if err == nil {
 			err = *lokiStdoutErr
