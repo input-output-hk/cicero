@@ -141,7 +141,7 @@ func (self invocationService) GetOutputById(id uuid.UUID) (*domain.OutputDefinit
 		return nil, err
 	} else if inputFactIds, err := self.GetInputFactIdsById(id); err != nil {
 		return nil, err
-	} else if inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds); err != nil {
+	} else if inputs, err := (*self.factService).GetByIds(inputFactIds); err != nil {
 		return nil, err
 	} else {
 		output := action.InOut.Output(inputs)
@@ -162,7 +162,7 @@ func (self invocationService) Retry(id uuid.UUID) (*domain.Invocation, InvokeRun
 		return nil, nil, err
 	}
 
-	inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds)
+	inputs, err := (*self.factService).GetByIds(inputFactIds)
 	if err != nil {
 		return nil, nil, err
 	}

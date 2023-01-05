@@ -22,12 +22,12 @@ type FactService interface {
 	withQuerier(config.PgxIface, FactServiceCyclicDependencies) FactService
 
 	GetById(uuid.UUID) (*domain.Fact, error)
+	GetByIds(map[string]uuid.UUID) (map[string]domain.Fact, error)
 	GetByRunId(uuid.UUID) ([]domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
 	GetLatestByCue(cue.Value) (*domain.Fact, error)
 	GetByCue(cue.Value) ([]domain.Fact, error)
 	Save(*domain.Fact, io.Reader) ([]domain.Invocation, InvokeRunFunc, error)
-	GetInvocationInputFacts(map[string]uuid.UUID) (map[string]domain.Fact, error)
 	Match(*domain.Fact, cue.Value) (cue.Value, error, error)
 }
 
@@ -136,8 +136,7 @@ func (self factService) GetByCue(value cue.Value) (facts []domain.Fact, err erro
 }
 
 // XXX Could probably be done entirely in the DB with a single SQL query
-// XXX Should this be `InvocationService.GetInputsById()`?
-func (self factService) GetInvocationInputFacts(inputFactIds map[string]uuid.UUID) (map[string]domain.Fact, error) {
+func (self factService) GetByIds(inputFactIds map[string]uuid.UUID) (map[string]domain.Fact, error) {
 	inputs := map[string]domain.Fact{}
 
 	for input, id := range inputFactIds {

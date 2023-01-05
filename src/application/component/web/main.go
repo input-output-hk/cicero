@@ -627,7 +627,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
 		return
-	} else if inputs_, err := self.FactService.GetInvocationInputFacts(inputFactIds); err != nil {
+	} else if inputs_, err := self.FactService.GetByIds(inputFactIds); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
 		return
 	} else {
@@ -707,7 +707,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
 		return
-	} else if inputs_, err := self.FactService.GetInvocationInputFacts(inputFactIds); err != nil {
+	} else if inputs_, err := self.FactService.GetByIds(inputFactIds); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
 		return
 	} else {
