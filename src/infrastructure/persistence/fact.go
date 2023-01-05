@@ -42,6 +42,39 @@ func (a *factRepository) GetById(id uuid.UUID) (*domain.Fact, error) {
 	return fact.(*domain.Fact), err
 }
 
+func (a *factRepository) GetByIds(idMap map[string]uuid.UUID) (facts map[string]domain.Fact, err error) {
+	ids := make([]uuid.UUID, 0, len(idMap))
+	for _, v := range idMap {
+		ids = append(ids, v)
+	}
+
+	result := []domain.Fact{}
+	err = pgxscan.Select(
+		context.Background(), a.DB, &result,
+		`SELECT id, run_id, value, created_at, binary_hash
+		FROM fact
+		WHERE id = ANY($1)`,
+		ids,
+	)
+	if err != nil {
+		return
+	}
+
+	facts = map[string]domain.Fact{}
+Result:
+	for _, fact := range result {
+		for k, v := range idMap {
+			if v == fact.ID {
+				facts[k] = fact
+				continue Result
+			}
+		}
+		panic("This should never happen™")
+	}
+
+	return
+}
+
 func (a *factRepository) GetByRunId(id uuid.UUID) (facts []domain.Fact, err error) {
 	facts = []domain.Fact{}
 	err = pgxscan.Select(

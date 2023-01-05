@@ -15,6 +15,7 @@ type FactRepository interface {
 	WithQuerier(config.PgxIface) FactRepository
 
 	GetById(uuid.UUID) (*domain.Fact, error)
+	GetByIds(map[string]uuid.UUID) (map[string]domain.Fact, error)
 	GetByRunId(uuid.UUID) ([]domain.Fact, error)
 	GetBinaryById(pgx.Tx, uuid.UUID) (io.ReadSeekCloser, error)
 	GetLatestByCue(cue.Value) (*domain.Fact, error)

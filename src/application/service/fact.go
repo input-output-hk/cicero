@@ -80,6 +80,13 @@ func (self factService) GetById(id uuid.UUID) (fact *domain.Fact, err error) {
 	return
 }
 
+func (self factService) GetByIds(ids map[string]uuid.UUID) (facts map[string]domain.Fact, err error) {
+	self.logger.Trace().Interface("ids", ids).Msg("Getting Facts by IDs")
+	facts, err = self.factRepository.GetByIds(ids)
+	err = errors.WithMessagef(err, "Could not select Facts by IDs %q", ids)
+	return
+}
+
 func (self factService) GetByRunId(id uuid.UUID) (facts []domain.Fact, err error) {
 	self.logger.Trace().Stringer("id", id).Msg("Getting Facts by Run ID")
 	facts, err = self.factRepository.GetByRunId(id)
@@ -133,26 +140,6 @@ func (self factService) GetByCue(value cue.Value) (facts []domain.Fact, err erro
 	facts, err = self.factRepository.GetByCue(value)
 	err = errors.WithMessagef(err, "Could not select Facts by CUE %q", value)
 	return
-}
-
-// XXX Could probably be done entirely in the DB with a single SQL query
-func (self factService) GetByIds(inputFactIds map[string]uuid.UUID) (map[string]domain.Fact, error) {
-	inputs := map[string]domain.Fact{}
-
-	for input, id := range inputFactIds {
-		fact, err := self.GetById(id)
-
-		switch {
-		case err != nil:
-			return nil, err
-		case fact == nil:
-			return nil, errors.New("no fact with given ID found")
-		default:
-			inputs[input] = *fact
-		}
-	}
-
-	return inputs, nil
 }
 
 func (self factService) Match(fact *domain.Fact, match cue.Value) (cue.Value, error, error) {
