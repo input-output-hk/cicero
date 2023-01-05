@@ -74,21 +74,21 @@ func (self factService) withQuerier(querier config.PgxIface, cyclicDeps FactServ
 }
 
 func (self factService) GetById(id uuid.UUID) (fact *domain.Fact, err error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Getting Fact by ID")
+	self.logger.Trace().Stringer("id", id).Msg("Getting Fact by ID")
 	fact, err = self.factRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Fact with ID %q", id)
 	return
 }
 
 func (self factService) GetByRunId(id uuid.UUID) (facts []domain.Fact, err error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Getting Facts by Run ID")
+	self.logger.Trace().Stringer("id", id).Msg("Getting Facts by Run ID")
 	facts, err = self.factRepository.GetByRunId(id)
 	err = errors.WithMessagef(err, "Could not select Facts for Run with ID %q", id)
 	return
 }
 
 func (self factService) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadSeekCloser, err error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Getting binary by ID")
+	self.logger.Trace().Stringer("id", id).Msg("Getting binary by ID")
 	binary, err = self.factRepository.GetBinaryById(tx, id)
 	err = errors.WithMessagef(err, "Could not select binary from Fact with ID %q", id)
 	return
@@ -103,12 +103,12 @@ func (self factService) Save(fact *domain.Fact, binary io.Reader) ([]domain.Invo
 
 		self.logger.Trace().Msg("Saving new Fact")
 		if err := txSelf.factRepository.Save(fact, binary); err != nil {
-			return errors.WithMessagef(err, "Could not insert Fact")
+			return errors.WithMessage(err, "Could not insert Fact")
 		}
-		self.logger.Trace().Str("id", fact.ID.String()).Msg("Created Fact")
+		self.logger.Trace().Stringer("id", fact.ID).Msg("Created Fact")
 
 		if invocations_, runFunc_, err := (*txSelf.actionService).InvokeCurrentActive(); err != nil {
-			return errors.WithMessagef(err, "Could not invoke currently active Actions")
+			return errors.WithMessage(err, "Could not invoke currently active Actions")
 		} else {
 			invocations = invocations_
 			runFunc = runFunc_

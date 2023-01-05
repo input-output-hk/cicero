@@ -114,21 +114,21 @@ func (self actionService) withQuerier(querier config.PgxIface, cyclicDeps Action
 }
 
 func (self actionService) GetById(id uuid.UUID) (action *domain.Action, err error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by ID")
+	self.logger.Trace().Stringer("id", id).Msg("Getting Action by ID")
 	action, err = self.actionRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for ID %q", id)
 	return
 }
 
 func (self actionService) GetByRunId(id uuid.UUID) (action *domain.Action, err error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Run ID")
+	self.logger.Trace().Stringer("id", id).Msg("Getting Action by Run ID")
 	action, err = self.actionRepository.GetByRunId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Run ID %q", id)
 	return
 }
 
 func (self actionService) GetByInvocationId(id uuid.UUID) (action *domain.Action, err error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Getting Action by Invocation ID")
+	self.logger.Trace().Stringer("id", id).Msg("Getting Action by Invocation ID")
 	action, err = self.actionRepository.GetByInvocationId(id)
 	err = errors.WithMessagef(err, "Could not select existing Action for Invocation ID %q", id)
 	return
@@ -156,25 +156,25 @@ func (self actionService) GetAll() ([]domain.Action, error) {
 func (self actionService) Save(action *domain.Action) error {
 	self.logger.Trace().Str("name", action.Name).Msg("Saving new Action")
 	if err := self.actionRepository.Save(action); err != nil {
-		return errors.WithMessagef(err, "Could not insert Action")
+		return errors.WithMessage(err, "Could not insert Action")
 	}
-	self.logger.Trace().Str("id", action.ID.String()).Msg("Created Action")
+	self.logger.Trace().Stringer("id", action.ID).Msg("Created Action")
 	return nil
 }
 
 func (self actionService) Update(action *domain.Action) error {
-	self.logger.Trace().Str("id", action.ID.String()).Msg("Updating Action")
+	self.logger.Trace().Stringer("id", action.ID).Msg("Updating Action")
 	if err := self.actionRepository.Update(action); err != nil {
-		return errors.WithMessagef(err, "Could not update Action")
+		return errors.WithMessage(err, "Could not update Action")
 	}
-	self.logger.Trace().Str("id", action.ID.String()).Msg("Updated Action")
+	self.logger.Trace().Stringer("id", action.ID).Msg("Updated Action")
 	return nil
 }
 
 func (self actionService) GetCurrent() (actions []domain.Action, err error) {
 	self.logger.Trace().Msg("Getting current Actions")
 	actions, err = self.actionRepository.GetCurrent()
-	err = errors.WithMessagef(err, "Could not select current Actions")
+	err = errors.WithMessage(err, "Could not select current Actions")
 	return
 }
 
@@ -279,7 +279,7 @@ func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]
 func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]domain.Fact, error) {
 	logger := self.logger.With().
 		Str("name", action.Name).
-		Str("id", action.ID.String()).
+		Stringer("id", action.ID).
 		Logger()
 
 	logger.Debug().Msg("Checking whether Action is runnable")

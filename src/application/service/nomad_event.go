@@ -45,7 +45,7 @@ func (n nomadEventService) WithQuerier(querier config.PgxIface) NomadEventServic
 func (n nomadEventService) Save(event *domain.NomadEvent) (err error) {
 	n.logger.Trace().Bytes("uid", event.Uid[:]).Uint64("index", event.Index).Msg("Saving nomad event")
 	if err = n.nomadEventRepository.Save(event); err != nil {
-		err = errors.WithMessagef(err, "Could not save nomad event")
+		err = errors.WithMessage(err, "Could not save nomad event")
 		return
 	}
 	n.logger.Trace().Bytes("uid", event.Uid[:]).Uint64("index", event.Index).Msg("Saved nomad event")
@@ -55,7 +55,7 @@ func (n nomadEventService) Save(event *domain.NomadEvent) (err error) {
 func (n nomadEventService) Update(event *domain.NomadEvent) (err error) {
 	n.logger.Trace().Bytes("uid", event.Uid[:]).Bool("handled", event.Handled).Msg("Updating nomad event")
 	if err = n.nomadEventRepository.Update(event); err != nil {
-		err = errors.WithMessagef(err, "Could not update nomad event")
+		err = errors.WithMessage(err, "Could not update nomad event")
 		return
 	}
 	n.logger.Trace().Bytes("uid", event.Uid[:]).Bool("handled", event.Handled).Msg("Updated nomad event")
