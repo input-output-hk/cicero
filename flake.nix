@@ -23,10 +23,6 @@
       url = "github:input-output-hk/nomad/release/1.4.3";
       inputs.utils.follows = "utils";
     };
-    driver = {
-      url = "github:input-output-hk/nomad-driver-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     follower = {
       url = "github:input-output-hk/nomad-follower";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -60,7 +56,6 @@
     devshell,
     nixos-shell,
     nomad,
-    driver,
     follower,
     poetry2nix,
     spongix,
