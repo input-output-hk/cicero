@@ -36,7 +36,13 @@
 							<td>
 								<a href="/invocation/{{.InvocationId}}">
 									{{.InvocationId}}
-								</a>
+								</a>&nbsp;<form
+									method="POST"
+									action="/_dispatch/method/POST/invocation/{{.InvocationId}}"
+									style="display: inline-block"
+								>
+									<button>Retry</button>
+								</form>
 							</td>
 						</tr>
 						<tr>
@@ -542,6 +548,7 @@
 											{{else}}
 												<em>No log found.</em>
 											{{end}}
+											Full logs are in <a href="{{index $.grafanaLokiUrls $alloc.ID}}">Loki</a>
 										</div>
 									{{end}}
 								</div>

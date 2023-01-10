@@ -44,7 +44,7 @@ func NewLokiService(prometheusClient prometheus.Client, logger *zerolog.Logger) 
 }
 
 func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.Time) (LokiLog, error) {
-	const linesToFetch = 10000
+	const linesToFetch = 10_000
 
 	log := LokiLog{}
 

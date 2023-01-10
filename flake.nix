@@ -19,9 +19,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     utils.url = "github:numtide/flake-utils";
-    driver = {
-      url = "github:input-output-hk/nomad-driver-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
+    nomad = {
+      url = "github:input-output-hk/nomad/release/1.4.3";
+      inputs.utils.follows = "utils";
     };
     follower = {
       url = "github:input-output-hk/nomad-follower";
@@ -55,7 +55,7 @@
     utils,
     devshell,
     nixos-shell,
-    driver,
+    nomad,
     follower,
     poetry2nix,
     spongix,
@@ -64,7 +64,7 @@
     tullia,
     ...
   }: let
-    supportedSystems = ["x86_64-linux"];
+    supportedSystems = ["x86_64-linux" "x86_64-darwin"];
   in
     utils.lib.eachSystem supportedSystems
     (
@@ -196,6 +196,7 @@
             {
               nixpkgs.overlays = [
                 (_: prev: {
+                  inherit (nomad.packages.${prev.system}) nomad;
                   inherit (self.outputs.packages.${prev.system}) nomad-driver-podman;
                 })
               ];

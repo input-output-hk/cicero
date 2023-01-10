@@ -138,7 +138,6 @@
       dropPrivileges = false;
 
       extraSettingsPlugins = [
-        self.inputs.driver.defaultPackage.${pkgs.system}
         pkgs.nomad-driver-podman
       ];
       extraPackages = with pkgs; [
@@ -151,7 +150,6 @@
         log_level = "TRACE";
 
         plugin = {
-          nix_driver = {};
           podman = {};
         };
 

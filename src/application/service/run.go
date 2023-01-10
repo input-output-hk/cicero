@@ -44,6 +44,7 @@ type RunService interface {
 	CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
 	MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
 	GrafanaUrls(allocs []*nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
+	GrafanaLokiUrls(allocs []*nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
 }
 
 type AllocationWithLogs struct {
@@ -255,7 +256,7 @@ func (self runService) GrafanaUrls(allocs []*nomad.Allocation, to *time.Time) (m
 			to = &t
 		}
 
-		grafanaUrl, err := url.Parse("https://monitoring.infra.aws.iohkdev.io/d/SxGmPry7k/cgroups")
+		grafanaUrl, err := url.Parse("https://monitoring.ci.iog.io/d/SxGmPry7k/cgroups")
 		if err != nil {
 			return nil, err
 		}
@@ -269,6 +270,73 @@ func (self runService) GrafanaUrls(allocs []*nomad.Allocation, to *time.Time) (m
 		grafanaUrls[alloc.ID] = grafanaUrl
 	}
 	return grafanaUrls, nil
+}
+
+func (self runService) GrafanaLokiUrls(allocs []*nomad.Allocation, to *time.Time) (map[string]*url.URL, error) {
+	grafanaUrls := map[string]*url.URL{}
+
+	for _, alloc := range allocs {
+		from := time.UnixMicro(alloc.CreateTime / 1000) // there's no UnixNano
+		if to == nil {
+			t := time.UnixMicro(alloc.ModifyTime / 1000)
+			to = &t
+		}
+
+		grafanaUrl, err := url.Parse("https://monitoring.ci.iog.io/explore")
+		if err != nil {
+			return nil, err
+		}
+		guQuery := grafanaUrl.Query()
+
+		guQuery.Set("from", strconv.FormatInt(from.UnixMilli(), 10))
+		guQuery.Set("to", strconv.FormatInt(to.UnixMilli(), 10))
+
+		left, err := json.Marshal(
+			grafanaExplore{
+				Datasource: "Loki",
+				Queries: []grafanaExploreQuery{
+					{
+						RefId:      "A",
+						EditorMode: "builder",
+						Expr:       fmt.Sprintf("{nomad_alloc_id=\"%s\"} |= ``", alloc.ID),
+						QueryType:  "range",
+					},
+				},
+				Range: grafanaExploreRange{
+					From: "now-24h",
+					To:   "now",
+				},
+			},
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		guQuery.Set("orgId", "1")
+		guQuery.Set("left", string(left))
+		grafanaUrl.RawQuery = guQuery.Encode()
+		grafanaUrls[alloc.ID] = grafanaUrl
+	}
+
+	return grafanaUrls, nil
+}
+
+type grafanaExplore struct {
+	Datasource string                `json:"datasource"`
+	Queries    []grafanaExploreQuery `json:"queries"`
+	Range      grafanaExploreRange   `json:"range"`
+}
+
+type grafanaExploreQuery struct {
+	RefId      string `json:"refId"`
+	EditorMode string `json:"editorMode"`
+	Expr       string `json:"expr"`
+	QueryType  string `json:"queryType"`
+}
+
+type grafanaExploreRange struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 func (self runService) metrics(allocs []*nomad.Allocation, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {

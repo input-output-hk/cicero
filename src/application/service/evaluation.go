@@ -55,6 +55,7 @@ func newScanner(input io.Reader) (scanner *bufio.Scanner) {
 
 func parseSource(src string) (fetchUrl *url.URL, evaluator string, err error) {
 	fetchUrl, err = url.Parse(src)
+	err = errors.WithMessage(err, "While parsing action source")
 	if err != nil {
 		return
 	}
@@ -158,9 +159,10 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		}
 
 		var lokiWg *sync.WaitGroup
+		var lokiStderrErr *error
 		if invocationId != nil {
 			stderrReader := io.Reader(stderr)
-			lokiWg = e.pipeToLoki(lokiEval, nil, &stderrReader, *invocationId)
+			lokiWg, _, lokiStderrErr = e.pipeToLoki(lokiEval, nil, &stderrReader, *invocationId)
 		}
 
 		if err := cmd.Start(); err != nil {
@@ -196,7 +198,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 				case "result":
 					// XXX Take *interface{} to unmarshal result into using json.Decoder instead of returning its []byte?
 					if r, err := json.Marshal(msg["result"]); err != nil {
-						scanErr = err
+						scanErr = errors.WithMessage(err, "While marshaling evaluator result")
 						break Scan
 					} else {
 						result = r
@@ -213,6 +215,9 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		// fill stderrBuf
 		if lokiWg != nil {
 			lokiWg.Wait()
+			if *lokiStderrErr != nil {
+				return nil, stderrBuf.Bytes(), *lokiStderrErr
+			}
 		} else {
 			for {
 				if _, err := stderr.Read(make([]byte, 512)); err != nil {
@@ -224,9 +229,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 			}
 		}
 
-		err = cmd.Wait()
-
-		if err != nil {
+		if err := cmd.Wait(); err != nil {
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {
 				evalErr := EvaluationError(*errExit)
@@ -293,17 +296,25 @@ func promtailEntry(line, label, fd string, invocationId uuid.UUID) promtail.Entr
 
 // Sends stdout and stderr (if not nil) async to Loki.
 // Returns a WaitGroup that finishes when both streams have been read completely.
-func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, invocationId uuid.UUID) *sync.WaitGroup {
-	wg := &sync.WaitGroup{}
+func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, invocationId uuid.UUID) (wg *sync.WaitGroup, stdoutErr, stderrErr *error) {
+	wg = &sync.WaitGroup{}
+	stdoutErr = new(error)
+	stderrErr = new(error)
+
+	pipeAll := func(input io.Reader, fd string) error {
+		scanner := newScanner(input)
+		for scanner.Scan() {
+			e.promtailChan <- promtailEntry(scanner.Text(), label, fd, invocationId)
+		}
+		// Intentionally not sending the error to promtail here; caller should do that.
+		return errors.WithMessage(scanner.Err(), "While scanning "+fd)
+	}
 
 	if stdout != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			scanner := newScanner(*stdout)
-			for scanner.Scan() {
-				e.promtailChan <- promtailEntry(scanner.Text(), label, lokiFdStdout, invocationId)
-			}
+			*stdoutErr = pipeAll(*stdout, lokiFdStdout)
 		}()
 	}
 
@@ -311,14 +322,11 @@ func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			scanner := newScanner(*stderr)
-			for scanner.Scan() {
-				e.promtailChan <- promtailEntry(scanner.Text(), label, lokiFdStderr, invocationId)
-			}
+			*stderrErr = pipeAll(*stderr, lokiFdStderr)
 		}()
 	}
 
-	return wg
+	return
 }
 
 func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domain.ActionDefinition, error) {
@@ -403,12 +411,13 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	// Marshal back to JSON to pass through transformers.
 	canonicalizedDefJson, err := json.Marshal(freeformDef)
 	if err != nil {
+		err = errors.WithMessage(err, "While marshaling canonicalized freeformDef")
 		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 		return nil, err
 	}
 
 	if output, err = e.transform(canonicalizedDefJson, dst, extraEnv, invocationId); err != nil {
-		return nil, err
+		return nil, errors.WithMessage(err, "While transforming")
 	}
 
 	type Def struct {
@@ -418,6 +427,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	def := Def{}
 
 	if err := json.Unmarshal(output, &def); err != nil {
+		err = errors.WithMessagef(err, "While unmarshaling transformer output. Output: %s", output)
 		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 		return nil, err
 	}
@@ -432,7 +442,7 @@ func (e evaluationService) unmarshalJob(freeformJob any, invocationId uuid.UUID)
 	// Marshal back to JSON so we can try both formats.
 	freeformJobJson, err := json.Marshal(freeformJob)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithMessage(err, "While marshaling freeformJob")
 	}
 
 	def := &nomad.Job{}
@@ -520,10 +530,12 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 			return nil, err
 		}
 		var lokiWg *sync.WaitGroup
+		var lokiStdoutErr *error
+		var lokiStderrErr *error
 		{
 			stdoutReader := io.Reader(stdout)
 			stderrReader := io.Reader(stderr)
-			lokiWg = e.pipeToLoki(lokiTransform, &stdoutReader, &stderrReader, invocationId)
+			lokiWg, lokiStdoutErr, lokiStderrErr = e.pipeToLoki(lokiTransform, &stdoutReader, &stderrReader, invocationId)
 		}
 
 		stdin, err := cmd.StdinPipe()
@@ -546,8 +558,16 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 			return nil, err
 		}
 
-		err = cmd.Wait()
 		lokiWg.Wait() // fill stdoutBuf and stderrBuf
+		err = cmd.Wait()
+
+		if err == nil {
+			err = *lokiStdoutErr
+		}
+		if err == nil {
+			err = *lokiStderrErr
+		}
+
 		if err != nil {
 			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
 
@@ -556,10 +576,11 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 				evalErr := EvaluationError(*errExit)
 				err = errors.WithMessagef(&evalErr, "Failed to transform\nStderr: %s", stderrBuf.String())
 			}
+
 			return nil, err
-		} else {
-			output = stdoutBuf.Bytes()
 		}
+
+		output = stdoutBuf.Bytes()
 	}
 
 	return output, nil
