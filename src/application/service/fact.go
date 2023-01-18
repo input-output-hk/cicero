@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -28,7 +29,7 @@ type FactService interface {
 	GetLatestByCue(cue.Value) (*domain.Fact, error)
 	GetByCue(cue.Value) ([]domain.Fact, error)
 	Save(*domain.Fact, io.Reader) ([]domain.Invocation, InvokeRunFunc, error)
-	Match(*domain.Fact, cue.Value) (cue.Value, error, error)
+	Match(*domain.Fact, cue.Value) (error, error)
 }
 
 type FactServiceCyclicDependencies struct {
@@ -114,6 +115,10 @@ func (self factService) Save(fact *domain.Fact, binary io.Reader) ([]domain.Invo
 		}
 		self.logger.Trace().Stringer("id", fact.ID).Msg("Created Fact")
 
+		if err := (*txSelf.actionService).UpdateSatisfaction(fact); err != nil {
+			return errors.WithMessage(err, "Could not update satisfaction")
+		}
+
 		if invocations_, runFunc_, err := (*txSelf.actionService).InvokeCurrentActive(); err != nil {
 			return errors.WithMessage(err, "Could not invoke currently active Actions")
 		} else {
@@ -142,13 +147,24 @@ func (self factService) GetByCue(value cue.Value) (facts []domain.Fact, err erro
 	return
 }
 
-func (self factService) Match(fact *domain.Fact, match cue.Value) (cue.Value, error, error) {
-	factCue := match.Context().Encode(fact.Value)
-	if err := factCue.Err(); err != nil {
-		return cue.Value{}, nil, err
+func (self factService) Match(fact *domain.Fact, match cue.Value) (error, error) {
+	factValueJson, err := json.Marshal(fact.Value)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Could not marshal fact to JSON")
 	}
 
-	unified := match.Unify(factCue)
+	// Read these to understand better:
+	// - https://github.com/cue-lang/cue/issues/375#issuecomment-873387284
+	// - https://github.com/cue-lang/cue/issues/1259
+	// - https://github.com/cue-lang/cue/issues/1470
 
-	return unified, unified.Validate(cue.Concrete(true)), nil
+	// A bit hacky but easy to understand. Not sure how else to close only `factCue`.
+	factCue := match.Context().CompileString("close(" + string(factValueJson) + ")")
+	if err := factCue.Err(); err != nil {
+		return nil, errors.WithMessage(err, "Could not create CUE value from fact")
+	}
+
+	// Cannot use `match.Subsume(factCue)` (no matter which options like `cue.Schema()` and `cue.Final()`)
+	// because subsumption does not work with string interpolation like `a: "\(b)", b: string` in `match`.
+	return match.Unify(factCue).Validate(cue.Concrete(true)), nil
 }

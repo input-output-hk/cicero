@@ -31,12 +31,13 @@ type ActionService interface {
 	GetLatestByName(string) (*domain.Action, error)
 	GetAll() ([]domain.Action, error)
 	GetCurrent() ([]domain.Action, error)
-	GetCurrentActive() ([]domain.Action, error)
+	GetCurrentByActive(bool) ([]domain.Action, error)
 	Save(*domain.Action) error
-	Update(*domain.Action) error
-	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, bool, error)
+	SetActive(string, bool) error
+	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, error)
 	IsRunnable(*domain.Action) (bool, map[string]domain.Fact, error)
 	Create(string, string) (*domain.Action, error)
+	UpdateSatisfaction(*domain.Fact) error
 	// Returns a nil pointer for the first return value if the Action was not runnable.
 	Invoke(*domain.Action) (*domain.Invocation, InvokeRunFunc, error)
 	InvokeCurrentActive() ([]domain.Invocation, InvokeRunFunc, error)
@@ -154,20 +155,22 @@ func (self actionService) GetAll() ([]domain.Action, error) {
 }
 
 func (self actionService) Save(action *domain.Action) error {
-	self.logger.Trace().Str("name", action.Name).Msg("Saving new Action")
+	logger := self.logger.With().Str("name", action.Name).Logger()
+	logger.Trace().Msg("Saving new Action")
 	if err := self.actionRepository.Save(action); err != nil {
 		return errors.WithMessage(err, "Could not insert Action")
 	}
-	self.logger.Trace().Stringer("id", action.ID).Msg("Created Action")
+	logger.Trace().Stringer("id", action.ID).Msg("Created Action")
 	return nil
 }
 
-func (self actionService) Update(action *domain.Action) error {
-	self.logger.Trace().Stringer("id", action.ID).Msg("Updating Action")
-	if err := self.actionRepository.Update(action); err != nil {
-		return errors.WithMessage(err, "Could not update Action")
+func (self actionService) SetActive(name string, active bool) error {
+	logger := self.logger.With().Str("name", name).Bool("active", active).Logger()
+	logger.Trace().Msg("Setting action active status")
+	if err := self.actionRepository.SetActive(name, active); err != nil {
+		return errors.WithMessage(err, "Could not set action active status")
 	}
-	self.logger.Trace().Stringer("id", action.ID).Msg("Updated Action")
+	logger.Trace().Msg("Set action active status")
 	return nil
 }
 
@@ -178,102 +181,23 @@ func (self actionService) GetCurrent() (actions []domain.Action, err error) {
 	return
 }
 
-func (self actionService) GetCurrentActive() (actions []domain.Action, err error) {
-	self.logger.Trace().Msg("Getting current active Actions")
-	actions, err = self.actionRepository.GetCurrentActive()
-	err = errors.WithMessagef(err, "Could not select current active Actions")
+func (self actionService) GetCurrentByActive(active bool) (actions []domain.Action, err error) {
+	self.logger.Trace().Bool("active", active).Msg("Getting current Actions")
+	actions, err = self.actionRepository.GetCurrentByActive(active)
+	err = errors.WithMessagef(err, "Could not select current Actions by active %v", active)
 	return
 }
 
-func (self actionService) GetSatisfiedInputs(action *domain.Action) (map[string]domain.Fact, bool, error) {
-	logger := self.logger.With().
-		Str("name", action.Name).
-		Str("id", action.ID.String()).
-		Logger()
-
-	inputs := map[string]domain.Fact{}
-
-	dbConnMutex := &sync.Mutex{}
-	valuePath := cue.MakePath(cue.Str("value"))
-
-	errNotRunnable := errors.New("not runnable")
-	if flow, err := action.InOut.InputsFlow(func(t *flow.Task) error {
-		name := t.Path().Selectors()[1].String() // inputs: <name>: …
-		if name_, err := cueliteral.Unquote(name); err == nil {
-			name = name_
-		}
-		input, err := action.InOut.Input(name, nil)
-		if err != nil {
-			return err
-		}
-		tValue := t.Value().LookupPath(valuePath)
-		inputLogger := logger.With().Str("input", name).Logger()
-
-		// A transaction happens on exactly one connection so
-		// we cannot use more connections to run queries in parallel.
-		dbConnMutex.Lock()
-		defer dbConnMutex.Unlock()
-
-		switch fact, err := (*self.factService).GetLatestByCue(tValue); {
-		case err != nil:
-			return err
-		case fact == nil:
-			if !input.Not && !input.Optional {
-				inputLogger.Debug().
-					Bool("runnable", false).
-					Msg("No fact found for required input")
-				return errNotRunnable
-			}
-		default:
-			if !input.Not {
-				inputs[name] = *fact
-			}
-
-			// Match candidate fact.
-			if _, matchErr, err := (*self.factService).Match(fact, tValue); err != nil {
-				return err
-			} else {
-				switch {
-				case matchErr == nil && input.Not:
-					inputLogger.Debug().
-						Bool("runnable", false).
-						Str("fact", fact.ID.String()).
-						Msg("Fact matches negated input")
-					delete(inputs, name)
-					return errNotRunnable
-				case matchErr != nil && !input.Not && !input.Optional:
-					inputLogger.Debug().
-						Bool("runnable", false).
-						Str("fact", fact.ID.String()).
-						AnErr("mismatch", matchErr).
-						Msg("Fact does not match required input")
-					delete(inputs, name)
-					return errNotRunnable
-				}
-			}
-
-			// Fill the CUE expression with the fact's value
-			// so it can be referenced by its dependents.
-			if _, exists := inputs[name]; exists {
-				if err := t.Fill(struct {
-					Value interface{} `json:"value"`
-				}{fact.Value}); err != nil {
-					return err
-				}
-			}
-		}
-
-		return nil
-	}); err != nil {
-		return nil, false, err
-	} else if err := flow.Run(context.Background()); err != nil {
-		if errors.Is(err, errNotRunnable) {
-			return inputs, false, nil
-		}
-		return nil, false, err
+func (self actionService) GetSatisfiedInputs(action *domain.Action) (inputs map[string]domain.Fact, err error) {
+	self.logger.Trace().Stringer("id", action.ID).Msg("Getting satisfactions")
+	ids, err := self.actionRepository.GetSatisfactions(action.ID)
+	if err != nil {
+		err = errors.WithMessage(err, "Could not select satisfactions")
+		return
 	}
-
-	return inputs, true, nil
+	inputs, err = (*self.factService).GetByIds(ids)
+	err = errors.WithMessage(err, "Could not select satisfying facts")
+	return
 }
 
 func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]domain.Fact, error) {
@@ -284,102 +208,33 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 
 	logger.Debug().Msg("Checking whether Action is runnable")
 
-	// Select and match candidate facts.
-	var inputs map[string]domain.Fact
-	switch inputs_, maybeRunnable, err := self.GetSatisfiedInputs(action); {
-	case err != nil:
+	inputs, err := self.GetSatisfiedInputs(action)
+	if err != nil {
 		return false, nil, err
-	case !maybeRunnable:
-		return false, inputs_, nil
-	default:
-		inputs = inputs_
 	}
 
-	// Not runnable if the inputs are the same as last invocation.
-	if invocation, err := (*self.invocationService).GetLatestByActionId(action.ID); err != nil {
-		return false, nil, err
-	} else if invocation != nil {
-		var inputFactIds map[string]uuid.UUID
-		if inputFactIds, err = (*self.invocationService).GetInputFactIdsById(invocation.Id); err != nil {
-			return false, nil, err
-		}
+	inputDefs, err := action.InOut.Inputs(nil)
+	if err != nil {
+		return false, inputs, err
+	}
 
-		inputFactsChanged := false
+	for name, input := range inputDefs {
+		inputLogger := logger.With().Str("input", name).Logger()
 
-		if inputsWithDeps, err := action.InOut.Inputs(inputs); err != nil {
-			return false, nil, err
-		} else {
-		InputFactsChanged:
-			for name, input := range inputsWithDeps {
-				if _, exists := inputs[name]; !exists {
-					// We only care about inputs that are
-					// passed into the evaluation.
-					continue
-				}
+		fact, satisfied := inputs[name]
 
-				var oldFactId *uuid.UUID
-				if _, hasOldFact := inputFactIds[name]; hasOldFact {
-					var oldFactIdOnHeap = inputFactIds[name]
-					oldFactId = &oldFactIdOnHeap
-				}
-
-				switch {
-				case input.Optional && oldFactId == nil:
-					if _, exists := inputs[name]; exists {
-						if logger.Debug().Enabled() {
-							logger.Debug().
-								Str("input", name).
-								Bool("input-optional", true).
-								Interface("old-fact", nil).
-								Str("new-fact", inputs[name].ID.String()).
-								Msg("input satisfied by new Fact")
-						}
-						inputFactsChanged = true
-						break InputFactsChanged
-					}
-				case input.Optional && oldFactId != nil:
-					if _, exists := inputs[name]; !exists || *oldFactId != inputs[name].ID {
-						if logger.Debug().Enabled() {
-							var newFactIdToLog *string
-							if !exists {
-								newFactIdToLogValue := inputs[name].ID.String()
-								newFactIdToLog = &newFactIdToLogValue
-							}
-							logger.Debug().
-								Str("input", name).
-								Bool("input-optional", true).
-								Str("old-fact", oldFactId.String()).
-								Interface("new-fact", newFactIdToLog).
-								Msg("input satisfied by new Fact or absence of one")
-						}
-						inputFactsChanged = true
-						break InputFactsChanged
-					}
-				case oldFactId == nil:
-					// A previous Invocation would not have been done
-					// if a non-optional input was not satisfied.
-					// We are not looking at a negated input here
-					// because those are never passed into the evaluation.
-					panic("This should never happen™")
-				case *oldFactId != inputs[name].ID:
-					if logger.Debug().Enabled() {
-						logger.Debug().
-							Str("input", name).
-							Str("old-fact", oldFactId.String()).
-							Str("new-fact", inputs[name].ID.String()).
-							Msg("input satisfied by new Fact")
-					}
-					inputFactsChanged = true
-					break InputFactsChanged
-				}
-
-				logger.Debug().
-					Str("input", name).
-					Msg("input satisfied by same Fact(s) as last Invocation")
-			}
-		}
-
-		if !inputFactsChanged {
+		switch {
+		case satisfied && input.Not:
+			inputLogger.Debug().
+				Bool("runnable", false).
+				Stringer("fact", fact.ID).
+				Msg("Fact matches negated input")
+			return false, inputs, nil
+		case !satisfied && !input.Not && !input.Optional:
+			inputLogger.Debug().
+				Bool("runnable", false).
+				Stringer("fact", fact.ID).
+				Msg("Required input not satisfied")
 			return false, inputs, nil
 		}
 	}
@@ -424,7 +279,6 @@ func (self actionService) Create(source, name string) (*domain.Action, error) {
 		ID:     uuid.New(),
 		Name:   name,
 		Source: source,
-		Active: true,
 	}
 
 	if def, err := self.evaluationService.EvaluateAction(source, name, action.ID); err != nil {
@@ -434,21 +288,7 @@ func (self actionService) Create(source, name string) (*domain.Action, error) {
 		action.ActionDefinition = def
 	}
 
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
-		txSelf := self.WithQuerier(tx).(*actionService)
-
-		// deactivate previous version for convenience
-		if prev, err := txSelf.GetLatestByName(action.Name); err != nil {
-			return err
-		} else if prev != nil && prev.Active {
-			prev.Active = false
-			if err := txSelf.Update(prev); err != nil {
-				return err
-			}
-		}
-
-		return txSelf.Save(&action)
-	}); err != nil {
+	if err := self.Save(&action); err != nil {
 		return nil, err
 	}
 
@@ -476,6 +316,10 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 
 		invocation = &domain.Invocation{ActionId: action.ID}
 		if err := (*txSelf.invocationService).Save(invocation, inputs); err != nil {
+			return err
+		}
+
+		if err := txSelf.actionRepository.DeleteSatisfactions(action.ID); err != nil {
 			return err
 		}
 
@@ -518,7 +362,7 @@ func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunF
 		}, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx).(*actionService)
 
-			actions, err := txSelf.GetCurrentActive()
+			actions, err := txSelf.GetCurrentByActive(true)
 			if err != nil {
 				return err
 			}
@@ -648,4 +492,112 @@ func (self actionService) NewInvokeRunFunc(action *domain.Action, invocation *do
 
 		return runs, registerFunc, nil
 	}
+}
+
+func (self actionService) UpdateSatisfaction(fact *domain.Fact) error {
+	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx).(*actionService)
+
+		actions, err := txSelf.GetCurrent()
+		if err != nil {
+			return err
+		}
+
+		for _, action := range actions {
+			if err := txSelf.updateSatisfaction(&action, fact); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+func (self actionService) updateSatisfaction(action *domain.Action, fact *domain.Fact) error {
+	logger := self.logger.With().
+		Str("name", action.Name).
+		Stringer("id", action.ID).
+		Stringer("fact", fact.ID).
+		Logger()
+
+	logger.Trace().Msg("Updating satisfaction with new fact")
+
+	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		txSelf := self.WithQuerier(tx).(*actionService)
+
+		inputs, err := txSelf.GetSatisfiedInputs(action)
+		if err != nil {
+			return err
+		}
+
+		// A transaction happens on exactly one connection so
+		// we cannot use more connections to run queries in parallel.
+		dbConnMutex := &sync.Mutex{}
+
+		matchPath := cue.MakePath(cue.Str("match"))
+
+		if flow, err := action.InOut.InputsFlow(func(t *flow.Task) error {
+			name := t.Path().Selectors()[1].String() // inputs: <name>: …
+			if name_, err := cueliteral.Unquote(name); err == nil {
+				name = name_
+			}
+
+			tMatch := t.Value().LookupPath(matchPath)
+
+			inputLogger := logger.With().Str("input", name).Logger()
+			inputLogger.Trace().Msg("Matching")
+
+			//nolint:gocritic // IMHO if-else chain is better than switch here
+			if matchErr, err := (*txSelf.factService).Match(fact, tMatch); err != nil {
+				return errors.WithMessagef(err, "Could not match fact %s against input %q of action %s", fact.ID, name, action.ID)
+			} else if matchErr == nil {
+				inputLogger.Trace().Msg("Satisfied")
+
+				inputs[name] = *fact
+
+				dbConnMutex.Lock()
+				defer dbConnMutex.Unlock()
+
+				if err := txSelf.actionRepository.SaveSatisfaction(action.ID, name, fact.ID); err != nil {
+					return errors.WithMessagef(err, "Could not save satisfaction of input %q on action %q by fact %q", name, action.ID, fact.ID)
+				}
+			} else {
+				inputLogger.Trace().AnErr("match-error", matchErr).Msg("Does not satisfy")
+
+				if oldMatch, exists := inputs[name]; exists {
+					// We need to check the old match again in case a dependency changed.
+					if matchErr, err := (*txSelf.factService).Match(&oldMatch, tMatch); err != nil {
+						return err
+					} else if matchErr != nil {
+						inputLogger.Trace().Stringer("old-fact", oldMatch.ID).Msg("No longer satisfied")
+
+						dbConnMutex.Lock()
+						defer dbConnMutex.Unlock()
+
+						if err := txSelf.actionRepository.DeleteSatisfaction(action.ID, name); err != nil {
+							return errors.WithMessagef(err, "Could not delete satisfaction of input %q on action %q", name, action.ID)
+						}
+
+						delete(inputs, name)
+					}
+				}
+			}
+
+			// Fill the CUE expression with the fact's value
+			// so it can be referenced by its dependents.
+			if input, exists := inputs[name]; exists {
+				if err := t.Fill(struct {
+					Match interface{} `json:"match"`
+				}{input.Value}); err != nil {
+					return errors.WithMessagef(err, "Could not fill value input %q with fact %q", name, input.ID)
+				}
+			}
+
+			return nil
+		}); err != nil {
+			return errors.WithMessage(err, "While building flow")
+		} else {
+			return errors.WithMessage(flow.Run(context.Background()), "While running flow")
+		}
+	})
 }

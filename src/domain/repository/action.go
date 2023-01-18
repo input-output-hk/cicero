@@ -17,7 +17,11 @@ type ActionRepository interface {
 	GetLatestByName(string) (*domain.Action, error)
 	GetAll() ([]domain.Action, error)
 	GetCurrent() ([]domain.Action, error)
-	GetCurrentActive() ([]domain.Action, error)
+	GetCurrentByActive(bool) ([]domain.Action, error)
 	Save(*domain.Action) error
-	Update(*domain.Action) error
+	SetActive(string, bool) error
+	GetSatisfactions(uuid.UUID) (map[string]uuid.UUID, error)
+	SaveSatisfaction(uuid.UUID, string, uuid.UUID) error
+	DeleteSatisfaction(uuid.UUID, string) error
+	DeleteSatisfactions(uuid.UUID) error
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
-	cueliteral "cuelang.org/go/cue/literal"
 	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
@@ -21,13 +20,18 @@ type Action struct {
 	Name      string    `json:"name"`
 	Source    string    `json:"source"`
 	CreatedAt time.Time `json:"created_at"`
-	Active    bool      `json:"active"`
 	ActionDefinition
 }
 
 type ActionDefinition struct {
 	Meta  map[string]interface{} `json:"meta"`
 	InOut InOutCUEString         `json:"io" db:"io"`
+}
+
+type ActionSatisfaction struct {
+	ActionId uuid.UUID `json:"action_id"`
+	Input    string    `json:"input"`
+	FactId   uuid.UUID `json:"fact_id"`
 }
 
 type InOutCUEString util.CUEString
@@ -139,42 +143,47 @@ func (self InOutCUEString) Input(name string, inputs map[string]Fact) (*InputDef
 }
 
 func (self InOutCUEString) InputsFlow(runnerFunc flow.RunnerFunc) (*flow.Controller, error) {
-	inputs, err := self.Inputs(nil)
-	if err != nil {
-		return nil, err
-	}
+	value := util.CUEString(self).Value(nil, nil)
 
-	cueStr := util.CUEString(self)
-	for name, input := range inputs {
-		if input.Not {
-			// not really necessary but makes sense
-			continue
-		}
-		cueStr += "\ninputs: "
-		cueStr = util.CUEString(cueliteral.Label.Append([]byte(cueStr), name))
-		cueStr += `: value: inputs.`
-		cueStr = util.CUEString(cueliteral.Label.Append([]byte(cueStr), name))
-		cueStr += ".match\n"
+	if err := value.Err(); err != nil {
+		return nil, errors.WithMessage(err, "Bad io")
 	}
-
-	// XXX replace loop above with this?
-	/*
-		value := util.CUEString(*self.source).Value(nil, nil)
-		for name, input := range self.inputs {
-			value = value.FillPath(cue.MakePath(cue.Str("inputs"), cue.Str(name), cue.Str("value")), input.Match)
-		}
-	*/
 
 	return flow.New(
-		&flow.Config{Root: cue.MakePath(cue.Str("inputs"))},
-		cueStr.Value(nil, nil),
+		&flow.Config{
+			Root: cue.MakePath(cue.Str("inputs")),
+			UpdateFunc: func(c *flow.Controller, t *flow.Task) error {
+				if t != nil {
+					if err := t.Err(); err != nil {
+						return errors.WithMessage(err, "UpdateFunc noticed task error")
+					}
+					if err := t.Value().Err(); err != nil {
+						return errors.WithMessage(err, "UpdateFunc noticed task value is an error")
+					}
+				}
+				return nil
+			},
+		},
+		value,
 		func(v cue.Value) (flow.Runner, error) {
-			if len(v.Path().Selectors()) != 2 {
+			if n := len(v.Path().Selectors()); n > 2 {
+				return nil, fmt.Errorf("Flow task path consists of more than two selectors: %s", v.Path())
+			} else if n == 1 {
+				// top-level inputs selector is not a task
 				return nil, nil
 			}
-			return runnerFunc, nil
+			return inputsFlowRunner(runnerFunc), nil
 		},
 	), nil
+}
+
+type inputsFlowRunner flow.RunnerFunc
+
+func (self inputsFlowRunner) Run(t *flow.Task, err error) error {
+	if err != nil {
+		return errors.WithMessage(err, "Flow runner received error")
+	}
+	return self(t)
 }
 
 func (self InOutCUEString) Output(inputs map[string]Fact) OutputDefinition {
@@ -189,7 +198,19 @@ func (self InOutCUEString) valueWithInputs(inputs map[string]Fact) cue.Value {
 	cueStr := util.CUEString(self)
 
 	if inputs != nil {
-		inputsJson, err := json.Marshal(inputs)
+		type inputAsDef struct {
+			Value interface{} `json:"match"` // ← "match" instead of "value"
+			Fact
+		}
+		inputsAsDef := make(map[string]inputAsDef, len(inputs))
+		for k, v := range inputs {
+			inputsAsDef[k] = inputAsDef{
+				Fact:  v,
+				Value: v.Value,
+			}
+		}
+
+		inputsJson, err := json.Marshal(inputsAsDef)
 		if err != nil {
 			panic("Facts should always be serializable to JSON")
 		}

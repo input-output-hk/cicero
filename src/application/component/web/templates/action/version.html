@@ -13,7 +13,6 @@
 					<th>ID</th>
 					<th>Created At</th>
 					<th>Source</th>
-					<th>Active</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -23,7 +22,12 @@
 							{{if eq .ID $.ActionID}}
 								<details>
 									<summary>this version</summary>
+								<a
+									href="/action/{{.ID}}"
+									target="_parent"
+								>
 									{{.ID}}
+								</a>
 								</details>
 							{{else}}
 								<a
@@ -36,26 +40,6 @@
 						</td>
 						<td>{{.CreatedAt}}</td>
 						<td><code>{{.Source}}</code></td>
-						<td>
-							<form
-								method="POST"
-								action="/_dispatch/method/PATCH/action/{{.ID}}"
-								style="text-align: center"
-							>
-								<input
-									type="checkbox"
-									{{if .Active}}
-										checked
-									{{end}}
-									onChange="this.form.submit()"
-								/>
-								<input
-									type="hidden"
-									name="active"
-									value="{{not .Active}}"
-								/>
-							</form>
-						</td>
 					</tr>
 				{{end}}
 			</tbody>

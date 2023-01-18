@@ -116,11 +116,17 @@ func (a *actionRepository) Save(action *domain.Action) error {
 	).Scan(&action.ID, &action.CreatedAt)
 }
 
-func (a *actionRepository) Update(action *domain.Action) (err error) {
+func (a *actionRepository) SetActive(name string, active bool) (err error) {
+	var sql string
+	if active {
+		sql = `INSERT INTO action_active (name) VALUES ($1) ON CONFLICT DO NOTHING`
+	} else {
+		sql = `DELETE FROM action_active WHERE name = $1`
+	}
 	_, err = a.DB.Exec(
 		context.Background(),
-		`UPDATE action SET active = $2 WHERE id = $1`,
-		action.ID, action.Active,
+		sql,
+		name,
 	)
 	return
 }
@@ -134,11 +140,87 @@ func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
 	return
 }
 
-func (a *actionRepository) GetCurrentActive() (actions []domain.Action, err error) {
+func (a *actionRepository) GetCurrentByActive(active bool) (actions []domain.Action, err error) {
+	sql := `
+		SELECT DISTINCT ON (name) *
+		FROM action
+		WHERE
+	`
+	if !active {
+		sql += ` NOT `
+	}
+	sql += `
+		EXISTS (
+			SELECT NULL
+			FROM action_active
+			WHERE name = action.name
+		)
+		ORDER BY name, created_at DESC
+	`
+
 	actions = []domain.Action{}
 	err = pgxscan.Select(
 		context.Background(), a.DB, &actions,
-		`SELECT DISTINCT ON (name) * FROM action WHERE active ORDER BY name, created_at DESC`,
+		sql,
+	)
+	return
+}
+
+func (a *actionRepository) GetSatisfactions(id uuid.UUID) (inputs map[string]uuid.UUID, err error) {
+	inputs = map[string]uuid.UUID{}
+
+	results := []struct {
+		InputName string    `json:"input_name"`
+		FactId    uuid.UUID `json:"fact_id"`
+	}{}
+
+	err = pgxscan.Select(
+		context.Background(), a.DB, &results,
+		`SELECT input_name, fact_id
+		FROM action_satisfaction
+		WHERE action_id = $1`,
+		id,
+	)
+	if err != nil {
+		return
+	}
+
+	for _, result := range results {
+		if _, exists := inputs[result.InputName]; exists {
+			panic("This should never happen™")
+		}
+		inputs[result.InputName] = result.FactId
+	}
+
+	return
+}
+
+func (a *actionRepository) SaveSatisfaction(actionId uuid.UUID, input string, factId uuid.UUID) (err error) {
+	_, err = a.DB.Exec(
+		context.Background(),
+		`INSERT INTO action_satisfaction (action_id, input_name, fact_id) VALUES ($1, $2, $3)
+		ON CONFLICT (action_id, input_name) DO UPDATE SET fact_id = EXCLUDED.fact_id`,
+		actionId, input, factId,
+	)
+	return
+}
+
+func (a *actionRepository) DeleteSatisfaction(actionId uuid.UUID, input string) (err error) {
+	_, err = a.DB.Exec(
+		context.Background(),
+		`DELETE FROM action_satisfaction
+		WHERE action_id = $1 AND input_name = $2`,
+		actionId, input,
+	)
+	return
+}
+
+func (a *actionRepository) DeleteSatisfactions(actionId uuid.UUID) (err error) {
+	_, err = a.DB.Exec(
+		context.Background(),
+		`DELETE FROM action_satisfaction
+		WHERE action_id = $1`,
+		actionId,
 	)
 	return
 }
