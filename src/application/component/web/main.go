@@ -293,16 +293,6 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost,
-		"/api/fact/match/latest",
-		self.ApiFactMatchLatestPost,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
-	); err != nil {
-		return err
-	}
 	if _, err := r.AddRoute(http.MethodGet,
 		"/api/fact/{id}/binary",
 		self.ApiFactIdBinaryGet,
@@ -1309,28 +1299,6 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 	} else {
 		self.json(w, fact, http.StatusOK)
 	}
-}
-
-func (self *Web) ApiFactMatchLatestPost(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		self.ServerError(w, err)
-		return
-	}
-
-	match := util.CUEString(body).Value(nil, nil)
-	if matchErr := match.Err(); matchErr != nil {
-		self.ClientError(w, errors.WithMessage(matchErr, "Failed to parse match CUE"))
-		return
-	}
-
-	fact, err := self.FactService.GetLatestByCue(match)
-	if err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
-		return
-	}
-
-	self.json(w, fact, http.StatusOK)
 }
 
 type apiActionMatchResponse struct {
