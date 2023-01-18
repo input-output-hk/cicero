@@ -36,7 +36,7 @@
 			{{range .Actions}}
 				<tr>
 					<td>
-						<a href="/action/{{.ID}}">
+						<a href="/action/current/{{.Name | pathEscape}}">
 							{{.Name}}
 						</a>
 					</td>
