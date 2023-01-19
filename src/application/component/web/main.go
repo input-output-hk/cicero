@@ -1302,24 +1302,24 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 }
 
 type apiActionMatchResponse struct {
-	Runnable bool
-	Inputs   map[string]apiActionMatchResponseInput
-	Output   domain.OutputDefinition
+	Runnable bool                                   `json:"runnable"`
+	Inputs   map[string]apiActionMatchResponseInput `json:"inputs"`
+	Output   domain.OutputDefinition                `json:"output"`
 }
 
 func (self apiActionMatchResponse) MarshalJSON() ([]byte, error) {
+	type Self apiActionMatchResponse
+
 	type output struct {
 		Success apiActionIoMatchResponse `json:"success"`
 		Failure apiActionIoMatchResponse `json:"failure"`
 	}
 
 	result := struct {
-		Runnable bool                                   `json:"runnable"`
-		Inputs   map[string]apiActionMatchResponseInput `json:"inputs"`
-		Output   output                                 `json:"output"`
+		Self
+		Output output `json:"output"`
 	}{
-		Runnable: self.Runnable,
-		Inputs:   self.Inputs,
+		Self: Self(self),
 		Output: output{
 			Success: apiActionIoMatchResponse{
 				Unified: self.Output.Success,
@@ -1335,29 +1335,22 @@ func (self apiActionMatchResponse) MarshalJSON() ([]byte, error) {
 }
 
 type apiActionMatchResponseInput struct {
-	SatisfiedByFact *string
+	SatisfiedByFact *string `json:"satisfiedByFact"`
 
-	MatchWithDeps *cue.Value
+	MatchWithDeps *cue.Value `json:"matchWithDeps"`
 
-	MatchedAgainstFact         map[string]apiActionIoMatchResponse
-	MatchedAgainstFactWithDeps map[string]apiActionIoMatchResponse
+	MatchedAgainstFact         map[string]apiActionIoMatchResponse `json:"matchedAgainstFact"`
+	MatchedAgainstFactWithDeps map[string]apiActionIoMatchResponse `json:"matchedAgainstFactWithDeps"`
 
-	Dependencies []string
+	Dependencies []string `json:"dependencies"`
 }
 
 func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
+	type Self apiActionMatchResponseInput
 	result := struct {
-		SatisfiedByFact            *string                             `json:"satisfiedByFact"`
-		MatchWithDeps              *string                             `json:"matchWithDeps"`
-		MatchedAgainstFact         map[string]apiActionIoMatchResponse `json:"matchedAgainstFact"`
-		MatchedAgainstFactWithDeps map[string]apiActionIoMatchResponse `json:"matchedAgainstFactWithDeps"`
-		Dependencies               []string                            `json:"dependencies"`
-	}{
-		SatisfiedByFact:            self.SatisfiedByFact,
-		MatchedAgainstFact:         self.MatchedAgainstFact,
-		MatchedAgainstFactWithDeps: self.MatchedAgainstFactWithDeps,
-		Dependencies:               self.Dependencies,
-	}
+		Self
+		MatchWithDeps *string `json:"matchWithDeps"`
+	}{Self: Self(self)}
 
 	if self.MatchWithDeps != nil {
 		matchWithDeps := util.CUEString("")
