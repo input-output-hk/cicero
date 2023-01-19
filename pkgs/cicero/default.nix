@@ -11,7 +11,7 @@
   package = vendorSha256:
     buildGo118Module rec {
       pname = "cicero";
-      version = "2022.04.27.001";
+      version = "2023.01.19.001";
       inherit vendorSha256;
 
       passthru.invalidHash =
