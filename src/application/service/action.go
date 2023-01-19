@@ -523,6 +523,9 @@ func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunF
 				return err
 			}
 
+			// We need to try to invoke all actions until none was runnable
+			// because some might be decision actions that immediately publish a fact,
+			// which in turn could make other actions runnable.
 			for {
 				anyRunnable := false
 
