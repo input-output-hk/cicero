@@ -38,6 +38,8 @@ type ActionService interface {
 	IsRunnable(*domain.Action) (bool, map[string]domain.Fact, error)
 	Create(string, string) (*domain.Action, error)
 	UpdateSatisfaction(*domain.Fact) error
+	// Returns true if there is no invocation also.
+	HaveSatisfactionsChangedSinceLastInvocation(uuid.UUID) (bool, error)
 	// Returns a nil pointer for the first return value if the Action was not runnable.
 	Invoke(*domain.Action) (*domain.Invocation, InvokeRunFunc, error)
 	InvokeCurrentActive() ([]domain.Invocation, InvokeRunFunc, error)
@@ -208,6 +210,12 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 
 	logger.Debug().Msg("Checking whether Action is runnable")
 
+	if changed, err := self.HaveSatisfactionsChangedSinceLastInvocation(action.ID); err != nil {
+		return false, nil, err
+	} else if !changed {
+		return false, nil, nil
+	}
+
 	inputs, err := self.GetSatisfiedInputs(action)
 	if err != nil {
 		return false, nil, err
@@ -316,10 +324,6 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 
 		invocation = &domain.Invocation{ActionId: action.ID}
 		if err := (*txSelf.invocationService).Save(invocation, inputs); err != nil {
-			return err
-		}
-
-		if err := txSelf.actionRepository.DeleteSatisfactions(action.ID); err != nil {
 			return err
 		}
 
@@ -600,4 +604,8 @@ func (self actionService) updateSatisfaction(action *domain.Action, fact *domain
 			return errors.WithMessage(flow.Run(context.Background()), "While running flow")
 		}
 	})
+}
+
+func (self actionService) HaveSatisfactionsChangedSinceLastInvocation(id uuid.UUID) (bool, error) {
+	return self.actionRepository.HaveSatisfactionsChangedSinceLastInvocation(id)
 }

@@ -23,5 +23,5 @@ type ActionRepository interface {
 	GetSatisfactions(uuid.UUID) (map[string]uuid.UUID, error)
 	SaveSatisfaction(uuid.UUID, string, uuid.UUID) error
 	DeleteSatisfaction(uuid.UUID, string) error
-	DeleteSatisfactions(uuid.UUID) error
+	HaveSatisfactionsChangedSinceLastInvocation(uuid.UUID) (bool, error)
 }

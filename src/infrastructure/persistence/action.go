@@ -215,12 +215,37 @@ func (a *actionRepository) DeleteSatisfaction(actionId uuid.UUID, input string) 
 	return
 }
 
-func (a *actionRepository) DeleteSatisfactions(actionId uuid.UUID) (err error) {
-	_, err = a.DB.Exec(
-		context.Background(),
-		`DELETE FROM action_satisfaction
-		WHERE action_id = $1`,
-		actionId,
+func (a *actionRepository) HaveSatisfactionsChangedSinceLastInvocation(id uuid.UUID) (changed bool, err error) {
+	_, err = get(
+		a.DB, &changed,
+		`
+		WITH latest_invocation AS (
+			SELECT DISTINCT ON (action_id) id, action_id
+			FROM invocation
+			WHERE action_id = $1
+			ORDER BY action_id, created_at DESC
+		)
+		SELECT
+			NOT EXISTS (
+				SELECT NULL
+				FROM latest_invocation
+			) OR
+			EXISTS (
+				SELECT NULL
+				FROM invocation_inputs, latest_invocation
+				WHERE
+					invocation_id = latest_invocation.id AND
+					NOT EXISTS (
+						SELECT NULL
+						FROM action_satisfaction
+						WHERE
+							action_id = latest_invocation.action_id AND
+							input_name = invocation_inputs.input_name AND
+							fact_id = invocation_inputs.fact_id
+					)
+			)
+		`,
+		id,
 	)
 	return
 }
