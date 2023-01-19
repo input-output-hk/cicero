@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"cuelang.org/go/cue"
+	cueerrors "cuelang.org/go/cue/errors"
 	cueliteral "cuelang.org/go/cue/literal"
 	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
@@ -600,8 +601,15 @@ func (self actionService) updateSatisfaction(action *domain.Action, fact *domain
 			return nil
 		}); err != nil {
 			return errors.WithMessage(err, "While building flow")
+		} else if err := flow.Run(context.Background()); err != nil {
+			cueError := new(cueerrors.Error)
+			if errors.As(err, cueError) {
+				logger.Info().AnErr("error", *cueError).Msg("CUE error while matching")
+				return nil
+			}
+			return errors.WithMessage(err, "While running flow")
 		} else {
-			return errors.WithMessage(flow.Run(context.Background()), "While running flow")
+			return nil
 		}
 	})
 }
