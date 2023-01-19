@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
+	cueliteral "cuelang.org/go/cue/literal"
 	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
@@ -184,6 +185,14 @@ func (self inputsFlowRunner) Run(t *flow.Task, err error) error {
 		return errors.WithMessage(err, "Flow runner received error")
 	}
 	return self(t)
+}
+
+func InputName(task *flow.Task) string {
+	name := task.Path().Selectors()[1].String() // inputs: <name>: …
+	if name_, err := cueliteral.Unquote(name); err == nil {
+		name = name_
+	}
+	return name
 }
 
 func (self InOutCUEString) Output(inputs map[string]Fact) OutputDefinition {

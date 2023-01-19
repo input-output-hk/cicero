@@ -1341,6 +1341,8 @@ type apiActionMatchResponseInput struct {
 
 	MatchedAgainstFact         map[string]apiActionIoMatchResponse
 	MatchedAgainstFactWithDeps map[string]apiActionIoMatchResponse
+
+	Dependencies []string
 }
 
 func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
@@ -1349,10 +1351,12 @@ func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
 		MatchWithDeps              *string                             `json:"matchWithDeps"`
 		MatchedAgainstFact         map[string]apiActionIoMatchResponse `json:"matchedAgainstFact"`
 		MatchedAgainstFactWithDeps map[string]apiActionIoMatchResponse `json:"matchedAgainstFactWithDeps"`
+		Dependencies               []string                            `json:"dependencies"`
 	}{
 		SatisfiedByFact:            self.SatisfiedByFact,
 		MatchedAgainstFact:         self.MatchedAgainstFact,
 		MatchedAgainstFactWithDeps: self.MatchedAgainstFactWithDeps,
+		Dependencies:               self.Dependencies,
 	}
 
 	if self.MatchWithDeps != nil {
@@ -1426,6 +1430,21 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 
 	response := apiActionMatchResponse{
 		Inputs: map[string]apiActionMatchResponseInput{},
+	}
+
+	// Compute DAG of dependencies between inputs.
+	if flow, err := action.InOut.InputsFlow(nil); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Error computing DAG of input dependencies"))
+		return
+	} else {
+		for _, t := range flow.Tasks() {
+			name := domain.InputName(t)
+			responseInput := response.Inputs[name]
+			for _, dep := range t.Dependencies() {
+				responseInput.Dependencies = append(responseInput.Dependencies, domain.InputName(dep))
+			}
+			response.Inputs[name] = responseInput
+		}
 	}
 
 	// Match every fact against every input in isolation.

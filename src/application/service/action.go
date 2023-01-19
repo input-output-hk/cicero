@@ -6,7 +6,6 @@ import (
 
 	"cuelang.org/go/cue"
 	cueerrors "cuelang.org/go/cue/errors"
-	cueliteral "cuelang.org/go/cue/literal"
 	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
@@ -542,10 +541,7 @@ func (self actionService) updateSatisfaction(action *domain.Action, fact *domain
 		matchPath := cue.MakePath(cue.Str("match"))
 
 		if flow, err := action.InOut.InputsFlow(func(t *flow.Task) error {
-			name := t.Path().Selectors()[1].String() // inputs: <name>: …
-			if name_, err := cueliteral.Unquote(name); err == nil {
-				name = name_
-			}
+			name := domain.InputName(t)
 
 			tMatch := t.Value().LookupPath(matchPath)
 
