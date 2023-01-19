@@ -64,8 +64,11 @@ func (self factService) withQuerier(querier config.PgxIface, cyclicDeps FactServ
 	}
 
 	if result.actionService == nil {
+		r := FactService(result)
 		result.actionService = new(ActionService)
-		*result.actionService = (*self.actionService).withQuerier(querier, ActionServiceCyclicDependencies{})
+		*result.actionService = (*self.actionService).withQuerier(querier, ActionServiceCyclicDependencies{
+			factService: &r,
+		})
 	}
 
 	return &result
