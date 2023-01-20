@@ -461,12 +461,12 @@ func (self *NomadEventConsumer) publishRunOutput(ctx context.Context, run *domai
 		panic("run status is not final in publishRunOutput()")
 	}
 
-	if fact.Value != nil {
-		_, runFunc, err := self.FactService.Save(&fact, nil)
-		return runFunc, err
+	if fact.Value == nil {
+		return nil, nil
 	}
 
-	return nil, nil
+	_, runFunc, err := self.FactService.Save(&fact, nil)
+	return runFunc, err
 }
 
 func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) (service.InvokeRunFunc, error) {
