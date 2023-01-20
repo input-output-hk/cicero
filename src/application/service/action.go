@@ -18,6 +18,7 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type ActionService interface {
@@ -243,6 +244,35 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 				Bool("runnable", false).
 				Stringer("fact", fact.ID).
 				Msg("Required input not satisfied")
+			return false, inputs, nil
+		}
+	}
+
+	// We do not consider the action runnable with these inputs
+	// if the output is not concrete because if we did
+	// we would get an error when attempting to save the output
+	// as a fact when the run finished.
+	output := action.InOut.Output(inputs)
+	for k, v := range map[string]cue.Value{
+		"success": output.Success,
+		"failure": output.Failure,
+	} {
+		if !util.IsConcreteRecursive(v) {
+			_, err := v.MarshalJSON()
+			if err == nil {
+				panic("This should never happen™")
+			}
+
+			inputIds := make(map[string]uuid.UUID, len(inputs))
+			for ik, iv := range inputs {
+				inputIds[ik] = iv.ID
+			}
+
+			logger.Info().
+				Str("output", k).
+				AnErr("error", err).
+				Interface("inputs", inputIds).
+				Msg("Output is not fully concrete")
 			return false, inputs, nil
 		}
 	}

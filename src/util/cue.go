@@ -79,3 +79,38 @@ func (self CUEString) Format(options ...cueformat.Option) (result CUEString, err
 func (self *CUEString) removeDestructiveBottomComments() {
 	*self = CUEString(strings.ReplaceAll(string(*self), "// explicit error (_|_ literal) in source\n", ""))
 }
+
+// https://github.com/cue-lang/cue/issues/883
+func IsConcreteRecursive(value cue.Value) bool {
+	concrete := true
+	def, _ := value.Default()
+	def.Walk(func(v cue.Value) bool {
+		switch k := v.Kind(); {
+		case k.IsAnyOf(cue.StructKind | cue.ListKind):
+			return true
+		case k == cue.BottomKind:
+			switch op, vals := v.Expr(); op {
+			case cue.OrOp:
+				for _, val := range vals {
+					if IsConcreteRecursive(val) {
+						concrete = true
+						break
+					}
+				}
+			case cue.AndOp:
+				for _, val := range vals {
+					if !IsConcreteRecursive(val) {
+						concrete = false
+						break
+					}
+				}
+			default:
+				concrete = v.IsConcrete()
+			}
+		default:
+			concrete = v.IsConcrete()
+		}
+		return concrete
+	}, nil)
+	return concrete
+}
