@@ -196,6 +196,6 @@ func (self invocationService) End(id uuid.UUID) error {
 func (self invocationService) GetLog(invocation domain.Invocation) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{cicero=~"eval(-transform)?",invocation=%q}`, invocation.Id),
-		invocation.CreatedAt, nil,
+		invocation.CreatedAt, invocation.FinishedAt,
 	)
 }
