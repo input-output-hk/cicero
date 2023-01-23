@@ -150,10 +150,7 @@
           hydraJobs = selfPkgs;
           devShell = pkgs.devshell.fromTOML ./devshell.toml;
         }
-        // tullia.fromSimple system {
-          tasks = import tullia/tasks.nix self;
-          actions = import tullia/actions.nix;
-        }
+        // tullia.fromSimple system (import ./tullia.nix)
     )
     // {
       overlay = final: prev:
