@@ -257,6 +257,10 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 		"success": output.Success,
 		"failure": output.Failure,
 	} {
+		if !v.Exists() {
+			continue
+		}
+
 		if !util.IsConcreteRecursive(v) {
 			_, err := v.MarshalJSON()
 			if err == nil {
