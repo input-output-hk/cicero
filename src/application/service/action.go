@@ -281,39 +281,8 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 		}
 	}
 
-	// Filter input facts. We only provide keys requested by the CUE expression.
-	/* FIXME Removes everything if CUE's builtin `or` function is used.
-	for name, input := range action.InOut.Inputs(inputs) {
-		if entry, exists := inputs[name]; exists {
-			filterFields(&entry.Value, input.Match)
-		}
-	}
-	*/
-
 	logger.Debug().Bool("runnable", true).Send()
 	return true, inputs, nil
-}
-
-//nolint:unused
-func filterFields(factValue *interface{}, filter cue.Value) {
-	if value, factIsMap := (*factValue).(map[string]interface{}); factIsMap {
-		if filter.Kind().IsAnyOf(cue.StructKind) {
-			for k, v := range value {
-				if filterV := filter.LookupPath(cue.MakePath(cue.Str(k)).Optional()); filterV.Exists() {
-					filterFields(&v, filterV)
-					value[k] = v
-				} else {
-					delete(value, k)
-				}
-			}
-		} else {
-			// fact is not allowed to be map because filter is not allowed to be a struct
-			*factValue = nil
-		}
-	} else if filter.Kind().IsAnyOf(cue.StructKind) {
-		// fact must be a map because filter is struct
-		*factValue = map[string]interface{}{}
-	}
 }
 
 func (self actionService) Create(source, name string) (*domain.Action, error) {
