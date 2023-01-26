@@ -55,11 +55,11 @@ parts @ {
         };
 
         nix = {
-          binaryCaches = ["http://127.0.0.1:${toString config.services.spongix.port}"];
-          binaryCachePublicKeys = ["spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI="];
-          requireSignedBinaryCaches = false; # TODO remove once spongix signs with own key again
           settings = {
             experimental-features = ["nix-command" "flakes"];
+            substituters = ["http://127.0.0.1:${toString config.services.spongix.port}"];
+            trusted-public-keys = ["spongix:yNfB2+pMSmrjNyMRWob1oEs4ihPnVKPkECWiDxv1MNI="];
+            require-sigs = false; # TODO remove once spongix signs with own key again
             netrc-file = /etc/nix/netrc;
             post-build-hook = pkgs.writers.writeBash "post-build-hook" ''
               set -euf
