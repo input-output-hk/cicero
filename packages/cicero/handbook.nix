@@ -8,7 +8,7 @@
     } ''
       mdbook build --dest-dir $out ${inputs.inclusive.lib.inclusive ../.. [
         ../../book.toml
-        ../../docs
+        ../../handbook
       ]}
     '';
   };
