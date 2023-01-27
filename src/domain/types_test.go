@@ -13,7 +13,7 @@ func TestValueWithInputs(t *testing.T) {
 	// given
 	s := InOutCUEString(`
 		inputs: a: match: _
-		output: success: inputs.a.value
+		output: success: inputs.a.match
 	`)
 	inputs := map[string]Fact{
 		"a": {Value: 1},

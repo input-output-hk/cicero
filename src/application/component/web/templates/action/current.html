@@ -28,7 +28,7 @@
 								checked
 							{{end}}
 							onChange="this.form.submit()"
-							title="Show only active Actions"
+							title="Showing only {{if not .active}}in{{end}}active Actions"
 						/>
 					</form>
 				</td>
@@ -36,7 +36,7 @@
 			{{range .Actions}}
 				<tr>
 					<td>
-						<a href="/action/{{.ID}}">
+						<a href="/action/current/{{.Name | pathEscape}}">
 							{{.Name}}
 						</a>
 					</td>
@@ -44,12 +44,12 @@
 					<td>
 						<form
 							method="POST"
-							action="/_dispatch/method/PATCH/action/{{.ID}}"
+							action="/_dispatch/method/PATCH/action/current/{{.Name | pathEscape}}"
 							style="text-align: center"
 						>
 							<input
 								type="checkbox"
-								{{if .Active}}
+								{{if $.active}}
 									checked
 								{{end}}
 								onChange="this.form.submit()"
@@ -57,7 +57,7 @@
 							<input
 								type="hidden"
 								name="active"
-								value="{{not .Active}}"
+								value="{{not $.active}}"
 							/>
 						</form>
 					</td>

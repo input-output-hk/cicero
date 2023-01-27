@@ -86,35 +86,35 @@ func (self runService) WithQuerier(querier config.PgxIface) RunService {
 }
 
 func (self runService) GetByNomadJobId(id uuid.UUID) (run *domain.Run, err error) {
-	self.logger.Trace().Str("nomad-job-id", id.String()).Msg("Getting Run by Nomad Job ID")
+	self.logger.Trace().Stringer("nomad-job-id", id).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q", id)
 	return
 }
 
 func (self runService) GetByNomadJobIdWithLock(id uuid.UUID, lock string) (run *domain.Run, err error) {
-	self.logger.Trace().Str("nomad-job-id", id.String()).Str("lock", lock).Msg("Getting Run by Nomad Job ID with lock")
+	self.logger.Trace().Stringer("nomad-job-id", id).Str("lock", lock).Msg("Getting Run by Nomad Job ID with lock")
 	run, err = self.runRepository.GetByNomadJobIdWithLock(id, lock)
 	err = errors.WithMessagef(err, "Could not select existing Run by Nomad Job ID %q with lock %q", id, lock)
 	return
 }
 
 func (self runService) GetByInvocationId(invocationId uuid.UUID) (run *domain.Run, err error) {
-	self.logger.Trace().Str("invocation-id", invocationId.String()).Msg("Getting Run by Invocation ID")
+	self.logger.Trace().Stringer("invocation-id", invocationId).Msg("Getting Run by Invocation ID")
 	run, err = self.runRepository.GetByInvocationId(invocationId)
 	err = errors.WithMessagef(err, "Could not select Run by Invocation ID %q", invocationId)
 	return
 }
 
 func (self runService) GetByActionId(id uuid.UUID, page *repository.Page) (runs []domain.Run, err error) {
-	self.logger.Trace().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Run by Action ID")
+	self.logger.Trace().Stringer("id", id).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Run by Action ID")
 	runs, err = self.runRepository.GetByActionId(id, page)
 	err = errors.WithMessagef(err, "Could not select existing Run by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
 	return
 }
 
 func (self runService) GetLatestByActionId(id uuid.UUID) (run *domain.Run, err error) {
-	self.logger.Trace().Str("action-id", id.String()).Msg("Getting latest Run by Action ID")
+	self.logger.Trace().Stringer("action-id", id).Msg("Getting latest Run by Action ID")
 	run, err = self.runRepository.GetLatestByActionId(id)
 	err = errors.WithMessagef(err, "Could not select latest Run by Action ID %q", id)
 	return
@@ -130,23 +130,23 @@ func (self runService) GetAll(page *repository.Page) (runs []domain.Run, err err
 func (self runService) Save(run *domain.Run) error {
 	self.logger.Trace().Msg("Saving new Run")
 	if err := self.runRepository.Save(run); err != nil {
-		return errors.WithMessagef(err, "Could not insert Run")
+		return errors.WithMessage(err, "Could not insert Run")
 	}
-	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Created Run")
+	self.logger.Trace().Stringer("id", run.NomadJobID).Msg("Created Run")
 	return nil
 }
 
 func (self runService) Update(run *domain.Run) error {
-	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Updating Run")
+	self.logger.Trace().Stringer("id", run.NomadJobID).Msg("Updating Run")
 	if err := self.runRepository.Update(run); err != nil {
 		return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
 	}
-	self.logger.Trace().Str("id", run.NomadJobID.String()).Msg("Updated Run")
+	self.logger.Trace().Stringer("id", run.NomadJobID).Msg("Updated Run")
 	return nil
 }
 
 func (self runService) End(run *domain.Run) error {
-	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Ending Run")
+	self.logger.Debug().Stringer("id", run.NomadJobID).Msg("Ending Run")
 	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if err := self.runRepository.WithQuerier(tx).Update(run); err != nil {
 			return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
@@ -158,12 +158,12 @@ func (self runService) End(run *domain.Run) error {
 	}); err != nil {
 		return err
 	}
-	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Ended Run")
+	self.logger.Debug().Stringer("id", run.NomadJobID).Msg("Ended Run")
 	return nil
 }
 
 func (self runService) Cancel(run *domain.Run) error {
-	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopping Run")
+	self.logger.Debug().Stringer("id", run.NomadJobID).Msg("Stopping Run")
 	run.Status = domain.RunStatusCanceled
 	if err := self.Update(run); err != nil {
 		return err
@@ -171,7 +171,7 @@ func (self runService) Cancel(run *domain.Run) error {
 	if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
 		return errors.WithMessagef(err, "Failed to deregister job %q", run.NomadJobID)
 	}
-	self.logger.Debug().Str("id", run.NomadJobID.String()).Msg("Stopped Run")
+	self.logger.Debug().Stringer("id", run.NomadJobID).Msg("Stopped Run")
 	return nil
 }
 

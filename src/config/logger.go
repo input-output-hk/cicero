@@ -122,7 +122,7 @@ func ConfigureLogger(level zerolog.Level) *zerolog.Logger {
 	zerolog.SetGlobalLevel(level)
 
 	logger.Info().
-		Str("logLevel", zerolog.GlobalLevel().String()).
+		Stringer("logLevel", zerolog.GlobalLevel()).
 		Bool("consoleLogging", config.ConsoleLoggingEnabled).
 		Bool("fileLogging", config.FileLoggingEnabled).
 		Str("logDirectory", config.Directory).

@@ -87,21 +87,21 @@ func (self invocationService) withQuerier(querier config.PgxIface, cyclicDeps In
 }
 
 func (self invocationService) GetById(id uuid.UUID) (invocation *domain.Invocation, err error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Getting Invocation by ID")
+	self.logger.Trace().Stringer("id", id).Msg("Getting Invocation by ID")
 	invocation, err = self.invocationRepository.GetById(id)
 	err = errors.WithMessagef(err, "Could not select existing Invocation for ID %q", id)
 	return
 }
 
 func (self invocationService) GetByActionId(id uuid.UUID, page *repository.Page) (invocations []domain.Invocation, err error) {
-	self.logger.Trace().Str("id", id.String()).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Invocation by Action ID")
+	self.logger.Trace().Stringer("id", id).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Invocation by Action ID")
 	invocations, err = self.invocationRepository.GetByActionId(id, page)
 	err = errors.WithMessagef(err, "Could not select existing Invocation by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
 	return
 }
 
 func (self invocationService) GetLatestByActionId(id uuid.UUID) (invocation *domain.Invocation, err error) {
-	self.logger.Trace().Str("action-id", id.String()).Msg("Getting latest Invocation by Action ID")
+	self.logger.Trace().Stringer("action-id", id).Msg("Getting latest Invocation by Action ID")
 	invocation, err = self.invocationRepository.GetLatestByActionId(id)
 	err = errors.WithMessagef(err, "Could not select latest Invocation by Action ID %q", id)
 	return
@@ -129,19 +129,19 @@ func (self invocationService) GetByInputFactIds(factIds []*uuid.UUID, recursive 
 }
 
 func (self invocationService) GetInputFactIdsById(id uuid.UUID) (inputFactIds map[string]uuid.UUID, err error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Getting Invocation input fact IDs by Nomad Job ID")
+	self.logger.Trace().Stringer("id", id).Msg("Getting Invocation input fact IDs by Nomad Job ID")
 	inputFactIds, err = self.invocationRepository.GetInputFactIdsById(id)
 	err = errors.WithMessagef(err, "Could not select Invocation input fact IDs by Nomad Job ID %q", id)
 	return
 }
 
 func (self invocationService) GetOutputById(id uuid.UUID) (*domain.OutputDefinition, error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Evaluating output for ID")
+	self.logger.Trace().Stringer("id", id).Msg("Evaluating output for ID")
 	if action, err := (*self.actionService).GetByInvocationId(id); err != nil {
 		return nil, err
 	} else if inputFactIds, err := self.GetInputFactIdsById(id); err != nil {
 		return nil, err
-	} else if inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds); err != nil {
+	} else if inputs, err := (*self.factService).GetByIds(inputFactIds); err != nil {
 		return nil, err
 	} else {
 		output := action.InOut.Output(inputs)
@@ -150,7 +150,7 @@ func (self invocationService) GetOutputById(id uuid.UUID) (*domain.OutputDefinit
 }
 
 func (self invocationService) Retry(id uuid.UUID) (*domain.Invocation, InvokeRunFunc, error) {
-	self.logger.Trace().Str("id", id.String()).Msg("Retrying")
+	self.logger.Trace().Stringer("id", id).Msg("Retrying")
 
 	action, err := (*self.actionService).GetByInvocationId(id)
 	if err != nil {
@@ -162,7 +162,7 @@ func (self invocationService) Retry(id uuid.UUID) (*domain.Invocation, InvokeRun
 		return nil, nil, err
 	}
 
-	inputs, err := (*self.factService).GetInvocationInputFacts(inputFactIds)
+	inputs, err := (*self.factService).GetByIds(inputFactIds)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,16 +178,16 @@ func (self invocationService) Retry(id uuid.UUID) (*domain.Invocation, InvokeRun
 func (self invocationService) Save(invocation *domain.Invocation, inputs map[string]domain.Fact) error {
 	self.logger.Trace().Msg("Saving new Invocation")
 	if err := self.invocationRepository.Save(invocation, inputs); err != nil {
-		return errors.WithMessagef(err, "Could not insert Invocation")
+		return errors.WithMessage(err, "Could not insert Invocation")
 	}
-	self.logger.Trace().Str("id", invocation.Id.String()).Msg("Created Invocation")
+	self.logger.Trace().Stringer("id", invocation.Id).Msg("Created Invocation")
 	return nil
 }
 
 func (self invocationService) End(id uuid.UUID) error {
 	self.logger.Trace().Stringer("id", id).Msg("Ending Invocation")
 	if err := self.invocationRepository.End(id); err != nil {
-		return errors.WithMessagef(err, "Could not end Invocation")
+		return errors.WithMessage(err, "Could not end Invocation")
 	}
 	self.logger.Trace().Stringer("id", id).Msg("Ended Invocation")
 	return nil
@@ -196,6 +196,6 @@ func (self invocationService) End(id uuid.UUID) error {
 func (self invocationService) GetLog(invocation domain.Invocation) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{cicero=~"eval(-transform)?",invocation=%q}`, invocation.Id),
-		invocation.CreatedAt, nil,
+		invocation.CreatedAt, invocation.FinishedAt,
 	)
 }

@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strconv"
 
-	"cuelang.org/go/cue"
 	"github.com/direnv/direnv/v2/sri"
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
@@ -42,6 +40,39 @@ func (a *factRepository) GetById(id uuid.UUID) (*domain.Fact, error) {
 	return fact.(*domain.Fact), err
 }
 
+func (a *factRepository) GetByIds(idMap map[string]uuid.UUID) (facts map[string]domain.Fact, err error) {
+	ids := make([]uuid.UUID, 0, len(idMap))
+	for _, v := range idMap {
+		ids = append(ids, v)
+	}
+
+	result := []domain.Fact{}
+	err = pgxscan.Select(
+		context.Background(), a.DB, &result,
+		`SELECT id, run_id, value, created_at, binary_hash
+		FROM fact
+		WHERE id = ANY($1)`,
+		ids,
+	)
+	if err != nil {
+		return
+	}
+
+	facts = map[string]domain.Fact{}
+Result:
+	for _, fact := range result {
+		for k, v := range idMap {
+			if v == fact.ID {
+				facts[k] = fact
+				continue Result
+			}
+		}
+		panic("This should never happen™")
+	}
+
+	return
+}
+
 func (a *factRepository) GetByRunId(id uuid.UUID) (facts []domain.Fact, err error) {
 	facts = []domain.Fact{}
 	err = pgxscan.Select(
@@ -68,202 +99,6 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 	los := tx.LargeObjects()
 	binary, err = los.Open(context.Background(), oid, pgx.LargeObjectModeRead)
 	err = errors.WithMessagef(err, "Failed to open large object with OID %d", oid)
-
-	return
-}
-
-func (a *factRepository) GetLatestByCue(value cue.Value) (*domain.Fact, error) {
-	where, args := sqlWhereCue(value, nil, 0)
-	fact, err := get(
-		a.DB, &domain.Fact{},
-		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where+` ORDER BY created_at DESC FETCH FIRST ROW ONLY`,
-		args...,
-	)
-	if fact == nil {
-		return nil, err
-	}
-	return fact.(*domain.Fact), err
-}
-
-func (a *factRepository) GetByCue(value cue.Value) (facts []domain.Fact, err error) {
-	where, args := sqlWhereCue(value, nil, 0)
-	facts = []domain.Fact{}
-	err = pgxscan.Select(
-		context.Background(), a.DB, &facts,
-		`SELECT id, run_id, value, created_at, binary_hash FROM fact WHERE `+where,
-		args...,
-	)
-	return
-}
-
-func sqlWhereCue(value cue.Value, path []string, argNum int) (clause string, args []interface{}) {
-	appendPath := func() {
-		clause += `value`
-		for _, part := range path {
-			argNum += 1
-			clause += `, $` + strconv.Itoa(argNum)
-			args = append(args, part)
-		}
-	}
-
-	appendTextEquals := func(arg string) {
-		clause = `jsonb_extract_path_text(`
-		appendPath()
-		argNum += 1
-		clause += `) = $` + strconv.Itoa(argNum)
-		args = append(args, arg)
-	}
-
-	appendArg := func(arg cue.Value) {
-		var v interface{}
-		var cast string
-
-		switch arg.Kind() {
-		case cue.BytesKind:
-			v, _ = arg.Bytes()
-			cast = "bytea"
-		case cue.IntKind:
-			v, _ = arg.Int64()
-			cast = "integer"
-		case cue.FloatKind:
-			v, _ = arg.Float64()
-			cast = "real"
-		case cue.NumberKind:
-			panic("we should handle all number kinds specifically")
-		case cue.BoolKind:
-			v, _ = arg.Bool()
-			cast = "boolean"
-		case cue.NullKind:
-			v = "null"
-			cast = "jsonb"
-		case cue.StringKind:
-			v, _ = arg.String()
-			cast = "text"
-		default:
-			panic("arg must be concrete scalar")
-		}
-
-		argNum += 1
-		clause += `$` + strconv.Itoa(argNum) + `::` + cast
-		args = append(args, v)
-	}
-
-	appendComparision := func(cmp string, arg cue.Value) {
-		clause = `jsonb_extract_path(`
-		appendPath()
-		clause += `) ` + cmp + ` to_jsonb(`
-		appendArg(arg)
-		clause += `)`
-	}
-
-	appendClause := func(subClause string, subArgs []interface{}) {
-		clause += subClause
-		args = append(args, subArgs...)
-		argNum += len(subArgs)
-	}
-
-	var and func() string
-	{
-		first := true
-		and = func() string {
-			if first {
-				first = false
-				return ``
-			}
-			return ` AND `
-		}
-	}
-
-Kind:
-	switch value.Kind() {
-	case cue.StructKind:
-		emptyStruct := true
-		for iter, _ := value.Fields(); iter.Next(); {
-			selector := iter.Selector()
-
-			if iter.IsOptional() || selector.IsDefinition() || selector.PkgPath() != "" || !selector.IsString() {
-				continue
-			}
-
-			emptyStruct = false
-
-			if fieldClause, fieldArgs := sqlWhereCue(iter.Value(), append(path, iter.Label()), argNum); fieldClause != "" {
-				appendClause(and()+fieldClause, fieldArgs)
-			}
-		}
-		if emptyStruct {
-			appendClause(and()+"TRUE", []interface{}{})
-		}
-	case cue.ListKind:
-		list, _ := value.List()
-		i := 0
-		for ; list.Next(); i += 1 {
-			itemClause, itemArgs := sqlWhereCue(list.Value(), append(path, strconv.Itoa(i)), argNum)
-			appendClause(and()+itemClause, itemArgs)
-		}
-		if i == 0 {
-			appendClause(and()+"TRUE", []interface{}{})
-		}
-	case cue.StringKind:
-		str, _ := value.String()
-		appendTextEquals(str)
-	case cue.BytesKind, cue.IntKind, cue.FloatKind, cue.NumberKind, cue.BoolKind, cue.NullKind:
-		appendComparision("=", value)
-	case cue.BottomKind, cue.TopKind:
-		switch op, vals := value.Eval().Expr(); op {
-		case cue.OrOp:
-			clause = `(`
-			for i, val := range vals {
-				if i > 0 {
-					clause += ` OR `
-				}
-				appendClause(sqlWhereCue(val, path, argNum))
-			}
-			clause += `)`
-			break Kind
-		case cue.AndOp:
-			clause = `(`
-			for i, val := range vals {
-				if i > 0 {
-					clause += ` AND `
-				}
-				appendClause(sqlWhereCue(val, path, argNum))
-			}
-			clause += `)`
-			break Kind
-		case cue.GreaterThanOp:
-			if val := vals[0]; val.IsConcrete() {
-				appendComparision(">", val)
-				break Kind
-			}
-		case cue.LessThanOp:
-			if val := vals[0]; val.IsConcrete() {
-				appendComparision("<", val)
-				break Kind
-			}
-		case cue.LessThanEqualOp:
-			if val := vals[0]; val.IsConcrete() {
-				appendComparision("<=", val)
-				break Kind
-			}
-		case cue.GreaterThanEqualOp:
-			if val := vals[0]; val.IsConcrete() {
-				appendComparision(">=", val)
-				break Kind
-			}
-		case cue.NotEqualOp:
-			if val := vals[0]; val.IsConcrete() {
-				appendComparision("<>", val)
-				break Kind
-			}
-		}
-
-		clause = `jsonb_extract_path(`
-		appendPath()
-		clause += `) IS NOT NULL`
-	default:
-		panic("switch should be exhaustive")
-	}
 
 	return
 }

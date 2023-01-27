@@ -64,6 +64,16 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if _, err := r.AddRoute(http.MethodPatch,
+		"/api/action/current/{name}",
+		self.ApiActionCurrentNamePatch,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "name", Description: "action name", Value: "string"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
+	); err != nil {
+		return err
+	}
 	if _, err := r.AddRoute(http.MethodGet,
 		"/api/action/current",
 		self.ApiActionCurrentGet,
@@ -111,16 +121,6 @@ func (self *Web) Start(ctx context.Context) error {
 	if _, err := r.AddRoute(http.MethodGet,
 		"/api/action/{id}",
 		self.ApiActionIdGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of the action", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Action{}, "Ok")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodPatch,
-		"/api/action/{id}",
-		self.ApiActionIdPatch,
 		apidoc.BuildSwaggerDef(
 			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of the action", Value: "UUID"}}),
 			nil,
@@ -293,16 +293,6 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	if _, err := r.AddRoute(http.MethodPost,
-		"/api/fact/match/latest",
-		self.ApiFactMatchLatestPost,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
-	); err != nil {
-		return err
-	}
 	if _, err := r.AddRoute(http.MethodGet,
 		"/api/fact/{id}/binary",
 		self.ApiFactIdBinaryGet,
@@ -353,9 +343,10 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNameGet).Methods(http.MethodGet)
+	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNamePatch).Methods(http.MethodPatch)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/{id}", self.ActionIdPatch).Methods(http.MethodPatch)
 	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}/version", self.ActionIdVersionGet).Methods(http.MethodGet)
 	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
@@ -399,12 +390,7 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	_, active := req.URL.Query()["active"]
-	if active {
-		actions, err = self.ActionService.GetCurrentActive()
-	} else {
-		actions, err = self.ActionService.GetCurrent()
-	}
-
+	actions, err = self.ActionService.GetCurrentByActive(active)
 	if err != nil {
 		self.ServerError(w, err)
 		return
@@ -416,6 +402,23 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	}); err != nil {
 		self.ServerError(w, err)
 		return
+	}
+}
+
+func (self *Web) ActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	//nolint:gocritic // IMHO if-else chain is better than switch here
+	if name, err := url.PathUnescape(vars["name"]); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
+		return
+	} else if action, err := self.ActionService.GetLatestByName(name); err != nil {
+		self.NotFound(w, err)
+		return
+	} else if action == nil {
+		self.NotFound(w, nil)
+		return
+	} else {
+		self.actionIdGet(w, action.ID)
 	}
 }
 
@@ -510,11 +513,17 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
-	} else if action, err := self.ActionService.GetById(id); err != nil {
+	} else {
+		self.actionIdGet(w, id)
+	}
+}
+
+func (self *Web) actionIdGet(w http.ResponseWriter, id uuid.UUID) {
+	if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 	} else if action == nil {
 		self.NotFound(w, nil)
-	} else if _, inputs, err := self.ActionService.IsRunnable(action); err != nil {
+	} else if inputs, err := self.ActionService.GetSatisfiedInputs(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
 	} else if err := render("action/[id].html", w, map[string]interface{}{
 		"Action": action,
@@ -524,8 +533,8 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) ActionIdPatch(w http.ResponseWriter, req *http.Request) {
-	self.ApiActionIdPatch(NopResponseWriter{w}, req)
+func (self *Web) ActionCurrentNamePatch(w http.ResponseWriter, req *http.Request) {
+	self.ApiActionCurrentNamePatch(NopResponseWriter{w}, req)
 
 	if referer := req.Header.Get("Referer"); referer != "" {
 		http.Redirect(w, req, referer, http.StatusFound)
@@ -627,7 +636,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
 		return
-	} else if inputs_, err := self.FactService.GetInvocationInputFacts(inputFactIds); err != nil {
+	} else if inputs_, err := self.FactService.GetByIds(inputFactIds); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
 		return
 	} else {
@@ -707,7 +716,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts IDs"))
 		return
-	} else if inputs_, err := self.FactService.GetInvocationInputFacts(inputFactIds); err != nil {
+	} else if inputs_, err := self.FactService.GetByIds(inputFactIds); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to fetch input facts"))
 		return
 	} else {
@@ -1207,7 +1216,7 @@ func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	if _, active := req.URL.Query()["active"]; active {
-		actions, err = self.ActionService.GetCurrentActive()
+		actions, err = self.ActionService.GetCurrentByActive(true)
 	} else {
 		actions, err = self.ActionService.GetCurrent()
 	}
@@ -1231,6 +1240,30 @@ func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Reques
 	}
 }
 
+func (self *Web) ApiActionCurrentNamePatch(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	if active, err := strconv.ParseBool(req.PostFormValue("active")); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Could not parse active status"))
+		return
+	} else if name, err := url.PathUnescape(vars["name"]); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
+		return
+	} else if err := self.ActionService.SetActive(name, active); err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	// At the moment we only support changing active status
+	// but this is a bit misleading with regards to what the endpoint is called,
+	// so we should at least give a proper warning instead of ignoring all other fields silently.
+	if len(req.PostForm) > 1 {
+		self.ClientError(w, errors.New("Only active status can be change with this endpoint"))
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
@@ -1240,27 +1273,6 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else {
 		self.json(w, action, http.StatusOK)
 	}
-}
-
-func (self *Web) ApiActionIdPatch(w http.ResponseWriter, req *http.Request) {
-	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
-		return
-	} else if action, err := self.ActionService.GetById(id); err != nil {
-		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
-		return
-	} else {
-		if active, err := strconv.ParseBool(req.PostFormValue("active")); err == nil {
-			action.Active = active
-		}
-
-		if err := self.ActionService.Update(action); err != nil {
-			self.ServerError(w, err)
-			return
-		}
-	}
-
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
@@ -1289,53 +1301,31 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (self *Web) ApiFactMatchLatestPost(w http.ResponseWriter, req *http.Request) {
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		self.ServerError(w, err)
-		return
-	}
-
-	match := util.CUEString(body).Value(nil, nil)
-	if matchErr := match.Err(); matchErr != nil {
-		self.ClientError(w, errors.WithMessage(matchErr, "Failed to parse match CUE"))
-		return
-	}
-
-	fact, err := self.FactService.GetLatestByCue(match)
-	if err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
-		return
-	}
-
-	self.json(w, fact, http.StatusOK)
-}
-
 type apiActionMatchResponse struct {
-	Runnable bool
-	Inputs   map[string]apiActionMatchResponseInput
-	Output   domain.OutputDefinition
+	Runnable bool                                   `json:"runnable"`
+	Inputs   map[string]apiActionMatchResponseInput `json:"inputs"`
+	Output   domain.OutputDefinition                `json:"output"`
 }
 
 func (self apiActionMatchResponse) MarshalJSON() ([]byte, error) {
+	type Self apiActionMatchResponse
+
 	type output struct {
-		Success apiActionIoMatchResponseUnified `json:"success"`
-		Failure apiActionIoMatchResponseUnified `json:"failure"`
+		Success apiActionIoMatchResponse `json:"success"`
+		Failure apiActionIoMatchResponse `json:"failure"`
 	}
 
 	result := struct {
-		Runnable bool                                   `json:"runnable"`
-		Inputs   map[string]apiActionMatchResponseInput `json:"inputs"`
-		Output   output                                 `json:"output"`
+		Self
+		Output output `json:"output"`
 	}{
-		Runnable: self.Runnable,
-		Inputs:   self.Inputs,
+		Self: Self(self),
 		Output: output{
-			Success: apiActionIoMatchResponseUnified{
+			Success: apiActionIoMatchResponse{
 				Unified: self.Output.Success,
 				Error:   self.Output.Success.Validate(cue.Concrete(true)),
 			},
-			Failure: apiActionIoMatchResponseUnified{
+			Failure: apiActionIoMatchResponse{
 				Unified: self.Output.Failure,
 				Error:   self.Output.Failure.Validate(cue.Concrete(true)),
 			},
@@ -1345,25 +1335,22 @@ func (self apiActionMatchResponse) MarshalJSON() ([]byte, error) {
 }
 
 type apiActionMatchResponseInput struct {
-	SatisfiedByFact *string
+	SatisfiedByFact *string `json:"satisfiedByFact"`
 
-	MatchWithDeps *cue.Value
-	Matched       *apiActionIoMatchResponseUnified
+	MatchWithDeps *cue.Value `json:"matchWithDeps"`
 
-	MatchedAgainstFact map[string]apiActionIoMatchResponseUnified
+	MatchedAgainstFact         map[string]apiActionIoMatchResponse `json:"matchedAgainstFact"`
+	MatchedAgainstFactWithDeps map[string]apiActionIoMatchResponse `json:"matchedAgainstFactWithDeps"`
+
+	Dependencies []string `json:"dependencies"`
 }
 
 func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
+	type Self apiActionMatchResponseInput
 	result := struct {
-		SatisfiedByFact    *string                                    `json:"satisfiedByFact"`
-		MatchWithDeps      *string                                    `json:"matchWithDeps"`
-		MatchedAgainstFact map[string]apiActionIoMatchResponseUnified `json:"matchedAgainstFact"`
-		Matched            *apiActionIoMatchResponseUnified           `json:"matched"`
-	}{
-		SatisfiedByFact:    self.SatisfiedByFact,
-		Matched:            self.Matched,
-		MatchedAgainstFact: self.MatchedAgainstFact,
-	}
+		Self
+		MatchWithDeps *string `json:"matchWithDeps"`
+	}{Self: Self(self)}
 
 	if self.MatchWithDeps != nil {
 		matchWithDeps := util.CUEString("")
@@ -1377,12 +1364,12 @@ func (self apiActionMatchResponseInput) MarshalJSON() ([]byte, error) {
 	return json.Marshal(result)
 }
 
-type apiActionIoMatchResponseUnified struct {
+type apiActionIoMatchResponse struct {
 	Unified cue.Value
 	Error   error
 }
 
-func (self apiActionIoMatchResponseUnified) MarshalJSON() ([]byte, error) {
+func (self apiActionIoMatchResponse) MarshalJSON() ([]byte, error) {
 	unified := util.CUEString("")
 	if err := unified.FromValue(self.Unified.Eval(), cueformat.Simplify()); err != nil {
 		return nil, err
@@ -1438,6 +1425,21 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 		Inputs: map[string]apiActionMatchResponseInput{},
 	}
 
+	// Compute DAG of dependencies between inputs.
+	if flow, err := action.InOut.InputsFlow(nil); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Error computing DAG of input dependencies"))
+		return
+	} else {
+		for _, t := range flow.Tasks() {
+			name := domain.InputName(t)
+			responseInput := response.Inputs[name]
+			for _, dep := range t.Dependencies() {
+				responseInput.Dependencies = append(responseInput.Dependencies, domain.InputName(dep))
+			}
+			response.Inputs[name] = responseInput
+		}
+	}
+
 	// Match every fact against every input in isolation.
 	if inputs, err := action.InOut.Inputs(nil); err != nil {
 		self.ClientError(w, err)
@@ -1445,7 +1447,7 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 	} else {
 		for inputName, input := range inputs {
 			for factName, fact := range formFacts {
-				unified, unifiedErr, err := self.FactService.Match(&fact, input.Match)
+				matchErr, err := self.FactService.Match(&fact, input.Match)
 				if err != nil {
 					self.ServerError(w, err)
 					return
@@ -1453,9 +1455,10 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 
 				responseInput := response.Inputs[inputName]
 				if responseInput.MatchedAgainstFact == nil {
-					responseInput.MatchedAgainstFact = map[string]apiActionIoMatchResponseUnified{}
+					responseInput.MatchedAgainstFact = map[string]apiActionIoMatchResponse{}
 				}
-				responseInput.MatchedAgainstFact[factName] = apiActionIoMatchResponseUnified{unified, unifiedErr}
+				unified := input.Match.Context().Encode(fact.Value).Unify(input.Match)
+				responseInput.MatchedAgainstFact[factName] = apiActionIoMatchResponse{unified, matchErr}
 				response.Inputs[inputName] = responseInput
 			}
 		}
@@ -1476,18 +1479,19 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Mark action inactive to avoid triggering an invocation upon fact creation.
-		action.Active = false
-		if err := actionService.Update(&action); err != nil {
+		if err := actionService.SetActive(action.Name, false); err != nil {
 			return err
 		}
 
 		// Create all facts.
 		factIdToName := map[uuid.UUID]string{}
 		for name, fact := range formFacts {
-			// Just ignore the returned InvokeRunFunc because we know
-			// that there is only our action in the DB.
-			if _, _, err := factService.Save(&fact, nil); err != nil {
+			if invocations, _, err := factService.Save(&fact, nil); err != nil {
 				return err
+			} else if len(invocations) > 0 {
+				// Just ignore the returned InvokeRunFunc because we know
+				// that there is only our inactive action in the DB.
+				panic("This should never happen™")
 			}
 			factIdToName[fact.ID] = name
 		}
@@ -1499,7 +1503,7 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 			action = *dbAction
 		}
 
-		if satisfied, runnable, err := actionService.GetSatisfiedInputs(&action); err != nil {
+		if runnable, satisfied, err := actionService.IsRunnable(&action); err != nil {
 			return err
 		} else {
 			response.Runnable = runnable
@@ -1517,16 +1521,22 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 					}
 
 					if fact, isSatisfied := satisfied[inputName]; isSatisfied {
-						{
-							factNameOnHeap := factIdToName[fact.ID]
-							responseInput.SatisfiedByFact = &factNameOnHeap
+						factNameOnHeap := factIdToName[fact.ID]
+						responseInput.SatisfiedByFact = &factNameOnHeap
+					}
+
+					// Match every fact against this input with its dependencies.
+					for factName, fact := range formFacts {
+						matchErr, err := self.FactService.Match(&fact, input.Match)
+						if err != nil {
+							return err
 						}
 
-						if unified, unifiedErr, err := factService.Match(&fact, input.Match); err != nil {
-							return err
-						} else {
-							responseInput.Matched = &apiActionIoMatchResponseUnified{unified, unifiedErr}
+						if responseInput.MatchedAgainstFactWithDeps == nil {
+							responseInput.MatchedAgainstFactWithDeps = map[string]apiActionIoMatchResponse{}
 						}
+						unified := input.Match.Context().Encode(fact.Value).Unify(input.Match)
+						responseInput.MatchedAgainstFactWithDeps[factName] = apiActionIoMatchResponse{unified, matchErr}
 					}
 
 					response.Inputs[inputName] = responseInput
