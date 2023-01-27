@@ -1,27 +1,20 @@
 # Cicero
 
-Cicero is an action execution engine for running Continuous Integration (CI) and Continuous Delivery (CD) tasks.
+Cicero is an action execution engine.
 
-In contrast to CI/CD tools like [Jenkins](https://www.jenkins.io/)
-or [Hydra](https://github.com/NixOS/hydra) Cicero provides more flexibility in writing pipelines
-and a deep integration of the [Nix Expression Language](https://nixos.wiki/wiki/Nix_Expression_Language) and the [Nix Package Manager](https://nixos.wiki/wiki/Nix_Package_Manager).
+Think of it like an if-this-then-that machine on HashiCorp Nomad.
 
-Cicero also offers a rich Web UI to query and inspect **actions** and their **runs**,
-as well as the **action output**.
-
-To interact with the Cicero-API via CLI POST requests with JSON are sent to the api endpoints.
-The api definition can be found here: [https://cicero.infra.aws.iohkdev.io/documentation/cicero.yaml](https://cicero.infra.aws.iohkdev.io/documentation/cicero.yaml).
-
-**Actions** are defined in the Nix expression language which is extended by Cicero specific libraries.
-Therefore the execution of an **action** is called **run**.
-
-**Runs** are converted into a job description which gets deployed to a Hashicorp Nomad instance.
-
-Integration with third party applications (e.g.JIRA) is possible, for automatic status updates.
-By using a declarative approach to **actions**, dependencies and intermediate results can be easily cached,
+Cicero’s actions are flexible enough to build Continuous Integration (CI) and
+Continuous Delivery (CD) pipelines. It offers a rich Web UI as well as a CLI
+tool for developers to query and inspect actions and their runs,
+as well as the action output. Integration with third party applications (e.g.
+JIRA) is possible, for automatic status updates. By using a declarative
+approach to actions, dependencies and intermediate results can be easily cached,
 and execution parallelised, thus reducing build times.
 
-Vault from the Hashicorp tech stack is used to enable authentication.
+This document aims to provide a quick glance of concepts and common tasks.
+
+A getting started guide and examples can be found in the [handbook](https://handbook.cicero.ci.iog.io).
 
 ## Vocabulary
 
@@ -76,25 +69,41 @@ and environment variables by invoking the language's runtime.
 
 Cicero currently only ships a Nix evaluator but others are planned.
 
-## Nix Standard Library
+## Tullia
 
-For actions written in Nix, Cicero provides a standard library of functions
-that help writing actions' inputs, output, and Nomad jobs in a concise way.
-
-Documentation is currently available in the form of source code
-[comments](https://github.com/input-output-hk/cicero/blob/main/pkgs/cicero/evaluators/nix/lib.nix), [example actions](https://github.com/input-output-hk/cicero/tree/main/actions/examples) and the [Cicero Handbook](https://cicero-handbook.infra.aws.iohkdev.io/).
+[Tullia](https://github.com/input-output-hk/tullia) provides a library
+for writing actions in the Nix expression language.
 
 # Development
 
+## Prerequisites
+
+- Nix
+	- At least version 2.4
+	- Enable flakes in your `/etc/nix/nix.conf`: `experimental-features = nix-command flakes`
+
 ## How To Run
 
-### [Install Nix](https://cicero-handbook.infra.aws.iohkdev.io/install-nix.html) section of the Cicero Handbook.
+First enter the development shell using either direnv or by running `nix develop`.
 
-### [Install Cicero](https://cicero-handbook.infra.aws.iohkdev.io/install-cicero.html) section of the Cicero Handbook.
+Start a development VM with Nomad, nomad-follower, Vault and Spongix:
 
-### There is also an OpenAPI v3 schema available at:
-- http://localhost:8000/documentation/cicero.json
-- http://localhost:8000/documentation/cicero.yaml
+	nixos-shell --flake .
+
+Inside the VM, run the application:
+
+	dev-cicero
+
+Cicero's web UI should now be available on http://localhost:18080.
+
+You can also run it outside the VM if you choose another port:
+
+	dev-cicero --web-listen :8000
+
+There is also an OpenAPI v3 schema available at:
+
+- http://localhost:18080/documentation/cicero.json
+- http://localhost:18080/documentation/cicero.yaml
 
 ## How To …
 
@@ -114,11 +123,11 @@ Run tests with coverage:
 
 	go test -cover ./...
 
-Run OpenApi validation tests:
+Run OpenAPI validation tests:
 
-	schemathesis run http://localhost:8000/documentation/cicero.yaml --validate-schema=false
+	schemathesis run http://localhost:18080/documentation/cicero.yaml --validate-schema=false
 
-Serve Cicero book locally on port 3000
+Serve the handbook locally on port 3000:
 
 	mdbook serve --open
 
