@@ -14,34 +14,33 @@
     packages = rec {
       default = cicero;
       cicero = let
-        package = vendorSha256:
-          pkgs.buildGo118Module rec {
-            pname = "cicero";
-            version = "2023.01.19.001";
-            inherit vendorSha256;
+        package = pkgs.buildGo118Module rec {
+          pname = "cicero";
+          version = "2023.01.19.001";
+          vendorHash = "sha256-IxwyLQ1tDVPztA8GQlCmIMZhFWRfDB1TEu+4UTu28mc=";
 
-            src = inputs.inclusive.lib.inclusive ../.. [
-              ../../go.mod
-              ../../go.sum
-              ../../main.go
-              ../../src
-            ];
+          src = inputs.inclusive.lib.inclusive ../.. [
+            ../../go.mod
+            ../../go.sum
+            ../../main.go
+            ../../src
+          ];
 
-            nativeBuildInputs = with pkgs; [go-mockery];
+          nativeBuildInputs = with pkgs; [go-mockery];
 
-            preBuild = ''
-              go generate ./...
-            '';
+          preBuild = ''
+            go generate ./...
+          '';
 
-            ldflags = [
-              "-s"
-              "-w"
-              "-X main.buildVersion=${version}"
-              "-X main.buildCommit=${self.rev or "dirty"}"
-            ];
-          };
+          ldflags = [
+            "-s"
+            "-w"
+            "-X main.buildVersion=${version}"
+            "-X main.buildCommit=${self.rev or "dirty"}"
+          ];
 
-        simple = package "sha256-IxwyLQ1tDVPztA8GQlCmIMZhFWRfDB1TEu+4UTu28mc=";
+          passthru.tests.schemathesis = schemathesisTest;
+        };
 
         # We cannot use pkgs.nixosTest because
         # it gives us no way to inject specialArgs
@@ -54,7 +53,7 @@
                 nixpkgs = {
                   inherit pkgs;
                   overlays = lib.mkForce [
-                    (_: _: {cicero = simple;})
+                    (_: _: {cicero = package;})
                   ];
                 };
               })
@@ -88,12 +87,7 @@
             '';
           };
       in
-        pkgs.runCommandNoCC simple.name {
-          requiredSystemFeatures = ["kvm"];
-        } ''
-          ln -s ${simple} $out
-          ${lib.getExe schemathesisTest.driver}
-        '';
+        package;
     };
   };
 }
