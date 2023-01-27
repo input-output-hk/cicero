@@ -49,7 +49,22 @@
 
             command.text = config.preset.github.status.lib.reportBulk {
               bulk.text = "nix eval .#packages --apply __attrNames --json | nix-systems -i";
-              each.text = ''nix build -L .#packages."$1".default'';
+              each.text = ''
+                nix build -L .#packages."$1".default
+
+                readarray -t tests < <(
+                  nix eval .#packages."$1".default.passthru.tests --apply __attrNames --json |
+                  jq --raw-output .[]
+                )
+
+                for test in "''${tests[@]}"; do
+                  installables+=(.#packages."$1".default.passthru.tests."$test")
+                done
+
+                if [[ ''${#tests[@]} -gt 0 ]]; then
+                  nix build -L "''${installables[@]}"
+                fi
+              '';
             };
 
             env.NIX_CONFIG = ''
