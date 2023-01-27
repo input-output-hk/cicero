@@ -13,6 +13,7 @@
   }: {
     packages = rec {
       default = cicero;
+
       cicero = let
         package = pkgs.buildGo118Module rec {
           pname = "cicero";
@@ -39,7 +40,11 @@
             "-X main.buildCommit=${self.rev or "dirty"}"
           ];
 
-          passthru.tests.schemathesis = schemathesisTest;
+          passthru.tests = let
+            ifSystem = pred: lib.optionalAttrs (pred (lib.systems.parse.mkSystemFromString system));
+          in
+            with lib.systems.inspect.predicates;
+              ifSystem isLinux {schemathesis = schemathesisTest;};
         };
 
         # We cannot use pkgs.nixosTest because
