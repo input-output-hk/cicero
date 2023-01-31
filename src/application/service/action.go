@@ -512,11 +512,7 @@ func (self actionService) UpdateSatisfaction(fact *domain.Fact) error {
 
 		for _, action := range actions {
 			if err := txSelf.updateSatisfaction(&action, fact); err != nil {
-				txSelf.logger.Info().
-					AnErr("error", err).
-					Stringer("action", action.ID).
-					Stringer("fact", fact.ID).
-					Msg("Could not update satisfaction of this action with this fact")
+				return err
 			}
 		}
 
@@ -603,6 +599,11 @@ func (self actionService) updateSatisfaction(action *domain.Action, fact *domain
 
 			return nil
 		}); err != nil {
+			cueError := new(cueerrors.Error)
+			if errors.As(err, cueError) {
+				logger.Info().AnErr("error", *cueError).Msg("CUE error while building flow")
+				return nil
+			}
 			return errors.WithMessage(err, "While building flow")
 		} else if err := flow.Run(context.Background()); err != nil {
 			cueError := new(cueerrors.Error)
