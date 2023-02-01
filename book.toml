@@ -1,0 +1,6 @@
+[book]
+authors = ["Robin Stumm"]
+language = "en"
+multilingual = false
+src = "handbook"
+title = "Cicero Handbook"

@@ -12,4 +12,5 @@
 /.spongix
 /.docker-registry
 dist-newstyle
+/book
 /nixos.qcow2

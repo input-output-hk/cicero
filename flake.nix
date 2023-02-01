@@ -57,6 +57,7 @@
         ./overlay.nix
         packages/cicero
         packages/cicero/evaluators/nix
+        packages/cicero/handbook.nix
         packages/trigger.nix
         packages/schemathesis.nix
         packages/nomad-driver-podman.nix

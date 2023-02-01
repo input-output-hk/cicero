@@ -188,6 +188,7 @@
           "curlie"
           "diffutils"
           "jq"
+          "mdbook"
         ];
       };
     });
