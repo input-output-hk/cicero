@@ -12,5 +12,3 @@ Cicero has a rudimentary web UI that can be used to create actions and inspect r
 
 There is no dedicated CLI yet. Instead you can talk to the HTTP API using a tool like [httpie](https://httpie.io/) or curl.
 Cicero serves an OpenAPI v3 [specification](https://cicero.ci.iog.io/documentation/cicero.yaml) that you can comfortably explore on Swagger UI.
-
-See the [README](https://github.com/input-output-hk/cicero/blob/main/README.md) for an overview of the concepts and vocabulary used.
