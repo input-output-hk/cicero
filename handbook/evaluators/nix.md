@@ -21,6 +21,16 @@ As its only argument the function takes an attribute set with the following keys
 | `inputs`      | The [`inputs`](evaluator.md#environment-variables) passed to the Nix evaluator unchanged.                                                                                                                                                       |
 | `ociRegistry` | (optional) The OCI registry to encode in the image name. This is only used for the [`nix2container` preparation hook](#nix2container). Might be deleted again, see [nix2container issue #61](https://github.com/nlewo/nix2container/issues/61). |
 
+## Configuration
+
+These are all optional:
+
+| Environment Variable              | Description                                                                                  |
+|-----------------------------------|----------------------------------------------------------------------------------------------|
+| `CICERO_EVALUATOR_NIX_EXTRA_ARGS` | A nix expression of an attribute set that will be merged over the action function arguments. |
+| `CICERO_EVALUATOR_NIX_VERBOSE`    | Enable verbose logging if set.                                                               |
+| `CICERO_EVALUATOR_NIX_STACKTRACE` | Print the stack trace on evaluation error if set.                                            |
+
 ## Preparation Hooks
 
 An action may define none, one, or multiple hooks in a `prepare` key.
@@ -43,16 +53,23 @@ This builds an image using [`nix2container`](https://github.com/nlewo/nix2contai
 | `imageDrv` | Path to `.drv` file of the image. Must exist in the local Nix store after evaluation.                   |
 | `name`     | The registry URL to push to, such as `docker://registry.ci.iog.io/ci:3lgzx79gf7m2shx3ls5dwd09kpwsibpp`. |
 
+| Environment Variable                                 | Required | Description                                     |
+|------------------------------------------------------|----------|-------------------------------------------------|
+| `CICERO_EVALUATOR_NIX_OCI_REGISTRY`                  | Yes      | URL of the OCI registry to push to.             |
+| `CICERO_EVALUATOR_NIX_OCI_REGISTRY_SKOPEO_COPY_ARGS` | No       | Extra command line arguments for `skopeo copy`. |
+
 ### `nix`
 
-This builds Nix packages.
-
-By configuring a [post-build hook](https://nixos.org/manual/nix/stable/advanced-topics/post-build-hook.html) you can use this to push them to a binary cache.
+This builds Nix packages and pushes them to a binary cache.
 
 | Field Name    | Description                                                                                  |
 |---------------|----------------------------------------------------------------------------------------------|
 | `type`        | `nix`                                                                                        |
 | `derivations` | An array of paths to `.drv` files. These must exist in the local Nix store after evaluation. |
+
+| Environment Variable                | Description                         |
+|-------------------------------------|-------------------------------------|
+| `CICERO_EVALUATOR_NIX_BINARY_CACHE` | URL of the binary cache to push to. |
 
 ## Debugging
 
