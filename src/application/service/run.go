@@ -277,9 +277,15 @@ func (self runService) GrafanaLokiUrls(allocs []*nomad.Allocation, to *time.Time
 
 	for _, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000) // there's no UnixNano
-		if to == nil {
+		if to == nil && alloc.ClientTerminalStatus() {
 			t := time.UnixMicro(alloc.ModifyTime / 1000)
 			to = &t
+		}
+		var toStr string
+		if to == nil {
+			toStr = "now"
+		} else {
+			toStr = strconv.FormatInt(to.UnixMilli(), 10)
 		}
 
 		grafanaUrl, err := url.Parse("https://monitoring.ci.iog.io/explore")
@@ -287,9 +293,6 @@ func (self runService) GrafanaLokiUrls(allocs []*nomad.Allocation, to *time.Time
 			return nil, err
 		}
 		guQuery := grafanaUrl.Query()
-
-		guQuery.Set("from", strconv.FormatInt(from.UnixMilli(), 10))
-		guQuery.Set("to", strconv.FormatInt(to.UnixMilli(), 10))
 
 		left, err := json.Marshal(
 			grafanaExplore{
@@ -303,8 +306,8 @@ func (self runService) GrafanaLokiUrls(allocs []*nomad.Allocation, to *time.Time
 					},
 				},
 				Range: grafanaExploreRange{
-					From: "now-24h",
-					To:   "now",
+					From: strconv.FormatInt(from.UnixMilli(), 10),
+					To:   toStr,
 				},
 			},
 		)
