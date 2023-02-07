@@ -164,6 +164,21 @@ ul.pagination > li > a {
 	justify-content: center;
 }
 
+ul.inline {
+	display: flex;
+
+	list-style: none;
+	padding: 0;
+	gap: .75em;
+}
+ul.inline > li:not(:last-child)::after {
+	position: relative;
+	left: .2em;
+
+	content: '|';
+	color: gray;
+}
+
 dl.concise {
 	margin: 0;
 }

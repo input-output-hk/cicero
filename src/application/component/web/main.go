@@ -1276,6 +1276,8 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
+	var log service.LokiLog
+
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
@@ -1283,8 +1285,23 @@ func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
 		self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
 	} else if run == nil {
 		w.WriteHeader(http.StatusNotFound)
-	} else if log, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt); err != nil {
+	} else if log_, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
+	} else {
+		log = log_
+	}
+
+	if _, raw := req.URL.Query()["raw"]; raw {
+		for _, line := range log {
+			if _, err := io.Copy(w, strings.NewReader(line.Text)); err != nil {
+				self.ServerError(w, errors.WithMessage(err, "Error writing log line"))
+				return
+			}
+			if _, err := w.Write([]byte("\n")); err != nil {
+				self.ServerError(w, errors.WithMessage(err, "Error writing newline after log line"))
+				return
+			}
+		}
 	} else {
 		self.json(w, log, http.StatusOK)
 	}

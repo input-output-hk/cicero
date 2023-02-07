@@ -536,6 +536,17 @@
 											</table>
 
 											<h3>Task Log</h3>
+											<ul
+												class="inline"
+												style="margin: 1em"
+											>
+												<li>
+													<a href="/api/run/{{$.Run.NomadJobID}}/log?raw">Raw</a>
+												</li>
+												<li>
+													<a href="{{index $.grafanaLokiUrls $alloc.ID}}">Loki</a>
+												</li>
+											</ul>
 											{{with index $alloc.TaskLogs $taskName}}
 												<table class="panel log">
 													{{range .}}
@@ -548,7 +559,6 @@
 											{{else}}
 												<em>No log found.</em>
 											{{end}}
-											Full logs are in <a href="{{index $.grafanaLokiUrls $alloc.ID}}">Loki</a>
 										</div>
 									{{end}}
 								</div>
