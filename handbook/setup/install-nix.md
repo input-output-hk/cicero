@@ -45,6 +45,7 @@ If you want to learn more about Nix have a look a the following links:
 	- [The Nix Hour](https://www.youtube.com/watch?v=wwV1204mCtE&list=PLyzwHTVJlRc8yjlx4VR4LU5A5O44og9in) (YouTube playlist)
 	- [How To Learn Nix](https://www.ianthehenry.com/posts/how-to-learn-nix)
 	- [Nix Tour](https://nixcloud.io/tour), an interactive tour
+	- [Nix Tutorial](https://nix-tutorial.gitlabpages.inria.fr)
 - [Nix Pills](https://nixos.org/guides/nix-pills/index.html), a comprehensive semi-officical guide that once was a series of blog posts
 - [community-made documentation of library functions](https://teu5us.github.io/nix-lib.html)
 
