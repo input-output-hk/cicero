@@ -19,8 +19,9 @@ import (
 )
 
 type LokiService interface {
-	QueryRangeLog(string, time.Time, *time.Time) (LokiLog, error)
-	QueryRange(string, time.Time, *time.Time, func(loghttp.Stream) (bool, error)) error
+	// A limit of 0 means no limit.
+	QueryRangeLog(string, time.Time, *time.Time, uint) (LokiLog, error)
+	QueryRange(string, time.Time, *time.Time, uint, func(loghttp.Stream) (bool, error)) error
 }
 
 type LokiLog []LokiLine
@@ -43,18 +44,18 @@ func NewLokiService(prometheusClient prometheus.Client, logger *zerolog.Logger) 
 	}
 }
 
-func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.Time) (LokiLog, error) {
-	const linesToFetch = 10_000
-
+func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.Time, limit uint) (LokiLog, error) {
 	log := LokiLog{}
 
-	if err := self.QueryRange(query, start, end, func(stream loghttp.Stream) (bool, error) {
+	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
+	const pageSize uint = 5000
+	if err := self.QueryRange(query, start, end, pageSize, func(stream loghttp.Stream) (bool, error) {
 		callbackLog := new(LokiLog)
 		callbackLog.FromStream(stream)
 
 		log = append(log, *callbackLog...)
 
-		return len(log) >= linesToFetch, nil
+		return limit != 0 && uint(len(log)) >= limit, nil
 	}); err != nil {
 		return nil, err
 	}
@@ -64,18 +65,18 @@ func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.T
 	return log, nil
 }
 
-func (self lokiService) QueryRange(query string, start time.Time, end *time.Time, callback func(loghttp.Stream) (bool, error)) error {
+func (self lokiService) QueryRange(query string, start time.Time, end *time.Time, limit uint, callback func(loghttp.Stream) (bool, error)) error {
 	const timeout time.Duration = 2 * time.Second
-	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
-	const limit int64 = 5000
 
 	if end == nil {
 		now := time.Now().UTC()
 		end = &now
 	}
 
-	endLater := end.Add(1 * time.Minute)
-	end = &endLater
+	{
+		endLater := end.Add(1 * time.Minute)
+		end = &endLater
+	}
 
 Page:
 	for {
@@ -92,7 +93,7 @@ Page:
 
 		q := req.URL.Query()
 		q.Set("query", query)
-		q.Set("limit", strconv.FormatInt(limit, 10))
+		q.Set("limit", strconv.FormatUint(uint64(limit), 10))
 		q.Set("start", strconv.FormatInt(start.UnixNano(), 10))
 		q.Set("end", strconv.FormatInt(end.UnixNano(), 10))
 		q.Set("direction", "FORWARD")
@@ -125,7 +126,7 @@ Page:
 			break Page
 		}
 
-		var numEntries int64
+		var numEntries uint
 		for _, stream := range streams {
 			if stop, err := callback(stream); err != nil {
 				return err
@@ -133,7 +134,7 @@ Page:
 				break Page
 			}
 
-			numEntries += int64(len(stream.Entries))
+			numEntries += uint(len(stream.Entries))
 			for _, entry := range stream.Entries {
 				if entry.Timestamp.After(start) {
 					start = entry.Timestamp

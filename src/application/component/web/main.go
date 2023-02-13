@@ -617,7 +617,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log, err := self.InvocationService.GetLog(*invocation)
+	log, err := self.InvocationService.GetLog(*invocation, 0)
 	if err != nil {
 		self.ServerError(w, err)
 		return
@@ -699,7 +699,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	allocsWithLogs, err := self.RunService.GetRunAllocationsWithLogs(*run)
+	allocsWithLogs, err := self.RunService.GetRunAllocationsWithLogs(*run, 10_000)
 	if err != nil {
 		self.ServerError(w, err)
 		return
@@ -1285,7 +1285,7 @@ func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
 		self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
 	} else if run == nil {
 		w.WriteHeader(http.StatusNotFound)
-	} else if log_, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt); err != nil {
+	} else if log_, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt, 0); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
 	} else {
 		log = log_

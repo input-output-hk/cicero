@@ -28,7 +28,7 @@ type InvocationService interface {
 	Save(*domain.Invocation, map[string]domain.Fact) error
 	End(uuid.UUID) error
 	Retry(uuid.UUID) (*domain.Invocation, InvokeRunFunc, error)
-	GetLog(domain.Invocation) (LokiLog, error)
+	GetLog(domain.Invocation, uint) (LokiLog, error)
 }
 
 type InvocationServiceCyclicDependencies struct {
@@ -193,9 +193,9 @@ func (self invocationService) End(id uuid.UUID) error {
 	return nil
 }
 
-func (self invocationService) GetLog(invocation domain.Invocation) (LokiLog, error) {
+func (self invocationService) GetLog(invocation domain.Invocation, limit uint) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{cicero=~"eval(-transform)?",invocation=%q}`, invocation.Id),
-		invocation.CreatedAt, invocation.FinishedAt,
+		invocation.CreatedAt, invocation.FinishedAt, limit,
 	)
 }

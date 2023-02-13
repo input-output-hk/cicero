@@ -38,9 +38,12 @@ type RunService interface {
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	JobLog(id uuid.UUID, start time.Time, end *time.Time) (LokiLog, error)
-	RunLog(allocId, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error)
-	GetRunAllocationsWithLogs(domain.Run) ([]AllocationWithLogs, error)
+	// A limit of 0 means no limit.
+	JobLog(id uuid.UUID, start time.Time, end *time.Time, limit uint) (LokiLog, error)
+	// A limit of 0 means no limit.
+	RunLog(allocId, taskGroup, taskName string, start time.Time, end *time.Time, limit uint) (LokiLog, error)
+	// A limit of 0 means no limit.
+	GetRunAllocationsWithLogs(domain.Run, uint) ([]AllocationWithLogs, error)
 	CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
 	MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
 	GrafanaUrls(allocs []*nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
@@ -175,21 +178,21 @@ func (self runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self runService) JobLog(nomadJobID uuid.UUID, start time.Time, end *time.Time) (LokiLog, error) {
+func (self runService) JobLog(nomadJobID uuid.UUID, start time.Time, end *time.Time, limit uint) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
-		start, end,
+		start, end, limit,
 	)
 }
 
-func (self runService) RunLog(allocID, taskGroup, taskName string, start time.Time, end *time.Time) (LokiLog, error) {
+func (self runService) RunLog(allocID, taskGroup, taskName string, start time.Time, end *time.Time, limit uint) (LokiLog, error) {
 	return self.lokiService.QueryRangeLog(
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
-		start, end,
+		start, end, limit,
 	)
 }
 
-func (self runService) GetRunAllocationsWithLogs(run domain.Run) ([]AllocationWithLogs, error) {
+func (self runService) GetRunAllocationsWithLogs(run domain.Run, limit uint) ([]AllocationWithLogs, error) {
 	allocs, err := self.nomadEventService.GetLatestEventAllocationByJobId(run.NomadJobID)
 	if err != nil {
 		return nil, err
@@ -222,7 +225,7 @@ func (self runService) GetRunAllocationsWithLogs(run domain.Run) ([]AllocationWi
 		for taskName := range alloc.TaskResources {
 			go func(i int, taskName string) {
 				defer wg.Done()
-				log, err := self.RunLog(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, nil)
+				log, err := self.RunLog(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, nil, limit)
 				logs <- logsMsg{
 					idx:      i,
 					taskName: taskName,
