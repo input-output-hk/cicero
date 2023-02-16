@@ -206,13 +206,17 @@ dl.inline > dd:not(:last-child)::after {
 	white-space: pre;
 }
 
-.log {
+table.log {
 	font-size: .8rem;
 	font-family: "SFMono-Regular", Monaco, Menlo, Consolas, "Liberation Mono", Courier, monospace;
 }
-.log.stderr {
+table.log > tbody > tr > td:first-child {
+	text-align: center;
+}
+table.log > tbody > tr.stderr > td:last-child {
 	color: red;
 }
-.log.error {
+table.log > tbody > tr.error,
+table.log > tbody > tr.info {
 	font-style: italic;
 }

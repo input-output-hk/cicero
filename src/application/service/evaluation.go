@@ -40,11 +40,11 @@ type EvaluationService interface {
 }
 
 const (
-	lokiFdErr     = "error"
-	lokiFdStdout  = "stdout"
-	lokiFdStderr  = "stderr"
-	lokiEval      = "eval"
-	lokiTransform = "eval-transform"
+	lokiSourceErr    = "error"
+	lokiSourceStdout = "stdout"
+	lokiSourceStderr = "stderr"
+	lokiEval         = "eval"
+	lokiTransform    = "eval-transform"
 )
 
 func newScanner(input io.Reader) (scanner *bufio.Scanner) {
@@ -175,7 +175,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 	Scan:
 		for scanner.Scan() {
 			if invocationId != nil {
-				e.promtailChan <- promtailEntry(scanner.Text(), lokiEval, lokiFdStdout, *invocationId)
+				e.promtailChan <- promtailEntry(scanner.Text(), lokiEval, lokiSourceStdout, *invocationId)
 			}
 
 			var msg map[string]interface{}
@@ -244,7 +244,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 	if evaluator != "" {
 		if output, stderr, err := tryEval(evaluator); err != nil {
 			if invocationId != nil {
-				e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, *invocationId)
+				e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, *invocationId)
 			}
 			return nil, stderr, errors.WithMessagef(err, "Evaluator %q specified in source failed. Stderr: %s", evaluator, string(stderr))
 		} else {
@@ -256,7 +256,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		for _, evaluator := range e.Evaluators {
 			if output, stderr, err := tryEval(evaluator); err != nil {
 				if invocationId != nil {
-					e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, *invocationId)
+					e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, *invocationId)
 				}
 
 				var evalErr *EvaluationError
@@ -280,11 +280,11 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 	}
 }
 
-func promtailEntry(line, label, fd string, invocationId uuid.UUID) promtail.Entry {
+func promtailEntry(line, label, source string, invocationId uuid.UUID) promtail.Entry {
 	return promtail.Entry{
 		Labels: map[model.LabelName]model.LabelValue{
 			"cicero":     model.LabelValue(label),
-			"fd":         model.LabelValue(fd),
+			"source":     model.LabelValue(source),
 			"invocation": model.LabelValue(invocationId.String()),
 		},
 		Entry: logproto.Entry{
@@ -301,20 +301,20 @@ func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, i
 	stdoutErr = new(error)
 	stderrErr = new(error)
 
-	pipeAll := func(input io.Reader, fd string) error {
+	pipeAll := func(input io.Reader, source string) error {
 		scanner := newScanner(input)
 		for scanner.Scan() {
-			e.promtailChan <- promtailEntry(scanner.Text(), label, fd, invocationId)
+			e.promtailChan <- promtailEntry(scanner.Text(), label, source, invocationId)
 		}
 		// Intentionally not sending the error to promtail here; caller should do that.
-		return errors.WithMessage(scanner.Err(), "While scanning "+fd)
+		return errors.WithMessage(scanner.Err(), "While scanning "+source)
 	}
 
 	if stdout != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			*stdoutErr = pipeAll(*stdout, lokiFdStdout)
+			*stdoutErr = pipeAll(*stdout, lokiSourceStdout)
 		}()
 	}
 
@@ -322,7 +322,7 @@ func (e evaluationService) pipeToLoki(label string, stdout, stderr *io.Reader, i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			*stderrErr = pipeAll(*stderr, lokiFdStderr)
+			*stderrErr = pipeAll(*stderr, lokiSourceStderr)
 		}()
 	}
 
@@ -358,13 +358,13 @@ func (e evaluationService) EvaluateAction(src, name string, id uuid.UUID) (domai
 func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.UUID, inputs map[string]domain.Fact) (*nomad.Job, error) {
 	dst, evaluator, err := e.fetchSource(src)
 	if err != nil {
-		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
 		return nil, err
 	}
 
 	inputsJson, err := json.Marshal(inputs)
 	if err != nil {
-		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
 		return nil, errors.WithMessagef(err, "Could not marshal inputs to JSON: %v", inputs)
 	}
 
@@ -391,7 +391,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	err = json.Unmarshal(output, &freeformDef)
 	if err != nil {
 		err = errors.WithMessage(err, "While unmarshaling evaluator output into freeform definition")
-		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
 		return nil, errors.WithMessagef(err, "\nOutput: %s\nStderr: %s", string(output), string(stderr))
 	}
 
@@ -401,7 +401,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 
 	// Canonicalize the definition. That is, make sure the job is in API-JSON.
 	if job, err := e.unmarshalJob(*freeformDef.Job, invocationId); err != nil {
-		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
 		return nil, err
 	} else {
 		var jobIface any = *job
@@ -412,7 +412,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 	canonicalizedDefJson, err := json.Marshal(freeformDef)
 	if err != nil {
 		err = errors.WithMessage(err, "While marshaling canonicalized freeformDef")
-		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiSourceErr, invocationId)
 		return nil, err
 	}
 
@@ -428,7 +428,7 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 
 	if err := json.Unmarshal(output, &def); err != nil {
 		err = errors.WithMessagef(err, "While unmarshaling transformer output. Output: %s", output)
-		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+		e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiSourceErr, invocationId)
 		return nil, err
 	}
 
@@ -452,7 +452,7 @@ func (e evaluationService) unmarshalJob(freeformJob any, invocationId uuid.UUID)
 
 	// If that didn't work try parsing as HCL-JSON.
 	if err != nil {
-		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiFdErr, invocationId)
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
 
 		// escape HCL variable interpolation
 		hclJsonJob := bytes.ReplaceAll(freeformJobJson, []byte("${"), []byte("$${"))
@@ -526,7 +526,7 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 
 		stdout, stdoutBuf, stderr, stderrBuf, err := util.BufPipes(cmd)
 		if err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiSourceErr, invocationId)
 			return nil, err
 		}
 		var lokiWg *sync.WaitGroup
@@ -540,21 +540,21 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 
 		stdin, err := cmd.StdinPipe()
 		if err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiSourceErr, invocationId)
 			return nil, err
 		}
 
 		if err := cmd.Start(); err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiSourceErr, invocationId)
 			return nil, err
 		}
 
 		if _, err := io.Copy(stdin, bytes.NewReader(output)); err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiSourceErr, invocationId)
 			return nil, err
 		}
 		if err := stdin.Close(); err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiSourceErr, invocationId)
 			return nil, err
 		}
 
@@ -569,7 +569,7 @@ func (e evaluationService) transform(output []byte, src string, extraEnv []strin
 		}
 
 		if err != nil {
-			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiFdErr, invocationId)
+			e.promtailChan <- promtailEntry(err.Error(), lokiTransform, lokiSourceErr, invocationId)
 
 			var errExit *exec.ExitError
 			if errors.As(err, &errExit) {

@@ -128,12 +128,36 @@
 			const table = noLogFound.previousElementSibling;
 			const tbody = table.querySelector('tbody');
 
+			function renderLine(tr, line) {
+				const td1 = document.createElement('td');
+				if (line.time != null) {
+					const s2 = '2-digit';
+					const p =
+						new Intl.DateTimeFormat('in', { year: 'numeric', month: s2, day: s2, hour: s2, minute: s2, second: s2, hour12: false }).
+						formatToParts(new Date(line.time)).
+						map(p => p.value);
+
+					td1.innerText = `${p[4]}-${p[2]}-${p[0]} ${p[6]}:${p[8]}:${p[10]}`;
+				} else {
+					td1.innerText = line.labels.source;
+				}
+
+				const samp = document.createElement('samp');
+				samp.innerText = line.text;
+
+				const td2 = document.createElement('td');
+				td2.appendChild(samp);
+
+				tr.appendChild(td1);
+				tr.appendChild(td2);
+				tr.classList.add(line.labels.source);
+			}
+
 			document.addEventListener('DOMContentLoaded', async () => {
 				const response = await fetch({{.}})
-
 				const reader = response.body.getReader();
-
 				let buf = [];
+				let snipLineAdded = false;
 				while (true) {
 					const {done, value} = await reader.read();
 
@@ -153,41 +177,37 @@
 						try {
 							line = JSON.parse(lineStr);
 						} catch {
-							line = {
-								labels: {fd: "error"},
-								text: lineStr,
-							};
+							line = {error: lineStr};
 						}
 						buf = buf.slice(lineEndIdx + 1);
+
+						if (line.error != null) {
+							line.text = line.error;
+							delete line.error;
+							line.labels = {source: 'error'};
+						}
 
 						table.style.display = null;
 						noLogFound.style.display = 'none';
 
-						const td1 = document.createElement('td');
-						if (line.time != null) {
-							const s2 = '2-digit';
-							const p =
-								new Intl.DateTimeFormat('in', { year: 'numeric', month: s2, day: s2, hour: s2, minute: s2, second: s2, hour12: false }).
-								formatToParts(new Date(line.time)).
-								map(p => p.value);
+						renderLine(tbody.insertRow(), line);
+					}
 
-							td1.innerText = `${p[4]}-${p[2]}-${p[0]} ${p[6]}:${p[8]}:${p[10]}`;
-						} else {
-							td1.innerText = line.labels.fd;
+					const maxLines = 5000;
+					const snipLineRowIdx = maxLines / 2;
+					while (tbody.childElementCount > maxLines) {
+						if (!snipLineAdded) {
+							renderLine(tbody.insertRow(snipLineRowIdx), {
+								text: '… omitted … (view raw instead)',
+								labels: {source: 'info'},
+							});
+							snipLineAdded = true;
+
+							// remove one more line because the snip line also counts
+							tbody.querySelector('tr:nth-child(' + snipLineRowIdx + ')').remove()
 						}
 
-						const samp = document.createElement('samp');
-						samp.classList.add('log', line.labels.fd);
-						samp.innerText = line.text;
-
-						const td2 = document.createElement('td');
-						td2.appendChild(samp);
-
-						const tr = document.createElement('tr');
-						tr.appendChild(td1);
-						tr.appendChild(td2);
-
-						tbody.appendChild(tr);
+						tbody.querySelector('tr:nth-child(' + (snipLineRowIdx + 1) + ')').remove()
 					}
 				}
 			});
