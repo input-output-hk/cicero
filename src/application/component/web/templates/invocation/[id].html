@@ -117,48 +117,11 @@
 		</div>
 
 		<h2>Logs</h2>
-		{{$i := 0}}
 
 		<h3>Evaluation</h3>
-		{{with $.log}}
-			<table class="panel log">
-				{{$break := false}} <!-- TODO use the proper break statement that's new in Go 1.18 -->
-				{{range $ii, $line := .}}
-					{{if and (not $break) (not (eq .Labels.cicero "eval"))}}
-						{{$break = true}}
-					{{end}}
-					{{if not $break}}
-						{{$i = addInt $ii 1}}
-						<tr>
-							<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-							<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
-						</tr>
-					{{end}}
-				{{end}}
-			</table>
-		{{else}}
-			<em>No log found.</em>
-		{{end}}
+		{{template "log" (print "/api/invocation/" .Id "/log/evaluation?strip-ansi")}}
 
 		<h3>Transformation</h3>
-		{{with slice $.log $i}}
-			<table class="panel log">
-				{{$break := false}} <!-- TODO use the proper break statement that's new in Go 1.18 -->
-				{{range $ii, $line := .}}
-					{{if and (not $break) (not (eq .Labels.cicero "eval-transform"))}}
-						{{$break = true}}
-					{{end}}
-					{{if not $break}}
-						{{$i = addInt $ii 1}}
-						<tr>
-							<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-							<td><samp class="log {{.Labels.fd}}">{{.Text}}</samp></td>
-						</tr>
-					{{end}}
-				{{end}}
-			</table>
-		{{else}}
-			<em>No log found.</em>
-		{{end}}
+		{{template "log" (print "/api/invocation/" .Id "/log/transformation?strip-ansi")}}
 	{{end}}
 {{end}}

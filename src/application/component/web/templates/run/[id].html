@@ -173,8 +173,8 @@
 		</div>
 
 		<h2>Task Groups</h2>
-		<div class="tabs border" style="--num-tabs: {{len .allocsWithLogsByGroup}}">
-			{{range $groupName, $allocs := .allocsWithLogsByGroup}}
+		<div class="tabs border" style="--num-tabs: {{len .allocsByGroup}}">
+			{{range $groupName, $allocs := .allocsByGroup}}
 				<input id="tab-group-{{$groupName}}" type="radio" name="tab-group" checked/>
 				<label for="tab-group-{{$groupName}}"><h3>{{$groupName}}</h3></label>
 				<div style="padding: 1em">
@@ -536,28 +536,19 @@
 											</table>
 
 											<h3>Task Log</h3>
-											<ul
-												class="inline"
-												style="margin: 1em"
-											>
-												<li>
-													<a href="/api/run/{{$.Run.NomadJobID}}/log?raw">Raw</a>
-												</li>
-												<li>
-													<a href="{{index $.grafanaLokiUrls $alloc.ID}}">Loki</a>
-												</li>
-											</ul>
-											{{with index $alloc.TaskLogs $taskName}}
-												<table class="panel log">
-													{{range .}}
-														<tr>
-															<td>{{.Time.Format "2006-01-02 15:04:05"}}</td>
-															<td><samp class="log {{.Labels.source}}">{{.Text}}</samp></td>
-														</tr>
-													{{end}}
-												</table>
-											{{else}}
-												<em>No log found.</em>
+											{{with $log := print "/api/run/log/" $alloc.ID "/" $taskName}}
+												<ul
+													class="inline"
+													style="margin: 1em"
+												>
+													<li>
+														<a href="{{$log}}?raw">Raw</a>
+													</li>
+													<li>
+														<a href="{{index $.grafanaLokiUrls $alloc.ID}}">Loki</a>
+													</li>
+												</ul>
+												{{template "log" (print $log "?strip-ansi")}}
 											{{end}}
 										</div>
 									{{end}}

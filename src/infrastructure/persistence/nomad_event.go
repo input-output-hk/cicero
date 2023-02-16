@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
@@ -66,19 +67,19 @@ func (n nomadEventRepository) GetLastNomadEventIndex() (index uint64, err error)
 	return
 }
 
-func (n nomadEventRepository) getEventAllocationByJobId(id uuid.UUID, extraWhere string) ([]nomad.Allocation, error) {
+func (n nomadEventRepository) getEventAllocation(where string, params ...any) ([]nomad.Allocation, error) {
 	var rows []map[string]interface{}
 	if err := pgxscan.Select(context.Background(), n.DB, &rows, `
 		SELECT
 			payload#>>'{Allocation,CreateTime}' AS create_time,
 			payload->>'Allocation' AS alloc
 		FROM nomad_event
-		WHERE payload#>>'{Allocation,JobID}' = $1
-			AND topic = 'Allocation'
+		WHERE
+			topic = 'Allocation'
 			AND type = 'AllocationUpdated'
-			`+extraWhere+`
+			`+where+`
 		ORDER BY create_time ASC
-	`, id); err != nil {
+	`, params...); err != nil {
 		return nil, err
 	}
 
@@ -93,11 +94,12 @@ func (n nomadEventRepository) getEventAllocationByJobId(id uuid.UUID, extraWhere
 }
 
 func (n nomadEventRepository) GetEventAllocationByJobId(id uuid.UUID) ([]nomad.Allocation, error) {
-	return n.getEventAllocationByJobId(id, "")
+	return n.getEventAllocation(`AND payload#>>'{Allocation,JobID}' = $1`, id)
 }
 
 func (n nomadEventRepository) GetLatestEventAllocationByJobId(id uuid.UUID) ([]nomad.Allocation, error) {
-	return n.getEventAllocationByJobId(id, `
+	return n.getEventAllocation(`
+		AND payload#>>'{Allocation,JobID}' = $1
 		AND NOT EXISTS (
 			SELECT NULL
 			FROM nomad_event e2
@@ -107,5 +109,28 @@ func (n nomadEventRepository) GetLatestEventAllocationByJobId(id uuid.UUID) ([]n
 				AND payload#>>'{Allocation,ID}' = nomad_event.payload#>>'{Allocation,ID}'
 				AND payload#>>'{Allocation,JobID}' = $1
 		)
-	`)
+	`, id)
+}
+
+func (n nomadEventRepository) GetLatestEventAllocationById(id uuid.UUID) (*nomad.Allocation, error) {
+	if allocs, err := n.getEventAllocation(`
+		AND payload#>>'{Allocation,ID}' = $1
+		AND NOT EXISTS (
+			SELECT NULL
+			FROM nomad_event e2
+			WHERE e2."index" > nomad_event."index"
+				AND topic = 'Allocation'
+				AND type = 'AllocationUpdated'
+				AND payload#>>'{Allocation,ID}' = $1
+		)
+	`, id); err != nil {
+		return nil, err
+	} else if len(allocs) == 0 {
+		return nil, nil
+	} else if len(allocs) == 1 {
+		alloc := allocs[0]
+		return &alloc, nil
+	} else {
+		return nil, fmt.Errorf("Expected only one row but got %d", len(allocs))
+	}
 }

@@ -19,6 +19,7 @@ type NomadEventService interface {
 	Update(*domain.NomadEvent) error
 	GetByHandled(bool) ([]domain.NomadEvent, error)
 	GetLastNomadEventIndex() (uint64, error)
+	GetLatestEventAllocationById(uuid.UUID) (*nomad.Allocation, error)
 	GetEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
 	GetLatestEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
 }
@@ -94,5 +95,16 @@ func (n nomadEventService) GetLatestEventAllocationByJobId(jobId uuid.UUID) (res
 		return
 	}
 	n.logger.Trace().Stringer("job-id", jobId).Msg("Got latest AllocationUpdated event's Allocation by job ID")
+	return
+}
+
+func (n nomadEventService) GetLatestEventAllocationById(id uuid.UUID) (result *nomad.Allocation, err error) {
+	logger := n.logger.With().Stringer("id", id).Logger()
+	logger.Trace().Msg("Get latest AllocationUpdated event's Allocation by ID")
+	result, err = n.nomadEventRepository.GetLatestEventAllocationById(id)
+	if err != nil {
+		return
+	}
+	logger.Trace().Msg("Got latest AllocationUpdated event's Allocation by ID")
 	return
 }

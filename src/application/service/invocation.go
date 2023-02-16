@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -28,7 +29,9 @@ type InvocationService interface {
 	Save(*domain.Invocation, map[string]domain.Fact) error
 	End(uuid.UUID) error
 	Retry(uuid.UUID) (*domain.Invocation, InvokeRunFunc, error)
-	GetLog(domain.Invocation, uint) (LokiLog, error)
+	GetLog(domain.Invocation) LokiLineChan
+	GetEvalLog(domain.Invocation) LokiLineChan
+	GetTransformLog(domain.Invocation) LokiLineChan
 }
 
 type InvocationServiceCyclicDependencies struct {
@@ -193,9 +196,26 @@ func (self invocationService) End(id uuid.UUID) error {
 	return nil
 }
 
-func (self invocationService) GetLog(invocation domain.Invocation, limit uint) (LokiLog, error) {
-	return self.lokiService.QueryRangeLog(
+func (self invocationService) GetLog(invocation domain.Invocation) LokiLineChan {
+	return self.lokiService.TailRange(
+		context.Background(),
 		fmt.Sprintf(`{cicero=~"eval(-transform)?",invocation=%q}`, invocation.Id),
-		invocation.CreatedAt, invocation.FinishedAt, limit,
+		invocation.CreatedAt, invocation.FinishedAt,
+	)
+}
+
+func (self invocationService) GetEvalLog(invocation domain.Invocation) LokiLineChan {
+	return self.lokiService.TailRange(
+		context.Background(),
+		fmt.Sprintf(`{cicero=~"eval",invocation=%q}`, invocation.Id),
+		invocation.CreatedAt, invocation.FinishedAt,
+	)
+}
+
+func (self invocationService) GetTransformLog(invocation domain.Invocation) LokiLineChan {
+	return self.lokiService.TailRange(
+		context.Background(),
+		fmt.Sprintf(`{cicero=~"eval-transform",invocation=%q}`, invocation.Id),
+		invocation.CreatedAt, invocation.FinishedAt,
 	)
 }

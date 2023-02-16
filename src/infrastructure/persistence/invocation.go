@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/google/uuid"
@@ -204,8 +205,12 @@ func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map
 func (self *invocationRepository) End(id uuid.UUID) (err error) {
 	_, err = self.db.Exec(
 		context.Background(),
-		`UPDATE invocation SET finished_at = STATEMENT_TIMESTAMP() WHERE id = $1`,
+		`UPDATE invocation SET finished_at = $2 WHERE id = $1`,
 		id,
+		// Do not use `STATEMENT_TIMESTAMP()` to avoid
+		// issues when the DB time is even just slightly
+		// different from Cicero's time.
+		time.Now().UTC(),
 	)
 	return
 }

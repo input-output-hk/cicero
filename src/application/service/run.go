@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
+	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -38,21 +38,13 @@ type RunService interface {
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	// A limit of 0 means no limit.
-	JobLog(id uuid.UUID, start time.Time, end *time.Time, limit uint) (LokiLog, error)
-	// A limit of 0 means no limit.
-	RunLog(allocId, taskGroup, taskName string, start time.Time, end *time.Time, limit uint) (LokiLog, error)
-	// A limit of 0 means no limit.
-	GetRunAllocationsWithLogs(domain.Run, uint) ([]AllocationWithLogs, error)
-	CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
-	MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error)
-	GrafanaUrls(allocs []*nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
-	GrafanaLokiUrls(allocs []*nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
-}
-
-type AllocationWithLogs struct {
-	*nomad.Allocation
-	TaskLogs map[string]LokiLog
+	JobLog(domain.Run) LokiLineChan
+	TaskLog(nomad.Allocation, string) LokiLineChan
+	GetRunAllocations(domain.Run) (Allocations, error)
+	CPUMetrics(allocs []nomad.Allocation, end *time.Time) (map[string][]VMMetric, error)
+	MemMetrics(allocs []nomad.Allocation, end *time.Time) (map[string][]VMMetric, error)
+	GrafanaUrls(allocs []nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
+	GrafanaLokiUrls(allocs []nomad.Allocation, end *time.Time) (map[string]*url.URL, error)
 }
 
 type runService struct {
@@ -178,78 +170,53 @@ func (self runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self runService) JobLog(nomadJobID uuid.UUID, start time.Time, end *time.Time, limit uint) (LokiLog, error) {
-	return self.lokiService.QueryRangeLog(
-		fmt.Sprintf(`{nomad_job_id=%q}`, nomadJobID.String()),
-		start, end, limit,
+func (self runService) JobLog(run domain.Run) LokiLineChan {
+	return self.lokiService.TailRange(
+		context.Background(),
+		fmt.Sprintf(`{nomad_job_id=%q}`, run.NomadJobID.String()),
+		run.CreatedAt, run.FinishedAt,
 	)
 }
 
-func (self runService) RunLog(allocID, taskGroup, taskName string, start time.Time, end *time.Time, limit uint) (LokiLog, error) {
-	return self.lokiService.QueryRangeLog(
-		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_group=%q,nomad_task_name=%q}`, allocID, taskGroup, taskName),
-		start, end, limit,
+func (self runService) TaskLog(alloc nomad.Allocation, task string) LokiLineChan {
+	taskState := alloc.TaskStates[task]
+
+	var finishedAt *time.Time
+	if taskState.State == nomadStructs.TaskStateDead {
+		finishedAt = &taskState.FinishedAt
+
+		// tolerate logs shipped up to one minute late
+		late := finishedAt.Add(time.Minute)
+		// must not be in the future or `TailRange()` will panic
+		now := time.Now()
+		if late.After(now) {
+			late = now
+		}
+		finishedAt = &late
+	}
+
+	return self.lokiService.TailRange(
+		context.Background(),
+		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_name=%q}`, alloc.ID, task),
+		taskState.StartedAt, finishedAt,
 	)
 }
 
-func (self runService) GetRunAllocationsWithLogs(run domain.Run, limit uint) ([]AllocationWithLogs, error) {
-	allocs, err := self.nomadEventService.GetLatestEventAllocationByJobId(run.NomadJobID)
-	if err != nil {
-		return nil, err
-	}
-
-	allocsWithLog := make([]AllocationWithLogs, len(allocs))
-
-	type logsMsg struct {
-		idx      int
-		taskName string
-		log      LokiLog
-		err      error
-	}
-
-	logs := make(chan logsMsg)
-	var numMsgs uint
-
-	wg := &sync.WaitGroup{}
-
-	for i, alloc := range allocs {
-		alloc := alloc
-
-		allocsWithLog[i] = AllocationWithLogs{
-			Allocation: &alloc,
-			TaskLogs:   map[string]LokiLog{},
-		}
-
-		numMsgs += uint(len(alloc.TaskResources))
-		wg.Add(len(alloc.TaskResources))
-		for taskName := range alloc.TaskResources {
-			go func(i int, taskName string) {
-				defer wg.Done()
-				log, err := self.RunLog(alloc.ID, alloc.TaskGroup, taskName, run.CreatedAt, nil, limit)
-				logs <- logsMsg{
-					idx:      i,
-					taskName: taskName,
-					log:      log,
-					err:      err,
-				}
-			}(i, taskName)
-		}
-	}
-
-	for i := uint(0); i < numMsgs; i++ {
-		msg := <-logs
-		if msg.err != nil {
-			return nil, err
-		}
-		allocsWithLog[msg.idx].TaskLogs[msg.taskName] = msg.log
-	}
-
-	wg.Wait()
-
-	return allocsWithLog, nil
+func (self runService) GetRunAllocations(run domain.Run) (Allocations, error) {
+	return self.nomadEventService.GetLatestEventAllocationByJobId(run.NomadJobID)
 }
 
-func (self runService) GrafanaUrls(allocs []*nomad.Allocation, to *time.Time) (map[string]*url.URL, error) {
+type Allocations []nomad.Allocation
+
+func (self Allocations) ByGroup() map[string][]nomad.Allocation {
+	byGroup := map[string][]nomad.Allocation{}
+	for _, alloc := range self {
+		byGroup[alloc.TaskGroup] = append(byGroup[alloc.TaskGroup], alloc)
+	}
+	return byGroup
+}
+
+func (self runService) GrafanaUrls(allocs []nomad.Allocation, to *time.Time) (map[string]*url.URL, error) {
 	grafanaUrls := map[string]*url.URL{}
 
 	for _, alloc := range allocs {
@@ -275,7 +242,7 @@ func (self runService) GrafanaUrls(allocs []*nomad.Allocation, to *time.Time) (m
 	return grafanaUrls, nil
 }
 
-func (self runService) GrafanaLokiUrls(allocs []*nomad.Allocation, to *time.Time) (map[string]*url.URL, error) {
+func (self runService) GrafanaLokiUrls(allocs []nomad.Allocation, to *time.Time) (map[string]*url.URL, error) {
 	grafanaUrls := map[string]*url.URL{}
 
 	for _, alloc := range allocs {
@@ -345,14 +312,14 @@ type grafanaExploreRange struct {
 	To   string `json:"to"`
 }
 
-func (self runService) metrics(allocs []*nomad.Allocation, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]*VMMetric, error) {
+func (self runService) metrics(allocs []nomad.Allocation, to *time.Time, queryPattern string, labelFunc func(float64) template.HTML) (map[string][]VMMetric, error) {
 	vmUrl, err := url.Parse(self.victoriaMetricsAddr + "/api/v1/query_range")
 	if err != nil {
 		return nil, err
 	}
 	query := vmUrl.Query()
 
-	metrics := map[string][]*VMMetric{}
+	metrics := map[string][]VMMetric{}
 	for _, alloc := range allocs {
 		from := time.UnixMicro(alloc.CreateTime / 1000)
 		if to == nil {
@@ -400,8 +367,10 @@ func (self runService) metrics(allocs []*nomad.Allocation, to *time.Time, queryP
 					max = f
 				}
 
-				vm := &VMMetric{Time: t, Size: f, Label: labelFunc(f)}
-				metrics[alloc.ID] = append(metrics[alloc.ID], vm)
+				metrics[alloc.ID] = append(
+					metrics[alloc.ID],
+					VMMetric{Time: t, Size: f, Label: labelFunc(f)},
+				)
 			}
 		}
 
@@ -418,7 +387,7 @@ func (self runService) metrics(allocs []*nomad.Allocation, to *time.Time, queryP
 	return metrics, nil
 }
 
-func (self runService) CPUMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) CPUMetrics(allocs []nomad.Allocation, end *time.Time) (map[string][]VMMetric, error) {
 	return self.metrics(allocs, end, `rate(host_cgroup_cpu_usage_seconds_total{cgroup=~".*%s.*payload"})`, func(f float64) template.HTML {
 		return template.HTML(strconv.FormatFloat(f, 'f', 1, 64))
 	})
@@ -431,7 +400,7 @@ const (
 	tib = gib * 1024
 )
 
-func (self runService) MemMetrics(allocs []*nomad.Allocation, end *time.Time) (map[string][]*VMMetric, error) {
+func (self runService) MemMetrics(allocs []nomad.Allocation, end *time.Time) (map[string][]VMMetric, error) {
 	return self.metrics(allocs, end, `host_cgroup_memory_current_bytes{cgroup=~".*%s.*payload"}`, func(f float64) template.HTML {
 		switch {
 		case f >= tib:
@@ -472,14 +441,14 @@ type VMMetric struct {
 
 // Groups metrics by timestamp.
 // Useful to display as multiple datasets in one chart.
-func GroupMetrics(seriesByAllocId ...map[string][]*VMMetric) map[string]map[time.Time][]*VMMetric {
-	result := map[string]map[time.Time][]*VMMetric{}
+func GroupMetrics(seriesByAllocId ...map[string][]VMMetric) map[string]map[time.Time][]VMMetric {
+	result := map[string]map[time.Time][]VMMetric{}
 	for seriesIdx, series := range seriesByAllocId {
 		for allocId, seriesMetrics := range series {
 			for _, seriesMetric := range seriesMetrics {
 				// Make sure the map of groups for this allocation exists.
 				if result[allocId] == nil {
-					result[allocId] = map[time.Time][]*VMMetric{}
+					result[allocId] = map[time.Time][]VMMetric{}
 				}
 
 				if group, exists := result[allocId][seriesMetric.Time]; exists {
@@ -487,7 +456,7 @@ func GroupMetrics(seriesByAllocId ...map[string][]*VMMetric) map[string]map[time
 					group[seriesIdx] = seriesMetric
 				} else {
 					// No group for the same timestamp exists so create it.
-					group = make([]*VMMetric, len(seriesByAllocId))
+					group = make([]VMMetric, len(seriesByAllocId))
 					group[seriesIdx] = seriesMetric
 					result[allocId][seriesMetric.Time] = group
 				}

@@ -17,4 +17,5 @@ type NomadEventRepository interface {
 	GetLastNomadEventIndex() (uint64, error)
 	GetEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
 	GetLatestEventAllocationByJobId(uuid.UUID) ([]nomad.Allocation, error)
+	GetLatestEventAllocationById(uuid.UUID) (*nomad.Allocation, error)
 }

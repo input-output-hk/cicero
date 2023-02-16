@@ -111,6 +111,89 @@
 		</ul>
 	{{end}}
 
+	{{define "log"}}
+		<table
+			class="panel log"
+			style="display: none"
+		>
+			<tbody></tbody>
+		</table>
+
+		<em>No log found.</em>
+
+		<script>
+		(() => {
+			const noLogFound = document.scripts[document.scripts.length - 1].previousElementSibling;
+			const table = noLogFound.previousElementSibling;
+			const tbody = table.querySelector('tbody');
+
+			document.addEventListener('DOMContentLoaded', async () => {
+				const response = await fetch({{.}})
+
+				const reader = response.body.getReader();
+
+				let buf = [];
+				while (true) {
+					const {done, value} = await reader.read();
+
+					if (done) {
+						break;
+					}
+
+					buf.push(...value);
+
+					let valueStartIdx = 0;
+					for (let i = 0; i < value.length; i++) {
+						if (value[i] != '\n'.charCodeAt()) continue;
+
+						const lineEndIdx = buf.length - value.length + i;
+						const lineStr = String.fromCharCode(...buf.slice(0, lineEndIdx));
+						let line;
+						try {
+							line = JSON.parse(lineStr);
+						} catch {
+							line = {
+								labels: {fd: "error"},
+								text: lineStr,
+							};
+						}
+						buf = buf.slice(lineEndIdx + 1);
+
+						table.style.display = null;
+						noLogFound.style.display = 'none';
+
+						const td1 = document.createElement('td');
+						if (line.time != null) {
+							const s2 = '2-digit';
+							const p =
+								new Intl.DateTimeFormat('in', { year: 'numeric', month: s2, day: s2, hour: s2, minute: s2, second: s2, hour12: false }).
+								formatToParts(new Date(line.time)).
+								map(p => p.value);
+
+							td1.innerText = `${p[4]}-${p[2]}-${p[0]} ${p[6]}:${p[8]}:${p[10]}`;
+						} else {
+							td1.innerText = line.labels.fd;
+						}
+
+						const samp = document.createElement('samp');
+						samp.classList.add('log', line.labels.fd);
+						samp.innerText = line.text;
+
+						const td2 = document.createElement('td');
+						td2.appendChild(samp);
+
+						const tr = document.createElement('tr');
+						tr.appendChild(td1);
+						tr.appendChild(td2);
+
+						tbody.appendChild(tr);
+					}
+				}
+			});
+		})()
+		</script>
+	{{end}}
+
 	<body>
 		<nav>
 			<ul>

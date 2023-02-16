@@ -17,7 +17,6 @@ import (
 	"github.com/davidebianchi/gswagger/apirouter"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -149,6 +148,36 @@ func (self *Web) Start(ctx context.Context) error {
 		return err
 	}
 	if _, err := r.AddRoute(http.MethodGet,
+		"/api/invocation/{id}/log/evaluation",
+		self.ApiInvocationIdLogEvaluationGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/invocation/{id}/log/transformation",
+		self.ApiInvocationIdLogTransformationGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/invocation/{id}/log",
+		self.ApiInvocationIdLogGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet,
 		"/api/invocation/{id}/inputs",
 		self.ApiInvocationIdInputsGet,
 		apidoc.BuildSwaggerDef(
@@ -207,6 +236,19 @@ func (self *Web) Start(ctx context.Context) error {
 			nil,
 			nil,
 			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Invocation{}, "OK")),
+	); err != nil {
+		return err
+	}
+	if _, err := r.AddRoute(http.MethodGet,
+		"/api/run/log/{allocation}/{task}",
+		self.ApiRunLogIdIdGet,
+		apidoc.BuildSwaggerDef(
+			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{
+				{Name: "allocation", Description: "id of an allocation", Value: "UUID"},
+				{Name: "task", Description: "id of a task", Value: "UUID"},
+			}),
+			nil,
+			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
 	); err != nil {
 		return err
 	}
@@ -617,13 +659,6 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log, err := self.InvocationService.GetLog(*invocation, 0)
-	if err != nil {
-		self.ServerError(w, err)
-		return
-	}
-	log.Deduplicate()
-
 	var run *domain.Run
 	if run_, err := self.RunService.GetByInvocationId(id); err != nil {
 		self.ServerError(w, err)
@@ -647,7 +682,6 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		"Invocation": invocation,
 		"Run":        run,
 		"inputs":     inputs,
-		"log":        log,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -699,18 +733,13 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	allocsWithLogs, err := self.RunService.GetRunAllocationsWithLogs(*run, 10_000)
+	allocs, err := self.RunService.GetRunAllocations(*run)
 	if err != nil {
 		self.ServerError(w, err)
 		return
 	}
 
-	allocs := []*nomad.Allocation{}
-	allocsWithLogsByGroup := map[string][]service.AllocationWithLogs{}
-	for _, alloc := range allocsWithLogs {
-		allocs = append(allocs, alloc.Allocation)
-		allocsWithLogsByGroup[alloc.TaskGroup] = append(allocsWithLogsByGroup[alloc.TaskGroup], alloc)
-	}
+	allocsByGroup := allocs.ByGroup()
 
 	var inputs map[string]domain.Fact
 	if inputFactIds, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
@@ -764,13 +793,13 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 			domain.Run
 			Action domain.Action
 		}{*run, *action},
-		"inputs":                inputs,
-		"output":                output,
-		"facts":                 facts,
-		"allocsWithLogsByGroup": allocsWithLogsByGroup,
-		"metrics":               service.GroupMetrics(cpuMetrics, memMetrics),
-		"grafanaUrls":           grafanaUrls,
-		"grafanaLokiUrls":       grafanaLokiUrls,
+		"inputs":          inputs,
+		"output":          output,
+		"facts":           facts,
+		"allocsByGroup":   allocsByGroup,
+		"metrics":         service.GroupMetrics(cpuMetrics, memMetrics),
+		"grafanaUrls":     grafanaUrls,
+		"grafanaLokiUrls": grafanaLokiUrls,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -1075,6 +1104,31 @@ func (self *Web) ApiInvocationIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (self *Web) ApiInvocationIdLogGet(w http.ResponseWriter, req *http.Request) {
+	self.apiInvocationIdLogGet(self.InvocationService.GetLog, w, req)
+}
+
+func (self *Web) ApiInvocationIdLogEvaluationGet(w http.ResponseWriter, req *http.Request) {
+	self.apiInvocationIdLogGet(self.InvocationService.GetEvalLog, w, req)
+}
+
+func (self *Web) ApiInvocationIdLogTransformationGet(w http.ResponseWriter, req *http.Request) {
+	self.apiInvocationIdLogGet(self.InvocationService.GetTransformLog, w, req)
+}
+
+func (self *Web) apiInvocationIdLogGet(getLog func(domain.Invocation) service.LokiLineChan, w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	if id, err := uuid.Parse(vars["id"]); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+	} else if invocation, err := self.InvocationService.GetById(id); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Failed to fetch invocation"))
+	} else if invocation == nil {
+		self.NotFound(w, nil)
+	} else {
+		self.log(getLog(*invocation), w, req)
+	}
+}
+
 func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
@@ -1276,34 +1330,34 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
-	var log service.LokiLog
-
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
 	} else if run == nil {
-		w.WriteHeader(http.StatusNotFound)
-	} else if log_, err := self.RunService.JobLog(id, run.CreatedAt, run.FinishedAt, 0); err != nil {
-		self.ServerError(w, errors.WithMessage(err, "Failed to get logs"))
+		self.NotFound(w, nil)
 	} else {
-		log = log_
+		self.log(self.RunService.JobLog(*run), w, req)
 	}
+}
 
-	if _, raw := req.URL.Query()["raw"]; raw {
-		for _, line := range log {
-			if _, err := io.Copy(w, strings.NewReader(line.Text)); err != nil {
-				self.ServerError(w, errors.WithMessage(err, "Error writing log line"))
-				return
-			}
-			if _, err := w.Write([]byte("\n")); err != nil {
-				self.ServerError(w, errors.WithMessage(err, "Error writing newline after log line"))
-				return
-			}
-		}
+func (self *Web) ApiRunLogIdIdGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	if allocId, err := uuid.Parse(vars["allocation"]); err != nil {
+		self.ClientError(w, errors.New("cannot parse allocation UUID"))
+		return
+	} else if task, exists := vars["task"]; !exists {
+		self.ClientError(w, errors.New("no task name given"))
+		return
+	} else if alloc, err := self.NomadEventService.GetLatestEventAllocationById(allocId); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if alloc == nil {
+		self.NotFound(w, errors.New("no such allocation"))
+		return
 	} else {
-		self.json(w, log, http.StatusOK)
+		self.log(self.RunService.TaskLog(*alloc, task), w, req)
 	}
 }
 
@@ -1720,5 +1774,88 @@ func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {
 	if err := json.NewEncoder(w).Encode(obj); err != nil {
 		self.ServerError(w, err)
 		return
+	}
+}
+
+func (self *Web) log(log service.LokiLineChan, w http.ResponseWriter, req *http.Request) {
+	query := req.URL.Query()
+	_, raw := query["raw"]
+	if _, stripAnsi := query["strip-ansi"]; stripAnsi {
+		log = log.StripAnsi()
+	}
+
+	wJson := json.NewEncoder(w)
+
+	/*
+		You might think why not just flush after every line like this?
+
+		```
+		for line := range log {
+			// … write …
+
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
+		```
+
+		But it is inefficient to flush after every line.
+		Instead we write as long as values are available on the channel,
+		then flush, and then do the next read in a blocking fashion
+		so that we don't enter a tight loop.
+	*/
+
+	flushed := false
+	var line *service.LokiLineMsg
+Line:
+	for {
+		if line != nil {
+			if line.Err != nil {
+				self.ServerError(w, line.Err)
+				return
+			}
+
+			if raw {
+				if _, err := io.Copy(w, strings.NewReader(line.Text)); err != nil {
+					self.ServerError(w, errors.WithMessage(err, "Error writing log line"))
+					return
+				}
+				if _, err := w.Write([]byte("\n")); err != nil {
+					self.ServerError(w, errors.WithMessage(err, "Error writing newline after log line"))
+					return
+				}
+			} else if err := wJson.Encode(*line.LokiLine); err != nil {
+				self.ServerError(w, err)
+				return
+			}
+
+			line = nil
+		}
+
+		if flushed {
+			// this blocks so that we don't flush in a tight loop
+			l, ok := <-log
+			if !ok {
+				break
+			}
+			line = &l
+			flushed = false
+			continue
+		}
+
+		select {
+		case l, ok := <-log:
+			if !ok {
+				break Line
+			}
+			lCopy := l
+			line = &lCopy
+		default:
+			// flush if there is no value to read yet
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			flushed = true
+		}
 	}
 }

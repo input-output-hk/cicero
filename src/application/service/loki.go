@@ -1,16 +1,21 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"io"
 	"net/http"
+	"net/url"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/grafana/loki/pkg/loghttp"
 	"github.com/pborman/ansi"
 	"github.com/pkg/errors"
@@ -19,17 +24,139 @@ import (
 )
 
 type LokiService interface {
+	// Cancel the context to close the connection.
+	Tail(context.Context, string, time.Time) LokiLineChan
+
+	// Start and end times are inclusive.
 	// A limit of 0 means no limit.
-	QueryRangeLog(string, time.Time, *time.Time, uint) (LokiLog, error)
-	QueryRange(string, time.Time, *time.Time, uint, func(loghttp.Stream) (bool, error)) error
+	QueryRange(string, time.Time, time.Time, LokiDirection, uint) LokiLineChan
+
+	// Start and end times are inclusive.
+	QueryRangePages(string, time.Time, time.Time, LokiDirection, uint, func(loghttp.Stream) (bool, error)) error
+
+	// Uses `Tail()` to fetch and `QueryRange()` to know when to stop.
+	// More efficient than `QueryRange()` but limited in options.
+	// Degrades to `Tail()` if no end time is given.
+	TailRange(context.Context, string, time.Time, *time.Time) LokiLineChan
+}
+
+type LokiLineChan <-chan LokiLineMsg
+
+func (self LokiLineChan) StripAnsi() LokiLineChan {
+	lines := make(chan LokiLineMsg, 1)
+
+	go func() {
+		defer close(lines)
+
+		for line := range self {
+			if line.LokiLine != nil {
+				line.StripAnsi()
+			}
+			lines <- line
+		}
+	}()
+
+	return lines
+}
+
+// This function filters out duplicate lines with the same timestamp.
+// This is needed because the /loki/api/v1/{tail,query_range} endpoints
+// stop sending lines after a configured limit is reached.
+// `Tail()` and `QueryRangePages()` therefore reconnect in a loop,
+// bumping the start time parameter each time to the latest time encountered.
+// They cannot bump the time by one unit of the smallest resolution
+// because there may be more messages with the same timestamp that
+// have not been received yet due to the limit on the endpoint.
+// However, this means that the message(s) with the last timestamp
+// will be received again, so we have to skip them the second time
+// that they are received. That's what this function does.
+func (self LokiLineChan) deduplicate() LokiLineChan {
+	deduped := make(chan LokiLineMsg)
+
+	go func() {
+		defer close(deduped)
+
+		var latestTime *time.Time
+		var hashes []uint32
+		hash := fnv.New32()
+
+	Line:
+		for line := range self {
+			if line.Err != nil {
+				deduped <- line
+				continue
+			}
+
+			if latestTime != nil && line.Time.Before(*latestTime) {
+				// We know that we have already seen this line because it has an older time.
+				continue
+			}
+
+			var buf bytes.Buffer
+			if err := json.NewEncoder(&buf).Encode(line); err != nil {
+				deduped <- LokiLineMsg{Err: err}
+				continue
+			}
+			hash.Reset()
+			if _, err := io.Copy(hash, &buf); err != nil {
+				deduped <- LokiLineMsg{Err: err}
+				continue
+			}
+			sum := hash.Sum32()
+
+			if latestTime == nil || line.Time.After(*latestTime) {
+				latestTime = &line.Time
+				hashes = []uint32{sum}
+
+				// This is either the first line or its time is newer so we cannot have seen it yet.
+				deduped <- line
+				continue
+			}
+
+			if !line.Time.Equal(*latestTime) {
+				panic("This should never happen™")
+			}
+
+			for _, seen := range hashes {
+				if sum == seen {
+					// This line's hash has already been seen yet for the latest time.
+					continue Line
+				}
+			}
+
+			// This line's hash has not been seen yet for the latest time.
+			hashes = append(hashes, sum)
+			deduped <- line
+		}
+	}()
+
+	return deduped
 }
 
 type LokiLog []LokiLine
 
 type LokiLine struct {
-	Time   time.Time
-	Text   string
-	Labels map[string]string
+	Time   time.Time         `json:"time"`
+	Text   string            `json:"text"`
+	Labels map[string]string `json:"labels"`
+}
+
+const (
+	LokiDirectionBackward LokiDirection = iota
+	LokiDirectionForward
+)
+
+type LokiDirection uint
+
+func (self LokiDirection) String() string {
+	switch self {
+	case LokiDirectionBackward:
+		return "BACKWARD"
+	case LokiDirectionForward:
+		return "FORWARD"
+	default:
+		panic("Invalid value for LokiDirection: " + strconv.FormatUint(uint64(self), 10))
+	}
 }
 
 type lokiService struct {
@@ -44,39 +171,299 @@ func NewLokiService(prometheusClient prometheus.Client, logger *zerolog.Logger) 
 	}
 }
 
-func (self lokiService) QueryRangeLog(query string, start time.Time, end *time.Time, limit uint) (LokiLog, error) {
-	log := LokiLog{}
-
-	// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
-	const pageSize uint = 5000
-	if err := self.QueryRange(query, start, end, pageSize, func(stream loghttp.Stream) (bool, error) {
-		callbackLog := new(LokiLog)
-		callbackLog.FromStream(stream)
-
-		log = append(log, *callbackLog...)
-
-		return limit != 0 && uint(len(log)) >= limit, nil
-	}); err != nil {
-		return nil, err
+func (self lokiService) TailRange(ctx context.Context, query string, start time.Time, end *time.Time) LokiLineChan {
+	if end == nil {
+		return self.Tail(ctx, query, start)
 	}
 
-	log.Sort()
+	if end.After(time.Now()) {
+		panic("`end` must not be in the future! Otherwise new lines may be pushed and the expected last line will no longer be the last, blocking forever.")
+	}
 
-	return log, nil
+	lines := make(chan LokiLineMsg, 1) // at least one so we can return immediately on error
+
+	var lastLine LokiLineMsg
+	if line, ok := <-self.QueryRange(query, start, *end, LokiDirectionBackward, 1); !ok {
+		close(lines)
+		return lines
+	} else if line.Err != nil {
+		lines <- LokiLineMsg{Err: line.Err}
+		close(lines)
+		return lines
+	} else {
+		lastLine = line
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	go func() {
+		defer close(lines)
+		defer cancel()
+
+		tail := self.Tail(ctx, query, start)
+
+		/*
+			You might think why not just do this?
+
+			```
+			for line := range tail {
+				lines <- line
+
+				if line.LokiLine != nil && line.Equal(*lastLine.LokiLine) {
+					break
+				}
+			}
+			```
+
+			There may be multiple lines that equal `lastLine`
+			before the actual last line.
+			In that case we want to include them.
+			So we read as long as lines are available in the channel
+			and only check for equality when there are no more values.
+			If that was not the last line though we might just have
+			been faster than the sender can send values to the channel
+			so we try a blocking read to avoid a tight loop.
+		*/
+
+		block := false
+	Outer:
+		for {
+			var line *LokiLineMsg
+
+		Recv:
+			for {
+				if block {
+					if l, ok := <-tail; !ok {
+						break Outer
+					} else {
+						line = &l
+					}
+					block = false
+				} else {
+					select {
+					case l, ok := <-tail:
+						if !ok {
+							break Outer
+						}
+						line = &l
+					default:
+						// `line` is still the value from the last iteration of `Recv`
+						// because there was no value on `tail`.
+						if line != nil && line.Equal(*lastLine.LokiLine) {
+							break Outer
+						}
+						break Recv
+					}
+				}
+
+				lines <- *line
+
+				if line.Err != nil {
+					break Outer
+				}
+			}
+
+			block = true
+		}
+	}()
+
+	return lines
 }
 
-func (self lokiService) QueryRange(query string, start time.Time, end *time.Time, limit uint, callback func(loghttp.Stream) (bool, error)) error {
+type LokiLineMsg struct {
+	*LokiLine
+	Err error
+}
+
+func (self lokiService) Tail(ctx context.Context, query string, start time.Time) LokiLineChan {
+	const limit = 500 // default for Loki server so a higher limit may be ignored (or a lower one if so configured on the server)
+
+	lines := make(chan LokiLineMsg, 1) // at least one so we can shut down immediately on error
+
+	go func() {
+		closedLines := false
+		defer func() {
+			closedLines = true
+			close(lines)
+		}()
+
+	Limit:
+		for {
+			u := self.prometheus.URL("/loki/api/v1/tail", nil)
+			u.Scheme = "ws"
+			{
+				q := url.Values{}
+				q.Set("query", query)
+				q.Set("limit", strconv.FormatInt(limit, 10))
+				q.Set("start", strconv.FormatInt(start.UnixNano(), 10))
+				u.RawQuery = q.Encode()
+			}
+
+			conn, _, err := websocket.DefaultDialer.DialContext(ctx, u.String(), nil)
+			if err != nil {
+				lines <- LokiLineMsg{Err: err}
+				break
+			}
+			defer conn.Close()
+
+			closureAnnounced := false
+			announceClosure := func(message string) {
+				if closureAnnounced {
+					return
+				}
+				closureAnnounced = true
+
+				// Not really necessary but let's be a good citizen and announce the closure.
+				if err := conn.WriteControl(
+					websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.CloseNormalClosure, message),
+					time.Now().Add(time.Millisecond), // Do not wait for long though.
+				); err != nil {
+					// Does not matter much, just log and go on.
+					self.logger.Err(err).Msg("Failed to send close message")
+				}
+			}
+			defer announceClosure("done")
+
+			go func() {
+				<-ctx.Done()
+
+				if err := ctx.Err(); err != nil && !closedLines {
+					lines <- LokiLineMsg{Err: err}
+				}
+
+				announceClosure("canceled")
+
+				// This will unblock reads and return error
+				// thereby exiting the `Limit` loop and close `lines`.
+				if err := conn.Close(); err != nil && !closedLines {
+					lines <- LokiLineMsg{Err: err}
+				}
+			}()
+
+			numLinesRead := 0
+
+		Read:
+			for {
+				msg := struct {
+					Streams []struct {
+						Stream map[string]string `json:"stream"`
+						Values [][]string        `json:"values"`
+					} `json:"streams"`
+				}{}
+				// XXX This will block forever if there are no further lines.
+				err := conn.ReadJSON(&msg)
+				if err != nil {
+					if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+						// Loki closed the connection normally but unexpectedly, let's reconnect.
+						break
+					} else {
+						if _, ok := err.(*websocket.CloseError); ok {
+							// Do not try and fail to send a close message
+							// as the websocket is already closed.
+							closureAnnounced = true
+						}
+						lines <- LokiLineMsg{Err: err}
+						break Limit
+					}
+				}
+
+				for _, stream := range msg.Streams {
+					for _, value := range stream.Values {
+						numLinesRead += 1
+
+						ns, err := strconv.ParseInt(value[0], 10, 64)
+						if err != nil {
+							lines <- LokiLineMsg{Err: err}
+							break Read
+						}
+
+						lineTime := time.Unix(
+							ns/int64(time.Second),
+							ns%int64(time.Second),
+						).UTC()
+
+						lines <- LokiLineMsg{
+							LokiLine: &LokiLine{
+								Time:   lineTime,
+								Text:   value[1],
+								Labels: stream.Stream,
+							},
+						}
+
+						// Bump the timestamp so in the next iteration
+						// we do not receive messages that we already received in this iteration
+						// except those with the same timestamp. This overlap is necessary.
+						// We cannot bump the timestamp even by one nanosecond because
+						// when there are multiple lines with the same timestamp
+						// and the limit is reached before the last line with that timestamp has been sent,
+						// then the remaining not yet sent lines with the same timestamp would never be sent
+						// because we would skip them in the next iteration due to the bumped start time.
+						// The overlapping lines with the same timestamp are filtered out by `LokiLineChan.deduplicate()`.
+						// Note this only works if all lines with the same timestamp fit in the limit,
+						// otherwise we will loop indefinitely.
+						start = lineTime
+					}
+				}
+
+				if numLinesRead >= limit {
+					// When the limit is reached Loki will not send any further lines
+					// but it does also not close the websocket connection
+					// or send a message indicating that the limit was reached.
+					// Let's reconnect to reset the limit so we won't hang waiting forever.
+					announceClosure("limit reached")
+					numLinesRead = 0
+					break
+				}
+			}
+		}
+	}()
+
+	return LokiLineChan(lines).deduplicate()
+}
+
+func (self lokiService) QueryRange(query string, start time.Time, end time.Time, direction LokiDirection, limit uint) LokiLineChan {
+	log := make(chan LokiLineMsg, 1) // at least one so we can shut down immediately on error
+
+	go func() {
+		defer close(log)
+
+		var numLinesSent uint
+
+		// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
+		var pageSize uint = 5000
+		if limit < pageSize {
+			pageSize = limit
+		}
+
+		if err := self.QueryRangePages(query, start, end, direction, pageSize, func(stream loghttp.Stream) (bool, error) {
+			page := make(LokiLog, 0, len(stream.Entries))
+			page.FromStream(stream)
+			page.Sort(direction)
+
+			for _, line := range page {
+				line := line // copy so we don't point to loop variable
+				log <- LokiLineMsg{LokiLine: &line}
+
+				numLinesSent += 1
+				if limit != 0 && numLinesSent == limit {
+					return true, nil
+				}
+			}
+
+			return false, nil
+		}); err != nil {
+			log <- LokiLineMsg{Err: err}
+		}
+	}()
+
+	return LokiLineChan(log).deduplicate()
+}
+
+func (self lokiService) QueryRangePages(query string, start time.Time, end time.Time, direction LokiDirection, limit uint, callback func(loghttp.Stream) (bool, error)) error {
 	const timeout time.Duration = 2 * time.Second
 
-	if end == nil {
-		now := time.Now().UTC()
-		end = &now
-	}
-
-	{
-		endLater := end.Add(1 * time.Minute)
-		end = &endLater
-	}
+	end = end.Add(time.Nanosecond) // make end inclusive
 
 Page:
 	for {
@@ -96,7 +483,7 @@ Page:
 		q.Set("limit", strconv.FormatUint(uint64(limit), 10))
 		q.Set("start", strconv.FormatInt(start.UnixNano(), 10))
 		q.Set("end", strconv.FormatInt(end.UnixNano(), 10))
-		q.Set("direction", "FORWARD")
+		q.Set("direction", direction.String())
 		req.URL.RawQuery = q.Encode()
 
 		ctxTimeout, ctxTimeoutCancel := context.WithTimeout(context.Background(), timeout)
@@ -136,9 +523,19 @@ Page:
 
 			numEntries += uint(len(stream.Entries))
 			for _, entry := range stream.Entries {
-				if entry.Timestamp.After(start) {
-					start = entry.Timestamp
+				switch direction {
+				case LokiDirectionBackward:
+					if entry.Timestamp.After(start) {
+						continue
+					}
+				case LokiDirectionForward:
+					if entry.Timestamp.Before(start) {
+						continue
+					}
+				default:
+					panic("Unhandled value for LokiDirection")
 				}
+				start = entry.Timestamp
 			}
 		}
 		if numEntries < limit {
@@ -151,27 +548,26 @@ Page:
 
 func (self *LokiLog) FromStream(stream loghttp.Stream) {
 	for _, entry := range stream.Entries {
-		line := LokiLine{
-			Time:   entry.Timestamp,
-			Text:   entry.Line,
-			Labels: stream.Labels.Map(),
-		}
 		lines := strings.Split(entry.Line, "\r")
-		for _, l := range lines {
-			if sane, err := ansi.Strip([]byte(l)); err == nil {
-				line.Text = string(sane)
-			} else {
-				line.Text = l
-			}
-			*self = append(*self, line)
+		for _, line := range lines {
+			*self = append(*self, LokiLine{
+				Time:   entry.Timestamp,
+				Text:   line,
+				Labels: stream.Labels.Map(),
+			})
 		}
 	}
 }
 
-func (self *LokiLog) Sort() {
-	sort.Slice(*self, func(i, j int) bool {
-		return (*self)[i].Time.Before((*self)[j].Time)
-	})
+func (self *LokiLog) Sort(direction LokiDirection) {
+	switch direction {
+	case LokiDirectionBackward:
+		sort.Sort(sort.Reverse(self))
+	case LokiDirectionForward:
+		sort.Sort(self)
+	default:
+		panic("Unhandled value for LokiDirection")
+	}
 }
 
 // Removes consecutive duplicates as considered by `LokiLine.Equal()`.
@@ -185,6 +581,29 @@ func (self *LokiLog) Deduplicate() {
 		deduped = append(deduped, l)
 	}
 	*self = deduped
+}
+
+// Implements `sort.Interface`.
+func (self LokiLog) Len() int {
+	return len(self)
+}
+
+// Implements `sort.Interface`.
+func (self LokiLog) Less(i, j int) bool {
+	a := self[i].Time
+	b := self[j].Time
+	return a.Before(b)
+}
+
+// Implements `sort.Interface`.
+func (self LokiLog) Swap(i, j int) {
+	self[i], self[j] = self[j], self[i]
+}
+
+func (self *LokiLine) StripAnsi() {
+	if sane, _ := ansi.Strip([]byte(self.Text)); sane != nil {
+		self.Text = string(sane)
+	}
 }
 
 func (self LokiLine) Equal(o LokiLine) bool {
