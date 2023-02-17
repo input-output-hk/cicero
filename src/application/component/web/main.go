@@ -554,6 +554,7 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+		return
 	} else {
 		self.actionIdGet(w, id)
 	}
@@ -562,15 +563,19 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) actionIdGet(w http.ResponseWriter, id uuid.UUID) {
 	if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
+		return
 	} else if action == nil {
 		self.NotFound(w, nil)
+		return
 	} else if inputs, err := self.ActionService.GetSatisfiedInputs(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
+		return
 	} else if err := render("action/[id].html", w, map[string]interface{}{
 		"Action": action,
 		"inputs": inputs,
 	}); err != nil {
 		self.ServerError(w, err)
+		return
 	}
 }
 
@@ -595,6 +600,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	if source == "" {
 		if err := render(templateName, w, nil); err != nil {
 			self.ServerError(w, err)
+			return
 		}
 		return
 	}
@@ -603,8 +609,10 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	if name == "" {
 		if names, err := self.EvaluationService.ListActions(source); err != nil {
 			self.ServerError(w, errors.WithMessagef(err, "While listing Actions in %q", source))
+			return
 		} else if err := render(templateName, w, map[string]interface{}{"Source": source, "Names": names}); err != nil {
 			self.ServerError(w, err)
+			return
 		}
 		return
 	}
@@ -922,14 +930,19 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 	vars := mux.Vars(req)
 	if source, err := url.PathUnescape(vars["source"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action definition source: %q", vars["source"]))
+		return
 	} else if name, err := url.PathUnescape(vars["name"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
+		return
 	} else if idStr, err := url.PathUnescape(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action ID: %q", vars["id"]))
+		return
 	} else if id, err := uuid.Parse(idStr); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid UUID given as action ID: %q", idStr))
+		return
 	} else if def, err := self.EvaluationService.EvaluateAction(source, name, id); err != nil {
 		self.ServerError(w, err)
+		return
 	} else {
 		self.json(w, def, http.StatusOK)
 	}
@@ -938,8 +951,10 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 func (self *Web) ApiInvocationGet(w http.ResponseWriter, req *http.Request) {
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if invocations, err := self.InvocationService.GetAll(page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
+		return
 	} else {
 		self.json(w, invocations, http.StatusOK)
 	}
@@ -948,8 +963,10 @@ func (self *Web) ApiInvocationGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if runs, err := self.RunService.GetAll(page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Runs"))
+		return
 	} else {
 		self.json(w, runs, http.StatusOK)
 	}
@@ -985,10 +1002,13 @@ func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 	ok := true
 	if recursive, _, factIds, err := getByInputParams(req); err != nil {
 		self.ClientError(w, err)
+		return
 	} else if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, &ok, page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
+		return
 	} else {
 		runs := []*domain.Run{}
 		for _, invocation := range invocations {
@@ -1007,10 +1027,13 @@ func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiInvocationByInputGet(w http.ResponseWriter, req *http.Request) {
 	if recursive, ok, factIds, err := getByInputParams(req); err != nil {
 		self.ClientError(w, err)
+		return
 	} else if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, ok, page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
+		return
 	} else {
 		self.json(w, invocations, http.StatusOK)
 	}
@@ -1119,10 +1142,13 @@ func (self *Web) apiInvocationIdLogGet(getLog func(domain.Invocation) service.Lo
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+		return
 	} else if invocation, err := self.InvocationService.GetById(id); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to fetch invocation"))
+		return
 	} else if invocation == nil {
 		self.NotFound(w, nil)
+		return
 	} else {
 		self.log(getLog(*invocation), w, req)
 	}
@@ -1131,8 +1157,10 @@ func (self *Web) apiInvocationIdLogGet(getLog func(domain.Invocation) service.Lo
 func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
+		return
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Could not get Invocation's inputs"))
+		return
 	} else {
 		self.json(w, inputs, http.StatusOK)
 	}
@@ -1141,8 +1169,10 @@ func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Reque
 func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
+		return
 	} else if output, err := self.InvocationService.GetOutputById(id); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if output == nil {
 		w.WriteHeader(http.StatusNotFound)
 	} else {
@@ -1177,12 +1207,15 @@ func (self *Web) ApiInvocationIdPost(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
+		return
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if run == nil {
 		w.WriteHeader(http.StatusNotFound)
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Could not get Run's Invocation's inputs"))
+		return
 	} else {
 		self.json(w, inputs, http.StatusOK)
 	}
@@ -1191,12 +1224,15 @@ func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
+		return
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if run == nil {
 		w.WriteHeader(http.StatusNotFound)
 	} else if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if output == nil {
 		w.WriteHeader(http.StatusNotFound)
 	} else {
@@ -1232,6 +1268,7 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if err := binary.Close(); err != nil {
 			self.ServerError(w, err)
+			return
 		}
 	}()
 	if err != nil {
@@ -1243,10 +1280,13 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 
 	if _, runFunc, err := self.FactService.Save(&fact, binary); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if _, registerFunc, err := runFunc(self.Db); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if err := registerFunc(); err != nil {
 		self.ServerError(w, err)
+		return
 	} else {
 		self.json(w, fact, http.StatusOK)
 	}
@@ -1255,6 +1295,7 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 	if actions, err := self.ActionService.GetAll(); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get all actions"))
+		return
 	} else {
 		self.json(w, actions, http.StatusOK)
 	}
@@ -1283,8 +1324,10 @@ func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Reques
 	vars := mux.Vars(req)
 	if name, err := url.PathUnescape(vars["name"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
+		return
 	} else if actions, err := self.ActionService.GetLatestByName(name); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Failed to get current action named %q", name))
+		return
 	} else {
 		self.json(w, actions, http.StatusOK)
 	}
@@ -1318,8 +1361,10 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+		return
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
+		return
 	} else {
 		self.json(w, action, http.StatusOK)
 	}
@@ -1329,10 +1374,13 @@ func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+		return
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to fetch job"))
+		return
 	} else if run == nil {
 		self.NotFound(w, nil)
+		return
 	} else {
 		self.log(self.RunService.JobLog(*run), w, req)
 	}
@@ -1361,8 +1409,10 @@ func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+		return
 	} else if fact, err := self.FactService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
+		return
 	} else {
 		self.json(w, fact, http.StatusOK)
 	}
@@ -1627,6 +1677,7 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
+		return
 	} else if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if binary, err := self.FactService.GetBinaryById(tx, id); err != nil {
 			return errors.WithMessage(err, "Failed to get binary")
@@ -1639,14 +1690,17 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 		return nil
 	}); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "While fetching and writing binary"))
+		return
 	}
 }
 
 func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(req.URL.Query().Get("run")); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse Run ID"))
+		return
 	} else if fact, err := self.FactService.GetByRunId(id); err != nil {
 		self.ServerError(w, err)
+		return
 	} else {
 		self.json(w, fact, http.StatusOK)
 	}
@@ -1657,6 +1711,7 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if err := binary.Close(); err != nil {
 			self.ServerError(w, err)
+			return
 		}
 	}()
 	if err != nil {
@@ -1666,10 +1721,13 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 
 	if _, runFunc, err := self.FactService.Save(&fact, binary); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if _, registerFunc, err := runFunc(self.Db); err != nil {
 		self.ServerError(w, err)
+		return
 	} else if err := registerFunc(); err != nil {
 		self.ServerError(w, err)
+		return
 	} else {
 		self.json(w, fact, http.StatusOK)
 	}
