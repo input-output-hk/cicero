@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"github.com/davidebianchi/gswagger/apirouter"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -1138,7 +1140,7 @@ func (self *Web) ApiInvocationIdLogTransformationGet(w http.ResponseWriter, req 
 	self.apiInvocationIdLogGet(self.InvocationService.GetTransformLog, w, req)
 }
 
-func (self *Web) apiInvocationIdLogGet(getLog func(domain.Invocation) service.LokiLineChan, w http.ResponseWriter, req *http.Request) {
+func (self *Web) apiInvocationIdLogGet(getLog func(context.Context, domain.Invocation) service.LokiLineChan, w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	if id, err := uuid.Parse(vars["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
@@ -1150,7 +1152,9 @@ func (self *Web) apiInvocationIdLogGet(getLog func(domain.Invocation) service.Lo
 		self.NotFound(w, nil)
 		return
 	} else {
-		self.log(getLog(*invocation), w, req)
+		self.log(func(ctx context.Context) service.LokiLineChan {
+			return getLog(ctx, *invocation)
+		}, w, req)
 	}
 }
 
@@ -1382,7 +1386,9 @@ func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
 		self.NotFound(w, nil)
 		return
 	} else {
-		self.log(self.RunService.JobLog(*run), w, req)
+		self.log(func(ctx context.Context) service.LokiLineChan {
+			return self.RunService.JobLog(ctx, *run)
+		}, w, req)
 	}
 }
 
@@ -1401,7 +1407,9 @@ func (self *Web) ApiRunLogIdIdGet(w http.ResponseWriter, req *http.Request) {
 		self.NotFound(w, errors.New("no such allocation"))
 		return
 	} else {
-		self.log(self.RunService.TaskLog(*alloc, task), w, req)
+		self.log(func(ctx context.Context) service.LokiLineChan {
+			return self.RunService.TaskLog(ctx, *alloc, task)
+		}, w, req)
 	}
 }
 
@@ -1831,14 +1839,57 @@ func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {
 	}
 }
 
-func (self *Web) log(log service.LokiLineChan, w http.ResponseWriter, req *http.Request) {
-	query := req.URL.Query()
-	_, raw := query["raw"]
-	if _, stripAnsi := query["strip-ansi"]; stripAnsi {
-		log = log.StripAnsi()
+func (self *Web) log(logFunc func(context.Context) service.LokiLineChan, w http.ResponseWriter, req *http.Request) {
+	messagesFunc := func(ctx context.Context) <-chan []byte {
+		messages := make(chan []byte, 1)
+
+		go func() {
+			defer close(messages)
+
+			log := logFunc(ctx)
+
+			query := req.URL.Query()
+			_, raw := query["raw"]
+			if _, stripAnsi := query["strip-ansi"]; stripAnsi {
+				log = log.StripAnsi()
+			}
+
+			for line := range log {
+				if raw {
+					if line.Err != nil {
+						self.Logger.Err(line.Err).Msg("Received error instead of log line")
+					} else {
+						messages <- []byte(line.Text)
+					}
+				} else if buf, err := json.Marshal(line); err != nil {
+					self.Logger.Err(err).Msg("While marshaling log line to JSON")
+				} else {
+					messages <- buf
+				}
+			}
+		}()
+
+		return messages
 	}
 
-	wJson := json.NewEncoder(w)
+	if req.Header.Get("Upgrade") == "websocket" {
+		self.logWS(messagesFunc, w, req)
+	} else {
+		self.logHTTP(messagesFunc, w, req)
+	}
+}
+
+// Closes the connection after no more lines have been found after a timeout.
+// We do not notice when the client stops listening so the websocket connection to Loki stays open until the timeout expires.
+func (self *Web) logHTTP(messagesFunc func(context.Context) <-chan []byte, w http.ResponseWriter, req *http.Request) {
+	const timeout = 15 * time.Second
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	timer := time.AfterFunc(timeout, cancel)
+
+	messages := messagesFunc(ctx)
 
 	/*
 		You might think why not just flush after every line like this?
@@ -1856,54 +1907,49 @@ func (self *Web) log(log service.LokiLineChan, w http.ResponseWriter, req *http.
 		But it is inefficient to flush after every line.
 		Instead we write as long as values are available on the channel,
 		then flush, and then do the next read in a blocking fashion
-		so that we don't enter a tight loop.
+		so that we don't enter a busy loop.
 	*/
 
 	flushed := false
-	var line *service.LokiLineMsg
+	var message []byte
 Line:
 	for {
-		if line != nil {
-			if line.Err != nil {
-				self.ServerError(w, line.Err)
+		if message != nil {
+			if _, err := io.Copy(w, bytes.NewReader(message)); err != nil {
+				self.ServerError(w, errors.WithMessage(err, "Error writing log line"))
+				return
+			}
+			if _, err := w.Write([]byte("\n")); err != nil {
+				self.ServerError(w, errors.WithMessage(err, "Error writing newline after log line"))
 				return
 			}
 
-			if raw {
-				if _, err := io.Copy(w, strings.NewReader(line.Text)); err != nil {
-					self.ServerError(w, errors.WithMessage(err, "Error writing log line"))
-					return
-				}
-				if _, err := w.Write([]byte("\n")); err != nil {
-					self.ServerError(w, errors.WithMessage(err, "Error writing newline after log line"))
-					return
-				}
-			} else if err := wJson.Encode(*line.LokiLine); err != nil {
-				self.ServerError(w, err)
-				return
-			}
-
-			line = nil
+			message = nil
 		}
 
 		if flushed {
-			// this blocks so that we don't flush in a tight loop
-			l, ok := <-log
+			// this blocks so that we don't flush in a busy loop
+			msg, ok := <-messages
+
+			if !timer.Stop() {
+				timer.Reset(timeout)
+			}
+
 			if !ok {
 				break
 			}
-			line = &l
+
+			message = msg
 			flushed = false
 			continue
 		}
 
 		select {
-		case l, ok := <-log:
+		case msg, ok := <-messages:
 			if !ok {
 				break Line
 			}
-			lCopy := l
-			line = &lCopy
+			message = msg
 		default:
 			// flush if there is no value to read yet
 			if f, ok := w.(http.Flusher); ok {
@@ -1912,4 +1958,60 @@ Line:
 			flushed = true
 		}
 	}
+}
+
+var websocketUpgrader = websocket.Upgrader{}
+
+func (self *Web) logWS(messagesFunc func(context.Context) <-chan []byte, w http.ResponseWriter, req *http.Request) {
+	conn, err := websocketUpgrader.Upgrade(w, req, nil)
+	if err != nil {
+		self.ClientError(w, err)
+		return
+	}
+
+	go func() {
+		defer func() {
+			if err := conn.Close(); err != nil {
+				self.Logger.Err(err).Msg("While closing websocket")
+			}
+		}()
+
+		noMoreMessages := false
+		ctx, cancel := context.WithCancel(context.Background())
+		defer func() {
+			noMoreMessages = true
+			cancel()
+		}()
+
+		/* XXX send heartbeats to keep connection healty through proxies if unstable
+		go func() {
+			defer cancel()
+			const d = 5 * time.Second
+			for {
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(d)); err != nil {
+					break
+				}
+				time.Sleep(d)
+			}
+		}()
+		*/
+
+		// Cancel context to disconnect from Loki when the connection is closed.
+		go func() {
+			defer cancel()
+			for {
+				if _, _, err := conn.NextReader(); err != nil {
+					if _, ok := err.(*websocket.CloseError); ok || noMoreMessages {
+						break
+					}
+				}
+			}
+		}()
+
+		for message := range messagesFunc(ctx) {
+			if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				self.Logger.Err(err).Msg("While writing message to websocket")
+			}
+		}
+	}()
 }

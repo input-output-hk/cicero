@@ -38,8 +38,8 @@ type RunService interface {
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
-	JobLog(domain.Run) LokiLineChan
-	TaskLog(nomad.Allocation, string) LokiLineChan
+	JobLog(context.Context, domain.Run) LokiLineChan
+	TaskLog(context.Context, nomad.Allocation, string) LokiLineChan
 	GetRunAllocations(domain.Run) (Allocations, error)
 	CPUMetrics(allocs []nomad.Allocation, end *time.Time) (map[string][]VMMetric, error)
 	MemMetrics(allocs []nomad.Allocation, end *time.Time) (map[string][]VMMetric, error)
@@ -170,15 +170,15 @@ func (self runService) Cancel(run *domain.Run) error {
 	return nil
 }
 
-func (self runService) JobLog(run domain.Run) LokiLineChan {
+func (self runService) JobLog(ctx context.Context, run domain.Run) LokiLineChan {
 	return self.lokiService.TailRange(
-		context.Background(),
+		ctx,
 		fmt.Sprintf(`{nomad_job_id=%q}`, run.NomadJobID.String()),
 		run.CreatedAt, run.FinishedAt,
 	)
 }
 
-func (self runService) TaskLog(alloc nomad.Allocation, task string) LokiLineChan {
+func (self runService) TaskLog(ctx context.Context, alloc nomad.Allocation, task string) LokiLineChan {
 	taskState := alloc.TaskStates[task]
 
 	var finishedAt *time.Time
@@ -196,7 +196,7 @@ func (self runService) TaskLog(alloc nomad.Allocation, task string) LokiLineChan
 	}
 
 	return self.lokiService.TailRange(
-		context.Background(),
+		ctx,
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_name=%q}`, alloc.ID, task),
 		taskState.StartedAt, finishedAt,
 	)

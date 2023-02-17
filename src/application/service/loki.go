@@ -177,7 +177,7 @@ func (self lokiService) TailRange(ctx context.Context, query string, start time.
 	}
 
 	if end.After(time.Now()) {
-		panic("`end` must not be in the future! Otherwise new lines may be pushed and the expected last line will no longer be the last, blocking forever.")
+		panic("`end` must not be in the future! Otherwise new lines may be pushed so the expected last line is no longer the last, blocking forever.")
 	}
 
 	lines := make(chan LokiLineMsg, 1) // at least one so we can return immediately on error
@@ -222,7 +222,7 @@ func (self lokiService) TailRange(ctx context.Context, query string, start time.
 			and only check for equality when there are no more values.
 			If that was not the last line though we might just have
 			been faster than the sender can send values to the channel
-			so we try a blocking read to avoid a tight loop.
+			so we try a blocking read to avoid a busy loop.
 		*/
 
 		block := false
@@ -272,7 +272,7 @@ func (self lokiService) TailRange(ctx context.Context, query string, start time.
 
 type LokiLineMsg struct {
 	*LokiLine
-	Err error
+	Err error `json:"error,omitempty"`
 }
 
 func (self lokiService) Tail(ctx context.Context, query string, start time.Time) LokiLineChan {
@@ -328,10 +328,6 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 			go func() {
 				<-ctx.Done()
 
-				if err := ctx.Err(); err != nil && !closedLines {
-					lines <- LokiLineMsg{Err: err}
-				}
-
 				announceClosure("canceled")
 
 				// This will unblock reads and return error
@@ -351,7 +347,6 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 						Values [][]string        `json:"values"`
 					} `json:"streams"`
 				}{}
-				// XXX This will block forever if there are no further lines.
 				err := conn.ReadJSON(&msg)
 				if err != nil {
 					if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
@@ -363,7 +358,13 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 							// as the websocket is already closed.
 							closureAnnounced = true
 						}
-						lines <- LokiLineMsg{Err: err}
+
+						// If there is an error on `ctx` that means it was canceled
+						// so the error from `conn.ReadJSON()` can be ignored.
+						if ctx.Err() == nil {
+							lines <- LokiLineMsg{Err: err}
+						}
+
 						break Limit
 					}
 				}
