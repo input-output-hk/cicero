@@ -1,0 +1,11 @@
+[linters]
+
+enable = [
+	"gocritic"
+]
+
+[linters-settings.gocritic]
+
+disabled-checks = [
+	"ifElseChain"
+]

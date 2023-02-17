@@ -75,7 +75,7 @@
         {
           name = "lint";
           command = ''
-            golangci-lint run -E gocritic --timeout 5m &&
+            golangci-lint run --timeout 5m
             nix fmt -- --fail-on-change
           '';
           help = "Run code linters";

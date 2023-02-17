@@ -449,7 +449,6 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ActionCurrentNameGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	//nolint:gocritic // IMHO if-else chain is better than switch here
 	if name, err := url.PathUnescape(vars["name"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
 		return
@@ -1140,7 +1139,6 @@ func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Reque
 }
 
 func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Request) {
-	//nolint:gocritic // IMHO if-else chain is better than switch here
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 	} else if output, err := self.InvocationService.GetOutputById(id); err != nil {
@@ -1177,7 +1175,6 @@ func (self *Web) ApiInvocationIdPost(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
-	//nolint:gocritic // IMHO if-else chain is better than switch here
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
@@ -1192,7 +1189,6 @@ func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
-	//nolint:gocritic // IMHO if-else chain is better than switch here
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 	} else if run, err := self.RunService.GetByNomadJobId(id); err != nil {
