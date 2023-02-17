@@ -38,6 +38,12 @@ type LokiService interface {
 	// More efficient than `QueryRange()` but limited in options.
 	// Degrades to `Tail()` if no end time is given.
 	TailRange(context.Context, string, time.Time, *time.Time) LokiLineChan
+
+	// Like `Tail()` but also fetches the start of the log up until the tailed lines.
+	QueryTail(context.Context, string, time.Time) LokiLineChan
+
+	// Like `TailRange()` but also fetches the start of the log up until the tailed lines.
+	QueryTailRange(context.Context, string, time.Time, *time.Time) LokiLineChan
 }
 
 type LokiLineChan <-chan LokiLineMsg
@@ -92,6 +98,7 @@ func (self LokiLineChan) deduplicate() LokiLineChan {
 				continue
 			}
 
+			line.Time = line.Time.UTC() // so the timezone does not change the hash
 			var buf bytes.Buffer
 			if err := json.NewEncoder(&buf).Encode(line); err != nil {
 				deduped <- LokiLineMsg{Err: err}
@@ -169,6 +176,68 @@ func NewLokiService(prometheusClient prometheus.Client, logger *zerolog.Logger) 
 		logger:     logger.With().Str("component", "LokiService").Logger(),
 		prometheus: prometheusClient,
 	}
+}
+func (self lokiService) QueryTail(ctx context.Context, query string, start time.Time) LokiLineChan {
+	return self.QueryTailRange(ctx, query, start, nil)
+}
+
+func (self lokiService) QueryTailRange(ctx context.Context, query string, start time.Time, end *time.Time) LokiLineChan {
+	lines := make(chan LokiLineMsg, 1)
+
+	go func() {
+		defer close(lines)
+
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		// First, start tailing.
+		tail := self.TailRange(ctx, query, start, end)
+
+		// Read the first line from tail
+		// and query up to that line's time (inclusive).
+		var log LokiLineChan
+		firstTailLine, ok := <-tail
+		if !ok {
+			return
+		} else if err := firstTailLine.Err; err != nil {
+			lines <- firstTailLine
+			return
+		} else {
+			log = self.QueryRange(query, start, firstTailLine.Time, LokiDirectionForward, 0)
+		}
+
+		// Now, if there were multiple lines with the same time, they may be duplicated.
+		// So we concatenate and deduplicate `log` and `tail` until we encounter a line
+		// with a newer time than the first tail line; at that point we know that lines
+		// will not overlap anymore.
+		seam := make(chan LokiLineMsg, 1)
+		go func() {
+			defer close(seam)
+
+			for line := range log {
+				seam <- line
+			}
+
+			for line := range tail {
+				seam <- line
+
+				if line.Err == nil && line.Time.After(firstTailLine.Time) {
+					break
+				}
+			}
+		}()
+
+		for line := range LokiLineChan(seam).deduplicate() {
+			lines <- line
+		}
+
+		// Finally, read the remaining tail lines.
+		for line := range tail {
+			lines <- line
+		}
+	}()
+
+	return lines
 }
 
 func (self lokiService) TailRange(ctx context.Context, query string, start time.Time, end *time.Time) LokiLineChan {
@@ -276,7 +345,7 @@ type LokiLineMsg struct {
 }
 
 func (self lokiService) Tail(ctx context.Context, query string, start time.Time) LokiLineChan {
-	const limit = 500 // default for Loki server so a higher limit may be ignored (or a lower one if so configured on the server)
+	const limit = 500 // default from Loki's API docs
 
 	lines := make(chan LokiLineMsg, 1) // at least one so we can shut down immediately on error
 
@@ -287,14 +356,14 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 			close(lines)
 		}()
 
-	Limit:
+	Conn:
 		for {
 			u := self.prometheus.URL("/loki/api/v1/tail", nil)
 			u.Scheme = "ws"
 			{
 				q := url.Values{}
 				q.Set("query", query)
-				q.Set("limit", strconv.FormatInt(limit, 10))
+				q.Set("limit", strconv.FormatUint(limit, 10))
 				q.Set("start", strconv.FormatInt(start.UnixNano(), 10))
 				u.RawQuery = q.Encode()
 			}
@@ -304,7 +373,6 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 				lines <- LokiLineMsg{Err: err}
 				break
 			}
-			defer conn.Close()
 
 			closureAnnounced := false
 			announceClosure := func(message string) {
@@ -323,7 +391,6 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 					self.logger.Err(err).Msg("Failed to send close message")
 				}
 			}
-			defer announceClosure("done")
 
 			go func() {
 				<-ctx.Done()
@@ -331,13 +398,13 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 				announceClosure("canceled")
 
 				// This will unblock reads and return error
-				// thereby exiting the `Limit` loop and close `lines`.
+				// thereby exiting the `Conn` loop and close `lines`.
 				if err := conn.Close(); err != nil && !closedLines {
 					lines <- LokiLineMsg{Err: err}
 				}
 			}()
 
-			numLinesRead := 0
+			var numLinesRead uint = 0
 
 		Read:
 			for {
@@ -365,7 +432,7 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 							lines <- LokiLineMsg{Err: err}
 						}
 
-						break Limit
+						break Conn
 					}
 				}
 
@@ -413,9 +480,13 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 					// or send a message indicating that the limit was reached.
 					// Let's reconnect to reset the limit so we won't hang waiting forever.
 					announceClosure("limit reached")
-					numLinesRead = 0
 					break
 				}
+			}
+
+			announceClosure("done")
+			if err := conn.Close(); err != nil {
+				lines <- LokiLineMsg{Err: err}
 			}
 		}
 	}()
@@ -433,7 +504,7 @@ func (self lokiService) QueryRange(query string, start time.Time, end time.Time,
 
 		// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
 		var pageSize uint = 5000
-		if limit < pageSize {
+		if limit < pageSize && limit != 0 {
 			pageSize = limit
 		}
 

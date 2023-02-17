@@ -171,7 +171,7 @@ func (self runService) Cancel(run *domain.Run) error {
 }
 
 func (self runService) JobLog(ctx context.Context, run domain.Run) LokiLineChan {
-	return self.lokiService.TailRange(
+	return self.lokiService.QueryTailRange(
 		ctx,
 		fmt.Sprintf(`{nomad_job_id=%q}`, run.NomadJobID.String()),
 		run.CreatedAt, run.FinishedAt,
@@ -187,7 +187,7 @@ func (self runService) TaskLog(ctx context.Context, alloc nomad.Allocation, task
 
 		// tolerate logs shipped up to one minute late
 		late := finishedAt.Add(time.Minute)
-		// must not be in the future or `TailRange()` will panic
+		// must not be in the future or `QueryTailRange()` will panic
 		now := time.Now()
 		if late.After(now) {
 			late = now
@@ -195,7 +195,7 @@ func (self runService) TaskLog(ctx context.Context, alloc nomad.Allocation, task
 		finishedAt = &late
 	}
 
-	return self.lokiService.TailRange(
+	return self.lokiService.QueryTailRange(
 		ctx,
 		fmt.Sprintf(`{nomad_alloc_id=%q,nomad_task_name=%q}`, alloc.ID, task),
 		taskState.StartedAt, finishedAt,

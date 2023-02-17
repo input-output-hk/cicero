@@ -197,7 +197,7 @@ func (self invocationService) End(id uuid.UUID) error {
 }
 
 func (self invocationService) GetLog(ctx context.Context, invocation domain.Invocation) LokiLineChan {
-	return self.lokiService.TailRange(
+	return self.lokiService.QueryTailRange(
 		ctx,
 		fmt.Sprintf(`{cicero=~"eval(-transform)?",invocation=%q}`, invocation.Id),
 		invocation.CreatedAt, invocation.FinishedAt,
@@ -205,7 +205,7 @@ func (self invocationService) GetLog(ctx context.Context, invocation domain.Invo
 }
 
 func (self invocationService) GetEvalLog(ctx context.Context, invocation domain.Invocation) LokiLineChan {
-	return self.lokiService.TailRange(
+	return self.lokiService.QueryTailRange(
 		ctx,
 		fmt.Sprintf(`{cicero=~"eval",invocation=%q}`, invocation.Id),
 		invocation.CreatedAt, invocation.FinishedAt,
@@ -213,7 +213,7 @@ func (self invocationService) GetEvalLog(ctx context.Context, invocation domain.
 }
 
 func (self invocationService) GetTransformLog(ctx context.Context, invocation domain.Invocation) LokiLineChan {
-	return self.lokiService.TailRange(
+	return self.lokiService.QueryTailRange(
 		ctx,
 		fmt.Sprintf(`{cicero=~"eval-transform",invocation=%q}`, invocation.Id),
 		invocation.CreatedAt, invocation.FinishedAt,
