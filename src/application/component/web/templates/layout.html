@@ -163,7 +163,7 @@
 			function appendLine(line) {
 				renderLine(tbody.insertRow(), line);
 
-				const maxLines = 5000;
+				const maxLines = 1000;
 				const snipLineRowIdx = Math.floor(maxLines / 2);
 				if (tbody.childElementCount > maxLines) {
 					numLinesOmitted += 1;
