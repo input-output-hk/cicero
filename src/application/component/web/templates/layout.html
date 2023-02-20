@@ -159,25 +159,34 @@
 				tr.classList.add(line.labels.source);
 			}
 
-			let snipLineAdded = false;
+			let numLinesOmitted = 0;
 			function appendLine(line) {
 				renderLine(tbody.insertRow(), line);
 
 				const maxLines = 5000;
-				const snipLineRowIdx = maxLines / 2;
-				while (tbody.childElementCount > maxLines) {
-					if (!snipLineAdded) {
+				const snipLineRowIdx = Math.floor(maxLines / 2);
+				if (tbody.childElementCount > maxLines) {
+					numLinesOmitted += 1;
+
+					const snipLineText = numLinesOmitted + ' lines omitted (view raw instead)';
+					if (numLinesOmitted == 1) {
+						// This is the first line we omit so the snip line does not yet exist. Add it.
 						renderLine(tbody.insertRow(snipLineRowIdx), {
-							text: '… omitted … (view raw instead)',
+							text: snipLineText,
 							labels: {source: 'info'},
 						});
-						snipLineAdded = true;
-
-						// remove one more line because the snip line also counts
-						tbody.querySelector('tr:nth-child(' + snipLineRowIdx + ')').remove()
+					} else {
+						// This is not the first line we omit so the snip line already exists.
+						// Update its text to represent the omitted line count.
+						// Access properties directly instead of using a query for speed.
+						tbody.children[snipLineRowIdx]. // <tr>
+							children[1]. // <td>
+							children[0]. // <samp>
+							textContent = snipLineText;
 					}
 
-					tbody.querySelector('tr:nth-child(' + (snipLineRowIdx + 1) + ')').remove()
+					// Remove the line after the snip line so we don't accidentally remove the snip line itself.
+					tbody.children[snipLineRowIdx + 1].remove();
 				}
 
 				table.style.display = null;
