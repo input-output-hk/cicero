@@ -601,20 +601,17 @@ Page:
 			}
 
 			numEntries += uint(len(stream.Entries))
-			for _, entry := range stream.Entries {
-				switch direction {
-				case LokiDirectionBackward:
-					if entry.Timestamp.After(start) {
-						continue
-					}
-				case LokiDirectionForward:
-					if entry.Timestamp.Before(start) {
-						continue
-					}
-				default:
-					panic("Unhandled value for LokiDirection")
+			switch direction {
+			case LokiDirectionBackward:
+				if entry := stream.Entries[0]; entry.Timestamp.Before(start) {
+					start = entry.Timestamp
 				}
-				start = entry.Timestamp
+			case LokiDirectionForward:
+				if entry := stream.Entries[len(stream.Entries)-1]; entry.Timestamp.After(start) {
+					start = entry.Timestamp
+				}
+			default:
+				panic("Unhandled value for LokiDirection")
 			}
 		}
 		if numEntries < limit {
