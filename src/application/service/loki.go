@@ -495,12 +495,10 @@ func (self lokiService) Tail(ctx context.Context, query string, start time.Time)
 }
 
 func (self lokiService) QueryRange(query string, start time.Time, end time.Time, direction LokiDirection, limit uint) LokiLineChan {
-	log := make(chan LokiLineMsg, 1) // at least one so we can shut down immediately on error
+	lines := make(chan LokiLineMsg, 1) // at least one so we can shut down immediately on error
 
 	go func() {
-		defer close(log)
-
-		var numLinesSent uint
+		defer close(lines)
 
 		// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
 		var pageSize uint = 5000
@@ -508,28 +506,37 @@ func (self lokiService) QueryRange(query string, start time.Time, end time.Time,
 			pageSize = limit
 		}
 
+		log := make(LokiLog, 0, pageSize)
+
 		if err := self.QueryRangePages(query, start, end, direction, pageSize, func(stream loghttp.Stream) (bool, error) {
 			page := make(LokiLog, 0, len(stream.Entries))
 			page.FromStream(stream)
-			page.Sort(direction)
 
-			for _, line := range page {
-				line := line // copy so we don't point to loop variable
-				log <- LokiLineMsg{LokiLine: &line}
+			pageLenCap := uint(len(page))
+			if numRemaining := limit - uint(len(log)); limit != 0 && numRemaining < uint(len(page)) {
+				pageLenCap = numRemaining
+			}
 
-				numLinesSent += 1
-				if limit != 0 && numLinesSent == limit {
-					return true, nil
-				}
+			log = append(log, page[0:pageLenCap]...)
+
+			if limit != 0 && uint(len(log)) == limit {
+				return true, nil
 			}
 
 			return false, nil
 		}); err != nil {
-			log <- LokiLineMsg{Err: err}
+			lines <- LokiLineMsg{Err: err}
+		}
+
+		log.Sort(direction)
+
+		for _, line := range log {
+			line := line // copy so we don't point to loop variable
+			lines <- LokiLineMsg{LokiLine: &line}
 		}
 	}()
 
-	return LokiLineChan(log).deduplicate()
+	return LokiLineChan(lines).deduplicate()
 }
 
 func (self lokiService) QueryRangePages(query string, start time.Time, end time.Time, direction LokiDirection, limit uint, callback func(loghttp.Stream) (bool, error)) error {
