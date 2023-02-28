@@ -518,8 +518,7 @@ func (self lokiService) QueryRange(query string, start time.Time, end time.Time,
 	go func() {
 		defer close(lines)
 
-		// TODO: figure out the correct value for our infra, 5000 is the default configuration in loki
-		var pageSize uint = 5000
+		var pageSize uint = 5000 // loki default
 		if limit < pageSize && limit != 0 {
 			pageSize = limit
 		}
