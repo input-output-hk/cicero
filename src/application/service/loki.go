@@ -344,6 +344,24 @@ type LokiLineMsg struct {
 	Err error `json:"error,omitempty"`
 }
 
+// https://github.com/golang/go/issues/5161
+func (self LokiLineMsg) MarshalJSON() ([]byte, error) {
+	type Self LokiLineMsg
+
+	var errMsg string
+	if self.Err != nil {
+		errMsg = self.Err.Error()
+	}
+
+	return json.Marshal(struct {
+		Self
+		Err string `json:"error,omitempty"`
+	}{
+		Self: Self(self),
+		Err:  errMsg,
+	})
+}
+
 func (self lokiService) Tail(ctx context.Context, query string, start time.Time) LokiLineChan {
 	const limit = 500 // default from Loki's API docs
 
