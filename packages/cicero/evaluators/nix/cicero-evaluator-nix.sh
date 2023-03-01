@@ -64,7 +64,7 @@ function evaluate {
 	echo >&2 'Evaluating…'
 	nix eval --no-write-lock-file --json \
 		${CICERO_EVALUATOR_NIX_STACKTRACE:+--show-trace} \
-		".#cicero.$system" "$@"
+		"$@"
 }
 
 function prepare {
@@ -120,7 +120,7 @@ function prepare {
 case "${1:-}" in
 list)
 	shift
-	msg result result="$(evaluate --apply __attrNames)"
+	msg result result="$(evaluate ".#cicero.$system" --apply __attrNames)"
 	;;
 eval)
 	shift
@@ -129,13 +129,22 @@ eval)
 	vars=$(
 		nix-instantiate --eval --strict \
 			--expr '{...} @ vars: {
+			  # We are not using this ourselves but make it available for CICERO_EVALUATOR_NIX_EXTRA_ARGS.
+			  inherit (vars) system;
+
+			  name = __getEnv "CICERO_ACTION_NAME";
+
 			  args = __mapAttrs (k: v: if v == "" then null else v) {
-			    inherit (vars) id ociRegistry;
-			  } // {
-			    inputs = __fromJSON vars.inputs;
+			    id          = __getEnv "CICERO_ACTION_ID";
+			    ociRegistry = __getEnv "CICERO_EVALUATOR_NIX_OCI_REGISTRY";
+			    inputs = let
+			      env = __getEnv "CICERO_ACTION_INPUTS";
+			    in
+			      if env != ""
+			      then __fromJSON env
+			      else null;
 			  };
 
-			  inherit (vars) name system;
 			  attrs =
 			    let requestedAttrs = __filter __isString (__split "[[:space:]]" vars.attrs); in
 			    requestedAttrs ++
@@ -143,54 +152,58 @@ eval)
 			    # if "job" is present so that the preparation hooks can run.
 			    (if __elem "job" requestedAttrs then [ "prepare" ] else []);
 			}' \
-			--argstr name "${CICERO_ACTION_NAME:-}" \
-			--argstr id "${CICERO_ACTION_ID:-}" \
-			--argstr inputs "${CICERO_ACTION_INPUTS:-null}" \
-			--argstr ociRegistry "${CICERO_EVALUATOR_NIX_OCI_REGISTRY:-}" \
 			--argstr system "$system" \
 			--argstr attrs "${*}"
 	)
 
-	result=$(evaluate --apply "$(
-		cat <<-EOF
-			with $vars;
+	trap 'rm -rf "$tmpFlake"' ERR
+	tmpFlake=$(mktemp -d)
+	cat > "$tmpFlake/flake.nix" <<-EOF
+		{
+		  inputs.source.url = "$PWD";
 
-			let
-			  # in a separate let-block so it cannot access all the stuff below
-			  allArgs = args // ${CICERO_EVALUATOR_NIX_EXTRA_ARGS:-"{}"};
-			in
+		  outputs = { source, ... }: {
+		    result =
+		      with $vars;
 
-			actions:
+		      let
+		        # in a separate let-block so it cannot access all the stuff below
+		        allArgs = args // ${CICERO_EVALUATOR_NIX_EXTRA_ARGS:-"{}"};
+		      in
 
-			let
-			  mapAttrs' = fn: attrs: __listToAttrs (
-			    __filter
-			      (kv: kv.name != null)
-			      (map
-			        (name: fn name attrs.\${name})
-			        (__attrNames attrs)
-			      )
-			  );
+		      let
+		        mapAttrs' = fn: attrs: __listToAttrs (
+		          __filter
+		            (kv: kv.name != null)
+		            (map
+		              (name: fn name attrs.\${name})
+		              (__attrNames attrs)
+		            )
+		        );
 
-			  actionFn = actions.\${name};
-			  actionFnArgs =
-			    # If the action takes named args
-			    # provide only those requested (like callPackage).
-			    # If it does not simply provide everything.
-			    let fnArgs = __functionArgs actionFn; in
-			    if fnArgs == {} then allArgs else mapAttrs' (k: v: {
-			      name = if allArgs.\${k} or null == null then null else k;
-			      value = allArgs.\${k} or null;
-			    }) fnArgs;
-			  action = actionFn actionFnArgs;
-			in
+		        actionFn = source.outputs.cicero.$system.\${name};
+		        actionFnArgs =
+		          # If the action takes named args
+		          # provide only those requested (like callPackage).
+		          # If it does not simply provide everything.
+		          let fnArgs = __functionArgs actionFn; in
+		          if fnArgs == {} then allArgs else mapAttrs' (k: v: {
+		            name = if allArgs.\${k} or null == null then null else k;
+		            value = allArgs.\${k} or null;
+		          }) fnArgs;
+		        action = actionFn actionFnArgs;
+		      in
 
-			mapAttrs' (k: value: {
-			  name = if __elem k attrs then k else null;
-			  inherit value;
-			}) action
-		EOF
-	)")
+		      mapAttrs' (k: value: {
+		        name = if __elem k attrs then k else null;
+		        inherit value;
+		      }) action;
+		  };
+		}
+	EOF
+	result=$(evaluate "$tmpFlake#result")
+	rm -r "$tmpFlake"
+	trap ERR
 
 	msg result result="$result"
 
