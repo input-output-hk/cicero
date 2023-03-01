@@ -1,10 +1,10 @@
 # shellcheck shell=bash
 
-if [[ -n "${CICERO_EVALUATOR_NIX_VERBOSE:-}" ]]; then
+if [[ -v CICERO_EVALUATOR_NIX_VERBOSE ]]; then
 	set -x
 fi
 
-export NIX_CONFIG="${NIX_CONFIG:-}"$'\n'"extra-experimental-features = nix-command flakes"
+export NIX_CONFIG="${NIX_CONFIG:-}"$'\n''extra-experimental-features = nix-command flakes'
 
 function usage {
 	{
@@ -183,9 +183,9 @@ eval)
 
 		        actionFn = source.outputs.cicero.$system.\${name};
 		        actionFnArgs =
-		          # If the action takes named args
+		          # If the action takes named args,
 		          # provide only those requested (like callPackage).
-		          # If it does not simply provide everything.
+		          # If it does not, simply provide everything.
 		          let fnArgs = __functionArgs actionFn; in
 		          if fnArgs == {} then allArgs else mapAttrs' (k: v: {
 		            name = if allArgs.\${k} or null == null then null else k;
