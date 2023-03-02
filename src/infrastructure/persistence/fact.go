@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -135,10 +136,18 @@ func (a *factRepository) Save(fact *domain.Fact, binary io.Reader) error {
 			}
 		}
 
+		// You might think "why not just pass `fact.Value` to `pgxscan.Get()` directly?"
+		// but that has other marshalling rules than `json.Marshal()`.
+		// Most importantly it would pass strings and null verbatim to postgres.
+		factJson, err := json.Marshal(fact.Value)
+		if err != nil {
+			return errors.WithMessage(err, "Could not marshal fact to JSON")
+		}
+
 		return pgxscan.Get(
 			ctx, tx, fact,
 			`INSERT INTO fact (run_id, value, binary_hash, "binary") VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
-			fact.RunId, fact.Value, fact.BinaryHash, binaryOid,
+			fact.RunId, factJson, fact.BinaryHash, binaryOid,
 		)
 	})
 }
