@@ -163,6 +163,22 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		if invocationId != nil {
 			stderrReader := io.Reader(stderr)
 			lokiWg, _, lokiStderrErr = e.pipeToLoki(lokiEval, nil, &stderrReader, *invocationId)
+		} else {
+			lokiWg = &sync.WaitGroup{}
+			lokiStderrErr = new(error)
+
+			lokiWg.Add(1)
+			go func() {
+				defer lokiWg.Done()
+				for {
+					if _, err := stderr.Read(make([]byte, 512)); err != nil {
+						if err == io.EOF {
+							break
+						}
+						*lokiStderrErr = errors.WithMessage(err, "While reading stderr")
+					}
+				}
+			}()
 		}
 
 		if err := cmd.Start(); err != nil {
@@ -213,20 +229,9 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 		}
 
 		// fill stderrBuf
-		if lokiWg != nil {
-			lokiWg.Wait()
-			if *lokiStderrErr != nil {
-				return nil, stderrBuf.Bytes(), *lokiStderrErr
-			}
-		} else {
-			for {
-				if _, err := stderr.Read(make([]byte, 512)); err != nil {
-					if err == io.EOF {
-						break
-					}
-					return nil, nil, errors.WithMessage(err, "While reading stderr")
-				}
-			}
+		lokiWg.Wait()
+		if *lokiStderrErr != nil {
+			return nil, stderrBuf.Bytes(), *lokiStderrErr
 		}
 
 		if err := cmd.Wait(); err != nil {
