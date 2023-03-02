@@ -141,7 +141,7 @@ eval)
 			      env = __getEnv "CICERO_ACTION_INPUTS";
 			    in
 			      if env != ""
-			      then __fromJSON env
+			      then __fromJSON (__readFile env)
 			      else null;
 			  };
 

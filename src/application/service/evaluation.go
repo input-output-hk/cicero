@@ -367,16 +367,32 @@ func (e evaluationService) EvaluateRun(src, name string, id, invocationId uuid.U
 		return nil, err
 	}
 
-	inputsJson, err := json.Marshal(inputs)
+	inputsJson, err := os.CreateTemp("", "inputs")
 	if err != nil {
 		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
-		return nil, errors.WithMessagef(err, "Could not marshal inputs to JSON: %v", inputs)
+		return nil, errors.WithMessage(err, "Could not create temporary file for inputs")
+	}
+	defer func() {
+		if err := inputsJson.Close(); err != nil {
+			err = errors.WithMessage(err, "Could not close temporary file for inputs")
+			e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
+		}
+
+		if err := os.Remove(inputsJson.Name()); err != nil {
+			err = errors.WithMessage(err, "Could not remove temporary file for inputs")
+			e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
+		}
+	}()
+
+	if err := json.NewEncoder(inputsJson).Encode(inputs); err != nil {
+		e.promtailChan <- promtailEntry(err.Error(), lokiEval, lokiSourceErr, invocationId)
+		return nil, errors.WithMessagef(err, "Could not marshal inputs to JSON or write to temporary file: %v", inputs)
 	}
 
 	extraEnv := []string{
 		"CICERO_ACTION_NAME=" + name,
 		"CICERO_ACTION_ID=" + id.String(),
-		"CICERO_ACTION_INPUTS=" + string(inputsJson),
+		"CICERO_ACTION_INPUTS=" + inputsJson.Name(),
 	}
 
 	output, stderr, err := e.evaluate(dst, evaluator, []string{"eval", "job"}, extraEnv, &invocationId)

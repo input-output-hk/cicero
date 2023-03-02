@@ -20,7 +20,7 @@ consisting of environment variables, command line arguments, and stdout.
 |------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `CICERO_ACTION_ID`     | The UUID of the [action](action.md) being evaluated.                                                                                                                                                  |
 | `CICERO_ACTION_NAME`   | The name of the action being evaluated.                                                                                                                                                               |
-| `CICERO_ACTION_INPUTS` | A JSON object that contains the action's inputs except for missing optional or negated ones. The key is the input name and the value is the entire fact (not just its value) except for the artifact. This is only set when evaluating for a [run](run.md). |
+| `CICERO_ACTION_INPUTS` | Path to a file containing a JSON object that contains the action's inputs except for missing optional or negated ones. The key is the input name and the value is the entire fact (not just its value) except for the artifact. This is only set when evaluating for a [run](run.md). |
 
 ### Command Line Arguments
 

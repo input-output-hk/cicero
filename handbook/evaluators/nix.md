@@ -93,9 +93,8 @@ The log messages are printed on stderr and not part of the protocol.
 ### Evaluating an Action
 
 ```sh
-$ CICERO_ACTION_ID=foo \
-  CICERO_ACTION_NAME=cicero/ci \
-  CICERO_ACTION_INPUTS='{
+$ inputs=$(mktemp)
+$ echo > "$inputs" '{
     "GitHub Push or PR": {
       "id": "bar",
       "created_at": "2023-02-01T14:29:28,251197177+01:00",
@@ -104,7 +103,10 @@ $ CICERO_ACTION_ID=foo \
         "baz": "qux"
       }
     }
-  }' \
+  }'
+$ CICERO_ACTION_ID=foo \
+  CICERO_ACTION_NAME=cicero/ci \
+  CICERO_ACTION_INPUTS="$inputs" \
   cicero-evaluator-nix eval meta io job prepare
 Getting current system…
 Got current system: x86_64-linux
@@ -113,6 +115,7 @@ Evaluating…
 {"event":"result","result":{"io":…,"job":…,"prepare":[{"derivations":[…],"type":"nix"}]}}
 Preparing nix…
 Pushing to http://127.0.0.1:17745?compression=none: …
+$ rm "$inputs"
 ```
 
 Again, only the event is printed on stdout and part of the protocol.
