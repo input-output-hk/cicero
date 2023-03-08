@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,10 +19,13 @@ import (
 	"github.com/davidebianchi/gswagger/apirouter"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
+	"github.com/zitadel/oidc/pkg/client/rp"
+	"github.com/zitadel/oidc/pkg/oidc"
 
 	"github.com/input-output-hk/cicero/src/application/component/web/apidoc"
 	"github.com/input-output-hk/cicero/src/application/service"
@@ -32,7 +36,8 @@ import (
 )
 
 type Web struct {
-	Listen            string
+	Config config.WebConfig
+
 	Logger            zerolog.Logger
 	InvocationService service.InvocationService
 	RunService        service.RunService
@@ -41,10 +46,14 @@ type Web struct {
 	NomadEventService service.NomadEventService
 	EvaluationService service.EvaluationService
 	Db                config.PgxIface
+
+	sessions sessions.Store
 }
 
+const loginOidcPath = "/login/oidc"
+
 func (self *Web) Start(ctx context.Context) error {
-	self.Logger.Info().Str("listen", self.Listen).Msg("Starting")
+	self.Logger.Info().Str("listen", self.Config.Listen).Msg("Starting")
 
 	muxRouter := mux.NewRouter().StrictSlash(true).UseEncodedPath()
 	muxRouter.NotFoundHandler = http.NotFoundHandler()
@@ -400,17 +409,104 @@ func (self *Web) Start(ctx context.Context) error {
 		http.StripPrefix("/_dispatch/method/"+req.Method, muxRouter).ServeHTTP(w, req)
 	})
 
+	self.sessions = sessions.NewCookieStore(self.Config.CookieAuth, self.Config.CookieEnc)
+
+	{ // OIDC
+		muxRouter.HandleFunc(loginOidcPath, self.LoginOidcGet).Methods(http.MethodGet)
+
+		type State struct {
+			Forward string
+			Id      string
+		}
+
+		muxRouter.HandleFunc(loginOidcPath+"/{provider}", func(w http.ResponseWriter, req *http.Request) {
+			provider, exists := self.Config.OidcProviders[mux.Vars(req)["provider"]]
+			if !exists {
+				self.NotFound(w, nil)
+				return
+			}
+
+			if state, err := json.Marshal(State{
+				req.URL.Query().Get("forward"),
+				uuid.New().String(),
+			}); err != nil {
+				self.ClientError(w, errors.WithMessage(err, "While marshaling the `forward` parameter to JSON"))
+				return
+			} else {
+				rp.AuthURLHandler(func() string { return string(state) }, provider)(w, req)
+			}
+		}).Methods(http.MethodGet)
+
+		muxRouter.HandleFunc(loginOidcPath+"/{provider}/callback", func(w http.ResponseWriter, req *http.Request) {
+			providerName := mux.Vars(req)["provider"]
+			provider, exists := self.Config.OidcProviders[providerName]
+			if !exists {
+				self.NotFound(w, nil)
+				return
+			}
+
+			rp.CodeExchangeHandler(
+				rp.UserinfoCallback(func(w http.ResponseWriter, req *http.Request, tokens *oidc.Tokens, stateJson string, provider rp.RelyingParty, info oidc.UserInfo) {
+					session, err := self.sessions.New(req, sessionOidc)
+					if err != nil {
+						self.ServerError(w, err)
+						return
+					}
+
+					if infoJson, err := json.Marshal(info); err != nil {
+						self.ServerError(w, err)
+						return
+					} else {
+						session.Values[sessionOidcUserinfo] = infoJson
+					}
+
+					session.Values[sessionOidcProvider] = providerName
+					session.Values[sessionOidcIdToken] = tokens.IDToken
+
+					if err := session.Save(req, w); err != nil {
+						self.ServerError(w, err)
+						return
+					}
+
+					state := State{}
+					if err := json.Unmarshal([]byte(stateJson), &state); err != nil {
+						self.ClientError(w, err)
+						return
+					}
+
+					http.Redirect(w, req, state.Forward, http.StatusFound)
+				}),
+				provider,
+			)(w, req)
+		})
+
+		muxRouter.HandleFunc("/logout", func(w http.ResponseWriter, req *http.Request) {
+			session := self.sessionOidc(w, req, true)
+			if session == nil {
+				return
+			}
+
+			session.Session.Options.MaxAge = -1
+			if err := session.Session.Save(req, w); err != nil {
+				self.ServerError(w, err)
+				return
+			}
+
+			http.Redirect(w, req, loginOidcPath, http.StatusFound)
+		})
+	}
+
 	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
 	err = r.GenerateAndExposeSwagger()
 	if err != nil {
 		return errors.WithMessage(err, "Failed to generate and expose swagger: %s")
 	}
 
-	server := &http.Server{Addr: self.Listen, Handler: muxRouter}
+	server := &http.Server{Addr: self.Config.Listen, Handler: muxRouter}
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
-			self.Logger.Err(err).Msgf("Failed to start web server on %s", self.Listen)
+			self.Logger.Err(err).Msgf("Failed to start web server on %s", self.Config.Listen)
 		}
 	}()
 
@@ -429,7 +525,38 @@ func (self *Web) IndexGet(w http.ResponseWriter, req *http.Request) {
 	http.Redirect(w, req, "/action/current?active", http.StatusFound)
 }
 
+func (self *Web) LoginOidcGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, false)
+
+	providers := make([]string, 0, len(self.Config.OidcProviders))
+	for name := range self.Config.OidcProviders {
+		providers = append(providers, name)
+	}
+
+	var provider string
+	if session != nil {
+		provider = session.Provider()
+	}
+
+	if err := self.render("login/oidc.html", w, req, session, struct {
+		Providers []string
+		Forward   string
+
+		// only non-empty if already logged in
+		Provider string
+	}{
+		providers,
+		req.URL.Query().Get("forward"),
+		provider,
+	}); err != nil {
+		self.ServerError(w, err)
+		return
+	}
+}
+
 func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, false)
+
 	var actions []domain.Action
 	var err error
 
@@ -440,7 +567,7 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := render("action/current.html", w, map[string]any{
+	if err := self.render("action/current.html", w, req, session, map[string]any{
 		"Actions": actions,
 		"active":  active,
 	}); err != nil {
@@ -461,11 +588,16 @@ func (self *Web) ActionCurrentNameGet(w http.ResponseWriter, req *http.Request) 
 		self.NotFound(w, nil)
 		return
 	} else {
-		self.actionIdGet(w, action.ID)
+		self.actionIdGet(w, req, action.ID)
 	}
 }
 
 func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, true)
+	if session == nil {
+		return
+	}
+
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 		return
@@ -516,7 +648,7 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		if err := render("action/runs.html", w, struct {
+		if err := self.render("action/runs.html", w, req, session, struct {
 			Entries []entry
 			*repository.Page
 		}{entries, page}); err != nil {
@@ -527,6 +659,11 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, true)
+	if session == nil {
+		return
+	}
+
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 		return
@@ -539,7 +676,7 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 	} else if actions, err := self.ActionService.GetByName(action.Name, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by name: %q", action.Name))
 		return
-	} else if err := render("action/version.html", w, struct {
+	} else if err := self.render("action/version.html", w, req, session, struct {
 		ActionID uuid.UUID
 		Actions  []domain.Action
 		*repository.Page
@@ -558,11 +695,16 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 		return
 	} else {
-		self.actionIdGet(w, id)
+		self.actionIdGet(w, req, id)
 	}
 }
 
-func (self *Web) actionIdGet(w http.ResponseWriter, id uuid.UUID) {
+func (self *Web) actionIdGet(w http.ResponseWriter, req *http.Request, id uuid.UUID) {
+	session := self.sessionOidc(w, req, true)
+	if session == nil {
+		return
+	}
+
 	if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
@@ -572,7 +714,7 @@ func (self *Web) actionIdGet(w http.ResponseWriter, id uuid.UUID) {
 	} else if inputs, err := self.ActionService.GetSatisfiedInputs(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
 		return
-	} else if err := render("action/[id].html", w, map[string]any{
+	} else if err := self.render("action/[id].html", w, req, session, map[string]any{
 		"Action": action,
 		"inputs": inputs,
 	}); err != nil {
@@ -594,13 +736,15 @@ func (self *Web) ActionCurrentNamePatch(w http.ResponseWriter, req *http.Request
 func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	const templateName = "action/new.html"
 
+	session := self.sessionOidc(w, req, false)
+
 	query := req.URL.Query()
 	source := query.Get("source")
 	name := query.Get("name")
 
 	// step 1
 	if source == "" {
-		if err := render(templateName, w, nil); err != nil {
+		if err := self.render(templateName, w, req, session, nil); err != nil {
 			self.ServerError(w, err)
 			return
 		}
@@ -612,7 +756,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		if names, err := self.EvaluationService.ListActions(source); err != nil {
 			self.ServerError(w, errors.WithMessagef(err, "While listing Actions in %q", source))
 			return
-		} else if err := render(templateName, w, map[string]any{"Source": source, "Names": names}); err != nil {
+		} else if err := self.render(templateName, w, req, session, map[string]any{"Source": source, "Names": names}); err != nil {
 			self.ServerError(w, err)
 			return
 		}
@@ -652,6 +796,11 @@ func (self *Web) InvocationIdPost(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, true)
+	if session == nil {
+		return
+	}
+
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
@@ -687,7 +836,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		inputs = inputs_
 	}
 
-	if err := render("invocation/[id].html", w, map[string]any{
+	if err := self.render("invocation/[id].html", w, req, session, map[string]any{
 		"Invocation": invocation,
 		"Run":        run,
 		"inputs":     inputs,
@@ -714,6 +863,11 @@ func (self *Web) RunIdDelete(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, true)
+	if session == nil {
+		return
+	}
+
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
@@ -797,7 +951,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := render("run/[id].html", w, map[string]any{
+	if err := self.render("run/[id].html", w, req, session, map[string]any{
 		"Run": struct {
 			domain.Run
 			Action domain.Action
@@ -838,6 +992,11 @@ func getPage(req *http.Request) (*repository.Page, error) {
 }
 
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, true)
+	if session == nil {
+		return
+	}
+
 	if page, err := getPage(req); err != nil {
 		self.ClientError(w, err)
 		return
@@ -893,7 +1052,7 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		if err := render("run/index.html", w, struct {
+		if err := self.render("run/index.html", w, req, session, struct {
 			Entries []entry
 			*repository.Page
 		}{entries, page}); err != nil {
@@ -2013,4 +2172,109 @@ func (self *Web) logWS(messagesFunc func(context.Context) <-chan []byte, w http.
 			}
 		}
 	}()
+}
+
+const (
+	sessionOidc         = "oidc"
+	sessionOidcUserinfo = "userinfo"
+	sessionOidcProvider = "provider"
+	sessionOidcIdToken  = "id-token"
+)
+
+// For protected endpoints do this (before sending the first byte):
+//
+// session := self.sessionOidc(w, req, true)
+// if session == nil { return }
+func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, private bool) *SessionOidc {
+	session, err := self.sessions.Get(req, sessionOidc)
+	sessionOidc := SessionOidc{Session: session}
+	if err != nil || sessionOidc.UserInfo() == nil {
+		if private {
+			forward := req.URL.RequestURI()
+			if req.URL.RawFragment != "" {
+				forward += "#" + req.URL.RawFragment
+			}
+
+			loginUriQuery := url.Values{}
+			loginUriQuery.Add("forward", forward)
+
+			loginUri := url.URL{
+				Path:     loginOidcPath,
+				RawQuery: loginUriQuery.Encode(),
+			}
+
+			http.Redirect(w, req, loginUri.RequestURI(), http.StatusFound)
+		}
+		return nil
+	}
+	return &sessionOidc
+}
+
+type SessionOidc struct {
+	Session *sessions.Session
+
+	userinfo *oidc.UserInfo // for caching
+}
+
+func (self SessionOidc) UserInfo() *oidc.UserInfo {
+	if self.userinfo != nil {
+		return self.userinfo
+	}
+
+	info := oidc.NewUserInfo()
+	if infoJsonIf, exists := self.Session.Values[sessionOidcUserinfo]; !exists {
+		return nil
+	} else if infoJson, ok := infoJsonIf.([]byte); !ok {
+		return nil
+	} else if err := json.Unmarshal(infoJson, info); err != nil {
+		return nil
+	}
+
+	infoRo := oidc.UserInfo(info)
+	self.userinfo = &infoRo
+	return self.userinfo
+}
+
+func (self SessionOidc) Provider() string {
+	return self.getString(sessionOidcProvider)
+}
+
+func (self SessionOidc) IdToken() string {
+	return self.getString(sessionOidcIdToken)
+}
+
+func (self SessionOidc) getString(key string) string {
+	if v, exists := self.Session.Values[key]; !exists {
+		panic("This should never happen™")
+	} else {
+		return v.(string)
+	}
+}
+
+func (self *Web) render(route string, w http.ResponseWriter, req *http.Request, session *SessionOidc, extraData any) error {
+	var data map[string]any
+
+	switch d := extraData.(type) {
+	case map[string]any:
+		data = d
+	default:
+		data = make(map[string]any)
+		t := reflect.TypeOf(extraData)
+		v := reflect.ValueOf(extraData)
+
+		if t.Kind() == reflect.Struct {
+			for _, field := range reflect.VisibleFields(t) {
+				if fieldValue := v.FieldByName(field.Name); fieldValue.CanInterface() {
+					data[field.Name] = fieldValue.Interface()
+				}
+			}
+			break
+		}
+
+		panic("`extraData` type not supported: " + t.Name())
+	}
+
+	data["Session"] = session
+
+	return render(route, w, data)
 }

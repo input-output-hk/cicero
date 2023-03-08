@@ -89,11 +89,31 @@
               --log-level trace \
               --victoriametrics-addr http://127.0.0.1:18428 \
               --prometheus-addr http://127.0.0.1:13100 \
-              --web-listen :18080 \
               --transform dev-cicero-transformer \
+              --web-listen :18080 \
+              --web-cookie-auth ${__toFile "cookie-auth" "aaaaaaaaaaaaaaaa"} \
+              --web-cookie-enc ${__toFile "cookie-enc" "aaaaaaaaaaaaaaaabbbbbbbbbbbbbbbb"} \
+              --web-oidc-providers ${__toFile "oidc-providers" (__toJSON rec {
+              dex = {
+                issuer = "http://localhost:15556";
+                client-id = "cicero";
+                client-secret = "foo";
+                callback-url = "http://localhost:18080/login/oidc/dex/callback";
+              };
+              dex-host =
+                dex
+                // {
+                  callback-url = "http://localhost:18081/login/oidc/dex-host/callback";
+                };
+            })} \
               "$@"
           '';
           help = "Run Cicero from source";
+        }
+        {
+          name = "dev-cicero-host";
+          command = ''dev-cicero --web-listen :18081 "$@"'';
+          help = "Run Cicero from source (outside the VM)";
         }
         {
           name = "psqlc";

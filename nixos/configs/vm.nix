@@ -91,6 +91,7 @@ parts @ {
               config.services.spongix.port
               config.services.postgresql.port
               config.services.dockerRegistry.port
+              (lib.toInt (lib.last (lib.splitString ":" config.services.dex.settings.web.http)))
             ];
 
           cores =
@@ -233,6 +234,14 @@ parts @ {
               host all all 0.0.0.0/0 trust
               host all all ::1/0 trust
             '';
+
+            ensureDatabases = ["dex"];
+            ensureUsers = [
+              {
+                name = "dex";
+                ensurePermissions."DATABASE dex" = "ALL PRIVILEGES";
+              }
+            ];
           };
 
           dockerRegistry = {
@@ -295,6 +304,43 @@ parts @ {
                 boltdb.directory = "/var/lib/loki/index";
                 filesystem.directory = "/var/lib/loki/chunks";
               };
+            };
+          };
+
+          dex = {
+            enable = true;
+            settings = {
+              issuer = "http://localhost:15556";
+
+              web.http = "0.0.0.0:15556";
+
+              storage = {
+                type = "postgres";
+                config = {
+                  host = "/var/run/postgresql";
+                  inherit (config.services.postgresql) port;
+                };
+              };
+
+              connectors = [
+                {
+                  id = "mock";
+                  name = "Mock";
+                  type = "mockCallback";
+                }
+              ];
+
+              staticClients = [
+                {
+                  id = "cicero";
+                  name = "Cicero";
+                  redirectURIs = [
+                    "http://localhost:18080/login/oidc/dex/callback"
+                    "http://localhost:18081/login/oidc/dex-host/callback"
+                  ];
+                  secret = "foo";
+                }
+              ];
             };
           };
         };

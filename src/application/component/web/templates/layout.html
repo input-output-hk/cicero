@@ -31,6 +31,10 @@
 			gap: 2em;
 			align-items: center;
 		}
+		body > nav > ul > li:last-child {
+			flex-grow: 1;
+			text-align: end;
+		}
 		body > main {
 			flex-grow: 1;
 			padding: 1rem;
@@ -220,6 +224,18 @@
 				</li>
 				<li><a href="/action/current?active">Actions</a></li>
 				<li><a href="/run">Runs</a></li>
+				<li>
+					{{with .Session}}
+						<a
+							href="/logout"
+							title="{{.UserInfo.GetEmail}}"
+						>
+							Log Out
+						</a>
+					{{else}}
+						<a href="/login/oidc">Log In</a>
+					{{end}}
+				</li>
 			</ul>
 		</nav>
 		<main>

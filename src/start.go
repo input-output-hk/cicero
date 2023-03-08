@@ -28,7 +28,10 @@ type StartCmd struct {
 	Evaluators          []string `arg:"--evaluators"`
 	Transformers        []string `arg:"--transform"`
 
-	WebListen string `arg:"--web-listen,env:CICERO_WEB_LISTEN" default:":8080"`
+	WebListen        string `arg:"--web-listen,env:CICERO_WEB_LISTEN" default:":8080"`
+	WebCookieAuth    string `arg:"--web-cookie-auth" help:"file that contains the cookie authentication key"`
+	WebCookieEnc     string `arg:"--web-cookie-enc" help:"file that contains the cookie encryption key"`
+	WebOidcProviders string `arg:"--web-oidc-providers" help:"JSON file that contains a map of OIDC provider settings"`
 
 	LogDb bool `arg:"--log-db"`
 }
@@ -132,9 +135,13 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	}
 
 	if start.web {
+		cfg, err := config.NewWebConfig(cmd.WebListen, cmd.WebCookieAuth, cmd.WebCookieEnc, cmd.WebOidcProviders)
+		if err != nil {
+			return err
+		}
 		child := web.Web{
+			Config:            cfg,
 			Logger:            logger.With().Str("component", "Web").Logger(),
-			Listen:            cmd.WebListen,
 			InvocationService: *invocationService,
 			RunService:        runService,
 			ActionService:     *actionService,
