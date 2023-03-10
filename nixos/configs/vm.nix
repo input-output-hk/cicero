@@ -167,9 +167,7 @@ parts @ {
             settings = {
               log_level = "TRACE";
 
-              plugin = {
-                podman = {};
-              };
+              plugin.podman = {};
 
               server = {
                 enabled = true;
