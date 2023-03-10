@@ -16,6 +16,12 @@ import (
 	"github.com/input-output-hk/cicero/src/util"
 )
 
+type ActionName struct {
+	Name    string `json:"name"`
+	Active  bool   `json:"active"`
+	Private bool   `json:"private"`
+}
+
 type Action struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`

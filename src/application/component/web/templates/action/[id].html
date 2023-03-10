@@ -18,6 +18,50 @@
 					</thead>
 					<tbody>
 						<tr>
+							<td>Active</td>
+							<td>
+								<form
+									method="POST"
+									action="/_dispatch/method/PATCH/action/current/{{.Name | pathEscape}}"
+								>
+									<input
+										type="checkbox"
+										{{if $.ActionName.Active}}
+											checked
+										{{end}}
+										onChange="this.form.submit()"
+									/>
+									<input
+										type="hidden"
+										name="active"
+										value="{{not $.ActionName.Active}}"
+									/>
+								</form>
+							</td>
+						</tr>
+						<tr>
+							<td>Private</td>
+							<td>
+								<form
+									method="POST"
+									action="/_dispatch/method/PATCH/action/current/{{.Name | pathEscape}}"
+								>
+									<input
+										type="checkbox"
+										{{if $.ActionName.Private}}
+											checked
+										{{end}}
+										onChange="this.form.submit()"
+									/>
+									<input
+										type="hidden"
+										name="private"
+										value="{{not $.ActionName.Private}}"
+									/>
+								</form>
+							</td>
+						</tr>
+						<tr>
 							<td>Source</td>
 							<td><code>{{.Source}}</code></td>
 						</tr>

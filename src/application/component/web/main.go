@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -41,6 +42,7 @@ type Web struct {
 	InvocationService service.InvocationService
 	RunService        service.RunService
 	ActionService     service.ActionService
+	ActionNameService service.ActionNameService
 	FactService       service.FactService
 	NomadEventService service.NomadEventService
 	EvaluationService service.EvaluationService
@@ -396,7 +398,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNameGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNamePatch).Methods(http.MethodPatch)
+	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNamePatch).Methods(http.MethodPatch) // TODO auth
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
@@ -425,8 +427,13 @@ func (self *Web) Start(ctx context.Context) error {
 				return
 			}
 
+			forward := req.URL.Query().Get("forward")
+			if forward == "" {
+				forward = "/login/oidc"
+			}
+
 			if state, err := json.Marshal(State{
-				req.URL.Query().Get("forward"),
+				forward,
 				uuid.New().String(),
 			}); err != nil {
 				self.ClientError(w, errors.WithMessage(err, "While marshaling the `forward` parameter to JSON"))
@@ -556,7 +563,12 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	_, active := req.URL.Query()["active"]
-	actions, err = self.ActionService.GetCurrentByActive(active)
+	var private *bool
+	if session == nil {
+		false := false
+		private = &false
+	}
+	actions, err = self.ActionService.GetCurrentByActiveByPrivate(&active, private)
 	if err != nil {
 		self.ServerError(w, err)
 		return
@@ -588,16 +600,19 @@ func (self *Web) ActionCurrentNameGet(w http.ResponseWriter, req *http.Request) 
 }
 
 func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
-	session := self.sessionOidc(w, req, true)
-	if session == nil {
-		return
-	}
-
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 		return
 	} else if page, err := getPage(req); err != nil {
 		self.ClientError(w, err)
+		return
+	} else if actionName, err := self.ActionNameService.GetByActionId(id); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if actionName == nil {
+		self.NotFound(w, nil)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
 	} else if invocations, err := self.InvocationService.GetByActionId(id, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Invocations by Action ID: %q", id))
@@ -654,19 +669,22 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
-	session := self.sessionOidc(w, req, true)
-	if session == nil {
-		return
-	}
-
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
+		return
+	} else if page, err := getPage(req); err != nil {
+		self.ClientError(w, err)
 		return
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
-	} else if page, err := getPage(req); err != nil {
-		self.ClientError(w, err)
+	} else if action == nil {
+		self.NotFound(w, nil)
+		return
+	} else if actionName, err := self.ActionNameService.Get(action.Name); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
 	} else if actions, err := self.ActionService.GetByName(action.Name, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by name: %q", action.Name))
@@ -691,23 +709,24 @@ func (self *Web) ActionIdGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) actionIdGet(w http.ResponseWriter, req *http.Request, id uuid.UUID) {
-	session := self.sessionOidc(w, req, true)
-	if session == nil {
-		return
-	}
-
 	if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
 	} else if action == nil {
 		self.NotFound(w, nil)
 		return
+	} else if actionName, err := self.ActionNameService.Get(action.Name); err != nil {
+		self.ServerError(w, errors.WithMessagef(err, "Could not get action name %q", action.Name))
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
 	} else if inputs, err := self.ActionService.GetSatisfiedInputs(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
 		return
 	} else if err := self.render("action/[id].html", w, session, map[string]any{
-		"Action": action,
-		"inputs": inputs,
+		"Action":     action,
+		"ActionName": actionName,
+		"inputs":     inputs,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -727,11 +746,13 @@ func (self *Web) ActionCurrentNamePatch(w http.ResponseWriter, req *http.Request
 func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	const templateName = "action/new.html"
 
-	session := self.sessionOidc(w, req, false)
+	session := self.sessionOidc(w, req, true)
+	if session == nil {
+		return
+	}
 
 	query := req.URL.Query()
 	source := query.Get("source")
-	name := query.Get("name")
 
 	// step 1
 	if source == "" {
@@ -743,7 +764,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// step 2
-	if name == "" {
+	if _, exists := query["name[0]"]; !exists {
 		if names, err := self.EvaluationService.ListActions(source); err != nil {
 			self.ServerError(w, errors.WithMessagef(err, "While listing Actions in %q", source))
 			return
@@ -754,16 +775,64 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if action, err := self.ActionService.Create(source, name); err != nil {
+	modes := make(map[string]string, 1)
+	for i := 0; ; i++ {
+		idx := "[" + strconv.Itoa(i) + "]"
+		if name := query.Get("name" + idx); name == "" {
+			break
+		} else if mode := query.Get("mode" + idx); mode == "" {
+			continue
+		} else {
+			switch mode {
+			case "public":
+			case "private":
+				if session == nil {
+					w.Header().Add("WWW-Authenticate", `Bearer scope="oidc"`)
+					self.ClientError(w, HandlerError{nil, http.StatusUnauthorized})
+					return
+				}
+			default:
+				self.ClientError(w, fmt.Errorf("Invalid value for `mode[%d]` query parameter: %s", i, mode))
+				return
+			}
+
+			modes[name] = mode
+		}
+	}
+
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		actionService := self.ActionService.WithQuerier(tx)
+		actionNameService := self.ActionNameService.WithQuerier(tx)
+
+		for name, mode := range modes {
+			if action, err := actionService.Create(source, name); err != nil {
+				return err
+			} else if len(modes) == 1 {
+				http.Redirect(w, req, "/action/"+action.ID.String(), http.StatusCreated)
+			}
+
+			return actionNameService.Update(name, func(actionName *domain.ActionName, _ config.PgxIface) error {
+				actionName.Private = mode == "private"
+				return nil
+			})
+		}
+
+		return nil
+	}); err != nil {
 		self.ServerError(w, err)
 		return
-	} else {
-		http.Redirect(w, req, "/action/"+action.ID.String(), http.StatusFound)
-		return
+	}
+
+	if len(modes) > 1 {
+		http.Redirect(w, req, "/action/current?active", http.StatusCreated)
 	}
 }
 
 func (self *Web) InvocationIdPost(w http.ResponseWriter, req *http.Request) {
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
@@ -787,11 +856,6 @@ func (self *Web) InvocationIdPost(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
-	session := self.sessionOidc(w, req, true)
-	if session == nil {
-		return
-	}
-
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
@@ -806,6 +870,17 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 	if invocation == nil {
 		self.NotFound(w, nil)
 		return
+	}
+
+	var session *SessionOidc
+	if actionName, err := self.ActionNameService.GetByActionId(invocation.ActionId); err != nil || actionName == nil {
+		self.ServerError(w, err)
+		return
+	} else {
+		session = self.sessionOidc(w, req, actionName.Private)
+		if actionName.Private && session == nil {
+			return
+		}
 	}
 
 	var run *domain.Run
@@ -838,6 +913,10 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) RunIdDelete(w http.ResponseWriter, req *http.Request) {
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
@@ -854,11 +933,6 @@ func (self *Web) RunIdDelete(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
-	session := self.sessionOidc(w, req, true)
-	if session == nil {
-		return
-	}
-
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
@@ -884,6 +958,17 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	action, err := self.ActionService.GetById(invocation.ActionId)
 	if err != nil {
 		self.ServerError(w, err)
+		return
+	}
+
+	actionName, err := self.ActionNameService.Get(action.Name)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+
+	session := self.sessionOidc(w, req, actionName.Private)
+	if actionName.Private && session == nil {
 		return
 	}
 
@@ -983,15 +1068,18 @@ func getPage(req *http.Request) (*repository.Page, error) {
 }
 
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
-	session := self.sessionOidc(w, req, true)
+	session := self.sessionOidc(w, req, false)
+
+	var private *bool
 	if session == nil {
-		return
+		false := false
+		private = &false
 	}
 
 	if page, err := getPage(req); err != nil {
 		self.ClientError(w, err)
 		return
-	} else if invocations, err := self.InvocationService.GetAll(page); err != nil {
+	} else if invocations, err := self.InvocationService.GetByPrivate(page, private); err != nil {
 		self.ServerError(w, err)
 		return
 	} else {
@@ -1193,8 +1281,9 @@ func (self *Web) ApiInvocationByInputGet(w http.ResponseWriter, req *http.Reques
 
 // XXX take form body instead of json?
 type apiActionPostBody struct {
-	Source string  `json:"source"`
-	Name   *string `json:"name"`
+	Source  string  `json:"source"`
+	Name    *string `json:"name"`
+	Private bool    `json:"private"`
 }
 
 func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
@@ -1204,29 +1293,44 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if params.Name != nil {
-		if action, err := self.ActionService.Create(params.Source, *params.Name); err != nil {
-			self.ClientError(w, err)
-			return
-		} else {
-			self.json(w, action, http.StatusOK)
-		}
-	} else {
-		if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
-			self.ClientError(w, errors.WithMessage(err, "Failed to list actions"))
-			return
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		actionService := self.ActionService.WithQuerier(tx)
+		actionNameService := self.ActionNameService.WithQuerier(tx)
+
+		if params.Name != nil {
+			if action, err := actionService.Create(params.Source, *params.Name); err != nil {
+				return err
+			} else if err := actionNameService.Update(action.Name, func(actionName *domain.ActionName, _ config.PgxIface) error {
+				actionName.Private = params.Private
+				return nil
+			}); err != nil {
+				return err
+			} else {
+				self.json(w, action, http.StatusOK)
+			}
+		} else if actionNames, err := self.EvaluationService.ListActions(params.Source); err != nil {
+			return errors.WithMessage(err, "Failed to list actions")
 		} else {
 			actions := make([]*domain.Action, len(actionNames))
 			for i, actionName := range actionNames {
-				if action, err := self.ActionService.Create(params.Source, actionName); err != nil {
-					self.ClientError(w, err)
-					return
+				if action, err := actionService.Create(params.Source, actionName); err != nil {
+					return err
+				} else if err := actionNameService.Update(action.Name, func(actionName *domain.ActionName, _ config.PgxIface) error {
+					actionName.Private = params.Private
+					return nil
+				}); err != nil {
+					return err
 				} else {
 					actions[i] = action
 				}
 			}
 			self.json(w, actions, http.StatusOK)
 		}
+
+		return nil
+	}); err != nil {
+		self.ServerError(w, err)
+		return
 	}
 }
 
@@ -1461,7 +1565,7 @@ func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	if _, active := req.URL.Query()["active"]; active {
-		actions, err = self.ActionService.GetCurrentByActive(true)
+		actions, err = self.ActionService.GetCurrentByActiveByPrivate(&active, nil)
 	} else {
 		actions, err = self.ActionService.GetCurrent()
 	}
@@ -1489,22 +1593,42 @@ func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Reques
 
 func (self *Web) ApiActionCurrentNamePatch(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	if active, err := strconv.ParseBool(req.PostFormValue("active")); err != nil {
-		self.ClientError(w, errors.WithMessage(err, "Could not parse active status"))
-		return
-	} else if name, err := url.PathUnescape(vars["name"]); err != nil {
+	name, err := url.PathUnescape(vars["name"])
+	if err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
 		return
-	} else if err := self.ActionService.SetActive(name, active); err != nil {
+	}
+
+	if err := req.ParseForm(); err != nil {
 		self.ServerError(w, err)
 		return
 	}
 
-	// At the moment we only support changing active status
-	// but this is a bit misleading with regards to what the endpoint is called,
-	// so we should at least give a proper warning instead of ignoring all other fields silently.
-	if len(req.PostForm) > 1 {
-		self.ClientError(w, errors.New("Only active status can be change with this endpoint"))
+	if err := self.ActionNameService.Update(name, func(actionName *domain.ActionName, _ config.PgxIface) error {
+		for key := range req.PostForm {
+			valueStr := req.PostFormValue(key)
+			if valueStr == "" {
+				continue
+			}
+
+			value, err := strconv.ParseBool(valueStr)
+			if err != nil {
+				return errors.WithMessagef(err, "Could not parse %q", key)
+			}
+
+			switch key {
+			case "active":
+				actionName.Active = value
+			case "private":
+				actionName.Private = value
+			default:
+				return fmt.Errorf("No such field: %q", key)
+			}
+		}
+
+		return nil
+	}); err != nil {
+		self.ServerError(w, err)
 		return
 	}
 
@@ -1746,6 +1870,7 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 		}
 
 		actionService := self.ActionService.WithQuerier(tx)
+		actionNameService := self.ActionNameService.WithQuerier(tx)
 		factService := self.FactService.WithQuerier(tx)
 
 		// Create action.
@@ -1754,7 +1879,10 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Mark action inactive to avoid triggering an invocation upon fact creation.
-		if err := actionService.SetActive(action.Name, false); err != nil {
+		if err := actionNameService.Update(action.Name, func(actionName *domain.ActionName, _ config.PgxIface) error {
+			actionName.Active = false
+			return nil
+		}); err != nil {
 			return err
 		}
 
@@ -1950,7 +2078,11 @@ func (self *Web) ClientError(w http.ResponseWriter, err error) {
 }
 
 func (self *Web) NotFound(w http.ResponseWriter, err error) {
-	self.Error(w, HandlerError{err, http.StatusNotFound})
+	if err == nil {
+		http.NotFound(w, nil)
+	} else {
+		self.Error(w, HandlerError{err, http.StatusNotFound})
+	}
 }
 
 func (self *Web) Error(w http.ResponseWriter, err error) {
@@ -2176,11 +2308,11 @@ const (
 //
 // session := self.sessionOidc(w, req, true)
 // if session == nil { return }
-func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, private bool) *SessionOidc {
+func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectToLogin bool) *SessionOidc {
 	session, err := self.sessions.Get(req, sessionOidc)
 	sessionOidc := SessionOidc{Session: session}
 	if err != nil || sessionOidc.UserInfo() == nil {
-		if private {
+		if redirectToLogin {
 			forward := req.URL.RequestURI()
 			if req.URL.RawFragment != "" {
 				forward += "#" + req.URL.RawFragment
@@ -2194,7 +2326,8 @@ func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, private b
 				RawQuery: loginUriQuery.Encode(),
 			}
 
-			http.Redirect(w, req, loginUri.RequestURI(), http.StatusFound)
+			w.Header().Add("WWW-Authenticate", `Bearer scope="oidc"`)
+			http.Redirect(w, req, loginUri.RequestURI(), http.StatusUnauthorized)
 		}
 		return nil
 	}

@@ -116,21 +116,6 @@ func (a *actionRepository) Save(action *domain.Action) error {
 	).Scan(&action.ID, &action.CreatedAt)
 }
 
-func (a *actionRepository) SetActive(name string, active bool) (err error) {
-	var sql string
-	if active {
-		sql = `INSERT INTO action_active (name) VALUES ($1) ON CONFLICT DO NOTHING`
-	} else {
-		sql = `DELETE FROM action_active WHERE name = $1`
-	}
-	_, err = a.DB.Exec(
-		context.Background(),
-		sql,
-		name,
-	)
-	return
-}
-
 func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
 	actions = []domain.Action{}
 	err = pgxscan.Select(
@@ -140,29 +125,35 @@ func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
 	return
 }
 
-func (a *actionRepository) GetCurrentByActive(active bool) (actions []domain.Action, err error) {
+func (a *actionRepository) GetCurrentByActiveByPrivate(active *bool, private *bool) (actions []domain.Action, err error) {
 	sql := `
-		SELECT DISTINCT ON (name) *
+		SELECT DISTINCT ON (name) action.*
 		FROM action
-		WHERE
+		NATURAL JOIN action_name
+		WHERE TRUE
 	`
-	if !active {
-		sql += ` NOT `
+
+	whereName := func(field string, state *bool) {
+		if state == nil {
+			return
+		}
+
+		sql += ` AND `
+		if !*state {
+			sql += ` NOT `
+		}
+		sql += ` action_name.` + field
 	}
+
+	whereName(`active`, active)
+	whereName(`private`, private)
+
 	sql += `
-		EXISTS (
-			SELECT NULL
-			FROM action_active
-			WHERE name = action.name
-		)
 		ORDER BY name, created_at DESC
 	`
 
 	actions = []domain.Action{}
-	err = pgxscan.Select(
-		context.Background(), a.DB, &actions,
-		sql,
-	)
+	err = pgxscan.Select(context.Background(), a.DB, &actions, sql)
 	return
 }
 

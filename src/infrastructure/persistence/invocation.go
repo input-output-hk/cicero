@@ -94,6 +94,27 @@ func (self *invocationRepository) GetAll(page *repository.Page) ([]domain.Invoca
 	)
 }
 
+func (self *invocationRepository) GetByPrivate(page *repository.Page, private *bool) ([]domain.Invocation, error) {
+	from := `invocation`
+	if private != nil {
+		from += `
+			JOIN action ON action.id = invocation.action_id
+			JOIN action_name ON action_name.name = action.name
+			WHERE
+		`
+		if !*private {
+			from += ` NOT `
+		}
+		from += ` action_name.private`
+	}
+
+	invocations := make([]domain.Invocation, page.Limit)
+	return invocations, fetchPage(
+		self.db, page, &invocations,
+		`invocation.*`, from, `created_at DESC`,
+	)
+}
+
 // `ok`: Allows to filter for successful or failed invocations.
 func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok *bool, page *repository.Page) ([]domain.Invocation, error) {
 	joins := ``

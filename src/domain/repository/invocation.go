@@ -15,6 +15,7 @@ type InvocationRepository interface {
 	GetLatestByActionId(uuid.UUID) (*domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
 	GetAll(*Page) ([]domain.Invocation, error)
+	GetByPrivate(*Page, *bool) ([]domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, *bool, *Page) ([]domain.Invocation, error)
 	Save(*domain.Invocation, map[string]domain.Fact) error
 	End(uuid.UUID) error

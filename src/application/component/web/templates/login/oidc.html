@@ -12,14 +12,14 @@
 	>
 		{{with .Session}}
 			<strong>
-				You are already logged in with <samp>{{.Provider}}</samp> as <samp>{{.UserInfo.GetEmail}}</samp>.
+				You are logged in with <samp>{{.Provider}}</samp> as <samp>{{.UserInfo.GetEmail}}</samp>.
 			</strong>
 		{{else}}
 			<strong>Please log in with…</strong>
 
 			<ul style="list-style-type: none">
 				{{range .Providers}}
-					<li>→ <a href="/login/oidc/{{.}}?forward={{$.Forward}}">{{.}}</a></li>
+					<li>→ <a href="/login/oidc/{{.}}{{with $.Forward}}?forward={{.}}{{end}}">{{.}}</a></li>
 				{{end}}
 			</ul>
 		{{end}}

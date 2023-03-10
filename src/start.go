@@ -112,6 +112,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	nomadEventService := service.NewNomadEventService(db, logger)
 	runService := service.NewRunService(db, lokiService, nomadEventService, cmd.VictoriaMetricsAddr, nomadClientWrapper, logger)
 	evaluationService := service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, promtailClient.Chan(), logger)
+	actionNameService := service.NewActionNameService(db, logger)
 
 	*invocationService = service.NewInvocationService(db, lokiService, actionService, factService, logger)
 	*actionService = service.NewActionService(db, nomadClientWrapper, invocationService, factService, runService, evaluationService, logger)
@@ -145,6 +146,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 			InvocationService: *invocationService,
 			RunService:        runService,
 			ActionService:     *actionService,
+			ActionNameService: actionNameService,
 			FactService:       *factService,
 			NomadEventService: nomadEventService,
 			EvaluationService: evaluationService,

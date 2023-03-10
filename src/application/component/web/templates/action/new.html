@@ -23,16 +23,35 @@
 			Actions available in
 			<code>{{.Source}}</code>:
 		</h3>
-		<ul>
-			{{range .Names}}
-				<li>
-					<form>
-						<input type="hidden" name="source" value="{{$.Source}}"/>
-						<input type="hidden" name="name" value="{{.}}"/>
-						<button class="link">{{.}}</button>
-					</form>
-				</li>
+		<form>
+			<input type="hidden" name="source" value="{{.Source}}"/>
+			{{range $idx, $name := .Names}}
+				<fieldset>
+					<legend>{{.}}</legend>
+					<input type="hidden" name="name[{{$idx}}]" value="{{.}}"/>
+					<label>
+						<input type="radio" name="mode[{{$idx}}]" value="public" checked/>
+						public
+					</label>
+					<label
+						{{if not $.Session}}
+							title="needs login"
+						{{end}}
+					>
+						<input type="radio" name="mode[{{$idx}}]" value="private"
+							{{if not $.Session}}
+								disabled
+							{{end}}
+						/>
+						private
+					</label>
+					<label>
+						<input type="radio" name="mode[{{$idx}}]" value=""/>
+						do not create
+					</label>
+				</fieldset>
 			{{end}}
-		</ul>
+			<button>Submit</button>
+		</form>
 	{{end}}
 {{end}}
