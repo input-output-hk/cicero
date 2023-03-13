@@ -470,7 +470,7 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 		return
 	} else if page, err := getPage(req); err != nil {
-		self.BadRequest(w, err)
+		self.ClientError(w, err)
 		return
 	} else if invocations, err := self.InvocationService.GetByActionId(id, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Invocations by Action ID: %q", id))
@@ -534,7 +534,7 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by ID: %q", id))
 		return
 	} else if page, err := getPage(req); err != nil {
-		self.BadRequest(w, err)
+		self.ClientError(w, err)
 		return
 	} else if actions, err := self.ActionService.GetByName(action.Name, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by name: %q", action.Name))
@@ -839,7 +839,7 @@ func getPage(req *http.Request) (*repository.Page, error) {
 
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	if page, err := getPage(req); err != nil {
-		self.BadRequest(w, err)
+		self.ClientError(w, err)
 		return
 	} else if invocations, err := self.InvocationService.GetAll(page); err != nil {
 		self.ServerError(w, err)
@@ -1796,15 +1796,11 @@ func (self *Web) ServerError(w http.ResponseWriter, err error) {
 }
 
 func (self *Web) ClientError(w http.ResponseWriter, err error) {
-	self.Error(w, HandlerError{err, http.StatusPreconditionFailed})
+	self.Error(w, HandlerError{err, http.StatusBadRequest})
 }
 
 func (self *Web) NotFound(w http.ResponseWriter, err error) {
 	self.Error(w, HandlerError{err, http.StatusNotFound})
-}
-
-func (self *Web) BadRequest(w http.ResponseWriter, err error) {
-	self.Error(w, HandlerError{err, http.StatusBadRequest})
 }
 
 func (self *Web) Error(w http.ResponseWriter, err error) {
