@@ -1809,17 +1809,20 @@ func (self *Web) BadRequest(w http.ResponseWriter, err error) {
 
 func (self *Web) Error(w http.ResponseWriter, err error) {
 	status := 500
-	e := self.Logger.Error()
 
 	if handlerErr, ok := err.(HandlerError); ok {
-		status = err.(HandlerError).StatusCode
-		if handlerErr.HasError() {
-			e = e.Err(err)
-		} else {
+		status = handlerErr.StatusCode
+		if !handlerErr.HasError() {
 			err = nil
 		}
 	}
 
+	var e *zerolog.Event
+	if status >= 500 {
+		e = self.Logger.Error()
+	} else {
+		e = self.Logger.Debug()
+	}
 	e.Int("status", status).Msg("Handler error")
 
 	var msg string
