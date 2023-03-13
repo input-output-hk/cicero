@@ -664,7 +664,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if invocation == nil {
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 		return
 	}
 
@@ -726,7 +726,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if run == nil {
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 		return
 	}
 
@@ -1112,7 +1112,7 @@ func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
 	switch run, ok := self.getRun(w, req); {
 	case !ok:
 	case run == nil:
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 	default:
 		self.json(w, run, http.StatusOK)
 	}
@@ -1122,7 +1122,7 @@ func (self *Web) ApiInvocationIdGet(w http.ResponseWriter, req *http.Request) {
 	switch invocation, ok := self.getInvocation(w, req); {
 	case !ok:
 	case invocation == nil:
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 	default:
 		self.json(w, invocation, http.StatusOK)
 	}
@@ -1178,7 +1178,7 @@ func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Reque
 		self.ServerError(w, err)
 		return
 	} else if output == nil {
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 	} else {
 		self.json(w, output, http.StatusOK)
 	}
@@ -1216,7 +1216,7 @@ func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, err)
 		return
 	} else if run == nil {
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Could not get Run's Invocation's inputs"))
 		return
@@ -1233,12 +1233,12 @@ func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, err)
 		return
 	} else if run == nil {
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 	} else if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
 		self.ServerError(w, err)
 		return
 	} else if output == nil {
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 	} else {
 		self.json(w, output, http.StatusOK)
 	}
@@ -1248,7 +1248,7 @@ func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
 	if run, ok := self.getRun(w, req); !ok {
 		return
 	} else if run == nil {
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 		return
 	} else if err := self.RunService.Cancel(run); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", run.NomadJobID))
@@ -1264,7 +1264,7 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if run == nil {
-		w.WriteHeader(http.StatusNotFound)
+		self.NotFound(w, nil)
 		return
 	}
 
