@@ -25,8 +25,8 @@ type Action struct {
 }
 
 type ActionDefinition struct {
-	Meta  map[string]interface{} `json:"meta"`
-	InOut InOutCUEString         `json:"io" db:"io"`
+	Meta  map[string]any `json:"meta"`
+	InOut InOutCUEString `json:"io" db:"io"`
 }
 
 type ActionSatisfaction struct {
@@ -75,11 +75,11 @@ const (
 )
 
 type Fact struct {
-	ID         uuid.UUID   `json:"id"`
-	RunId      *uuid.UUID  `json:"run_id,omitempty"`
-	CreatedAt  time.Time   `json:"created_at"`
-	Value      interface{} `json:"value"`
-	BinaryHash *string     `json:"binary_hash,omitempty"`
+	ID         uuid.UUID  `json:"id"`
+	RunId      *uuid.UUID `json:"run_id,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Value      any        `json:"value"`
+	BinaryHash *string    `json:"binary_hash,omitempty"`
 	// TODO nyi: unique key over (value, binary_hash)?
 }
 
@@ -208,7 +208,7 @@ func (self InOutCUEString) valueWithInputs(inputs map[string]Fact) cue.Value {
 
 	if inputs != nil {
 		type inputAsDef struct {
-			Value interface{} `json:"match"` // ← "match" instead of "value"
+			Value any `json:"match"` // ← "match" instead of "value"
 			Fact
 		}
 		inputsAsDef := make(map[string]inputAsDef, len(inputs))
@@ -276,7 +276,7 @@ func (self RunStatus) MarshalJSON() ([]byte, error) {
 	return json.Marshal(self.String())
 }
 
-func (self *RunStatus) Scan(value interface{}) error {
+func (self *RunStatus) Scan(value any) error {
 	return self.FromString(value.(string))
 }
 

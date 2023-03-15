@@ -429,7 +429,7 @@ type vmResultData struct {
 
 type vmResult struct {
 	Metric map[string]string `json:"metric"`
-	Values [][]interface{}   `json:"values"`
+	Values [][]any           `json:"values"`
 }
 
 type VMMetric struct {

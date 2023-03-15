@@ -13,9 +13,9 @@ import (
 )
 
 type PgxIface interface {
-	Query(context.Context, string, ...interface{}) (pgx.Rows, error)
-	QueryRow(context.Context, string, ...interface{}) pgx.Row
-	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 	BeginFunc(context.Context, func(pgx.Tx) error) error
 	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
 }
@@ -59,7 +59,7 @@ func wrapLogger(original *zerolog.Logger) pgLogger {
 
 type pgLogger struct{ original *zerolog.Logger }
 
-func (l pgLogger) Log(ctx context.Context, level pgx.LogLevel, msg string, data map[string]interface{}) {
+func (l pgLogger) Log(ctx context.Context, level pgx.LogLevel, msg string, data map[string]any) {
 	var event *zerolog.Event
 	switch level {
 	case pgx.LogLevelTrace:

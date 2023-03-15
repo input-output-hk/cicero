@@ -48,7 +48,7 @@ func loadTemplate(route string) (*template.Template, error) {
 	return parsed, nil
 }
 
-func render(route string, w http.ResponseWriter, data interface{}) error {
+func render(route string, w http.ResponseWriter, data any) error {
 	tmpl, err := loadTemplate(route)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -67,7 +67,7 @@ var templateFuncs = template.FuncMap{
 	"buildInfo": func() domain.BuildInfo {
 		return domain.Build
 	},
-	"toJson": func(o interface{}, pretty bool) string {
+	"toJson": func(o any, pretty bool) string {
 		var enc []byte
 		if pretty {
 			enc, _ = json.MarshalIndent(o, "", "\t")
@@ -102,7 +102,7 @@ var templateFuncs = template.FuncMap{
 		}
 		return a
 	},
-	"hasKey": func(m interface{}, key interface{}) bool {
+	"hasKey": func(m any, key interface{}) bool {
 		for _, k := range reflect.ValueOf(m).MapKeys() {
 			if k.Interface() == key {
 				return true

@@ -104,7 +104,7 @@ func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recurs
 			invocation_inputs_` + iStr + `.fact_id = $` + iStr
 	}
 
-	args := make([]interface{}, len(factIds))
+	args := make([]any, len(factIds))
 	for i, factId := range factIds {
 		args[i] = factId
 	}
@@ -176,7 +176,7 @@ func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map
 
 		if len(inputs) > 0 {
 			sql := `INSERT INTO invocation_inputs (invocation_id, input_name, fact_id) VALUES`
-			args := []interface{}{}
+			args := []any{}
 
 			i := 1
 			for name, fact := range inputs {

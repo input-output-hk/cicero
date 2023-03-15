@@ -194,7 +194,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 				e.promtailChan <- promtailEntry(scanner.Text(), lokiEval, lokiSourceStdout, *invocationId)
 			}
 
-			var msg map[string]interface{}
+			var msg map[string]any
 			if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
 				scanErr = err
 				break
@@ -212,7 +212,7 @@ func (e evaluationService) evaluate(src, evaluator string, args, extraEnv []stri
 					scanErr = fmt.Errorf("Error message received from evaluator: %q", msg["error"])
 					break Scan
 				case "result":
-					// XXX Take *interface{} to unmarshal result into using json.Decoder instead of returning its []byte?
+					// XXX Take *any to unmarshal result into using json.Decoder instead of returning its []byte?
 					if r, err := json.Marshal(msg["result"]); err != nil {
 						scanErr = errors.WithMessage(err, "While marshaling evaluator result")
 						break Scan
@@ -515,7 +515,7 @@ func setJobDefaults(job *nomad.Job) {
 				// deduplicate and sort packages
 				if pkgsI, found := task.Config["packages"]; found {
 					keys := map[string]bool{}
-					for _, pkg := range pkgsI.([]interface{}) {
+					for _, pkg := range pkgsI.([]any) {
 						keys[pkg.(string)] = true
 					}
 

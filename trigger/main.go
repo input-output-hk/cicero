@@ -111,7 +111,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		apiAddr = fmt.Sprintf("http://%s/api", apiAddr)
 	}
 
-	event := map[string]interface{}{}
+	event := map[string]any{}
 	err = json.Unmarshal(body, &event)
 	if fail(w, errors.WithMessage(err, "unmarshal body"), 400) {
 		return
@@ -120,7 +120,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)
 
-	err = enc.Encode(map[string]interface{}{
+	err = enc.Encode(map[string]any{
 		"github_event": eventType,
 		"github_body":  event,
 	})

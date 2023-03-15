@@ -254,7 +254,7 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	var value interface{} //TODO: WIP
+	var value any //TODO: WIP
 	if _, err := r.AddRoute(http.MethodPost,
 		"/api/run/{id}/fact",
 		self.ApiRunIdFactPost,
@@ -440,7 +440,7 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := render("action/current.html", w, map[string]interface{}{
+	if err := render("action/current.html", w, map[string]any{
 		"Actions": actions,
 		"active":  active,
 	}); err != nil {
@@ -572,7 +572,7 @@ func (self *Web) actionIdGet(w http.ResponseWriter, id uuid.UUID) {
 	} else if inputs, err := self.ActionService.GetSatisfiedInputs(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
 		return
-	} else if err := render("action/[id].html", w, map[string]interface{}{
+	} else if err := render("action/[id].html", w, map[string]any{
 		"Action": action,
 		"inputs": inputs,
 	}); err != nil {
@@ -612,7 +612,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		if names, err := self.EvaluationService.ListActions(source); err != nil {
 			self.ServerError(w, errors.WithMessagef(err, "While listing Actions in %q", source))
 			return
-		} else if err := render(templateName, w, map[string]interface{}{"Source": source, "Names": names}); err != nil {
+		} else if err := render(templateName, w, map[string]any{"Source": source, "Names": names}); err != nil {
 			self.ServerError(w, err)
 			return
 		}
@@ -687,7 +687,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		inputs = inputs_
 	}
 
-	if err := render("invocation/[id].html", w, map[string]interface{}{
+	if err := render("invocation/[id].html", w, map[string]any{
 		"Invocation": invocation,
 		"Run":        run,
 		"inputs":     inputs,
@@ -797,7 +797,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := render("run/[id].html", w, map[string]interface{}{
+	if err := render("run/[id].html", w, map[string]any{
 		"Run": struct {
 			domain.Run
 			Action domain.Action
@@ -1829,7 +1829,7 @@ func (self *Web) Error(w http.ResponseWriter, err error) {
 	http.Error(w, msg, status)
 }
 
-func (self *Web) json(w http.ResponseWriter, obj interface{}, status int) {
+func (self *Web) json(w http.ResponseWriter, obj any, status int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(obj); err != nil {

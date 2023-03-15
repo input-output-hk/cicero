@@ -30,7 +30,7 @@ func NewRouterDocumented(router apirouter.Router, title, version, docName string
 type PathParams struct {
 	Name        string
 	Description string
-	Value       interface{}
+	Value       any
 }
 
 func BuildSwaggerPathParams(params []PathParams) swagger.ParameterValue {
@@ -53,7 +53,7 @@ type Response struct {
 	body       swagger.ContentValue
 }
 
-func BuildResponseSuccessfully(statusCode int, content interface{}, description string) Response {
+func BuildResponseSuccessfully(statusCode int, content any, description string) Response {
 	return Response{
 		statusCode: statusCode,
 		body: swagger.ContentValue{
@@ -65,7 +65,7 @@ func BuildResponseSuccessfully(statusCode int, content interface{}, description 
 	}
 }
 
-func BuildBodyRequest(body interface{}) *swagger.ContentValue {
+func BuildBodyRequest(body any) *swagger.ContentValue {
 	return &swagger.ContentValue{
 		Content: swagger.Content{
 			jsonType: {

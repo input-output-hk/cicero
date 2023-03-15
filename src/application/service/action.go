@@ -591,7 +591,7 @@ func (self actionService) updateSatisfaction(action *domain.Action, fact *domain
 			// so it can be referenced by its dependents.
 			if input, exists := inputs[name]; exists {
 				if err := t.Fill(struct {
-					Match interface{} `json:"match"`
+					Match any `json:"match"`
 				}{input.Value}); err != nil {
 					return errors.WithMessagef(err, "Could not fill value input %q with fact %q", name, input.ID)
 				}

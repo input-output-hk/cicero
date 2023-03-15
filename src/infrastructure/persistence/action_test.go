@@ -56,7 +56,7 @@ func TestShouldSaveAction(t *testing.T) {
 		Source:    "Source",
 		CreatedAt: time.Time{},
 		ActionDefinition: domain.ActionDefinition{
-			Meta:  map[string]interface{}{},
+			Meta:  map[string]any{},
 			InOut: `inputs: a: match: {}`,
 		},
 	}

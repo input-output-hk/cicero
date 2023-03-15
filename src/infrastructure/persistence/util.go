@@ -15,9 +15,9 @@ import (
 func fetchPage(
 	db config.PgxIface,
 	page *repository.Page,
-	items interface{},
+	items any,
 	selects, from, orderBy string,
-	queryArgs ...interface{},
+	queryArgs ...any,
 ) error {
 	batch := &pgx.Batch{}
 	batch.Queue(`SELECT count(*) FROM `+from, queryArgs...)
@@ -49,7 +49,7 @@ func fetchPage(
 }
 
 // target must be a non-nil pointer.
-func get(db config.PgxIface, target interface{}, sql string, args ...interface{}) (interface{}, error) {
+func get(db config.PgxIface, target any, sql string, args ...interface{}) (interface{}, error) {
 	err := pgxscan.Get(
 		context.Background(), db, target,
 		sql, args...,

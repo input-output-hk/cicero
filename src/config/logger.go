@@ -15,10 +15,10 @@ type SupervisorLogger struct {
 	*zerolog.Logger
 }
 
-func (l *SupervisorLogger) Printf(format string, v ...interface{}) {
+func (l *SupervisorLogger) Printf(format string, v ...any) {
 	l.Logger.Printf(format, v...)
 }
-func (l *SupervisorLogger) Println(v ...interface{}) {
+func (l *SupervisorLogger) Println(v ...any) {
 	l.Logger.Print(v...)
 }
 

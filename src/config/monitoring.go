@@ -34,7 +34,7 @@ func NewPromtailClient(prometheusAddr string, logger *zerolog.Logger) (client pr
 			Timeout:       1 * time.Second,
 		},
 		streamLagLabels,
-		log.LoggerFunc(func(keyvals ...interface{}) error {
+		log.LoggerFunc(func(keyvals ...any) error {
 			contextualLogger.Trace().Fields(keyvals).Send()
 			return nil
 		}),

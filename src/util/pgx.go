@@ -5,7 +5,7 @@ import (
 	"github.com/jackc/pgx/v4"
 )
 
-func ScanNextRow(rows pgx.Rows, dst ...interface{}) error {
+func ScanNextRow(rows pgx.Rows, dst ...any) error {
 	defer rows.Close()
 	if err := rows.Err(); err != nil {
 		return err

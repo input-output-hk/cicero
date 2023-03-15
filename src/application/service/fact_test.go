@@ -26,12 +26,12 @@ func TestMatch(t *testing.T) {
 	factService := NewFactService(db, nil, &logger)
 
 	tries := map[string]struct {
-		factValue map[string]interface{}
+		factValue map[string]any
 		matchCue  string
 		callback  func(*testing.T, error)
 	}{
 		"exact": {
-			map[string]interface{}{
+			map[string]any{
 				"ok":       true,
 				"revision": "sha",
 			},
@@ -41,7 +41,7 @@ func TestMatch(t *testing.T) {
 			},
 		},
 		"missing field": {
-			map[string]interface{}{
+			map[string]any{
 				"revision": "sha",
 			},
 			`ok: bool, revision: string`,
@@ -50,7 +50,7 @@ func TestMatch(t *testing.T) {
 			},
 		},
 		"missing field and extra field": {
-			map[string]interface{}{
+			map[string]any{
 				"revision": "sha",
 				"extra":    false,
 			},
@@ -60,7 +60,7 @@ func TestMatch(t *testing.T) {
 			},
 		},
 		"extra field": {
-			map[string]interface{}{
+			map[string]any{
 				"ok":       true,
 				"revision": "sha",
 				"extra":    false,
@@ -71,9 +71,9 @@ func TestMatch(t *testing.T) {
 			},
 		},
 		"forbidden field": {
-			map[string]interface{}{
+			map[string]any{
 				"ok": true,
-				"commit": map[string]interface{}{
+				"commit": map[string]any{
 					"revision": "sha",
 					"extra":    false,
 				},
@@ -84,9 +84,9 @@ func TestMatch(t *testing.T) {
 			},
 		},
 		"string interpolation with reference": {
-			map[string]interface{}{
+			map[string]any{
 				"ref": "refs/heads/master",
-				"repo": map[string]interface{}{
+				"repo": map[string]any{
 					"default_branch": "master",
 				},
 			},
@@ -96,8 +96,8 @@ func TestMatch(t *testing.T) {
 			},
 		},
 		"unrelated concrete": {
-			map[string]interface{}{
-				"foo": map[string]interface{}{
+			map[string]any{
+				"foo": map[string]any{
 					"bar": "bar",
 				},
 			},

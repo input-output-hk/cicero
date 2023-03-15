@@ -4,7 +4,7 @@ import "fmt"
 
 type MD5Sum [16]byte
 
-func (self *MD5Sum) Scan(value interface{}) error {
+func (self *MD5Sum) Scan(value any) error {
 	if b, ok := value.([]byte); !ok {
 		return fmt.Errorf("Cannot scan %T into MD5Sum", value)
 	} else if copied := copy(self[:], b); copied != len(*self) {

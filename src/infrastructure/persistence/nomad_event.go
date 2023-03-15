@@ -68,7 +68,7 @@ func (n nomadEventRepository) GetLastNomadEventIndex() (index uint64, err error)
 }
 
 func (n nomadEventRepository) getEventAllocation(where string, params ...any) ([]nomad.Allocation, error) {
-	var rows []map[string]interface{}
+	var rows []map[string]any
 	if err := pgxscan.Select(context.Background(), n.DB, &rows, `
 		SELECT
 			payload#>>'{Allocation,CreateTime}' AS create_time,
