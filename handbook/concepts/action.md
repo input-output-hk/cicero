@@ -39,7 +39,7 @@ Conceptually though every action consists of the same parts.
 
 ### `meta`
 
-An action may have arbitrary data attached to it.
+An action may have arbitrary data attached to it in the form of a JSON object.
 
 This is not used for anything except showing it in the web UI.
 
@@ -51,7 +51,7 @@ Cicero will save it to its database to match incoming facts against the inputs a
 
 `io` is a `struct` with two fields: [`inputs`](input.md) and [`output`](output.md).
 
-### Job
+### `job`
 
 The `job` is simply a JSON value passed to the scheduler.
 Cicero makes no assumptions about this, although certain [transformers](transformer.md) might.
