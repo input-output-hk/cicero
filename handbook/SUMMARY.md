@@ -11,7 +11,7 @@
 - [Facts & Artifacts](concepts/fact.md)
 - [Actions](concepts/action.md)
 	- [Sources](concepts/source.md)
-	- [Inputs](concepts/inputs.md)
+	- [Inputs](concepts/input.md)
 	- [Invocations](concepts/invocation.md)
 	- [Runs](concepts/run.md)
 	- [Output](concepts/output.md)
