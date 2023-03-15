@@ -26,10 +26,18 @@ var (
 	_ PgxIface = pgx.Tx(nil)
 )
 
-func DBConnection(logger *zerolog.Logger, logDb bool) (PgxIface, error) {
-	url := GetenvStr("DATABASE_URL")
+func DbUrl() (url string, err error) {
+	url = GetenvStr("DATABASE_URL")
 	if url == "" {
-		return nil, errors.New("Environment variable DATABASE_URL not set or empty")
+		err = errors.New("Environment variable DATABASE_URL not set or empty")
+	}
+	return
+}
+
+func DBConnection(logger *zerolog.Logger, logDb bool) (PgxIface, error) {
+	url, err := DbUrl()
+	if err != nil {
+		return nil, err
 	}
 
 	dbconfig, err := pgxpool.ParseConfig(url)

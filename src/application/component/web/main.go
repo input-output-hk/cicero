@@ -16,6 +16,7 @@ import (
 	"cuelang.org/go/cue"
 	cueerrors "cuelang.org/go/cue/errors"
 	cueformat "cuelang.org/go/cue/format"
+	"github.com/antonlindstrom/pgstore"
 	"github.com/davidebianchi/gswagger/apirouter"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -410,7 +411,14 @@ func (self *Web) Start(ctx context.Context) error {
 		http.StripPrefix("/_dispatch/method/"+req.Method, muxRouter).ServeHTTP(w, req)
 	})
 
-	self.sessions = sessions.NewCookieStore(self.Config.CookieAuth, self.Config.CookieEnc)
+	if url, err := config.DbUrl(); err != nil {
+		return err
+	} else if store, err := pgstore.NewPGStore(url, self.Config.CookieAuth, self.Config.CookieEnc); err != nil {
+		return err
+	} else {
+		defer store.StopCleanup(store.Cleanup(time.Minute * 5))
+		self.sessions = store
+	}
 
 	{ // OIDC
 		muxRouter.HandleFunc(loginOidcPath, self.LoginOidcGet).Methods(http.MethodGet)

@@ -31,11 +31,14 @@ require (
 )
 
 require (
+	github.com/antonlindstrom/pgstore v0.0.0-20220421113606-e3a6e3fed12a
 	github.com/go-kit/log v0.2.1
+	github.com/gorilla/sessions v1.2.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/grafana/dskit v0.0.0-20220708141012-99f3d0043c23
 	github.com/hashicorp/nomad/api v0.0.0-20220805111057-428b2cd8014c
 	github.com/prometheus/common v0.35.0
+	github.com/zitadel/oidc v1.13.1
 )
 
 require (
@@ -93,7 +96,6 @@ require (
 	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/gorilla/schema v1.2.0 // indirect
 	github.com/gorilla/securecookie v1.1.1 // indirect
-	github.com/gorilla/sessions v1.2.1 // indirect
 	github.com/grafana/groupcache_exporter v0.0.0-20220629095919-59a8c6428a43 // indirect
 	github.com/grafana/regexp v0.0.0-20220304100321-149c8afcd6cb // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
@@ -140,6 +142,7 @@ require (
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
+	github.com/lib/pq v1.10.5 // indirect
 	github.com/mailgun/groupcache/v2 v2.3.2 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
@@ -185,7 +188,6 @@ require (
 	github.com/weaveworks/promrus v1.2.0 // indirect
 	github.com/zclconf/go-cty v1.8.0 // indirect
 	github.com/zclconf/go-cty-yaml v1.0.2 // indirect
-	github.com/zitadel/oidc v1.13.1 // indirect
 	go.etcd.io/etcd v3.3.25+incompatible // indirect
 	go.etcd.io/etcd/api/v3 v3.5.0 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.0 // indirect
