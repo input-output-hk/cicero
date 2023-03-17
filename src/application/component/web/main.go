@@ -2352,8 +2352,25 @@ func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectT
 		http.Redirect(w, req, loginUri.RequestURI(), http.StatusUnauthorized)
 	}
 
+	// convert the Authorization header to a cookie that we can use with the sessions library
+	if auth := req.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		req.AddCookie(&http.Cookie{
+			Name:  sessionOidc,
+			Value: strings.TrimPrefix(auth, "Bearer "),
+		})
+	}
+
+	cookie, err := req.Cookie(sessionOidc)
+	if err != nil {
+		redirect()
+		return nil
+	}
+
 	session, err := self.Config.Sessions.Get(req, sessionOidc)
-	sessionOidc := SessionOidc{Session: session}
+	sessionOidc := SessionOidc{
+		Session: session,
+		Raw:     cookie.Value,
+	}
 	if err != nil || sessionOidc.UserInfo() == nil {
 		redirect()
 		return nil
@@ -2389,6 +2406,7 @@ func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectT
 
 type SessionOidc struct {
 	Session *sessions.Session
+	Raw     string // the raw cookie value
 
 	userinfo *oidc.UserInfo // for caching
 }
