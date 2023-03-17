@@ -324,8 +324,8 @@ parts @ {
 
               connectors = [
                 {
-                  id = "mock";
-                  name = "Mock";
+                  id = "mock-callback";
+                  name = "no credentials";
                   type = "mockCallback";
                 }
               ];
