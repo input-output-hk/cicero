@@ -3,19 +3,26 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/antonlindstrom/pgstore"
 	"github.com/pkg/errors"
 	"github.com/zitadel/oidc/pkg/client/rp"
+	"github.com/zitadel/oidc/pkg/client/rs"
 	oidchttp "github.com/zitadel/oidc/pkg/http"
 	"github.com/zitadel/oidc/pkg/oidc"
 )
 
 type WebConfig struct {
 	Listen        string
-	OidcProviders map[string]rp.RelyingParty
+	OidcProviders map[string]OidcProvider
 	Sessions      *pgstore.PGStore
+}
+
+type OidcProvider struct {
+	rp.RelyingParty
+	rs.ResourceServer
 }
 
 func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfig, error) {
@@ -45,7 +52,7 @@ func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfi
 	} else if err := json.Unmarshal(providersJson, &oidcProviderCfgs); err != nil {
 		return self, errors.WithMessage(err, "While unmarshaling web OIDC provider settings")
 	}
-	self.OidcProviders = make(map[string]rp.RelyingParty, len(oidcProviderCfgs))
+	self.OidcProviders = make(map[string]OidcProvider, len(oidcProviderCfgs))
 	for name, cfg := range oidcProviderCfgs {
 		if provider, err := rp.NewRelyingPartyOIDC(
 			cfg.Issuer,
@@ -59,7 +66,15 @@ func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfi
 		); err != nil {
 			return self, errors.WithMessagef(err, "While setting up OIDC provider: %q", name)
 		} else {
-			self.OidcProviders[name] = provider
+			resourceServer, err := rs.NewResourceServerClientCredentials(cfg.Issuer, cfg.ClientId, cfg.ClientSecret)
+			if err != nil {
+				if strings.HasPrefix(err.Error(), "introspectURL and/or tokenURL is empty:") {
+					resourceServer = nil
+				} else {
+					return self, errors.WithMessagef(err, "While setting up OIDC resource server: %q", name)
+				}
+			}
+			self.OidcProviders[name] = OidcProvider{provider, resourceServer}
 		}
 	}
 

@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/zitadel/oidc/pkg/client/rp"
+	"github.com/zitadel/oidc/pkg/client/rs"
 	"github.com/zitadel/oidc/pkg/oidc"
 
 	"github.com/input-output-hk/cicero/src/application/component/web/apidoc"
@@ -449,7 +450,7 @@ func (self *Web) Start(ctx context.Context) error {
 				self.ClientError(w, errors.WithMessage(err, "While marshaling the `forward` parameter to JSON"))
 				return
 			} else {
-				rp.AuthURLHandler(func() string { return string(state) }, provider)(w, req)
+				rp.AuthURLHandler(func() string { return string(state) }, provider.RelyingParty)(w, req)
 			}
 		}).Methods(http.MethodGet)
 
@@ -479,6 +480,7 @@ func (self *Web) Start(ctx context.Context) error {
 					}
 
 					session.Values[sessionOidcProvider] = providerName
+					session.Values[sessionOidcAccessToken] = tokens.AccessToken
 					if tokens.RefreshToken != "" {
 						session.Values[sessionOidcRefreshToken] = tokens.RefreshToken
 					}
@@ -496,7 +498,7 @@ func (self *Web) Start(ctx context.Context) error {
 
 					http.Redirect(w, req, state.Forward, http.StatusFound)
 				}),
-				provider,
+				provider.RelyingParty,
 			)(w, req)
 		})
 
@@ -2319,6 +2321,7 @@ const (
 	sessionOidc             = "oidc"
 	sessionOidcUserinfo     = "userinfo"
 	sessionOidcProvider     = "provider"
+	sessionOidcAccessToken  = "access-token"
 	sessionOidcRefreshToken = "refresh-token"
 )
 
@@ -2327,28 +2330,60 @@ const (
 // session := self.sessionOidc(w, req, true)
 // if session == nil { return }
 func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectToLogin bool) *SessionOidc {
+	redirect := func() {
+		if !redirectToLogin {
+			return
+		}
+
+		forward := req.URL.RequestURI()
+		if req.URL.RawFragment != "" {
+			forward += "#" + req.URL.RawFragment
+		}
+
+		loginUriQuery := url.Values{}
+		loginUriQuery.Add("forward", forward)
+
+		loginUri := url.URL{
+			Path:     loginOidcPath,
+			RawQuery: loginUriQuery.Encode(),
+		}
+
+		w.Header().Add("WWW-Authenticate", `Bearer scope="oidc"`)
+		http.Redirect(w, req, loginUri.RequestURI(), http.StatusUnauthorized)
+	}
+
 	session, err := self.Config.Sessions.Get(req, sessionOidc)
 	sessionOidc := SessionOidc{Session: session}
 	if err != nil || sessionOidc.UserInfo() == nil {
-		if redirectToLogin {
-			forward := req.URL.RequestURI()
-			if req.URL.RawFragment != "" {
-				forward += "#" + req.URL.RawFragment
-			}
-
-			loginUriQuery := url.Values{}
-			loginUriQuery.Add("forward", forward)
-
-			loginUri := url.URL{
-				Path:     loginOidcPath,
-				RawQuery: loginUriQuery.Encode(),
-			}
-
-			w.Header().Add("WWW-Authenticate", `Bearer scope="oidc"`)
-			http.Redirect(w, req, loginUri.RequestURI(), http.StatusUnauthorized)
-		}
+		redirect()
 		return nil
 	}
+
+	provider, providerExists := self.Config.OidcProviders[sessionOidc.Provider()]
+	if !providerExists {
+		redirect()
+		return nil
+	}
+
+	// To check whether the token is still valid,
+	// use the introspection endpoint if supported,
+	// otherwise the userinfo endpoint.
+	if provider.ResourceServer != nil {
+		if introspection, err := rs.Introspect(req.Context(), provider.ResourceServer, sessionOidc.AccessToken()); err != nil {
+			self.Logger.Err(err).
+				Str("provider", sessionOidc.Provider()).
+				Msg("Could not introspect OIDC session token")
+			redirect()
+			return nil
+		} else if !introspection.IsActive() {
+			redirect()
+			return nil
+		}
+	} else if _, err := rp.Userinfo(sessionOidc.AccessToken(), oidc.BearerToken, (*sessionOidc.UserInfo()).GetSubject(), provider.RelyingParty); err != nil {
+		redirect()
+		return nil
+	}
+
 	return &sessionOidc
 }
 
@@ -2379,6 +2414,10 @@ func (self SessionOidc) UserInfo() *oidc.UserInfo {
 
 func (self SessionOidc) Provider() string {
 	return self.getString(sessionOidcProvider)
+}
+
+func (self SessionOidc) AccessToken() string {
+	return self.getString(sessionOidcAccessToken)
 }
 
 func (self SessionOidc) RefreshToken() string {
@@ -2435,10 +2474,11 @@ func (self Web) refreshTokens(ctx context.Context, interval time.Duration) <-cha
 					continue
 				}
 
-				if newTokens, err := rp.RefreshAccessToken(self.Config.OidcProviders[values[sessionOidcProvider].(string)], refreshToken, "", ""); err != nil {
+				if newTokens, err := rp.RefreshAccessToken(self.Config.OidcProviders[values[sessionOidcProvider].(string)].RelyingParty, refreshToken, "", ""); err != nil {
 					self.Logger.Err(err).Str("session", session.Key).Msg("While refreshing session OIDC token")
 					continue
 				} else {
+					values[sessionOidcAccessToken] = newTokens.AccessToken
 					if newTokens.RefreshToken != "" {
 						values[sessionOidcRefreshToken] = newTokens.RefreshToken
 					}
