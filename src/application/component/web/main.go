@@ -746,7 +746,7 @@ func (self *Web) actionIdGet(w http.ResponseWriter, req *http.Request, id uuid.U
 }
 
 func (self *Web) ActionCurrentNamePatch(w http.ResponseWriter, req *http.Request) {
-	self.ApiActionCurrentNamePatch(NopResponseWriter{w}, req)
+	self.ApiActionCurrentNamePatch(NopResponseWriter{}, req)
 
 	if referer := req.Header.Get("Referer"); referer != "" {
 		http.Redirect(w, req, referer, http.StatusFound)
@@ -935,7 +935,7 @@ func (self *Web) RunIdDelete(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	self.ApiRunIdDelete(NopResponseWriter{w}, req)
+	self.ApiRunIdDelete(NopResponseWriter{}, req)
 
 	if referer := req.Header.Get("Referer"); referer != "" {
 		http.Redirect(w, req, referer, http.StatusFound)
@@ -1154,7 +1154,11 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 }
 
 // Use this to call API request handlers from UI request handlers.
-type NopResponseWriter struct{ http.ResponseWriter }
+type NopResponseWriter struct{}
+
+func (w NopResponseWriter) Header() http.Header {
+	return make(http.Header, 0)
+}
 
 func (w NopResponseWriter) WriteHeader(int) {}
 
