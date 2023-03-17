@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/antonlindstrom/pgstore"
 	"github.com/pkg/errors"
 	"github.com/zitadel/oidc/pkg/client/rp"
 	oidchttp "github.com/zitadel/oidc/pkg/http"
@@ -13,23 +14,24 @@ import (
 
 type WebConfig struct {
 	Listen        string
-	CookieAuth    []byte
-	CookieEnc     []byte
 	OidcProviders map[string]rp.RelyingParty
+	Sessions      *pgstore.PGStore
 }
 
 func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfig, error) {
 	self := WebConfig{Listen: listen}
 
+	var cookieAuthKey, cookieEncKey []byte
+
 	if v, err := os.ReadFile(cookieAuth); err != nil {
 		return self, errors.WithMessage(err, "While reading web cookie authentication key")
 	} else {
-		self.CookieAuth = v
+		cookieAuthKey = v
 	}
 	if v, err := os.ReadFile(cookieEnc); err != nil {
 		return self, errors.WithMessage(err, "While reading web cookie encryption key")
 	} else {
-		self.CookieEnc = v
+		cookieEncKey = v
 	}
 
 	oidcProviderCfgs := make(map[string]struct {
@@ -52,13 +54,21 @@ func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfi
 			cfg.CallbackUrl,
 			[]string{oidc.ScopeOpenID, oidc.ScopeEmail},
 			// OAuth 2.1 and OAuth 2.0 BCP mandate PKCE for code flow regardless of whether a client secret is used
-			rp.WithPKCE(oidchttp.NewCookieHandler(self.CookieAuth, self.CookieEnc)),
+			rp.WithPKCE(oidchttp.NewCookieHandler(cookieAuthKey, cookieEncKey)),
 			rp.WithVerifierOpts(rp.WithIssuedAtOffset(5*time.Second)),
 		); err != nil {
 			return self, errors.WithMessagef(err, "While setting up OIDC provider: %q", name)
 		} else {
 			self.OidcProviders[name] = provider
 		}
+	}
+
+	if url, err := DbUrl(); err != nil {
+		return self, err
+	} else if store, err := pgstore.NewPGStore(url, cookieAuthKey, cookieEncKey); err != nil {
+		return self, err
+	} else {
+		self.Sessions = store
 	}
 
 	return self, nil

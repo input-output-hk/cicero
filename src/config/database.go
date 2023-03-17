@@ -34,7 +34,7 @@ func DbUrl() (url string, err error) {
 	return
 }
 
-func DBConnection(logger *zerolog.Logger, logDb bool) (PgxIface, error) {
+func DBConnection(logger *zerolog.Logger, logDb bool) (*pgxpool.Pool, error) {
 	url, err := DbUrl()
 	if err != nil {
 		return nil, err

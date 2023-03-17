@@ -16,10 +16,10 @@ import (
 	"cuelang.org/go/cue"
 	cueerrors "cuelang.org/go/cue/errors"
 	cueformat "cuelang.org/go/cue/format"
-	"github.com/antonlindstrom/pgstore"
 	"github.com/davidebianchi/gswagger/apirouter"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v4"
@@ -47,9 +47,8 @@ type Web struct {
 	FactService       service.FactService
 	NomadEventService service.NomadEventService
 	EvaluationService service.EvaluationService
+	SessionService    service.SessionService
 	Db                config.PgxIface
-
-	sessions sessions.Store
 }
 
 const loginOidcPath = "/login/oidc"
@@ -411,16 +410,19 @@ func (self *Web) Start(ctx context.Context) error {
 		http.StripPrefix("/_dispatch/method/"+req.Method, muxRouter).ServeHTTP(w, req)
 	})
 
-	if url, err := config.DbUrl(); err != nil {
-		return err
-	} else if store, err := pgstore.NewPGStore(url, self.Config.CookieAuth, self.Config.CookieEnc); err != nil {
-		return err
-	} else {
-		defer store.StopCleanup(store.Cleanup(time.Minute * 5))
-		self.sessions = store
-	}
-
 	{ // OIDC
+		defer self.Config.Sessions.StopCleanup(self.Config.Sessions.Cleanup(5 * time.Minute))
+
+		go func() {
+			for {
+				if err, ok := <-self.refreshTokens(ctx, 5*time.Minute); ok {
+					self.Logger.Err(err).Msg("While refreshing session OIDC tokens")
+				} else {
+					break
+				}
+			}
+		}()
+
 		muxRouter.HandleFunc(loginOidcPath, self.LoginOidcGet).Methods(http.MethodGet)
 
 		type State struct {
@@ -461,13 +463,13 @@ func (self *Web) Start(ctx context.Context) error {
 
 			rp.CodeExchangeHandler(
 				rp.UserinfoCallback(func(w http.ResponseWriter, req *http.Request, tokens *oidc.Tokens, stateJson string, provider rp.RelyingParty, info oidc.UserInfo) {
-					session, err := self.sessions.New(req, sessionOidc)
+					session, err := self.Config.Sessions.New(req, sessionOidc)
 					if err != nil {
 						self.ServerError(w, err)
 						return
 					}
 
-					session.Options.MaxAge = int(tokens.Expiry.Sub(time.Now()).Seconds())
+					session.Options.MaxAge = int(time.Until(tokens.Expiry).Seconds())
 
 					if infoJson, err := json.Marshal(info); err != nil {
 						self.ServerError(w, err)
@@ -2325,7 +2327,7 @@ const (
 // session := self.sessionOidc(w, req, true)
 // if session == nil { return }
 func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectToLogin bool) *SessionOidc {
-	session, err := self.sessions.Get(req, sessionOidc)
+	session, err := self.Config.Sessions.Get(req, sessionOidc)
 	sessionOidc := SessionOidc{Session: session}
 	if err != nil || sessionOidc.UserInfo() == nil {
 		if redirectToLogin {
@@ -2391,6 +2393,76 @@ func (self SessionOidc) getString(key string) string {
 	} else {
 		return v
 	}
+}
+
+func (self Web) refreshTokens(ctx context.Context, interval time.Duration) <-chan error {
+	done := make(chan error, 1)
+
+	go func() {
+		defer close(done)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				break
+			case <-ticker.C:
+			}
+
+			sessions, err := self.SessionService.GetExpiredBy(time.Now().Add(interval))
+			if err != nil {
+				self.Logger.Err(err).Msg("While getting sessions that have not recently been refreshed")
+				done <- err
+				break
+			}
+
+			for _, session := range sessions {
+				values := make(map[any]any)
+				if err := securecookie.DecodeMulti(sessionOidc, string(session.Data), &values, self.Config.Sessions.Codecs...); err != nil {
+					self.Logger.Err(err).Msg("While decoding session")
+					continue
+				}
+
+				var refreshToken string
+				if refreshToken_, exists := values[sessionOidcRefreshToken]; exists {
+					if v, ok := refreshToken_.(string); ok {
+						refreshToken = v
+					}
+				}
+				if refreshToken == "" {
+					continue
+				}
+
+				if newTokens, err := rp.RefreshAccessToken(self.Config.OidcProviders[values[sessionOidcProvider].(string)], refreshToken, "", ""); err != nil {
+					self.Logger.Err(err).Str("session", session.Key).Msg("While refreshing session OIDC token")
+					continue
+				} else {
+					if newTokens.RefreshToken != "" {
+						values[sessionOidcRefreshToken] = newTokens.RefreshToken
+					}
+					session.ExpiresOn = newTokens.Expiry
+				}
+
+				session.ModifiedOn = time.Now()
+
+				if encoded, err := securecookie.EncodeMulti(sessionOidc, values, self.Config.Sessions.Codecs...); err != nil {
+					self.Logger.Err(err).Msg("While decoding session")
+					continue
+				} else {
+					session.Data = encoded
+				}
+
+				if err := self.SessionService.Update(session); err != nil {
+					self.Logger.Err(err).Msg("While saving session")
+					continue
+				}
+			}
+		}
+	}()
+
+	return done
 }
 
 func (self *Web) render(route string, w http.ResponseWriter, session *SessionOidc, data map[string]any) error {

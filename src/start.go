@@ -7,6 +7,7 @@ import (
 	"cirello.io/oversight"
 	promtailClient "github.com/grafana/loki/clients/pkg/promtail/client"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/api"
 	"github.com/rs/zerolog"
@@ -66,7 +67,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 		cmd.Evaluators = []string{"nix"}
 	}
 
-	var db config.PgxIface
+	var db *pgxpool.Pool
 	if db_, err := config.DBConnection(logger, cmd.LogDb); err != nil {
 		logger.Fatal().Err(err).Send()
 		return err
@@ -113,6 +114,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 	runService := service.NewRunService(db, lokiService, nomadEventService, cmd.VictoriaMetricsAddr, nomadClientWrapper, logger)
 	evaluationService := service.NewEvaluationService(cmd.Evaluators, cmd.Transformers, promtailClient.Chan(), logger)
 	actionNameService := service.NewActionNameService(db, logger)
+	sessionService := service.NewSessionService(db, logger)
 
 	*invocationService = service.NewInvocationService(db, lokiService, actionService, factService, logger)
 	*actionService = service.NewActionService(db, nomadClientWrapper, invocationService, factService, runService, evaluationService, logger)
@@ -150,6 +152,7 @@ func (cmd *StartCmd) Run(logger *zerolog.Logger) error {
 			FactService:       *factService,
 			NomadEventService: nomadEventService,
 			EvaluationService: evaluationService,
+			SessionService:    sessionService,
 			Db:                db,
 		}
 		if err := supervisor.Add(child.Start); err != nil {
