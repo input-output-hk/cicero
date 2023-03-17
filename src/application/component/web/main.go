@@ -467,6 +467,8 @@ func (self *Web) Start(ctx context.Context) error {
 						return
 					}
 
+					session.Options.MaxAge = int(tokens.Expiry.Sub(time.Now()).Seconds())
+
 					if infoJson, err := json.Marshal(info); err != nil {
 						self.ServerError(w, err)
 						return
@@ -475,7 +477,9 @@ func (self *Web) Start(ctx context.Context) error {
 					}
 
 					session.Values[sessionOidcProvider] = providerName
-					session.Values[sessionOidcIdToken] = tokens.IDToken
+					if tokens.RefreshToken != "" {
+						session.Values[sessionOidcRefreshToken] = tokens.RefreshToken
+					}
 
 					if err := session.Save(req, w); err != nil {
 						self.ServerError(w, err)
@@ -2306,10 +2310,10 @@ func (self *Web) logWS(messagesFunc func(context.Context) <-chan []byte, w http.
 }
 
 const (
-	sessionOidc         = "oidc"
-	sessionOidcUserinfo = "userinfo"
-	sessionOidcProvider = "provider"
-	sessionOidcIdToken  = "id-token"
+	sessionOidc             = "oidc"
+	sessionOidcUserinfo     = "userinfo"
+	sessionOidcProvider     = "provider"
+	sessionOidcRefreshToken = "refresh-token"
 )
 
 // For protected endpoints do this (before sending the first byte):
@@ -2371,15 +2375,17 @@ func (self SessionOidc) Provider() string {
 	return self.getString(sessionOidcProvider)
 }
 
-func (self SessionOidc) IdToken() string {
-	return self.getString(sessionOidcIdToken)
+func (self SessionOidc) RefreshToken() string {
+	return self.getString(sessionOidcRefreshToken)
 }
 
 func (self SessionOidc) getString(key string) string {
 	if v, exists := self.Session.Values[key]; !exists {
+		return ""
+	} else if v, ok := v.(string); !ok {
 		panic("This should never happen™")
 	} else {
-		return v.(string)
+		return v
 	}
 }
 
