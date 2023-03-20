@@ -2121,12 +2121,15 @@ func (self *Web) Error(w http.ResponseWriter, err error) {
 	} else {
 		e = self.Logger.Debug()
 	}
-	e.Int("status", status).Msg("Handler error")
 
 	var msg string
 	if err != nil {
 		msg = err.Error()
+	} else {
+		msg = "Handler error"
 	}
+
+	e.Int("status", status).Msg(msg)
 
 	http.Error(w, msg, status)
 }
