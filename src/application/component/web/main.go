@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -538,16 +537,12 @@ func (self *Web) LoginOidcGet(w http.ResponseWriter, req *http.Request) {
 		provider = session.Provider()
 	}
 
-	if err := self.render("login/oidc.html", w, req, session, struct {
-		Providers []string
-		Forward   string
+	if err := self.render("login/oidc.html", w, session, map[string]any{
+		"Providers": providers,
+		"Forward":   req.URL.Query().Get("forward"),
 
 		// only non-empty if already logged in
-		Provider string
-	}{
-		providers,
-		req.URL.Query().Get("forward"),
-		provider,
+		"Provider": provider,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -567,7 +562,7 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := self.render("action/current.html", w, req, session, map[string]any{
+	if err := self.render("action/current.html", w, session, map[string]any{
 		"Actions": actions,
 		"active":  active,
 	}); err != nil {
@@ -648,10 +643,10 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		if err := self.render("action/runs.html", w, req, session, struct {
-			Entries []entry
-			*repository.Page
-		}{entries, page}); err != nil {
+		if err := self.render("action/runs.html", w, session, map[string]any{
+			"Entries": entries,
+			"Page":    page,
+		}); err != nil {
 			self.ServerError(w, err)
 			return
 		}
@@ -676,14 +671,10 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 	} else if actions, err := self.ActionService.GetByName(action.Name, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by name: %q", action.Name))
 		return
-	} else if err := self.render("action/version.html", w, req, session, struct {
-		ActionID uuid.UUID
-		Actions  []domain.Action
-		*repository.Page
-	}{
-		ActionID: id,
-		Actions:  actions,
-		Page:     page,
+	} else if err := self.render("action/version.html", w, session, map[string]any{
+		"ActionID": id,
+		"Actions":  actions,
+		"Page":     page,
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -714,7 +705,7 @@ func (self *Web) actionIdGet(w http.ResponseWriter, req *http.Request, id uuid.U
 	} else if inputs, err := self.ActionService.GetSatisfiedInputs(action); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get facts that satisfy inputs for Action with ID %q", id))
 		return
-	} else if err := self.render("action/[id].html", w, req, session, map[string]any{
+	} else if err := self.render("action/[id].html", w, session, map[string]any{
 		"Action": action,
 		"inputs": inputs,
 	}); err != nil {
@@ -744,7 +735,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 
 	// step 1
 	if source == "" {
-		if err := self.render(templateName, w, req, session, nil); err != nil {
+		if err := self.render(templateName, w, session, nil); err != nil {
 			self.ServerError(w, err)
 			return
 		}
@@ -756,7 +747,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		if names, err := self.EvaluationService.ListActions(source); err != nil {
 			self.ServerError(w, errors.WithMessagef(err, "While listing Actions in %q", source))
 			return
-		} else if err := self.render(templateName, w, req, session, map[string]any{"Source": source, "Names": names}); err != nil {
+		} else if err := self.render(templateName, w, session, map[string]any{"Source": source, "Names": names}); err != nil {
 			self.ServerError(w, err)
 			return
 		}
@@ -836,7 +827,7 @@ func (self *Web) InvocationIdGet(w http.ResponseWriter, req *http.Request) {
 		inputs = inputs_
 	}
 
-	if err := self.render("invocation/[id].html", w, req, session, map[string]any{
+	if err := self.render("invocation/[id].html", w, session, map[string]any{
 		"Invocation": invocation,
 		"Run":        run,
 		"inputs":     inputs,
@@ -951,7 +942,7 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := self.render("run/[id].html", w, req, session, map[string]any{
+	if err := self.render("run/[id].html", w, session, map[string]any{
 		"Run": struct {
 			domain.Run
 			Action domain.Action
@@ -1052,10 +1043,10 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		if err := self.render("run/index.html", w, req, session, struct {
-			Entries []entry
-			*repository.Page
-		}{entries, page}); err != nil {
+		if err := self.render("run/index.html", w, session, map[string]any{
+			"Entries": entries,
+			"Page":    page,
+		}); err != nil {
 			self.ServerError(w, err)
 			return
 		}
@@ -2251,30 +2242,12 @@ func (self SessionOidc) getString(key string) string {
 	}
 }
 
-func (self *Web) render(route string, w http.ResponseWriter, req *http.Request, session *SessionOidc, extraData any) error {
-	var data map[string]any
-
-	switch d := extraData.(type) {
-	case map[string]any:
-		data = d
-	default:
-		data = make(map[string]any)
-		t := reflect.TypeOf(extraData)
-		v := reflect.ValueOf(extraData)
-
-		if t.Kind() == reflect.Struct {
-			for _, field := range reflect.VisibleFields(t) {
-				if fieldValue := v.FieldByName(field.Name); fieldValue.CanInterface() {
-					data[field.Name] = fieldValue.Interface()
-				}
-			}
-			break
-		}
-
-		panic("`extraData` type not supported: " + t.Name())
+func (self *Web) render(route string, w http.ResponseWriter, session *SessionOidc, data map[string]any) error {
+	if data == nil {
+		data = make(map[string]any, 1)
+	} else if _, exists := data["Session"]; exists {
+		panic(`Render data must not contain key "Session"`)
 	}
-
 	data["Session"] = session
-
 	return render(route, w, data)
 }
