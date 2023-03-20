@@ -125,9 +125,13 @@ func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
 	return
 }
 
-func (a *actionRepository) GetCurrentByActiveByPrivate(active *bool, private *bool) (actions []domain.Action, err error) {
-	sql := `
-		SELECT DISTINCT ON (name) action.*
+func (a *actionRepository) GetByCurrentByActiveByPrivate(onlyCurrent bool, active *bool, private *bool) (actions []domain.Action, err error) {
+	sql := `SELECT `
+	if onlyCurrent {
+		sql += ` DISTINCT ON (name) `
+	}
+	sql += `
+		action.*
 		FROM action
 		NATURAL JOIN action_name
 		WHERE TRUE

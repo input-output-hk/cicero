@@ -56,7 +56,7 @@ func (a runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]dom
 		a.DB, page, &runs,
 		`run.*`,
 		`run JOIN invocation i ON i.id = run.invocation_id AND i.action_id = $1`,
-		`created_at DESC`,
+		`run.created_at DESC`,
 		id,
 	)
 }
@@ -83,6 +83,28 @@ func (a runRepository) GetAll(page *repository.Page) ([]domain.Run, error) {
 	return runs, fetchPage(
 		a.DB, page, &runs,
 		`*`, `run`, `created_at DESC`,
+	)
+}
+
+func (a runRepository) GetByPrivate(page *repository.Page, private *bool) ([]domain.Run, error) {
+	from := `run`
+	params := make([]any, 0)
+
+	if private != nil {
+		from += `
+			INNER JOIN invocation  ON invocation.id    = run.invocation_id
+			INNER JOIN action      ON action.id        = invocation.action_id
+			INNER JOIN action_name ON action_name.name = action.name
+			WHERE action_name.private = $1
+		`
+		params = append(params, *private)
+	}
+
+	runs := make([]domain.Run, page.Limit)
+	return runs, fetchPage(
+		a.DB, page, &runs,
+		`run.*`, from, `run.created_at DESC`,
+		params...,
 	)
 }
 

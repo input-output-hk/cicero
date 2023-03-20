@@ -21,6 +21,60 @@ func (a *actionNameRepository) WithQuerier(querier config.PgxIface) repository.A
 	return &actionNameRepository{querier}
 }
 
+func (a *actionNameRepository) GetByFactId(id uuid.UUID) (*domain.ActionName, error) {
+	actionName, err := get(
+		a.DB, &domain.ActionName{},
+		`SELECT * FROM action_name WHERE name = (
+			SELECT name
+			FROM action
+			INNER JOIN invocation ON invocation.action_id = action.id
+			INNER JOIN run        ON run.invocation_id    = invocation.id
+			INNER JOIN fact       ON fact.run_id          = run.nomad_job_id
+			WHERE fact.id = $1
+		)`,
+		id,
+	)
+	if actionName == nil {
+		return nil, err
+	}
+	return actionName.(*domain.ActionName), err
+}
+
+func (a *actionNameRepository) GetByRunId(id uuid.UUID) (*domain.ActionName, error) {
+	actionName, err := get(
+		a.DB, &domain.ActionName{},
+		`SELECT * FROM action_name WHERE name = (
+			SELECT name
+			FROM action
+			INNER JOIN invocation ON invocation.action_id = action.id
+			INNER JOIN run        ON run.invocation_id    = invocation.id
+			WHERE run.nomad_job_id = $1
+		)`,
+		id,
+	)
+	if actionName == nil {
+		return nil, err
+	}
+	return actionName.(*domain.ActionName), err
+}
+
+func (a *actionNameRepository) GetByInvocationId(id uuid.UUID) (*domain.ActionName, error) {
+	actionName, err := get(
+		a.DB, &domain.ActionName{},
+		`SELECT * FROM action_name WHERE name = (
+			SELECT name
+			FROM action
+			INNER JOIN invocation ON invocation.action_id = action.id
+			WHERE invocation.id = $1
+		)`,
+		id,
+	)
+	if actionName == nil {
+		return nil, err
+	}
+	return actionName.(*domain.ActionName), err
+}
+
 func (a *actionNameRepository) GetByActionId(id uuid.UUID) (*domain.ActionName, error) {
 	actionName, err := get(
 		a.DB, &domain.ActionName{},

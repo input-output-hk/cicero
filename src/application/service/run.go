@@ -34,6 +34,7 @@ type RunService interface {
 	GetByActionId(uuid.UUID, *repository.Page) ([]domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (*domain.Run, error)
 	GetAll(*repository.Page) ([]domain.Run, error)
+	GetByPrivate(*repository.Page, *bool) ([]domain.Run, error)
 	Save(*domain.Run) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
@@ -119,6 +120,13 @@ func (self runService) GetAll(page *repository.Page) (runs []domain.Run, err err
 	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Runs")
 	runs, err = self.runRepository.GetAll(page)
 	err = errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
+	return
+}
+
+func (self runService) GetByPrivate(page *repository.Page, private *bool) (runs []domain.Run, err error) {
+	self.logger.Trace().Interface("private", private).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Runs by private")
+	runs, err = self.runRepository.GetByPrivate(page, private)
+	err = errors.WithMessagef(err, "Could not select existing Runs (private: %v) with offset %d and limit %d", private, page.Offset, page.Limit)
 	return
 }
 

@@ -265,7 +265,7 @@ func (self *Web) Start(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
-	var value any //TODO: WIP
+	var value any
 	if _, err := r.AddRoute(http.MethodPost,
 		"/api/run/{id}/fact",
 		self.ApiRunIdFactPost,
@@ -399,7 +399,7 @@ func (self *Web) Start(ctx context.Context) error {
 	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNameGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNamePatch).Methods(http.MethodPatch) // TODO auth
+	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNamePatch).Methods(http.MethodPatch)
 	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
 	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
@@ -584,7 +584,7 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 		false := false
 		private = &false
 	}
-	actions, err = self.ActionService.GetCurrentByActiveByPrivate(&active, private)
+	actions, err = self.ActionService.GetByCurrentByActiveByPrivate(true, &active, private)
 	if err != nil {
 		self.ServerError(w, err)
 		return
@@ -750,6 +750,10 @@ func (self *Web) actionIdGet(w http.ResponseWriter, req *http.Request, id uuid.U
 }
 
 func (self *Web) ActionCurrentNamePatch(w http.ResponseWriter, req *http.Request) {
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	self.ApiActionCurrentNamePatch(NopResponseWriter{}, req)
 
 	if referer := req.Header.Get("Referer"); referer != "" {
@@ -1171,6 +1175,10 @@ func (w NopResponseWriter) Write(b []byte) (int, error) {
 }
 
 func (self *Web) ApiActionDefinitionSourceGet(w http.ResponseWriter, req *http.Request) {
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	vars := mux.Vars(req)
 	source, err := url.PathUnescape(vars["source"])
 	if err != nil {
@@ -1187,6 +1195,10 @@ func (self *Web) ApiActionDefinitionSourceGet(w http.ResponseWriter, req *http.R
 }
 
 func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *http.Request) {
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	vars := mux.Vars(req)
 	if source, err := url.PathUnescape(vars["source"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action definition source: %q", vars["source"]))
@@ -1209,10 +1221,16 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 }
 
 func (self *Web) ApiInvocationGet(w http.ResponseWriter, req *http.Request) {
+	var private *bool
+	if self.sessionOidc(w, req, false) == nil {
+		false := false
+		private = &false
+	}
+
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if invocations, err := self.InvocationService.GetAll(page); err != nil {
+	} else if invocations, err := self.InvocationService.GetByPrivate(page, private); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 		return
 	} else {
@@ -1221,10 +1239,16 @@ func (self *Web) ApiInvocationGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
+	var private *bool
+	if self.sessionOidc(w, req, false) == nil {
+		false := false
+		private = &false
+	}
+
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if runs, err := self.RunService.GetAll(page); err != nil {
+	} else if runs, err := self.RunService.GetByPrivate(page, private); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Runs"))
 		return
 	} else {
@@ -1270,9 +1294,16 @@ func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 		return
 	} else {
-		runs := []*domain.Run{}
+		session := self.sessionOidc(w, req, false)
+
+		runs := make([]*domain.Run, 0, len(invocations))
 		for _, invocation := range invocations {
-			if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil {
+			if actionName, err := self.ActionNameService.GetByInvocationId(invocation.Id); err != nil {
+				self.ServerError(w, err)
+				return
+			} else if actionName.Private && session == nil {
+				continue
+			} else if run, err := self.RunService.GetByInvocationId(invocation.Id); err != nil {
 				self.ServerError(w, err)
 				return
 			} else if run != nil {
@@ -1295,7 +1326,25 @@ func (self *Web) ApiInvocationByInputGet(w http.ResponseWriter, req *http.Reques
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 		return
 	} else {
-		self.json(w, invocations, http.StatusOK)
+		var invocationsToSend []domain.Invocation
+
+		if session := self.sessionOidc(w, req, false); session != nil {
+			invocationsToSend = invocations
+		} else {
+			for _, invocation := range invocations {
+				if actionName, err := self.ActionNameService.GetByInvocationId(invocation.Id); err != nil {
+					self.ServerError(w, err)
+					return
+				} else if actionName.Private {
+					continue
+				}
+
+				invocation := invocation // copy so we don't point to loop variable
+				invocationsToSend = append(invocationsToSend, invocation)
+			}
+		}
+
+		self.json(w, invocationsToSend, http.StatusOK)
 	}
 }
 
@@ -1307,6 +1356,10 @@ type apiActionPostBody struct {
 }
 
 func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	params := apiActionPostBody{}
 	if err := json.NewDecoder(req.Body).Decode(&params); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not unmarshal params from request body"))
@@ -1383,21 +1436,33 @@ func (self *Web) getInvocation(w http.ResponseWriter, req *http.Request) (*domai
 }
 
 func (self *Web) ApiRunIdGet(w http.ResponseWriter, req *http.Request) {
-	switch run, ok := self.getRun(w, req); {
-	case !ok:
-	case run == nil:
+	if run, ok := self.getRun(w, req); !ok {
+		return
+	} else if run == nil {
 		self.NotFound(w, nil)
-	default:
+		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(run.InvocationId); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
+	} else {
 		self.json(w, run, http.StatusOK)
 	}
 }
 
 func (self *Web) ApiInvocationIdGet(w http.ResponseWriter, req *http.Request) {
-	switch invocation, ok := self.getInvocation(w, req); {
-	case !ok:
-	case invocation == nil:
+	if invocation, ok := self.getInvocation(w, req); !ok {
+		return
+	} else if invocation == nil {
 		self.NotFound(w, nil)
-	default:
+		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(invocation.Id); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
+	} else {
 		self.json(w, invocation, http.StatusOK)
 	}
 }
@@ -1425,6 +1490,11 @@ func (self *Web) apiInvocationIdLogGet(getLog func(context.Context, domain.Invoc
 	} else if invocation == nil {
 		self.NotFound(w, nil)
 		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(invocation.Id); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
 	} else {
 		self.log(func(ctx context.Context) service.LokiLineChan {
 			return getLog(ctx, *invocation)
@@ -1435,6 +1505,11 @@ func (self *Web) apiInvocationIdLogGet(getLog func(context.Context, domain.Invoc
 func (self *Web) ApiInvocationIdInputsGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
+		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(id); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Could not get Invocation's inputs"))
@@ -1448,6 +1523,11 @@ func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Reque
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, err)
 		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(id); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
 	} else if output, err := self.InvocationService.GetOutputById(id); err != nil {
 		self.ServerError(w, err)
 		return
@@ -1460,6 +1540,10 @@ func (self *Web) ApiInvocationIdOutputGet(w http.ResponseWriter, req *http.Reque
 
 // Retries the invocation by duplicating it.
 func (self *Web) ApiInvocationIdPost(w http.ResponseWriter, req *http.Request) {
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	id, err := uuid.Parse(mux.Vars(req)["id"])
 	if err != nil {
 		self.ClientError(w, err)
@@ -1491,6 +1575,12 @@ func (self *Web) ApiRunIdInputsGet(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if run == nil {
 		self.NotFound(w, nil)
+		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(run.InvocationId); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
 	} else if inputs, err := self.InvocationService.GetInputFactIdsById(run.InvocationId); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Could not get Run's Invocation's inputs"))
 		return
@@ -1508,11 +1598,18 @@ func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if run == nil {
 		self.NotFound(w, nil)
+		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(run.InvocationId); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
 	} else if output, err := self.InvocationService.GetOutputById(run.InvocationId); err != nil {
 		self.ServerError(w, err)
 		return
 	} else if output == nil {
 		self.NotFound(w, nil)
+		return
 	} else {
 		self.json(w, output, http.StatusOK)
 	}
@@ -1523,6 +1620,11 @@ func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if run == nil {
 		self.NotFound(w, nil)
+		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(run.InvocationId); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
 	} else if err := self.RunService.Cancel(run); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", run.NomadJobID))
@@ -1539,6 +1641,13 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 	}
 	if run == nil {
 		self.NotFound(w, nil)
+		return
+	}
+
+	if actionName, err := self.ActionNameService.GetByInvocationId(run.InvocationId); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
 	}
 
@@ -1571,7 +1680,13 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
-	if actions, err := self.ActionService.GetAll(); err != nil {
+	var private *bool
+	if self.sessionOidc(w, req, false) == nil {
+		false := false
+		private = &false
+	}
+
+	if actions, err := self.ActionService.GetByCurrentByActiveByPrivate(false, nil, private); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get all actions"))
 		return
 	} else {
@@ -1584,11 +1699,19 @@ func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	var actions []domain.Action
 	var err error
 
-	if _, active := req.URL.Query()["active"]; active {
-		actions, err = self.ActionService.GetCurrentByActiveByPrivate(&active, nil)
-	} else {
-		actions, err = self.ActionService.GetCurrent()
+	var private *bool
+	if session := self.sessionOidc(w, req, false); session == nil {
+		false := false
+		private = &false
 	}
+
+	var active *bool
+	if _, hasActive := req.URL.Query()["active"]; hasActive {
+		true := true
+		active = &true
+	}
+
+	actions, err = self.ActionService.GetByCurrentByActiveByPrivate(true, active, private)
 
 	if err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get current actions"))
@@ -1603,11 +1726,23 @@ func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Reques
 	if name, err := url.PathUnescape(vars["name"]); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
 		return
-	} else if actions, err := self.ActionService.GetLatestByName(name); err != nil {
+	} else if actionName, err := self.ActionNameService.Get(name); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if actionName == nil {
+		self.NotFound(w, nil)
+		return
+	} else if session := self.sessionOidc(w, req, false); actionName.Private && session == nil {
+		self.NotFound(w, nil)
+		return
+	} else if action, err := self.ActionService.GetLatestByName(name); err != nil {
 		self.ClientError(w, errors.WithMessagef(err, "Failed to get current action named %q", name))
 		return
+	} else if action == nil {
+		self.NotFound(w, nil)
+		return
 	} else {
-		self.json(w, actions, http.StatusOK)
+		self.json(w, action, http.StatusOK)
 	}
 }
 
@@ -1621,6 +1756,17 @@ func (self *Web) ApiActionCurrentNamePatch(w http.ResponseWriter, req *http.Requ
 
 	if err := req.ParseForm(); err != nil {
 		self.ServerError(w, err)
+		return
+	}
+
+	if actionName, err := self.ActionNameService.Get(name); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if actionName == nil {
+		self.NotFound(w, nil)
+		return
+	} else if session := self.sessionOidc(w, req, false); actionName.Private && session == nil {
+		self.NotFound(w, nil)
 		return
 	}
 
@@ -1663,6 +1809,14 @@ func (self *Web) ApiActionIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if action, err := self.ActionService.GetById(id); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get action"))
 		return
+	} else if action == nil {
+		self.NotFound(w, nil)
+		return
+	} else if actionName, err := self.ActionNameService.Get(action.Name); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
 	} else {
 		self.json(w, action, http.StatusOK)
 	}
@@ -1678,6 +1832,11 @@ func (self *Web) ApiRunIdLogGet(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if run == nil {
 		self.NotFound(w, nil)
+		return
+	} else if actionName, err := self.ActionNameService.GetByInvocationId(run.InvocationId); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
 	} else {
 		self.log(func(ctx context.Context) service.LokiLineChan {
@@ -1700,6 +1859,14 @@ func (self *Web) ApiRunLogIdIdGet(w http.ResponseWriter, req *http.Request) {
 	} else if alloc == nil {
 		self.NotFound(w, errors.New("no such allocation"))
 		return
+	} else if runId, err := uuid.Parse(alloc.JobID); err != nil {
+		self.ClientError(w, errors.WithMessage(err, "Cannot parse allocation's job's ID as UUID"))
+		return
+	} else if actionName, err := self.ActionNameService.GetByRunId(runId); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
 	} else {
 		self.log(func(ctx context.Context) service.LokiLineChan {
 			return self.RunService.TaskLog(ctx, *alloc, task)
@@ -1709,15 +1876,35 @@ func (self *Web) ApiRunLogIdIdGet(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ApiFactIdGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	if id, err := uuid.Parse(vars["id"]); err != nil {
+	id, err := uuid.Parse(vars["id"])
+	if err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
 		return
-	} else if fact, err := self.FactService.GetById(id); err != nil {
+	}
+
+	fact, err := self.FactService.GetById(id)
+	if err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get Fact"))
 		return
-	} else {
-		self.json(w, fact, http.StatusOK)
 	}
+	if fact == nil {
+		self.NotFound(w, nil)
+		return
+	}
+
+	actionName, err := self.ActionNameService.GetByFactId(id)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+	if actionName != nil {
+		if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+			self.NotFound(w, nil)
+			return
+		}
+	}
+
+	self.json(w, fact, http.StatusOK)
 }
 
 type apiActionMatchResponse struct {
@@ -1981,10 +2168,24 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 
 func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
-	if id, err := uuid.Parse(vars["id"]); err != nil {
+	id, err := uuid.Parse(vars["id"])
+	if err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse id"))
 		return
-	} else if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	}
+
+	actionName, err := self.ActionNameService.GetByFactId(id)
+	if err != nil {
+		self.ServerError(w, err)
+		return
+	}
+	if actionName != nil {
+		if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+			return
+		}
+	}
+
+	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
 		if binary, err := self.FactService.GetBinaryById(tx, id); err != nil {
 			return errors.WithMessage(err, "Failed to get binary")
 		} else {
@@ -2004,8 +2205,19 @@ func (self *Web) ApiFactByRunGet(w http.ResponseWriter, req *http.Request) {
 	if id, err := uuid.Parse(req.URL.Query().Get("run")); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Failed to parse Run ID"))
 		return
+	} else if actionName, err := self.ActionNameService.GetByRunId(id); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if actionName == nil {
+		self.NotFound(w, nil)
+		return
+	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
 	} else if fact, err := self.FactService.GetByRunId(id); err != nil {
 		self.ServerError(w, err)
+		return
+	} else if fact == nil {
+		self.NotFound(w, nil)
 		return
 	} else {
 		self.json(w, fact, http.StatusOK)

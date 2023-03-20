@@ -32,7 +32,7 @@ type ActionService interface {
 	GetLatestByName(string) (*domain.Action, error)
 	GetAll() ([]domain.Action, error)
 	GetCurrent() ([]domain.Action, error)
-	GetCurrentByActiveByPrivate(*bool, *bool) ([]domain.Action, error)
+	GetByCurrentByActiveByPrivate(bool, *bool, *bool) ([]domain.Action, error)
 	Save(*domain.Action) error
 	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, error)
 	IsRunnable(*domain.Action) (bool, map[string]domain.Fact, error)
@@ -173,9 +173,9 @@ func (self actionService) GetCurrent() (actions []domain.Action, err error) {
 	return
 }
 
-func (self actionService) GetCurrentByActiveByPrivate(active *bool, private *bool) (actions []domain.Action, err error) {
-	self.logger.Trace().Interface("active", active).Interface("private", private).Msg("Getting current Actions")
-	actions, err = self.actionRepository.GetCurrentByActiveByPrivate(active, private)
+func (self actionService) GetByCurrentByActiveByPrivate(onlyCurrent bool, active *bool, private *bool) (actions []domain.Action, err error) {
+	self.logger.Trace().Bool("only-current", onlyCurrent).Interface("active", active).Interface("private", private).Msg("Getting current Actions")
+	actions, err = self.actionRepository.GetByCurrentByActiveByPrivate(onlyCurrent, active, private)
 	err = errors.WithMessagef(err, "Could not select current Actions by active %v and private %v", active, private)
 	return
 }
@@ -359,7 +359,7 @@ func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunF
 			txSelf := self.WithQuerier(tx).(*actionService)
 
 			true := true
-			actions, err := txSelf.GetCurrentByActiveByPrivate(&true, nil)
+			actions, err := txSelf.GetByCurrentByActiveByPrivate(true, &true, nil)
 			if err != nil {
 				return err
 			}

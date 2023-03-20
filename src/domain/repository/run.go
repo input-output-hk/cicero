@@ -16,6 +16,7 @@ type RunRepository interface {
 	GetByActionId(uuid.UUID, *Page) ([]domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (*domain.Run, error)
 	GetAll(*Page) ([]domain.Run, error)
+	GetByPrivate(*Page, *bool) ([]domain.Run, error)
 	Save(*domain.Run) error
 	Update(*domain.Run) error
 }
