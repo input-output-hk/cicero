@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -75,7 +76,12 @@ func parseArgs(args *CLI) (parser *arg.Parser, err error) {
 func Run(parser *arg.Parser, args *CLI, logger *zerolog.Logger) error {
 	switch {
 	case args.Start != nil:
-		return args.Start.Run(logger)
+		if instance, err := cicero.NewInstance(args.Start, logger); err != nil {
+			return err
+		} else {
+			defer instance.Close()
+			return instance.Run(context.Background())
+		}
 	default:
 		parser.WriteHelp(os.Stderr)
 	}
