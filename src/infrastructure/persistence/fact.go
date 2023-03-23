@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/direnv/direnv/v2/sri"
-	"github.com/georgysavva/scany/pgxscan"
+	"github.com/direnv/direnv/v2/pkg/sri"
+	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 
 	"github.com/input-output-hk/cicero/src/config"
@@ -106,7 +106,7 @@ func (a *factRepository) GetBinaryById(tx pgx.Tx, id uuid.UUID) (binary io.ReadS
 
 func (a *factRepository) Save(fact *domain.Fact, binary io.Reader) error {
 	ctx := context.Background()
-	return a.DB.BeginFunc(ctx, func(tx pgx.Tx) error {
+	return pgx.BeginFunc(ctx, a.DB, func(tx pgx.Tx) error {
 		var binaryOid *uint32
 		if binary != nil {
 			los := tx.LargeObjects()
@@ -126,7 +126,7 @@ func (a *factRepository) Save(fact *domain.Fact, binary io.Reader) error {
 						return errors.WithMessagef(err, "Failed to unlink large object with OID %d", oid)
 					}
 				default:
-					sum := hash.Sum()
+					sum := hash.Sum().String()
 					if fact.BinaryHash != nil && *fact.BinaryHash != sum {
 						return fmt.Errorf("Binary has hash %q instead of expected %q", sum, *fact.BinaryHash)
 					}

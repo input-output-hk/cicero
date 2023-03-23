@@ -5,12 +5,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/georgysavva/scany/pgxscan"
+	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/google/uuid"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 )
 
 type invocationRepository struct {
@@ -186,7 +186,7 @@ func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recurs
 func (self *invocationRepository) Save(invocation *domain.Invocation, inputs map[string]domain.Fact) error {
 	ctx := context.Background()
 
-	if err := self.db.BeginFunc(ctx, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, self.db, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(
 			ctx,
 			`INSERT INTO invocation (action_id) VALUES ($1) RETURNING id, created_at`,

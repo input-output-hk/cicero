@@ -4,8 +4,8 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/georgysavva/scany/pgxscan"
-	"github.com/jackc/pgx/v4"
+	"github.com/georgysavva/scany/v2/pgxscan"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain/repository"

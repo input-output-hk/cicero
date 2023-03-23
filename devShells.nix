@@ -15,7 +15,7 @@
         "language/go"
       ];
 
-      language.go.package = pkgs.go_1_18;
+      language.go.package = pkgs.go_1_20;
 
       env = [
         {

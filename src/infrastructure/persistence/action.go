@@ -3,7 +3,7 @@ package persistence
 import (
 	"context"
 
-	"github.com/georgysavva/scany/pgxscan"
+	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/google/uuid"
 
 	"github.com/input-output-hk/cicero/src/config"

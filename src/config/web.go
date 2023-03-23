@@ -8,10 +8,10 @@ import (
 
 	"github.com/antonlindstrom/pgstore"
 	"github.com/pkg/errors"
-	"github.com/zitadel/oidc/pkg/client/rp"
-	"github.com/zitadel/oidc/pkg/client/rs"
-	oidchttp "github.com/zitadel/oidc/pkg/http"
-	"github.com/zitadel/oidc/pkg/oidc"
+	"github.com/zitadel/oidc/v2/pkg/client/rp"
+	"github.com/zitadel/oidc/v2/pkg/client/rs"
+	oidchttp "github.com/zitadel/oidc/v2/pkg/http"
+	"github.com/zitadel/oidc/v2/pkg/oidc"
 )
 
 type WebConfig struct {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -121,7 +121,7 @@ func (self *NomadEventConsumer) processNomadEvent(ctx context.Context, event *do
 	// Save the event if it's not already in the DB.
 	switch {
 	case event.Uid == [16]byte{}:
-		if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(ctx, self.Db, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx)
 
 			if err := txSelf.NomadEventService.Save(event); err != nil {
@@ -232,7 +232,7 @@ func (self *NomadEventConsumer) handleNomadAllocationEvent(ctx context.Context, 
 
 	var runFunc service.InvokeRunFunc
 
-	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, self.Db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
 		run, err := txSelf.getRun(logger, allocation.JobID)
@@ -300,7 +300,7 @@ func (self *NomadEventConsumer) handleNomadJobEvent(ctx context.Context, event *
 
 	var runFunc service.InvokeRunFunc
 
-	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, self.Db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
 		run, err := txSelf.getRun(logger, *job.ID)
@@ -388,7 +388,7 @@ func (self *NomadEventConsumer) handleNomadDeploymentEvent(ctx context.Context, 
 
 	var runFunc service.InvokeRunFunc
 
-	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, self.Db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
 		run, err := txSelf.getRun(logger, deployment.JobID)
@@ -472,7 +472,7 @@ func (self *NomadEventConsumer) publishRunOutput(ctx context.Context, run *domai
 func (self *NomadEventConsumer) endRun(ctx context.Context, run *domain.Run, timestamp int64, status domain.RunStatus) (service.InvokeRunFunc, error) {
 	var runFunc service.InvokeRunFunc
 
-	if err := self.Db.BeginFunc(ctx, func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(ctx, self.Db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx)
 
 		switch run.Status {

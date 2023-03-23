@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -105,7 +105,7 @@ func (self actionNameService) Get(name string) (*domain.ActionName, error) {
 func (self actionNameService) Update(name string, update func(*domain.ActionName, config.PgxIface) error) error {
 	logger := self.logger.With().Str("name", name).Logger()
 	logger.Trace().Msg("Updating Action Name")
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*actionNameService)
 
 		actionName, err := txSelf.actionNameRepository.Get(name)

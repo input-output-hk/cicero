@@ -4,20 +4,21 @@ import (
 	"context"
 	"errors"
 
-	"github.com/jackc/pgconn"
-	"github.com/jackc/pgtype"
-	pgtypeuuid "github.com/jackc/pgtype/ext/gofrs-uuid"
-	"github.com/jackc/pgx/v4"
-	"github.com/jackc/pgx/v4/pgxpool"
+	pgxzerolog "github.com/jackc/pgx-zerolog"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/tracelog"
 	"github.com/rs/zerolog"
+	pgxuuid "github.com/vgarvardt/pgx-google-uuid/v5"
 )
 
 type PgxIface interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
-	BeginFunc(context.Context, func(pgx.Tx) error) error
 	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
+	Begin(context.Context) (pgx.Tx, error)
 }
 
 var (
@@ -45,47 +46,17 @@ func DBConnection(logger *zerolog.Logger, logDb bool) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 	if logDb {
-		dbconfig.ConnConfig.Logger = wrapLogger(logger)
+		dbconfig.ConnConfig.Tracer = &tracelog.TraceLog{
+			Logger: pgxzerolog.NewLogger(*logger),
+			LogLevel: tracelog.LogLevelTrace,
+		}
 	}
 
 	//TODO: log configuration
 	dbconfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-		conn.ConnInfo().RegisterDataType(pgtype.DataType{
-			Value: &pgtypeuuid.UUID{},
-			Name:  "uuid",
-			OID:   pgtype.UUIDOID,
-		})
+		pgxuuid.Register(conn.TypeMap())
 		return nil
 	}
 
-	return pgxpool.ConnectConfig(context.Background(), dbconfig)
-}
-
-func wrapLogger(original *zerolog.Logger) pgLogger {
-	return pgLogger{original}
-}
-
-type pgLogger struct{ original *zerolog.Logger }
-
-func (l pgLogger) Log(ctx context.Context, level pgx.LogLevel, msg string, data map[string]any) {
-	var event *zerolog.Event
-	switch level {
-	case pgx.LogLevelTrace:
-		event = l.original.Trace()
-	case pgx.LogLevelDebug:
-		event = l.original.Debug()
-	case pgx.LogLevelInfo:
-		event = l.original.Info()
-	case pgx.LogLevelWarn:
-		event = l.original.Warn()
-	case pgx.LogLevelError:
-		event = l.original.Error()
-	}
-
-	event = event.Str("lib", "pgx")
-	for k, v := range data {
-		event.Interface(k, v)
-	}
-
-	event.Msg(msg)
+	return pgxpool.NewWithConfig(context.Background(), dbconfig)
 }

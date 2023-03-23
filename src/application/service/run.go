@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -150,7 +150,7 @@ func (self runService) Update(run *domain.Run) error {
 
 func (self runService) End(run *domain.Run) error {
 	self.logger.Debug().Stringer("id", run.NomadJobID).Msg("Ending Run")
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		if err := self.runRepository.WithQuerier(tx).Update(run); err != nil {
 			return errors.WithMessagef(err, "Could not update Run with ID %q", run.NomadJobID)
 		}

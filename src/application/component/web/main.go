@@ -16,20 +16,18 @@ import (
 	"cuelang.org/go/cue"
 	cueerrors "cuelang.org/go/cue/errors"
 	cueformat "cuelang.org/go/cue/format"
-	"github.com/davidebianchi/gswagger/apirouter"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"github.com/gorilla/websocket"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
-	"github.com/zitadel/oidc/pkg/client/rp"
-	"github.com/zitadel/oidc/pkg/client/rs"
-	"github.com/zitadel/oidc/pkg/oidc"
+	"github.com/zitadel/oidc/v2/pkg/client/rp"
+	"github.com/zitadel/oidc/v2/pkg/client/rs"
+	"github.com/zitadel/oidc/v2/pkg/oidc"
 
-	"github.com/input-output-hk/cicero/src/application/component/web/apidoc"
 	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
@@ -57,358 +55,60 @@ const loginOidcPath = "/login/oidc"
 func (self *Web) Start(ctx context.Context) error {
 	self.Logger.Info().Str("listen", self.Config.Listen).Msg("Starting")
 
-	muxRouter := mux.NewRouter().StrictSlash(true).UseEncodedPath()
-	muxRouter.NotFoundHandler = http.NotFoundHandler()
-
-	r, err := apidoc.NewRouterDocumented(apirouter.NewGorillaMuxRouter(muxRouter), "Cicero REST API", "1.0.0", "cicero", ctx)
-	if err != nil {
-		return errors.WithMessage(err, "Failed to create swagger router")
-	}
+	router := mux.NewRouter().StrictSlash(true).UseEncodedPath()
+	router.NotFoundHandler = http.NotFoundHandler()
 
 	// sorted alphabetically, please keep it this way
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/current/{name}",
-		self.ApiActionCurrentNameGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "name", Description: "name of an action", Value: "actionName"}}),
-			apidoc.BuildBodyRequest(domain.Action{}),
-			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodPatch,
-		"/api/action/current/{name}",
-		self.ApiActionCurrentNamePatch,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "name", Description: "action name", Value: "string"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/current",
-		self.ApiActionCurrentGet,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Action{}, "Ok")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/definition/{source}/{name}/{id}",
-		self.ApiActionDefinitionSourceNameIdGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{
-				{Name: "source", Description: "source of one or more action definitions", Value: "source"},
-				{Name: "name", Description: "name of an action in the source", Value: "name"},
-				{Name: "id", Description: "id to evaluate the action's source with", Value: "UUID"},
-			}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.ActionDefinition{}, "Ok")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/definition/{source}",
-		self.ApiActionDefinitionSourceGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "source", Description: "source of one or more action definitions", Value: "source"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, []string{}, "Ok")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodPost,
-		"/api/action/match",
-		self.ApiActionMatchPost,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, apiActionMatchResponse{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action/{id}",
-		self.ApiActionIdGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of the action", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Action{}, "Ok")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/action",
-		self.ApiActionGet,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Action{}, "Ok")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodPost,
-		"/api/action",
-		self.ApiActionPost,
-		apidoc.BuildSwaggerDef(
-			nil,
-			apidoc.BuildBodyRequest(apiActionPostBody{}), //TODO: move to domain
-			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/invocation/{id}/log/evaluation",
-		self.ApiInvocationIdLogEvaluationGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/invocation/{id}/log/transformation",
-		self.ApiInvocationIdLogTransformationGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/invocation/{id}/log",
-		self.ApiInvocationIdLogGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/invocation/{id}/inputs",
-		self.ApiInvocationIdInputsGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/invocation/{id}/output",
-		self.ApiInvocationIdOutputGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodPost,
-		"/api/invocation/{id}",
-		self.ApiInvocationIdPost,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Invocation{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/invocation/{id}",
-		self.ApiInvocationIdGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of an Invocation", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Invocation{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if route, err := r.AddRoute(http.MethodGet,
-		"/api/invocation",
-		self.ApiInvocationByInputGet,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Invocation{}, "OK")),
-	); err != nil {
-		return err
-	} else {
-		route.(*mux.Route).Queries("input", "")
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/invocation",
-		self.ApiInvocationGet,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Invocation{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/run/log/{allocation}/{task}",
-		self.ApiRunLogIdIdGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{
-				{Name: "allocation", Description: "id of an allocation", Value: "UUID"},
-				{Name: "task", Description: "id of a task", Value: "UUID"},
-			}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
-	); err != nil {
-		return err
-	}
-	var value any
-	if _, err := r.AddRoute(http.MethodPost,
-		"/api/run/{id}/fact",
-		self.ApiRunIdFactPost,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
-			apidoc.BuildBodyRequest(value),
-			apidoc.BuildResponseSuccessfully(http.StatusNoContent, nil, "NoContent")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/run/{id}/log",
-		self.ApiRunIdLogGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, service.LokiLog{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/run/{id}",
-		self.ApiRunIdGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/run/{id}/inputs",
-		self.ApiRunIdInputsGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/run/{id}/output",
-		self.ApiRunIdOutputGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Run{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodDelete,
-		"/api/run/{id}",
-		self.ApiRunIdDelete,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a run", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusNoContent, domain.Run{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if route, err := r.AddRoute(http.MethodGet,
-		"/api/run",
-		self.ApiRunByInputGet,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Run{}, "OK")),
-	); err != nil {
-		return err
-	} else {
-		route.(*mux.Route).Queries("input", "")
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/run",
-		self.ApiRunGet,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, []domain.Run{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/fact/{id}/binary",
-		self.ApiFactIdBinaryGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a fact", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, []byte{}, "OK"),
-		),
-	); err != nil {
-		return err
-	}
-	if _, err := r.AddRoute(http.MethodGet,
-		"/api/fact/{id}",
-		self.ApiFactIdGet,
-		apidoc.BuildSwaggerDef(
-			apidoc.BuildSwaggerPathParams([]apidoc.PathParams{{Name: "id", Description: "id of a fact", Value: "UUID"}}),
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
-	); err != nil {
-		return err
-	}
-	if route, err := r.AddRoute(http.MethodGet,
-		"/api/fact",
-		self.ApiFactByRunGet,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
-	); err != nil {
-		return err
-	} else {
-		route.(*mux.Route).Queries("run", "")
-	}
-	if _, err := r.AddRoute(http.MethodPost,
-		"/api/fact",
-		self.ApiFactPost,
-		apidoc.BuildSwaggerDef(
-			nil,
-			nil,
-			apidoc.BuildResponseSuccessfully(http.StatusOK, domain.Fact{}, "OK")),
-	); err != nil {
-		return err
-	}
-	muxRouter.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/invocation/{id}", self.InvocationIdPost).Methods(http.MethodPost)
-	muxRouter.HandleFunc("/invocation/{id}", self.InvocationIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/run/{id}", self.RunIdDelete).Methods(http.MethodDelete)
-	muxRouter.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNameGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/current/{name}", self.ActionCurrentNamePatch).Methods(http.MethodPatch)
-	muxRouter.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
-	muxRouter.HandleFunc("/action/{id}/version", self.ActionIdVersionGet).Methods(http.MethodGet)
-	muxRouter.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
+	router.HandleFunc("/api/action/current/{name}", self.ApiActionCurrentNameGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/action/current/{name}", self.ApiActionCurrentNamePatch).Methods(http.MethodPatch)
+	router.HandleFunc("/api/action/current", self.ApiActionCurrentGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/action/definition/{source}/{name}/{id}", self.ApiActionDefinitionSourceNameIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/action/definition/{source}", self.ApiActionDefinitionSourceGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/action/match", self.ApiActionMatchPost).Methods(http.MethodPost)
+	router.HandleFunc("/api/action/{id}", self.ApiActionIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/action", self.ApiActionGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/action", self.ApiActionPost).Methods(http.MethodPost)
+	router.HandleFunc("/api/invocation/{id}/log/evaluation", self.ApiInvocationIdLogEvaluationGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/invocation/{id}/log/transformation", self.ApiInvocationIdLogTransformationGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/invocation/{id}/log", self.ApiInvocationIdLogGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/invocation/{id}/inputs", self.ApiInvocationIdInputsGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/invocation/{id}/output", self.ApiInvocationIdOutputGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/invocation/{id}", self.ApiInvocationIdPost).Methods(http.MethodPost)
+	router.HandleFunc("/api/invocation/{id}", self.ApiInvocationIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/invocation", self.ApiInvocationByInputGet).Methods(http.MethodGet).Queries("input", "")
+	router.HandleFunc("/api/invocation", self.ApiInvocationGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/run/log/{allocation}/{task}", self.ApiRunLogIdIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/run/{id}/fact", self.ApiRunIdFactPost).Methods(http.MethodPost)
+	router.HandleFunc("/api/run/{id}/log", self.ApiRunIdLogGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/run/{id}", self.ApiRunIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/run/{id}/inputs", self.ApiRunIdInputsGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/run/{id}/output", self.ApiRunIdOutputGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/run/{id}", self.ApiRunIdDelete).Methods(http.MethodDelete)
+	router.HandleFunc("/api/run", self.ApiRunByInputGet).Methods(http.MethodGet).Queries("input", "")
+	router.HandleFunc("/api/run", self.ApiRunGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/fact/{id}/binary", self.ApiFactIdBinaryGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/fact/{id}", self.ApiFactIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/fact", self.ApiFactByRunGet).Methods(http.MethodGet).Queries("run", "")
+	router.HandleFunc("/api/fact", self.ApiFactPost).Methods(http.MethodPost)
 
-	muxRouter.PathPrefix("/_dispatch/method/{method}/").HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	router.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
+	router.HandleFunc("/invocation/{id}", self.InvocationIdPost).Methods(http.MethodPost)
+	router.HandleFunc("/invocation/{id}", self.InvocationIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/run/{id}", self.RunIdDelete).Methods(http.MethodDelete)
+	router.HandleFunc("/run/{id}", self.RunIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
+	router.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
+	router.HandleFunc("/action/current/{name}", self.ActionCurrentNameGet).Methods(http.MethodGet)
+	router.HandleFunc("/action/current/{name}", self.ActionCurrentNamePatch).Methods(http.MethodPatch)
+	router.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
+	router.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
+	router.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
+	router.HandleFunc("/action/{id}/version", self.ActionIdVersionGet).Methods(http.MethodGet)
+	router.PathPrefix("/static/").Handler(http.StripPrefix("/", http.FileServer(http.FS(staticFs))))
+
+	router.PathPrefix("/_dispatch/method/{method}/").HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		req.Method = mux.Vars(req)["method"]
-		http.StripPrefix("/_dispatch/method/"+req.Method, muxRouter).ServeHTTP(w, req)
+		http.StripPrefix("/_dispatch/method/"+req.Method, router).ServeHTTP(w, req)
 	})
 
 	{ // OIDC
@@ -424,14 +124,14 @@ func (self *Web) Start(ctx context.Context) error {
 			}
 		}()
 
-		muxRouter.HandleFunc(loginOidcPath, self.LoginOidcGet).Methods(http.MethodGet)
+		router.HandleFunc(loginOidcPath, self.LoginOidcGet).Methods(http.MethodGet)
 
 		type State struct {
 			Forward string
 			Id      string
 		}
 
-		muxRouter.HandleFunc(loginOidcPath+"/{provider}", func(w http.ResponseWriter, req *http.Request) {
+		router.HandleFunc(loginOidcPath+"/{provider}", func(w http.ResponseWriter, req *http.Request) {
 			provider, exists := self.Config.OidcProviders[mux.Vars(req)["provider"]]
 			if !exists {
 				self.NotFound(w, nil)
@@ -454,7 +154,7 @@ func (self *Web) Start(ctx context.Context) error {
 			}
 		}).Methods(http.MethodGet)
 
-		muxRouter.HandleFunc(loginOidcPath+"/{provider}/callback", func(w http.ResponseWriter, req *http.Request) {
+		router.HandleFunc(loginOidcPath+"/{provider}/callback", func(w http.ResponseWriter, req *http.Request) {
 			providerName := mux.Vars(req)["provider"]
 			provider, exists := self.Config.OidcProviders[providerName]
 			if !exists {
@@ -463,7 +163,7 @@ func (self *Web) Start(ctx context.Context) error {
 			}
 
 			rp.CodeExchangeHandler(
-				rp.UserinfoCallback(func(w http.ResponseWriter, req *http.Request, tokens *oidc.Tokens, stateJson string, provider rp.RelyingParty, info oidc.UserInfo) {
+				rp.UserinfoCallback(func(w http.ResponseWriter, req *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], stateJson string, provider rp.RelyingParty, info *oidc.UserInfo) {
 					session, err := self.Config.Sessions.New(req, sessionOidc)
 					if err != nil {
 						self.ServerError(w, err)
@@ -502,7 +202,7 @@ func (self *Web) Start(ctx context.Context) error {
 			)(w, req)
 		})
 
-		muxRouter.HandleFunc("/logout", func(w http.ResponseWriter, req *http.Request) {
+		router.HandleFunc("/logout", func(w http.ResponseWriter, req *http.Request) {
 			session := self.sessionOidc(w, req, true)
 			if session == nil {
 				return
@@ -518,13 +218,7 @@ func (self *Web) Start(ctx context.Context) error {
 		})
 	}
 
-	// creates /documentation/cicero.json and /documentation/cicero.yaml routes
-	err = r.GenerateAndExposeSwagger()
-	if err != nil {
-		return errors.WithMessage(err, "Failed to generate and expose swagger: %s")
-	}
-
-	server := &http.Server{Addr: self.Config.Listen, Handler: muxRouter}
+	server := &http.Server{Addr: self.Config.Listen, Handler: router}
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
@@ -820,7 +514,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.Db, func(tx pgx.Tx) error {
 		actionService := self.ActionService.WithQuerier(tx)
 		actionNameService := self.ActionNameService.WithQuerier(tx)
 
@@ -1366,7 +1060,7 @@ func (self *Web) ApiActionPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.Db, func(tx pgx.Tx) error {
 		actionService := self.ActionService.WithQuerier(tx)
 		actionNameService := self.ActionNameService.WithQuerier(tx)
 
@@ -2071,7 +1765,7 @@ func (self *Web) ApiActionMatchPost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	okErr := errors.New("ok")
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.Db, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(context.Background(), `TRUNCATE action, fact CASCADE`); err != nil {
 			return err
 		}
@@ -2185,7 +1879,7 @@ func (self *Web) ApiFactIdBinaryGet(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	if err := self.Db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.Db, func(tx pgx.Tx) error {
 		if binary, err := self.FactService.GetBinaryById(tx, id); err != nil {
 			return errors.WithMessage(err, "Failed to get binary")
 		} else {
@@ -2607,11 +2301,11 @@ func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectT
 				Msg("Could not introspect OIDC session token")
 			redirect()
 			return nil
-		} else if !introspection.IsActive() {
+		} else if !introspection.Active {
 			redirect()
 			return nil
 		}
-	} else if _, err := rp.Userinfo(sessionOidc.AccessToken(), oidc.BearerToken, (*sessionOidc.UserInfo()).GetSubject(), provider.RelyingParty); err != nil {
+	} else if _, err := rp.Userinfo(sessionOidc.AccessToken(), oidc.BearerToken, sessionOidc.UserInfo().Subject, provider.RelyingParty); err != nil {
 		redirect()
 		return nil
 	}
@@ -2631,12 +2325,12 @@ func (self SessionOidc) UserInfo() *oidc.UserInfo {
 		return self.userinfo
 	}
 
-	info := oidc.NewUserInfo()
+	info := oidc.UserInfo{}
 	if infoJsonIf, exists := self.Session.Values[sessionOidcUserinfo]; !exists {
 		return nil
 	} else if infoJson, ok := infoJsonIf.([]byte); !ok {
 		return nil
-	} else if err := json.Unmarshal(infoJson, info); err != nil {
+	} else if err := json.Unmarshal(infoJson, &info); err != nil {
 		return nil
 	}
 

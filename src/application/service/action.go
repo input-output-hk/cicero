@@ -9,7 +9,7 @@ import (
 	"cuelang.org/go/tools/flow"
 	"github.com/google/uuid"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -300,7 +300,7 @@ func (self actionService) Invoke(action *domain.Action) (*domain.Invocation, Inv
 	var inputs map[string]domain.Fact
 	var runnable bool
 
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*actionService)
 
 		if runnable_, inputs_, err := txSelf.IsRunnable(action); err != nil {
@@ -355,7 +355,7 @@ func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunF
 				}
 				return nil
 			}, nil
-		}, self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		}, pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx).(*actionService)
 
 			true := true
@@ -418,7 +418,7 @@ func (self actionService) NewInvokeRunFunc(action *domain.Action, invocation *do
 		var runs []domain.Run
 		var registerFunc InvokeRegisterFunc
 
-		if err := db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+		if err := pgx.BeginFunc(context.Background(), db, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx).(*actionService)
 
 			if err := (*txSelf.invocationService).End(invocation.Id); err != nil {
@@ -492,7 +492,7 @@ func (self actionService) NewInvokeRunFunc(action *domain.Action, invocation *do
 }
 
 func (self actionService) UpdateSatisfaction(fact *domain.Fact) error {
-	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	return pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*actionService)
 
 		actions, err := txSelf.GetCurrent()
@@ -519,7 +519,7 @@ func (self actionService) updateSatisfaction(action *domain.Action, fact *domain
 
 	logger.Trace().Msg("Updating satisfaction with new fact")
 
-	return self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	return pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*actionService)
 
 		inputs, err := txSelf.GetSatisfiedInputs(action)

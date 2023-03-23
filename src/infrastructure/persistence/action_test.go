@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pashagolub/pgxmock"
+	"github.com/pashagolub/pgxmock/v2"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/input-output-hk/cicero/src/config/mocks"

@@ -7,7 +7,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -106,7 +106,7 @@ func (self factService) Save(fact *domain.Fact, binary io.Reader) ([]domain.Invo
 	var runFunc InvokeRunFunc
 	var invocations []domain.Invocation
 
-	if err := self.db.BeginFunc(context.Background(), func(tx pgx.Tx) error {
+	if err := pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*factService)
 
 		self.logger.Trace().Msg("Saving new Fact")

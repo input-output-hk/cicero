@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/antonlindstrom/pgstore"
-	"github.com/georgysavva/scany/pgxscan"
+	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 )

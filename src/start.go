@@ -7,7 +7,7 @@ import (
 	"cirello.io/oversight"
 	promtailClient "github.com/grafana/loki/clients/pkg/promtail/client"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pkg/errors"
 	prometheus "github.com/prometheus/client_golang/api"
 	"github.com/rs/zerolog"

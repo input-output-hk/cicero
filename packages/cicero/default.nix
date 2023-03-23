@@ -15,7 +15,7 @@
       default = cicero;
 
       cicero = let
-        package = pkgs.buildGo118Module rec {
+        package = pkgs.buildGo120Module rec {
           pname = "cicero";
           version = "2023.02.17";
           vendorHash = "sha256-On0w0EucNCVpo26UnoHMrRPd7hV5rukv71SAc8nWe/8=";

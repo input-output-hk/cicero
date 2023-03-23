@@ -2,8 +2,8 @@ package mocks
 
 import (
 	"context"
-	"github.com/jackc/pgx/v4"
-	"github.com/pashagolub/pgxmock"
+	"github.com/jackc/pgx/v5"
+	"github.com/pashagolub/pgxmock/v2"
 	"testing"
 )
 
