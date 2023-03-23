@@ -1,12 +1,14 @@
 package config
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/antonlindstrom/pgstore"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pkg/errors"
 	"github.com/zitadel/oidc/v2/pkg/client/rp"
 	"github.com/zitadel/oidc/v2/pkg/client/rs"
@@ -80,7 +82,9 @@ func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfi
 
 	if url, err := DbUrl(); err != nil {
 		return self, err
-	} else if store, err := pgstore.NewPGStore(url, cookieAuthKey, cookieEncKey); err != nil {
+	} else if db, err := sql.Open("pgx", url); err != nil {
+		return self, err
+	} else if store, err := pgstore.NewPGStoreFromPool(db, cookieAuthKey, cookieEncKey); err != nil {
 		return self, err
 	} else {
 		self.Sessions = store
