@@ -54,9 +54,9 @@ type InstanceComponentsOpts struct {
 }
 
 type InstanceWebComponentOpts struct {
-	ListenAddr string
-	CookieAuth string
-	CookieEnc string
+	ListenAddr    string
+	CookieAuth    string
+	CookieEnc     string
 	OidcProviders string
 }
 
@@ -82,9 +82,9 @@ func (cmd StartCmd) GetComponentOpts() InstanceComponentsOpts {
 	start := InstanceComponentsOpts{}
 
 	webOpts := InstanceWebComponentOpts{
-		ListenAddr: cmd.WebListen,
-		CookieAuth: cmd.WebCookieAuth,
-		CookieEnc: cmd.WebCookieEnc,
+		ListenAddr:    cmd.WebListen,
+		CookieAuth:    cmd.WebCookieAuth,
+		CookieEnc:     cmd.WebCookieEnc,
 		OidcProviders: cmd.WebOidcProviders,
 	}
 
@@ -213,12 +213,12 @@ func NewInstance(opts InstanceOpts, logger *zerolog.Logger) (Instance, error) {
 
 type Instance struct {
 	Nomad *component.NomadEventConsumer
-	Web *web.Web
+	Web   *web.Web
 
-	logger *zerolog.Logger
-	db *pgxpool.Pool
+	logger         *zerolog.Logger
+	db             *pgxpool.Pool
 	promtailClient promtailClient.Client
-	nomadClient *nomad.Client
+	nomadClient    *nomad.Client
 }
 
 func (self Instance) Close() {

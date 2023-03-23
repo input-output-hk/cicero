@@ -47,7 +47,7 @@ func DBConnection(logger *zerolog.Logger, logDb bool) (*pgxpool.Pool, error) {
 	}
 	if logDb {
 		dbconfig.ConnConfig.Tracer = &tracelog.TraceLog{
-			Logger: pgxzerolog.NewLogger(*logger),
+			Logger:   pgxzerolog.NewLogger(*logger),
 			LogLevel: tracelog.LogLevelTrace,
 		}
 	}
