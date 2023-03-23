@@ -2041,7 +2041,7 @@ func (self *Web) Error(w http.ResponseWriter, err error) {
 }
 
 func (self *Web) json(w http.ResponseWriter, obj any, status int) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(obj); err != nil {
 		self.ServerError(w, err)
