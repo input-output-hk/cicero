@@ -1,17 +1,18 @@
 {inputs, ...}: {
+  imports = [inputs.devshell.flakeModule];
+
   perSystem = {
     config,
     system,
     inputs',
     ...
   }: {
-    devShells.default = inputs'.devshell.legacyPackages.mkShell ({
+    devshells.default = {
       lib,
       pkgs,
-      extraModulesPath,
       ...
     }: {
-      imports = map (i: "${extraModulesPath}/${i}.nix") [
+      imports = map (i: "${inputs.devshell}/extra/${i}.nix") [
         "language/go"
       ];
 
@@ -211,6 +212,6 @@
           "mdbook"
         ];
       };
-    });
+    };
   };
 }

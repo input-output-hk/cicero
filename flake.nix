@@ -6,6 +6,7 @@
 
   inputs = {
     nixpkgs.url = github:NixOS/nixpkgs/nixos-22.11;
+    nixpkgs-unstable.url = github:NixOS/nixpkgs/nixpkgs-unstable;
     parts.url = github:hercules-ci/flake-parts;
     devshell = {
       url = github:numtide/devshell;
@@ -66,5 +67,12 @@
         nixos/modules
         nixos/configs/vm.nix
       ];
+
+      perSystem = {inputs', ...}: {
+        _module.args.pkgs = inputs'.nixpkgs.legacyPackages.extend (_: _: {
+          # We need at least v2.17.0 for Go 1.20 support.
+          go-mockery = inputs'.nixpkgs-unstable.legacyPackages.go-mockery;
+        });
+      };
     };
 }
