@@ -70,8 +70,11 @@
 
       perSystem = {inputs', ...}: {
         _module.args.pkgs = inputs'.nixpkgs.legacyPackages.extend (_: _: {
-          # We need at least v2.17.0 for Go 1.20 support.
-          go-mockery = inputs'.nixpkgs-unstable.legacyPackages.go-mockery;
+          inherit
+            (inputs'.nixpkgs-unstable.legacyPackages)
+            go-mockery # We need at least v2.17.0 for Go 1.20 support.
+            golangci-lint # We need at least v1.51.0 for Go 1.20 support.
+            ;
         });
       };
     };
