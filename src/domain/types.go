@@ -52,8 +52,8 @@ type InputDefinition struct {
 }
 
 type OutputDefinition struct {
-	Success cue.Value
-	Failure cue.Value
+	Success cue.Value `json:"success"`
+	Failure cue.Value `json:"failure"`
 }
 
 type Invocation struct {
