@@ -1468,6 +1468,10 @@ func (self *Web) ApiActionNameNamePatch(w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	if err := req.ParseForm(); err != nil {
 		self.ServerError(w, err)
 		return
@@ -1477,9 +1481,6 @@ func (self *Web) ApiActionNameNamePatch(w http.ResponseWriter, req *http.Request
 		self.ServerError(w, err)
 		return
 	} else if actionName == nil {
-		self.NotFound(w, nil)
-		return
-	} else if session := self.sessionOidc(w, req, false); actionName.Private && session == nil {
 		self.NotFound(w, nil)
 		return
 	}
