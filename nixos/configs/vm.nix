@@ -32,7 +32,7 @@ parts @ {
           inputs.follower.overlay
           (_: prev: {
             inherit (parts.inputs.nomad.packages.${prev.system}) nomad;
-            inherit ((getSystem prev.system).packages) cicero nomad-driver-podman;
+            inherit ((getSystem prev.system).packages) cicero cicero-evaluator-nix nomad-driver-podman;
           })
         ];
 

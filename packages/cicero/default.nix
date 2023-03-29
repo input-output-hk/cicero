@@ -2,10 +2,10 @@
   self,
   config,
   inputs,
-  getSystem,
   ...
 }: {
-  perSystem = {
+  perSystem = perSystem @ {
+    inputs',
     lib,
     pkgs,
     system,
@@ -47,31 +47,39 @@
               ifSystem isLinux {schemathesis = schemathesisTest;};
         };
 
-        schemathesisTest = pkgs.nixosTest {
-          name = "schemathesis";
-          nodes.main = {pkgs, ...}: {
-            imports = [config.flake.nixosModules.default];
+        nixosTestNode = {
+          imports = [config.flake.nixosModules.default];
 
-            nixpkgs.overlays = lib.mkForce [
-              (_: _: {cicero = package;})
-            ];
+          nixpkgs.overlays = lib.mkForce [
+            (_: _: {
+              cicero = package;
+              inherit (perSystem.config.packages) cicero-evaluator-nix;
+            })
+          ];
 
-            services = {
-              cicero = {
-                enable = true;
-                args = "web";
-              };
+          nix.settings.experimental-features = ["nix-command" "flakes"];
 
-              # The derivation implementing this accesses /var/log/{b,w}tmp at build time
-              # (should probably be fixed upstream).
-              # Without sandboxing, as is the case in an unprivileged container,
-              # this will fail due to file permissions not being open for the nix build user.
-              logrotate.checkConfig = false;
+          services = {
+            cicero = {
+              enable = true;
+              args = lib.mkDefault "web";
             };
 
-            environment.systemPackages = [(getSystem system).packages.schemathesis];
+            # The derivation implementing this accesses /var/log/{b,w}tmp at build time
+            # (should probably be fixed upstream).
+            # Without sandboxing, as is the case in an unprivileged container,
+            # this will fail due to file permissions not being open for the nix build user.
+            logrotate.checkConfig = false;
+          };
 
-            systemd.services.postgresql.serviceConfig.TimeoutStartSec = 300;
+          systemd.services.postgresql.serviceConfig.TimeoutStartSec = 300;
+        };
+
+        schemathesisTest = pkgs.nixosTest {
+          name = "schemathesis";
+          nodes.main = {
+            imports = [nixosTestNode];
+            environment.systemPackages = [perSystem.config.packages.schemathesis];
           };
           testScript = ''
             main.wait_for_unit("cicero")

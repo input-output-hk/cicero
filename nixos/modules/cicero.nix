@@ -14,6 +14,16 @@ in {
       default = pkgs.cicero;
     };
 
+    evaluators = mkOption {
+      type = with types; listOf package;
+      default = [pkgs.cicero-evaluator-nix];
+    };
+
+    transformers = mkOption {
+      type = with types; listOf package;
+      default = [];
+    };
+
     args = mkOption {
       type = types.str;
       default = "";
@@ -45,9 +55,10 @@ in {
       serviceConfig = {
         User = "cicero";
         ConfigurationDirectory = "cicero";
+        CacheDirectory = "cicero";
       };
 
-      path = [cfg.package pkgs.dbmate];
+      path = [cfg.package pkgs.dbmate config.nix.package] ++ cfg.evaluators ++ cfg.transformers;
 
       preStart = ''
         dbmate \
@@ -56,13 +67,20 @@ in {
           up
       '';
 
-      script = ''
+      script = let
+        exeNames = map (e: baseNameOf (lib.getExe e));
+      in ''
         argsFile="$CONFIGURATION_DIRECTORY"/start.args
         if [[ -f "$argsFile" ]]; then
           args=$(< "$argsFile")
         fi
 
-        cicero start $args "$@"
+        export XDG_CACHE_HOME="$CACHE_DIRECTORY"
+
+        # List `$args` first so positional arguments work as expected!
+        cicero start $args "$@" \
+          --evaluators ${lib.escapeShellArgs (map (lib.removePrefix "cicero-evaluator-") (exeNames cfg.evaluators))} \
+          ${lib.optionalString (cfg.transformers != []) "--transform ${lib.escapeShellArgs (exeNames cfg.transformers)}"}
       '';
       scriptArgs = cfg.args;
 
