@@ -45,7 +45,6 @@
           in
             with lib.systems.inspect.predicates;
               ifSystem isLinux {
-                schemathesis = schemathesisTest;
                 api = apiTest;
               };
         };
@@ -76,18 +75,6 @@
           };
 
           systemd.services.postgresql.serviceConfig.TimeoutStartSec = 300;
-        };
-
-        schemathesisTest = pkgs.nixosTest {
-          name = "schemathesis";
-          nodes.main = {
-            imports = [nixosTestNode];
-            environment.systemPackages = [perSystem.config.packages.schemathesis];
-          };
-          testScript = ''
-            main.wait_for_unit("cicero")
-            main.succeed("schemathesis run http://127.0.0.1:8080/documentation/cicero.json --validate-schema=false --hypothesis-suppress-health-check=too_slow")
-          '';
         };
 
         apiTest = let

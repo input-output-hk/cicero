@@ -69,7 +69,6 @@
 
       commands = [
         {package = "dbmate";}
-        {package = config.packages.schemathesis;}
         {package = "nomad";}
         {package = "vault";}
         {package = "damon";}

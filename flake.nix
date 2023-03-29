@@ -26,11 +26,6 @@
       url = github:input-output-hk/nomad-follower;
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    poetry2nix = {
-      # FIXME try building .#schemathesis when you unpin this
-      url = github:nix-community/poetry2nix/920ba682377d5c0d87945c5eb6141ab8447ca509;
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     spongix = {
       # tests fail on latest main
       url = github:input-output-hk/spongix/a08bcc8f0bb63e372bf82abe5ad1f001e6b4d566;
@@ -60,7 +55,6 @@
         packages/cicero/evaluators/nix
         packages/cicero/handbook.nix
         packages/trigger.nix
-        packages/schemathesis.nix
         packages/nomad-driver-podman.nix
         packages/go-critic.nix
         packages/treefmt-cue.nix

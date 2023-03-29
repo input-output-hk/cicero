@@ -35,10 +35,6 @@ Run tests with coverage:
 
 	go test -cover ./...
 
-Run OpenAPI validation tests:
-
-	schemathesis run http://localhost:18080/documentation/cicero.yaml --validate-schema=false
-
 Serve the handbook locally on port 3000 and open it:
 
 	mdbook serve --open
