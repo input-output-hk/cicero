@@ -28,7 +28,7 @@ $$;
 
 CREATE OR REPLACE TRIGGER action_insert
 AFTER INSERT ON action
-FOR EACH ROW EXECUTE PROCEDURE action_insert_trigger();
+FOR EACH ROW EXECUTE FUNCTION action_insert_trigger();
 
 CREATE OR REPLACE FUNCTION action_delete_trigger()
 RETURNS TRIGGER
@@ -48,7 +48,7 @@ $$;
 
 CREATE OR REPLACE TRIGGER action_delete
 AFTER DELETE ON action
-FOR EACH STATEMENT EXECUTE PROCEDURE action_delete_trigger();
+FOR EACH STATEMENT EXECUTE FUNCTION action_delete_trigger();
 
 -- migrate:down
 
@@ -67,7 +67,7 @@ $$;
 
 CREATE OR REPLACE TRIGGER action_insert
 AFTER INSERT ON action
-FOR EACH ROW EXECUTE PROCEDURE action_insert_trigger();
+FOR EACH ROW EXECUTE FUNCTION action_insert_trigger();
 
 CREATE OR REPLACE FUNCTION action_delete_trigger()
 RETURNS TRIGGER
@@ -87,7 +87,7 @@ $$;
 
 CREATE OR REPLACE TRIGGER action_delete
 AFTER DELETE ON action
-FOR EACH STATEMENT EXECUTE PROCEDURE action_delete_trigger();
+FOR EACH STATEMENT EXECUTE FUNCTION action_delete_trigger();
 
 ALTER TABLE action_name
 DROP active,
