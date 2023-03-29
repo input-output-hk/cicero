@@ -60,11 +60,12 @@ func (self *Web) Start(ctx context.Context) error {
 
 	// sorted alphabetically, please keep it this way
 	router.HandleFunc("/api/action/current/{name}", self.ApiActionCurrentNameGet).Methods(http.MethodGet)
-	router.HandleFunc("/api/action/current/{name}", self.ApiActionCurrentNamePatch).Methods(http.MethodPatch)
 	router.HandleFunc("/api/action/current", self.ApiActionCurrentGet).Methods(http.MethodGet)
 	router.HandleFunc("/api/action/definition/{source}/{name}/{id}", self.ApiActionDefinitionSourceNameIdGet).Methods(http.MethodGet)
 	router.HandleFunc("/api/action/definition/{source}", self.ApiActionDefinitionSourceGet).Methods(http.MethodGet)
 	router.HandleFunc("/api/action/match", self.ApiActionMatchPost).Methods(http.MethodPost)
+	router.HandleFunc("/api/action/name/{name}", self.ApiActionNameNameGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/action/name/{name}", self.ApiActionNameNamePatch).Methods(http.MethodPatch)
 	router.HandleFunc("/api/action/{id}", self.ApiActionIdGet).Methods(http.MethodGet)
 	router.HandleFunc("/api/action", self.ApiActionGet).Methods(http.MethodGet)
 	router.HandleFunc("/api/action", self.ApiActionPost).Methods(http.MethodPost)
@@ -99,7 +100,7 @@ func (self *Web) Start(ctx context.Context) error {
 	router.HandleFunc("/run", self.RunGet).Methods(http.MethodGet)
 	router.HandleFunc("/action/current", self.ActionCurrentGet).Methods(http.MethodGet)
 	router.HandleFunc("/action/current/{name}", self.ActionCurrentNameGet).Methods(http.MethodGet)
-	router.HandleFunc("/action/current/{name}", self.ActionCurrentNamePatch).Methods(http.MethodPatch)
+	router.HandleFunc("/action/name/{name}", self.ActionNameNamePatch).Methods(http.MethodPatch)
 	router.HandleFunc("/action/new", self.ActionNewGet).Methods(http.MethodGet)
 	router.HandleFunc("/action/{id}", self.ActionIdGet).Methods(http.MethodGet)
 	router.HandleFunc("/action/{id}/run", self.ActionIdRunGet).Methods(http.MethodGet)
@@ -443,12 +444,12 @@ func (self *Web) actionIdGet(w http.ResponseWriter, req *http.Request, id uuid.U
 	}
 }
 
-func (self *Web) ActionCurrentNamePatch(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ActionNameNamePatch(w http.ResponseWriter, req *http.Request) {
 	if self.sessionOidc(w, req, true) == nil {
 		return
 	}
 
-	self.ApiActionCurrentNamePatch(NopResponseWriter{}, req)
+	self.ApiActionNameNamePatch(NopResponseWriter{}, req)
 
 	if referer := req.Header.Get("Referer"); referer != "" {
 		http.Redirect(w, req, referer, http.StatusFound)
@@ -1440,7 +1441,26 @@ func (self *Web) ApiActionCurrentNameGet(w http.ResponseWriter, req *http.Reques
 	}
 }
 
-func (self *Web) ApiActionCurrentNamePatch(w http.ResponseWriter, req *http.Request) {
+func (self *Web) ApiActionNameNameGet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	if name, err := url.PathUnescape(vars["name"]); err != nil {
+		self.ClientError(w, errors.WithMessagef(err, "Invalid escaping of action name: %q", vars["name"]))
+		return
+	} else if actionName, err := self.ActionNameService.Get(name); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if actionName == nil {
+		self.NotFound(w, nil)
+		return
+	} else if session := self.sessionOidc(w, req, false); actionName.Private && session == nil {
+		self.NotFound(w, nil)
+		return
+	} else {
+		self.json(w, actionName, http.StatusOK)
+	}
+}
+
+func (self *Web) ApiActionNameNamePatch(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	name, err := url.PathUnescape(vars["name"])
 	if err != nil {
