@@ -107,8 +107,8 @@ in {
         {name = "cicero_api";}
       ];
 
+      authentication = "local cicero all peer map=cicero";
       identMap = "cicero cicero cicero";
-      authentication = "local cicero all ident map=cicero";
     };
 
     systemd.services.postgresql = lib.mkIf cfg.postgres.enable {
