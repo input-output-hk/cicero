@@ -26,7 +26,9 @@ AS $$
 	END;
 $$;
 
-CREATE OR REPLACE TRIGGER action_insert
+DROP TRIGGER action_insert ON action;
+
+CREATE TRIGGER action_insert
 AFTER INSERT ON action
 FOR EACH ROW EXECUTE FUNCTION action_insert_trigger();
 
@@ -46,7 +48,9 @@ AS $$
 	END;
 $$;
 
-CREATE OR REPLACE TRIGGER action_delete
+DROP TRIGGER action_delete ON action;
+
+CREATE TRIGGER action_delete
 AFTER DELETE ON action
 FOR EACH STATEMENT EXECUTE FUNCTION action_delete_trigger();
 
@@ -65,7 +69,9 @@ AS $$
 	END;
 $$;
 
-CREATE OR REPLACE TRIGGER action_insert
+DROP TRIGGER action_insert ON action;
+
+CREATE TRIGGER action_insert
 AFTER INSERT ON action
 FOR EACH ROW EXECUTE FUNCTION action_insert_trigger();
 
@@ -85,7 +91,9 @@ AS $$
 	END;
 $$;
 
-CREATE OR REPLACE TRIGGER action_delete
+DROP TRIGGER action_delete ON action;
+
+CREATE TRIGGER action_delete
 AFTER DELETE ON action
 FOR EACH STATEMENT EXECUTE FUNCTION action_delete_trigger();
 
