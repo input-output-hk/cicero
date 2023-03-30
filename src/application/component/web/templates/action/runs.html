@@ -13,6 +13,7 @@
 					<th>Created At</th>
 					<th>Finished At</th>
 					<th>Duration</th>
+					<th>Status</th>
 					<th>Nomad Job ID</th>
 				</tr>
 			</thead>
@@ -38,6 +39,7 @@
 									{{.FinishedAt.Sub .CreatedAt}}
 								{{end}}
 							</td>
+							<td>{{.Status}}</td>
 							<td>
 								<a target="_parent" href="/run/{{.NomadJobID}}">
 									{{.NomadJobID}}
@@ -46,7 +48,7 @@
 						{{else}}
 							{{with .Invocation}}
 								<td>{{.CreatedAt}}</td>
-								<td colspan="3">
+								<td colspan="4">
 									<a target="_parent" href="/invocation/{{.Id}}">Invocation</a>
 									{{if .FinishedAt}}
 										failed
