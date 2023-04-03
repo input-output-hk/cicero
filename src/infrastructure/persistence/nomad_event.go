@@ -30,7 +30,7 @@ func (n nomadEventRepository) Save(event *domain.NomadEvent) error {
 	return n.DB.QueryRow(
 		context.Background(),
 		`INSERT INTO nomad_event (topic, "type", "key", filter_keys, "index", payload)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		VALUES ($1, $2, $3, COALESCE($4, 'null'::jsonb), $5, $6)
 		ON CONFLICT (uid) DO UPDATE
 			-- just for RETURNING to work, would otherwise DO NOTHING
 			SET topic = EXCLUDED.topic
