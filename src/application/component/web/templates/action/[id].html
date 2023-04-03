@@ -29,6 +29,9 @@
 										{{if $.ActionName.Active}}
 											checked
 										{{end}}
+										{{if not $.Session}}
+											disabled
+										{{end}}
 										onChange="this.form.submit()"
 									/>
 									<input
@@ -50,6 +53,9 @@
 										type="checkbox"
 										{{if $.ActionName.Private}}
 											checked
+										{{end}}
+										{{if not $.Session}}
+											disabled
 										{{end}}
 										onChange="this.form.submit()"
 									/>
