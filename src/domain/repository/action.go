@@ -16,7 +16,6 @@ type ActionRepository interface {
 	GetByName(string, *Page) ([]domain.Action, error)
 	GetLatestByName(string) (*domain.Action, error)
 	GetAll() ([]domain.Action, error)
-	GetCurrent() ([]domain.Action, error)
 	GetByCurrentByActiveByPrivate(bool, *bool, *bool) ([]domain.Action, error)
 	Save(*domain.Action) error
 	GetSatisfactions(uuid.UUID) (map[string]uuid.UUID, error)

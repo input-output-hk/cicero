@@ -31,7 +31,6 @@ type ActionService interface {
 	GetByName(string, *repository.Page) ([]domain.Action, error)
 	GetLatestByName(string) (*domain.Action, error)
 	GetAll() ([]domain.Action, error)
-	GetCurrent() ([]domain.Action, error)
 	GetByCurrentByActiveByPrivate(bool, *bool, *bool) ([]domain.Action, error)
 	Save(*domain.Action) error
 	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, error)
@@ -63,6 +62,7 @@ type ActionServiceCyclicDependencies struct {
 type actionService struct {
 	logger            zerolog.Logger
 	actionRepository  repository.ActionRepository
+	actionNameService ActionNameService
 	evaluationService EvaluationService
 	runService        RunService
 	nomadClient       application.NomadClient
@@ -70,10 +70,11 @@ type actionService struct {
 	ActionServiceCyclicDependencies
 }
 
-func NewActionService(db config.PgxIface, nomadClient application.NomadClient, invocationService *InvocationService, factService *FactService, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
+func NewActionService(db config.PgxIface, nomadClient application.NomadClient, invocationService *InvocationService, factService *FactService, actionNameService ActionNameService, runService RunService, evaluationService EvaluationService, logger *zerolog.Logger) ActionService {
 	return &actionService{
 		logger:            logger.With().Str("component", "ActionService").Logger(),
 		actionRepository:  persistence.NewActionRepository(db),
+		actionNameService: actionNameService,
 		evaluationService: evaluationService,
 		nomadClient:       nomadClient,
 		runService:        runService,
@@ -94,6 +95,7 @@ func (self actionService) withQuerier(querier config.PgxIface, cyclicDeps Action
 		logger:                          self.logger,
 		actionRepository:                self.actionRepository.WithQuerier(querier),
 		runService:                      self.runService.WithQuerier(querier),
+		actionNameService:               self.actionNameService.WithQuerier(querier),
 		evaluationService:               self.evaluationService,
 		nomadClient:                     self.nomadClient,
 		db:                              querier,
@@ -164,13 +166,6 @@ func (self actionService) Save(action *domain.Action) error {
 	}
 	logger.Trace().Stringer("id", action.ID).Msg("Created Action")
 	return nil
-}
-
-func (self actionService) GetCurrent() (actions []domain.Action, err error) {
-	self.logger.Trace().Msg("Getting current Actions")
-	actions, err = self.actionRepository.GetCurrent()
-	err = errors.WithMessage(err, "Could not select current Actions")
-	return
 }
 
 func (self actionService) GetByCurrentByActiveByPrivate(onlyCurrent bool, active *bool, private *bool) (actions []domain.Action, err error) {
@@ -495,7 +490,17 @@ func (self actionService) UpdateSatisfaction(fact *domain.Fact) error {
 	return pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*actionService)
 
-		actions, err := txSelf.GetCurrent()
+		var private *bool
+		if fact.RunId != nil {
+			if actionName, err := txSelf.actionNameService.GetByRunId(*fact.RunId); err != nil {
+				return err
+			} else if actionName.Private {
+				true := true
+				private = &true
+			}
+		}
+
+		actions, err := txSelf.GetByCurrentByActiveByPrivate(true, nil, private)
 		if err != nil {
 			return err
 		}

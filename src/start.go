@@ -171,7 +171,7 @@ func NewInstance(opts InstanceOpts, logger *zerolog.Logger) (Instance, error) {
 	sessionService := service.NewSessionService(instance.db, logger)
 
 	*invocationService = service.NewInvocationService(instance.db, lokiService, actionService, factService, logger)
-	*actionService = service.NewActionService(instance.db, nomadClientWrapper, invocationService, factService, runService, evaluationService, logger)
+	*actionService = service.NewActionService(instance.db, nomadClientWrapper, invocationService, factService, actionNameService, runService, evaluationService, logger)
 	*factService = service.NewFactService(instance.db, actionService, logger)
 
 	start := opts.GetComponentOpts()

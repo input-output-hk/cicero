@@ -116,15 +116,6 @@ func (a *actionRepository) Save(action *domain.Action) error {
 	).Scan(&action.ID, &action.CreatedAt)
 }
 
-func (a *actionRepository) GetCurrent() (actions []domain.Action, err error) {
-	actions = []domain.Action{}
-	err = pgxscan.Select(
-		context.Background(), a.DB, &actions,
-		`SELECT DISTINCT ON (name) * FROM action ORDER BY name, created_at DESC`,
-	)
-	return
-}
-
 func (a *actionRepository) GetByCurrentByActiveByPrivate(onlyCurrent bool, active *bool, private *bool) (actions []domain.Action, err error) {
 	sql := `SELECT `
 	if onlyCurrent {
