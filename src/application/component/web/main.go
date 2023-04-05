@@ -530,10 +530,12 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 				http.Redirect(w, req, "/action/"+action.ID.String(), http.StatusCreated)
 			}
 
-			return actionNameService.Update(name, func(actionName *domain.ActionName, _ config.PgxIface) error {
+			if err := actionNameService.Update(name, func(actionName *domain.ActionName, _ config.PgxIface) error {
 				actionName.Private = mode == "private"
 				return nil
-			})
+			}); err != nil {
+				return err
+			}
 		}
 
 		return nil
