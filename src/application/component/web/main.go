@@ -151,7 +151,11 @@ func (self *Web) Start(ctx context.Context) error {
 				self.ClientError(w, errors.WithMessage(err, "While marshaling the `forward` parameter to JSON"))
 				return
 			} else {
-				rp.AuthURLHandler(func() string { return string(state) }, provider.RelyingParty)(w, req)
+				rp.AuthURLHandler(
+					func() string { return string(state) },
+					provider.RelyingParty,
+					provider.URLParamOpt,
+				)(w, req)
 			}
 		}).Methods(http.MethodGet)
 

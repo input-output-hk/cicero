@@ -14,6 +14,7 @@ import (
 	"github.com/zitadel/oidc/v2/pkg/client/rs"
 	oidchttp "github.com/zitadel/oidc/v2/pkg/http"
 	"github.com/zitadel/oidc/v2/pkg/oidc"
+	"golang.org/x/oauth2"
 )
 
 type WebConfig struct {
@@ -24,6 +25,8 @@ type WebConfig struct {
 
 type OidcProvider struct {
 	rp.RelyingParty
+	rp.URLParamOpt
+
 	rs.ResourceServer
 }
 
@@ -44,10 +47,12 @@ func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfi
 	}
 
 	oidcProviderCfgs := make(map[string]struct {
-		Issuer       string `json:"issuer"`
-		ClientId     string `json:"client-id"`
-		ClientSecret string `json:"client-secret"`
-		CallbackUrl  string `json:"callback-url"`
+		Issuer          string            `json:"issuer"`
+		ClientId        string            `json:"client-id"`
+		ClientSecret    string            `json:"client-secret"`
+		CallbackUrl     string            `json:"callback-url"`
+		AuthQueryParams map[string]string `json:"auth-query-params"`
+		Scopes          []string          `json:"scopes"`
 	})
 	if providersJson, err := os.ReadFile(oidcProviders); err != nil {
 		return self, errors.WithMessage(err, "While reading web OIDC provider settings")
@@ -61,7 +66,7 @@ func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfi
 			cfg.ClientId,
 			cfg.ClientSecret,
 			cfg.CallbackUrl,
-			[]string{oidc.ScopeOpenID, oidc.ScopeEmail},
+			append([]string{oidc.ScopeOpenID, oidc.ScopeEmail}, cfg.Scopes...),
 			// OAuth 2.1 and OAuth 2.0 BCP mandate PKCE for code flow regardless of whether a client secret is used
 			rp.WithPKCE(oidchttp.NewCookieHandler(cookieAuthKey, cookieEncKey)),
 			rp.WithVerifierOpts(rp.WithIssuedAtOffset(5*time.Second)),
@@ -76,7 +81,18 @@ func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfi
 					return self, errors.WithMessagef(err, "While setting up OIDC resource server: %q", name)
 				}
 			}
-			self.OidcProviders[name] = OidcProvider{provider, resourceServer}
+
+			self.OidcProviders[name] = OidcProvider{
+				provider,
+				func() []oauth2.AuthCodeOption {
+					opts := make([]oauth2.AuthCodeOption, 0, len(cfg.AuthQueryParams))
+					for k, v := range cfg.AuthQueryParams {
+						opts = append(opts, rp.WithURLParam(k, v)()...)
+					}
+					return opts
+				},
+				resourceServer,
+			}
 		}
 	}
 

@@ -99,6 +99,7 @@
                 client-id = "cicero";
                 client-secret = "foo";
                 callback-url = "http://localhost:18080/login/oidc/dex/callback";
+                scopes = ["offline_access"];
               };
               dex-host =
                 dex
