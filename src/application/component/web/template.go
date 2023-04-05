@@ -3,6 +3,7 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -84,6 +85,16 @@ var templateFuncs = template.FuncMap{
 		)
 	},
 	"timeNow": time.Now,
+	"timeZone": func(t time.Time) string {
+		name, offset := t.Zone()
+		return fmt.Sprintf(
+			"%s (%+03d:%02d:%02d)",
+			name,
+			offset/60/60,
+			offset/60%60,
+			offset%60,
+		)
+	},
 	"derefInt": func(ptr *int) int {
 		return *ptr
 	},

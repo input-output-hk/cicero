@@ -408,7 +408,11 @@
 											<table class="panel log">
 												{{range .Events}}
 													<tr>
-														<td>{{(timeUnixNano .Time).Format "2006-01-02 15:04:05"}}</td>
+														{{with (timeUnixNano .Time).UTC}}
+															<td title="{{timeZone .}}">
+																{{.Format "2006-01-02 15:04:05"}}
+															</td>
+														{{end}}
 														{{if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting"}}
 															<td><samp>{{.DisplayMessage}}</samp></td>
 														{{else if eq .Type "Not Restarting"}}
