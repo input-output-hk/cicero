@@ -17,7 +17,7 @@
       cicero = let
         package = pkgs.buildGo120Module rec {
           pname = "cicero";
-          version = "2023.02.17";
+          version = "2023.04.05";
           vendorHash = "sha256-9IhfbWHevgL3xQ2pIUaK0Sx+TS9o+3mZkydeQTGLkeQ=";
 
           src = inputs.inclusive.lib.inclusive ../.. [
