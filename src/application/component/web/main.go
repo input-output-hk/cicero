@@ -502,7 +502,7 @@ func (self *Web) ActionNewGet(w http.ResponseWriter, req *http.Request) {
 			case "public":
 			case "private":
 				if session == nil {
-					w.Header().Add("WWW-Authenticate", `Bearer scope="oidc"`)
+					w.Header().Add("WWW-Authenticate", oidc.PrefixBearer+`scope="oidc"`)
 					self.ClientError(w, HandlerError{nil, http.StatusUnauthorized})
 					return
 				}
@@ -2278,15 +2278,15 @@ func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectT
 			RawQuery: loginUriQuery.Encode(),
 		}
 
-		w.Header().Add("WWW-Authenticate", `Bearer scope="oidc"`)
+		w.Header().Add("WWW-Authenticate", oidc.PrefixBearer+`scope="oidc"`)
 		http.Redirect(w, req, loginUri.RequestURI(), http.StatusUnauthorized)
 	}
 
 	// convert the Authorization header to a cookie that we can use with the sessions library
-	if auth := req.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+	if auth := req.Header.Get("Authorization"); strings.HasPrefix(auth, oidc.PrefixBearer) {
 		req.AddCookie(&http.Cookie{
 			Name:  sessionOidc,
-			Value: strings.TrimPrefix(auth, "Bearer "),
+			Value: strings.TrimPrefix(auth, oidc.PrefixBearer),
 		})
 	}
 
