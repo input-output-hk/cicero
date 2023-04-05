@@ -1317,15 +1317,14 @@ func (self *Web) ApiRunIdOutputGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunIdDelete(w http.ResponseWriter, req *http.Request) {
+	if self.sessionOidc(w, req, true) == nil {
+		return
+	}
+
 	if run, ok := self.getRun(w, req); !ok {
 		return
 	} else if run == nil {
 		self.NotFound(w, nil)
-		return
-	} else if actionName, err := self.ActionNameService.GetByInvocationId(run.InvocationId); err != nil {
-		self.ServerError(w, err)
-		return
-	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
 	} else if err := self.RunService.Cancel(run); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Failed to cancel Run %q", run.NomadJobID))
