@@ -143,11 +143,12 @@
 				if (line.time != null) {
 					const s2 = '2-digit';
 					const p =
-						new Intl.DateTimeFormat('in', { year: 'numeric', month: s2, day: s2, hour: s2, minute: s2, second: s2, hour12: false }).
+						new Intl.DateTimeFormat('in', { year: 'numeric', month: s2, day: s2, hour: s2, minute: s2, second: s2, hour12: false, timeZoneName: 'longOffset' }).
 						formatToParts(new Date(line.time)).
 						map(p => p.value);
 
 					td1.innerText = `${p[4]}-${p[2]}-${p[0]} ${p[6]}:${p[8]}:${p[10]}`;
+					td1.title = `${p[12]}`;
 				} else {
 					td1.innerText = line.labels.source;
 				}
