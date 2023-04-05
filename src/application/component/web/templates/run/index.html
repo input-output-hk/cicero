@@ -35,7 +35,9 @@
 									method="POST"
 									action="/_dispatch/method/DELETE/run/{{.NomadJobID}}"
 								>
-									<button>Cancel</button>
+									<button {{if not $.Session}}disabled{{end}}>
+										Cancel
+									</button>
 								</form>
 							{{end}}
 						</td>

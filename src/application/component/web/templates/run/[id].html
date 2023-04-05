@@ -41,7 +41,9 @@
 									action="/_dispatch/method/POST/invocation/{{.InvocationId}}"
 									style="display: inline-block"
 								>
-									<button>Retry</button>
+									<button {{if not $.Session}}disabled{{end}}>
+										Retry
+									</button>
 								</form>
 							</td>
 						</tr>
