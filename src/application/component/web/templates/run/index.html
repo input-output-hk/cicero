@@ -26,10 +26,10 @@
 						{{end}}
 					</td>
 					{{with .Run}}
-						<td>{{.CreatedAt}}</td>
+						<td>{{template "datetime-local" .CreatedAt}}</td>
 						<td>
 							{{with .FinishedAt}}
-								{{.}}
+								{{template "datetime-local" .}}
 							{{else}}
 								<form
 									method="POST"
@@ -56,7 +56,7 @@
 						</td>
 					{{else}}
 						{{with .Invocation}}
-							<td>{{.CreatedAt}}</td>
+							<td>{{template "datetime-local" .CreatedAt}}</td>
 							<td colspan="4">
 								<a href="/invocation/{{.Id}}">Invocation</a>
 								{{if .FinishedAt}}

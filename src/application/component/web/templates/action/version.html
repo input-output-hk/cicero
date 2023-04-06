@@ -38,7 +38,7 @@
 								</a>
 							{{end}}
 						</td>
-						<td>{{.CreatedAt}}</td>
+						<td>{{template "datetime-local" .CreatedAt}}</td>
 						<td><code>{{.Source}}</code></td>
 					</tr>
 				{{end}}

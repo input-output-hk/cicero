@@ -40,7 +40,7 @@
 							{{.Name}}
 						</a>
 					</td>
-					<td>{{.CreatedAt}}</td>
+					<td>{{template "datetime-local" .CreatedAt}}</td>
 					<td>
 						<form
 							method="POST"

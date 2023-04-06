@@ -217,6 +217,26 @@
 		</script>
 	{{end}}
 
+	{{define "datetime-local"}}
+		{{if not .IsZero}}
+			<script>
+			(() => {
+				const span = document.createElement('span');
+				const s2 = '2-digit';
+				const p =
+					new Intl.DateTimeFormat('in', { year: 'numeric', month: s2, day: s2, hour: s2, minute: s2, second: s2, hour12: false, timeZoneName: 'longOffset' }).
+					formatToParts(new Date({{.UnixMilli}})).
+					map(p => p.value);
+				span.innerText = `${p[4]}-${p[2]}-${p[0]} ${p[6]}:${p[8]}:${p[10]}`;
+				span.title = `${p[12]}`;
+
+				document.scripts[document.scripts.length - 1].replaceWith(span);
+			})();
+			</script>
+			<noscript>{{.}}</noscript>
+		{{end}}
+	{{end}}
+
 	<body>
 		<nav>
 			<ul>

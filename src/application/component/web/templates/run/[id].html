@@ -49,13 +49,13 @@
 						</tr>
 						<tr>
 							<th>Created at</th>
-							<td>{{.CreatedAt}}</td>
+							<td>{{template "datetime-local" .CreatedAt}}</td>
 						</tr>
 						<tr>
 							<th>Finished at</th>
 							<td>
 								{{with .FinishedAt}}
-									{{.}}
+									{{template "datetime-local" .}}
 								{{else}}
 									<form
 										method="POST"
@@ -204,7 +204,7 @@
 									</td>
 									<td class="allocation-label">
 										<label for="allocation-{{.ID}}">
-											{{timeUnixNano .CreateTime}}
+											{{template "datetime-local" (timeUnixNano .CreateTime)}}
 										</label>
 									</td>
 									<td class="allocation-label">
@@ -356,13 +356,13 @@
 													{{with .StartedAt}}
 														<tr>
 															<th>Started</th>
-															<td>{{.}}</td>
+															<td>{{template "datetime-local" .}}</td>
 														</tr>
 													{{end}}
 													{{if not .FinishedAt.IsZero}}
 														<tr>
 															<th>Finished</th>
-															<td>{{.FinishedAt}}</td>
+															<td>{{template "datetime-local" .FinishedAt}}</td>
 														</tr>
 													{{end}}
 													{{if .StartedAt}}
@@ -410,9 +410,9 @@
 											<table class="panel log">
 												{{range .Events}}
 													<tr>
-														{{with (timeUnixNano .Time).UTC}}
+														{{with timeUnixNano .Time}}
 															<td title="{{timeZone .}}">
-																{{.Format "2006-01-02 15:04:05"}}
+																{{template "datetime-local" .}}
 															</td>
 														{{end}}
 														{{if eq .Type "Received" "Task Setup" "Task hook failed" "Started" "Restarting"}}
