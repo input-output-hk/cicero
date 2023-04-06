@@ -219,7 +219,10 @@ func (self *Web) Start(ctx context.Context) error {
 				return
 			}
 
-			http.Redirect(w, req, loginOidcPath, http.StatusFound)
+			// Do not redirect to `loginOidcPath` here.
+			// If there is only OIDC provider configured,
+			// that would send you right back to that provider.
+			http.Redirect(w, req, "/", http.StatusFound)
 		})
 	}
 
@@ -254,6 +257,19 @@ func (self *Web) LoginOidcGet(w http.ResponseWriter, req *http.Request) {
 		providers = append(providers, name)
 	}
 
+	forward := req.URL.Query().Get("forward")
+
+	if session == nil && len(providers) == 1 {
+		location := "/login/oidc/" + providers[0]
+		if forward != "" {
+			query := url.Values{}
+			query.Add("forward", forward)
+			location += "?" + query.Encode()
+		}
+		http.Redirect(w, req, location, http.StatusFound)
+		return
+	}
+
 	var provider string
 	if session != nil {
 		provider = session.Provider()
@@ -261,7 +277,7 @@ func (self *Web) LoginOidcGet(w http.ResponseWriter, req *http.Request) {
 
 	if err := self.render("login/oidc.html", w, session, map[string]any{
 		"Providers": providers,
-		"Forward":   req.URL.Query().Get("forward"),
+		"Forward":   forward,
 
 		// only non-empty if already logged in
 		"Provider": provider,

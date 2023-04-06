@@ -259,7 +259,7 @@
                 []
                 ```
 
-                GET http://localhost:8080/login/oidc/dex
+                GET http://localhost:8080/login/oidc
                 [Options]
                 location: true
                 HTTP 200
@@ -403,7 +403,7 @@
                 active: false
                 HTTP 401
 
-                GET http://localhost:8080/login/oidc/dex
+                GET http://localhost:8080/login/oidc
                 [Options]
                 location: true
                 HTTP 200
@@ -440,7 +440,7 @@
                 GET http://localhost:8080/api/action/${testData.actionId}
                 HTTP 401
 
-                GET http://localhost:8080/login/oidc/dex
+                GET http://localhost:8080/login/oidc
                 [Options]
                 location: true
                 HTTP 200
