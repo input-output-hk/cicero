@@ -18,6 +18,7 @@ type SessionService interface {
 	WithQuerier(config.PgxIface) SessionService
 
 	GetByKey(string) (*pgstore.PGSession, error)
+	GetExpiryByKey(string) (*time.Time, error)
 	GetExpiredByAndZeroModified(time.Time) ([]pgstore.PGSession, error)
 	Update(*pgstore.PGSession, string, []securecookie.Codec, func(map[any]any) error) error
 }
@@ -50,6 +51,18 @@ func (self sessionService) GetByKey(key string) (session *pgstore.PGSession, err
 		return
 	}
 	logger.Trace().Msg("Got session by key")
+	return
+}
+
+func (self sessionService) GetExpiryByKey(key string) (expiry *time.Time, err error) {
+	logger := self.logger.With().Str("key", key).Logger()
+	logger.Trace().Msg("Getting session expiry by key")
+	expiry, err = self.sessionRepository.GetExpiryByKey(key)
+	if err != nil {
+		err = errors.WithMessagef(err, "While getting session expiry by key %q", key)
+		return
+	}
+	logger.Trace().Msg("Got session expiry by key")
 	return
 }
 

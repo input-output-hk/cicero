@@ -114,7 +114,7 @@ func (self *Web) Start(ctx context.Context) error {
 	{ // OIDC
 		defer self.Config.Sessions.StopCleanup(self.Config.Sessions.Cleanup(5 * time.Minute))
 
-		go self.refreshTokens(ctx, 5*time.Minute)
+		go self.refreshSessionTokens(ctx, 5*time.Minute)
 
 		router.HandleFunc(loginOidcPath, self.LoginOidcGet).Methods(http.MethodGet)
 
@@ -193,7 +193,7 @@ func (self *Web) Start(ctx context.Context) error {
 						self.ServerError(w, fmt.Errorf("Could not find session %q", session.ID))
 						return
 					} else if err := self.SessionService.Update(pgSession, sessionOidc, self.Config.Sessions.Codecs, func(data map[any]any) error {
-						// `refreshTokens()` ignores sessions with the zero timestamp
+						// `refreshSessionTokens()` ignores sessions with the zero timestamp
 						pgSession.ModifiedOn = time.Time{}
 						return nil
 					}); err != nil {
@@ -2324,41 +2324,66 @@ func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectT
 	}
 
 	session, err := self.Config.Sessions.Get(req, sessionOidc)
-	sessionOidc := SessionOidc{
+	sessionWrapper := SessionOidc{
 		Session: session,
 		Raw:     cookie.Value,
 	}
-	if err != nil || sessionOidc.UserInfo() == nil {
+	if err != nil || sessionWrapper.UserInfo() == nil {
 		redirect()
 		return nil
 	}
 
-	provider, providerExists := self.Config.OidcProviders[sessionOidc.Provider()]
+	provider, providerExists := self.Config.OidcProviders[sessionWrapper.Provider()]
 	if !providerExists {
 		redirect()
 		return nil
 	}
 
-	// To check whether the token is still valid,
-	// use the introspection endpoint if supported,
-	// otherwise the userinfo endpoint.
-	if provider.ResourceServer != nil {
-		if introspection, err := rs.Introspect(req.Context(), provider.ResourceServer, sessionOidc.AccessToken()); err != nil {
-			self.Logger.Err(err).
-				Str("provider", sessionOidc.Provider()).
-				Msg("Could not introspect OIDC session token")
-			redirect()
-			return nil
-		} else if !introspection.Active {
-			redirect()
-			return nil
-		}
-	} else if _, err := rp.Userinfo(sessionOidc.AccessToken(), oidc.BearerToken, sessionOidc.UserInfo().Subject, provider.RelyingParty); err != nil {
-		redirect()
+	if expiry, err := self.SessionService.GetExpiryByKey(session.ID); err != nil {
+		self.ServerError(w, err)
 		return nil
+	} else if expiry == nil {
+		self.ServerError(w, errors.New("session not found"))
+		return nil
+	} else {
+		// Check token validity or refresh if it expires soon.
+		if time.Until(*expiry) <= 15*time.Minute {
+			if expiry, err := self.refreshSessionToken(session.Values); err != nil {
+				redirect()
+				return nil
+			} else if expiry == nil {
+				redirect()
+				return nil
+			} else {
+				session.Options.MaxAge = int(time.Until(*expiry).Seconds())
+				if err := session.Save(req, w); err != nil {
+					self.ServerError(w, err)
+					return nil
+				}
+			}
+		} else {
+			// To check whether the token is still valid,
+			// use the introspection endpoint if supported,
+			// otherwise the userinfo endpoint.
+			if provider.ResourceServer != nil {
+				if introspection, err := rs.Introspect(req.Context(), provider.ResourceServer, sessionWrapper.AccessToken()); err != nil {
+					self.Logger.Err(err).
+						Str("provider", sessionWrapper.Provider()).
+						Msg("Could not introspect OIDC session token")
+					redirect()
+					return nil
+				} else if !introspection.Active {
+					redirect()
+					return nil
+				}
+			} else if _, err := rp.Userinfo(sessionWrapper.AccessToken(), oidc.BearerToken, sessionWrapper.UserInfo().Subject, provider.RelyingParty); err != nil {
+				redirect()
+				return nil
+			}
+		}
 	}
 
-	return &sessionOidc
+	return &sessionWrapper
 }
 
 type SessionOidc struct {
@@ -2409,7 +2434,7 @@ func (self SessionOidc) getString(key string) string {
 	}
 }
 
-func (self Web) refreshTokens(ctx context.Context, interval time.Duration) {
+func (self Web) refreshSessionTokens(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -2431,25 +2456,12 @@ func (self Web) refreshTokens(ctx context.Context, interval time.Duration) {
 			for _, session := range sessions {
 				session := &session
 				if err := sessionService.Update(session, sessionOidc, self.Config.Sessions.Codecs, func(data map[any]any) error {
-					var refreshToken string
-					if refreshToken_, exists := data[sessionOidcRefreshToken]; exists {
-						if v, ok := refreshToken_.(string); ok {
-							refreshToken = v
-						}
-					}
-					if refreshToken == "" {
-						return nil
+					expiry, err := self.refreshSessionToken(data)
+					if err != nil || expiry == nil {
+						return err
 					}
 
-					if newTokens, err := rp.RefreshAccessToken(self.Config.OidcProviders[data[sessionOidcProvider].(string)].RelyingParty, refreshToken, "", ""); err != nil {
-						return errors.WithMessagef(err, "While refreshing session OIDC token on provider %q", data[sessionOidcProvider].(string))
-					} else {
-						data[sessionOidcAccessToken] = newTokens.AccessToken
-						if newTokens.RefreshToken != "" {
-							data[sessionOidcRefreshToken] = newTokens.RefreshToken
-						}
-						session.ExpiresOn = newTokens.Expiry
-					}
+					session.ExpiresOn = *expiry
 
 					return nil
 				}); err != nil {
@@ -2463,6 +2475,28 @@ func (self Web) refreshTokens(ctx context.Context, interval time.Duration) {
 			self.Logger.Err(err).Msg("While updating sessions")
 			continue
 		}
+	}
+}
+
+func (self Web) refreshSessionToken(data map[any]any) (*time.Time, error) {
+	var refreshToken string
+	if refreshToken_, exists := data[sessionOidcRefreshToken]; exists {
+		if v, ok := refreshToken_.(string); ok {
+			refreshToken = v
+		}
+	}
+	if refreshToken == "" {
+		return nil, nil
+	}
+
+	if newTokens, err := rp.RefreshAccessToken(self.Config.OidcProviders[data[sessionOidcProvider].(string)].RelyingParty, refreshToken, "", ""); err != nil {
+		return nil, errors.WithMessagef(err, "While refreshing session OIDC token on provider %q", data[sessionOidcProvider].(string))
+	} else {
+		data[sessionOidcAccessToken] = newTokens.AccessToken
+		if newTokens.RefreshToken != "" {
+			data[sessionOidcRefreshToken] = newTokens.RefreshToken
+		}
+		return &newTokens.Expiry, nil
 	}
 }
 

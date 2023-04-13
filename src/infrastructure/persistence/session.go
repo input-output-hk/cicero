@@ -36,6 +36,23 @@ func (self *sessionRepository) GetByKey(key string) (*pgstore.PGSession, error) 
 	return session.(*pgstore.PGSession), err
 }
 
+func (self *sessionRepository) GetExpiryByKey(key string) (*time.Time, error) {
+	type Result struct {
+		ExpiresOn time.Time
+	}
+	result, err := get(
+		self.Db, &Result{},
+		`SELECT expires_on
+		FROM http_sessions
+		WHERE key = $1`,
+		key,
+	)
+	if result == nil {
+		return nil, err
+	}
+	return &result.(*Result).ExpiresOn, err
+}
+
 func (self *sessionRepository) GetExpiredByAndZeroModified(expiry time.Time) ([]pgstore.PGSession, error) {
 	sessions := []pgstore.PGSession{}
 	// It would be nicer to have `modified_on` be `NULL` but we use `time.Time`s zero value instead
