@@ -10,6 +10,7 @@ import (
 type SessionRepository interface {
 	WithQuerier(config.PgxIface) SessionRepository
 
-	GetExpiredBy(time.Time) ([]pgstore.PGSession, error)
+	GetByKey(string) (*pgstore.PGSession, error)
+	GetExpiredByAndZeroModified(time.Time) ([]pgstore.PGSession, error)
 	Update(pgstore.PGSession) error
 }

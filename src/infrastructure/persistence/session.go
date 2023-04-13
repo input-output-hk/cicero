@@ -22,12 +22,30 @@ func (self *sessionRepository) WithQuerier(querier config.PgxIface) repository.S
 	return &sessionRepository{querier}
 }
 
-func (self *sessionRepository) GetExpiredBy(expiry time.Time) ([]pgstore.PGSession, error) {
+func (self *sessionRepository) GetByKey(key string) (*pgstore.PGSession, error) {
+	session, err := get(
+		self.Db, &pgstore.PGSession{},
+		`SELECT id, encode(key, 'escape') AS key, encode(data, 'escape') AS data, created_on, modified_on, expires_on
+		FROM http_sessions
+		WHERE key = $1`,
+		key,
+	)
+	if session == nil {
+		return nil, err
+	}
+	return session.(*pgstore.PGSession), err
+}
+
+func (self *sessionRepository) GetExpiredByAndZeroModified(expiry time.Time) ([]pgstore.PGSession, error) {
 	sessions := []pgstore.PGSession{}
+	// It would be nicer to have `modified_on` be `NULL` but we use `time.Time`s zero value instead
+	// because we need to stay compatible with `pgstore` and that does not like `NULL` even though the column is nullable.
 	return sessions, pgxscan.Select(
 		context.Background(), self.Db, &sessions,
-		`SELECT id, encode(key, 'escape') AS key, encode(data, 'escape') AS data, created_on, modified_on, expires_on FROM http_sessions WHERE expires_on <= $1`,
-		expiry,
+		`SELECT id, encode(key, 'escape') AS key, encode(data, 'escape') AS data, created_on, modified_on, expires_on
+		FROM http_sessions
+		WHERE expires_on <= $1 AND modified_on = $2`,
+		expiry, time.Time{},
 	)
 }
 
