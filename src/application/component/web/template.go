@@ -113,7 +113,7 @@ var templateFuncs = template.FuncMap{
 		}
 		return a
 	},
-	"hasKey": func(m any, key interface{}) bool {
+	"hasKey": func(m any, key any) bool {
 		for _, k := range reflect.ValueOf(m).MapKeys() {
 			if k.Interface() == key {
 				return true
