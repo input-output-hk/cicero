@@ -1,6 +1,8 @@
 package config
 
 import (
+	"bufio"
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -18,9 +20,10 @@ import (
 )
 
 type WebConfig struct {
-	Listen        string
-	OidcProviders map[string]OidcProvider
-	Sessions      *pgstore.PGStore
+	Listen             string
+	OidcProviders      map[string]OidcProvider
+	Sessions           *pgstore.PGStore
+	StaticBearerTokens []string
 }
 
 type OidcProvider struct {
@@ -30,7 +33,7 @@ type OidcProvider struct {
 	rs.ResourceServer
 }
 
-func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfig, error) {
+func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string, staticBearerTokens string) (WebConfig, error) {
 	self := WebConfig{Listen: listen}
 
 	var cookieAuthKey, cookieEncKey []byte
@@ -104,6 +107,20 @@ func NewWebConfig(listen, cookieAuth, cookieEnc, oidcProviders string) (WebConfi
 		return self, err
 	} else {
 		self.Sessions = store
+	}
+
+	if staticBearerTokens != "" {
+		if v, err := os.ReadFile(staticBearerTokens); err != nil {
+			return self, errors.WithMessage(err, "While reading web static bearer tokens")
+		} else {
+			scanner := bufio.NewScanner(bytes.NewReader(v))
+			for scanner.Scan() {
+				self.StaticBearerTokens = append(self.StaticBearerTokens, scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				return self, err
+			}
+		}
 	}
 
 	return self, nil

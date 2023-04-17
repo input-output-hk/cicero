@@ -93,6 +93,7 @@
               --web-listen :18080 \
               --web-cookie-auth ${__toFile "cookie-auth" "aaaaaaaaaaaaaaaa"} \
               --web-cookie-enc ${__toFile "cookie-enc" "aaaaaaaaaaaaaaaabbbbbbbbbbbbbbbb"} \
+              --web-static-bearer-tokens ${__toFile "static-bearer-tokens" "foo"} \
               --web-oidc-providers ${__toFile "oidc-providers" (__toJSON rec {
               dex = {
                 issuer = "http://localhost:15556";

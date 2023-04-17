@@ -26,6 +26,7 @@ import (
 	"github.com/zitadel/oidc/v2/pkg/client/rp"
 	"github.com/zitadel/oidc/v2/pkg/client/rs"
 	"github.com/zitadel/oidc/v2/pkg/oidc"
+	"golang.org/x/exp/slices"
 
 	"github.com/input-output-hk/cicero/src/application/service"
 	"github.com/input-output-hk/cicero/src/config"
@@ -2309,12 +2310,28 @@ func (self *Web) sessionOidc(w http.ResponseWriter, req *http.Request, redirectT
 		http.Redirect(w, req, loginUri.RequestURI(), http.StatusUnauthorized)
 	}
 
-	// convert the Authorization header to a cookie that we can use with the sessions library
 	if auth := req.Header.Get("Authorization"); strings.HasPrefix(auth, oidc.PrefixBearer) {
-		req.AddCookie(&http.Cookie{
-			Name:  sessionOidc,
-			Value: strings.TrimPrefix(auth, oidc.PrefixBearer),
-		})
+		token := strings.TrimPrefix(auth, oidc.PrefixBearer)
+		if slices.Contains(self.Config.StaticBearerTokens, token) {
+			staticSession := sessions.NewSession(self.Config.Sessions, sessionOidc)
+			if j, err := (&oidc.UserInfo{}).MarshalJSON(); err != nil {
+				panic("This should never happen™: " + err.Error())
+			} else {
+				staticSession.Values[sessionOidcUserinfo] = j
+			}
+			staticSession.Values[sessionOidcProvider] = "cicero"
+			staticSession.Values[sessionOidcAccessToken] = token
+			return &SessionOidc{
+				Session: staticSession,
+				Raw:     token,
+			}
+		} else {
+			// convert the Authorization header to a cookie that we can use with the sessions library
+			req.AddCookie(&http.Cookie{
+				Name:  sessionOidc,
+				Value: token,
+			})
+		}
 	}
 
 	cookie, err := req.Cookie(sessionOidc)

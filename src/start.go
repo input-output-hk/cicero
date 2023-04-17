@@ -29,10 +29,11 @@ type StartCmd struct {
 	Evaluators          []string `arg:"--evaluators"`
 	Transformers        []string `arg:"--transform"`
 
-	WebListen        string `arg:"--web-listen,env:CICERO_WEB_LISTEN" default:":8080"`
-	WebCookieAuth    string `arg:"--web-cookie-auth" help:"file that contains the cookie authentication key"`
-	WebCookieEnc     string `arg:"--web-cookie-enc" help:"file that contains the cookie encryption key"`
-	WebOidcProviders string `arg:"--web-oidc-providers" help:"JSON file that contains a map of OIDC provider settings"`
+	WebListen             string `arg:"--web-listen,env:CICERO_WEB_LISTEN" default:":8080"`
+	WebCookieAuth         string `arg:"--web-cookie-auth" help:"file that contains the cookie authentication key"`
+	WebCookieEnc          string `arg:"--web-cookie-enc" help:"file that contains the cookie encryption key"`
+	WebOidcProviders      string `arg:"--web-oidc-providers" help:"JSON file that contains a map of OIDC provider settings"`
+	WebStaticBearerTokens string `arg:"--web-static-bearer-tokens" help:"File that contains one static bearer token per line"`
 
 	LogDb bool `arg:"--log-db"`
 }
@@ -54,10 +55,11 @@ type InstanceComponentsOpts struct {
 }
 
 type InstanceWebComponentOpts struct {
-	ListenAddr    string
-	CookieAuth    string
-	CookieEnc     string
-	OidcProviders string
+	ListenAddr         string
+	CookieAuth         string
+	CookieEnc          string
+	OidcProviders      string
+	StaticBearerTokens string
 }
 
 func (cmd StartCmd) NewDB(logger *zerolog.Logger) (*pgxpool.Pool, error) {
@@ -82,10 +84,11 @@ func (cmd StartCmd) GetComponentOpts() InstanceComponentsOpts {
 	start := InstanceComponentsOpts{}
 
 	webOpts := InstanceWebComponentOpts{
-		ListenAddr:    cmd.WebListen,
-		CookieAuth:    cmd.WebCookieAuth,
-		CookieEnc:     cmd.WebCookieEnc,
-		OidcProviders: cmd.WebOidcProviders,
+		ListenAddr:         cmd.WebListen,
+		CookieAuth:         cmd.WebCookieAuth,
+		CookieEnc:          cmd.WebCookieEnc,
+		OidcProviders:      cmd.WebOidcProviders,
+		StaticBearerTokens: cmd.WebStaticBearerTokens,
 	}
 
 	// If none are given then start all,
@@ -189,7 +192,7 @@ func NewInstance(opts InstanceOpts, logger *zerolog.Logger) (Instance, error) {
 	}
 
 	if start.Web != nil {
-		cfg, err := config.NewWebConfig(start.Web.ListenAddr, start.Web.CookieAuth, start.Web.CookieEnc, start.Web.OidcProviders)
+		cfg, err := config.NewWebConfig(start.Web.ListenAddr, start.Web.CookieAuth, start.Web.CookieEnc, start.Web.OidcProviders, start.Web.StaticBearerTokens)
 		if err != nil {
 			return instance, err
 		}
