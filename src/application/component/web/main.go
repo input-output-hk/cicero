@@ -58,7 +58,6 @@ func (self *Web) Start(ctx context.Context) error {
 	router := mux.NewRouter().StrictSlash(true).UseEncodedPath()
 	router.NotFoundHandler = http.NotFoundHandler()
 
-	// sorted alphabetically, please keep it this way
 	router.HandleFunc("/api/action/current/{name}", self.ApiActionCurrentNameGet).Methods(http.MethodGet)
 	router.HandleFunc("/api/action/current", self.ApiActionCurrentGet).Methods(http.MethodGet)
 	router.HandleFunc("/api/action/definition/{source}/{name}/{id}", self.ApiActionDefinitionSourceNameIdGet).Methods(http.MethodGet)
