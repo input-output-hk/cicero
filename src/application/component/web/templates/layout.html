@@ -237,6 +237,44 @@
 		{{end}}
 	{{end}}
 
+	{{define "stats"}}
+		<dl
+			class="inline"
+			style="
+				justify-content: end;
+				align-items: center;
+			"
+		>
+			<dt>Running</dt>
+			<dd>{{.RunsRunning}}</dd>
+			<dt>Succeeded</dt>
+			<dd>{{.RunsSucceeded}}</dd>
+			<dt>Failed</dt>
+			<dd>{{.RunsFailed}}</dd>
+			<dt>Canceled</dt>
+			<dd>{{.RunsCanceled}}</dd>
+			<dt>Invoking</dt>
+			<dd>{{.InvocationsInvoking}}</dd>
+			<dt>Invocation failed</dt>
+			<dd>{{.InvocationsFailed}}</dd>
+		</dl>
+	{{end}}
+
+	{{define "paginationWithStats"}}
+		<nav style="display: flex">
+			<div style="
+				flex-grow: 1;
+				margin-right: 1em;
+
+				display: flex;
+				justify-content: end;
+			">
+				{{template "stats" .Stats}}
+			</div>
+			{{template "pagination" .Page}}
+		</nav>
+	{{end}}
+
 	<body>
 		<nav>
 			<ul>

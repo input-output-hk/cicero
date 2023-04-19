@@ -5,6 +5,7 @@ import (
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type RunRepository interface {
@@ -16,7 +17,7 @@ type RunRepository interface {
 	GetByActionId(uuid.UUID, *Page) ([]domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (*domain.Run, error)
 	GetAll(*Page) ([]domain.Run, error)
-	GetByPrivate(*Page, *bool) ([]domain.Run, error)
+	GetByPrivate(*Page, util.MayBool) ([]domain.Run, error)
 	Save(*domain.Run) error
 	Update(*domain.Run) error
 }

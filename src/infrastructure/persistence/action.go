@@ -9,6 +9,7 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type actionRepository struct {
@@ -116,7 +117,7 @@ func (a *actionRepository) Save(action *domain.Action) error {
 	).Scan(&action.ID, &action.CreatedAt)
 }
 
-func (a *actionRepository) GetByCurrentByActiveByPrivate(onlyCurrent bool, active *bool, private *bool) (actions []domain.Action, err error) {
+func (a *actionRepository) GetByCurrentByActiveByPrivate(onlyCurrent bool, active util.MayBool, private util.MayBool) (actions []domain.Action, err error) {
 	sql := `SELECT `
 	if onlyCurrent {
 		sql += ` DISTINCT ON (name) `
@@ -128,13 +129,15 @@ func (a *actionRepository) GetByCurrentByActiveByPrivate(onlyCurrent bool, activ
 		WHERE TRUE
 	`
 
-	whereName := func(field string, state *bool) {
-		if state == nil {
+	whereName := func(field string, state util.MayBool) {
+		statePtr := state.Ptr()
+
+		if statePtr == nil {
 			return
 		}
 
 		sql += ` AND `
-		if !*state {
+		if !*statePtr {
 			sql += ` NOT `
 		}
 		sql += ` action_name.` + field

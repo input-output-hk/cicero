@@ -7,10 +7,12 @@ import (
 
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
-	"github.com/jackc/pgx/v5"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type invocationRepository struct {
@@ -94,15 +96,15 @@ func (self *invocationRepository) GetAll(page *repository.Page) ([]domain.Invoca
 	)
 }
 
-func (self *invocationRepository) GetByPrivate(page *repository.Page, private *bool) ([]domain.Invocation, error) {
+func (self *invocationRepository) GetByPrivate(page *repository.Page, private util.MayBool) ([]domain.Invocation, error) {
 	from := `invocation`
-	if private != nil {
+	if privatePtr := private.Ptr(); privatePtr != nil {
 		from += `
 			JOIN action ON action.id = invocation.action_id
 			JOIN action_name ON action_name.name = action.name
 			WHERE
 		`
-		if !*private {
+		if !*privatePtr {
 			from += ` NOT `
 		}
 		from += ` action_name.private`
@@ -116,7 +118,7 @@ func (self *invocationRepository) GetByPrivate(page *repository.Page, private *b
 }
 
 // `ok`: Allows to filter for successful or failed invocations.
-func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok *bool, page *repository.Page) ([]domain.Invocation, error) {
+func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recursive bool, ok util.MayBool, page *repository.Page) ([]domain.Invocation, error) {
 	joins := ``
 	for i := range factIds {
 		iStr := strconv.Itoa(i + 1)
@@ -131,11 +133,11 @@ func (self *invocationRepository) GetByInputFactIds(factIds []*uuid.UUID, recurs
 	}
 
 	var whereOk string
-	if ok == nil {
+	if okPtr := ok.Ptr(); okPtr == nil {
 		whereOk = ``
 	} else {
 		whereOk = `WHERE `
-		if !*ok {
+		if !*okPtr {
 			whereOk += `NOT `
 		}
 		whereOk += `EXISTS (

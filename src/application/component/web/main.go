@@ -47,6 +47,7 @@ type Web struct {
 	NomadEventService service.NomadEventService
 	EvaluationService service.EvaluationService
 	SessionService    service.SessionService
+	StatisticsService service.StatisticsService
 	Db                config.PgxIface
 }
 
@@ -90,6 +91,8 @@ func (self *Web) Start(ctx context.Context) error {
 	router.HandleFunc("/api/fact/{id}", self.ApiFactIdGet).Methods(http.MethodGet)
 	router.HandleFunc("/api/fact", self.ApiFactByRunGet).Methods(http.MethodGet).Queries("run", "")
 	router.HandleFunc("/api/fact", self.ApiFactPost).Methods(http.MethodPost)
+	router.HandleFunc("/api/stats/action", self.ApiStatsActionGet).Methods(http.MethodGet)
+	router.HandleFunc("/api/stats/action/name", self.ApiStatsActionNameGet).Methods(http.MethodGet)
 
 	router.HandleFunc("/", self.IndexGet).Methods(http.MethodGet)
 	router.HandleFunc("/invocation/{id}", self.InvocationIdPost).Methods(http.MethodPost)
@@ -300,12 +303,8 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	_, active := req.URL.Query()["active"]
-	var private *bool
-	if session == nil {
-		false := false
-		private = &false
-	}
-	actions, err = self.ActionService.GetByCurrentByActiveByPrivate(true, &active, private)
+	private := util.NewMayBool(session != nil).FalseElseNone()
+	actions, err = self.ActionService.GetByCurrentByActiveByPrivate(true, util.NewMayBool(active), private)
 	if err != nil {
 		self.ServerError(w, err)
 		return
@@ -350,6 +349,9 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 		self.NotFound(w, nil)
 		return
 	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
+		return
+	} else if stats, err := self.StatisticsService.ActionStatus([]uuid.UUID{id}, nil, util.None()); err != nil {
+		self.ServerError(w, err)
 		return
 	} else if invocations, err := self.InvocationService.GetByActionId(id, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Invocations by Action ID: %q", id))
@@ -398,6 +400,7 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 		if err := self.render("action/runs.html", w, session, map[string]any{
 			"Entries": entries,
 			"Page":    page,
+			"Stats":   stats.Total(),
 		}); err != nil {
 			self.ServerError(w, err)
 			return
@@ -426,10 +429,14 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 	} else if actions, err := self.ActionService.GetByName(action.Name, page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by name: %q", action.Name))
 		return
+	} else if stats, err := self.StatisticsService.ActionStatus(nil, []string{action.Name}, util.None()); err != nil {
+		self.ServerError(w, err)
+		return
 	} else if err := self.render("action/version.html", w, session, map[string]any{
 		"ActionID": id,
 		"Actions":  actions,
 		"Page":     page,
+		"Stats":    stats.Total(),
 	}); err != nil {
 		self.ServerError(w, err)
 		return
@@ -812,17 +819,14 @@ func getPage(req *http.Request) (*repository.Page, error) {
 
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	session := self.sessionOidc(w, req, false)
-
-	var private *bool
-	if session == nil {
-		false := false
-		private = &false
-	}
-
+	private := util.NewMayBool(session != nil).FalseElseNone()
 	if page, err := getPage(req); err != nil {
 		self.ClientError(w, err)
 		return
 	} else if invocations, err := self.InvocationService.GetByPrivate(page, private); err != nil {
+		self.ServerError(w, err)
+		return
+	} else if stats, err := self.StatisticsService.ActionStatus(nil, nil, private); err != nil {
 		self.ServerError(w, err)
 		return
 	} else {
@@ -877,6 +881,7 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 		if err := self.render("run/index.html", w, session, map[string]any{
 			"Entries": entries,
 			"Page":    page,
+			"Stats":   stats.Total(),
 		}); err != nil {
 			self.ServerError(w, err)
 			return
@@ -944,12 +949,8 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 }
 
 func (self *Web) ApiInvocationGet(w http.ResponseWriter, req *http.Request) {
-	var private *bool
-	if self.sessionOidc(w, req, false) == nil {
-		false := false
-		private = &false
-	}
-
+	session := self.sessionOidc(w, req, false)
+	private := util.NewMayBool(session != nil).FalseElseNone()
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
@@ -962,12 +963,8 @@ func (self *Web) ApiInvocationGet(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
-	var private *bool
-	if self.sessionOidc(w, req, false) == nil {
-		false := false
-		private = &false
-	}
-
+	session := self.sessionOidc(w, req, false)
+	private := util.NewMayBool(session != nil).FalseElseNone()
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
@@ -979,24 +976,24 @@ func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func getByInputParams(req *http.Request) (bool, *bool, []*uuid.UUID, error) {
+func getByInputParams(req *http.Request) (bool, util.MayBool, []*uuid.UUID, error) {
 	query := req.URL.Query()
 
 	_, recursive := query["recursive"]
 
-	var ok *bool
+	ok := util.None()
 	if okStr := query.Get("ok"); okStr != "" {
 		if ok_, err := strconv.ParseBool(okStr); err != nil {
-			return false, nil, nil, err
+			return false, util.None(), nil, err
 		} else {
-			ok = &ok_
+			ok = util.NewMayBool(ok_)
 		}
 	}
 
 	factIds := make([]*uuid.UUID, len(query["input"]))
 	for i, str := range query["input"] {
 		if id, err := uuid.Parse(str); err != nil {
-			return false, nil, nil, err
+			return false, util.None(), nil, err
 		} else {
 			factIds[i] = &id
 		}
@@ -1006,14 +1003,13 @@ func getByInputParams(req *http.Request) (bool, *bool, []*uuid.UUID, error) {
 }
 
 func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
-	ok := true
 	if recursive, _, factIds, err := getByInputParams(req); err != nil {
 		self.ClientError(w, err)
 		return
 	} else if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, &ok, page); err != nil {
+	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, util.True(), page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 		return
 	} else {
@@ -1402,13 +1398,9 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 }
 
 func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
-	var private *bool
-	if self.sessionOidc(w, req, false) == nil {
-		false := false
-		private = &false
-	}
-
-	if actions, err := self.ActionService.GetByCurrentByActiveByPrivate(false, nil, private); err != nil {
+	session := self.sessionOidc(w, req, false)
+	private := util.NewMayBool(session != nil).FalseElseNone()
+	if actions, err := self.ActionService.GetByCurrentByActiveByPrivate(false, util.None(), private); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get all actions"))
 		return
 	} else {
@@ -1421,16 +1413,12 @@ func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 	var actions []domain.Action
 	var err error
 
-	var private *bool
-	if session := self.sessionOidc(w, req, false); session == nil {
-		false := false
-		private = &false
-	}
+	session := self.sessionOidc(w, req, false)
+	private := util.NewMayBool(session != nil).FalseElseNone()
 
-	var active *bool
+	active := util.None()
 	if _, hasActive := req.URL.Query()["active"]; hasActive {
-		true := true
-		active = &true
+		active = util.True()
 	}
 
 	actions, err = self.ActionService.GetByCurrentByActiveByPrivate(true, active, private)
@@ -2032,6 +2020,28 @@ func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.
 		binary = io.NopCloser(binaryReader)
 	}
 	return
+}
+
+func (self *Web) ApiStatsActionGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, false)
+	private := util.NewMayBool(session != nil).FalseElseNone()
+	if stats, err := self.StatisticsService.ActionStatus(nil, nil, private); err != nil {
+		self.ServerError(w, err)
+		return
+	} else {
+		self.json(w, stats.ById(), http.StatusOK)
+	}
+}
+
+func (self *Web) ApiStatsActionNameGet(w http.ResponseWriter, req *http.Request) {
+	session := self.sessionOidc(w, req, false)
+	private := util.NewMayBool(session != nil).FalseElseNone()
+	if stats, err := self.StatisticsService.ActionStatus(nil, nil, private); err != nil {
+		self.ServerError(w, err)
+		return
+	} else {
+		self.json(w, stats.ByName(), http.StatusOK)
+	}
 }
 
 type HandlerError struct {

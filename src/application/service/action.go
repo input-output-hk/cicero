@@ -31,7 +31,7 @@ type ActionService interface {
 	GetByName(string, *repository.Page) ([]domain.Action, error)
 	GetLatestByName(string) (*domain.Action, error)
 	GetAll() ([]domain.Action, error)
-	GetByCurrentByActiveByPrivate(bool, *bool, *bool) ([]domain.Action, error)
+	GetByCurrentByActiveByPrivate(bool, util.MayBool, util.MayBool) ([]domain.Action, error)
 	Save(*domain.Action) error
 	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, error)
 	IsRunnable(*domain.Action) (bool, map[string]domain.Fact, error)
@@ -168,7 +168,7 @@ func (self actionService) Save(action *domain.Action) error {
 	return nil
 }
 
-func (self actionService) GetByCurrentByActiveByPrivate(onlyCurrent bool, active *bool, private *bool) (actions []domain.Action, err error) {
+func (self actionService) GetByCurrentByActiveByPrivate(onlyCurrent bool, active util.MayBool, private util.MayBool) (actions []domain.Action, err error) {
 	self.logger.Trace().Bool("only-current", onlyCurrent).Interface("active", active).Interface("private", private).Msg("Getting current Actions")
 	actions, err = self.actionRepository.GetByCurrentByActiveByPrivate(onlyCurrent, active, private)
 	err = errors.WithMessagef(err, "Could not select current Actions by active %v and private %v", active, private)
@@ -353,8 +353,7 @@ func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunF
 		}, pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx).(*actionService)
 
-			true := true
-			actions, err := txSelf.GetByCurrentByActiveByPrivate(true, &true, nil)
+			actions, err := txSelf.GetByCurrentByActiveByPrivate(true, util.True(), util.None())
 			if err != nil {
 				return err
 			}
@@ -490,17 +489,16 @@ func (self actionService) UpdateSatisfaction(fact *domain.Fact) error {
 	return pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 		txSelf := self.WithQuerier(tx).(*actionService)
 
-		var private *bool
+		private := util.None()
 		if fact.RunId != nil {
 			if actionName, err := txSelf.actionNameService.GetByRunId(*fact.RunId); err != nil {
 				return err
 			} else if actionName.Private {
-				true := true
-				private = &true
+				private = util.True()
 			}
 		}
 
-		actions, err := txSelf.GetByCurrentByActiveByPrivate(true, nil, private)
+		actions, err := txSelf.GetByCurrentByActiveByPrivate(true, util.None(), private)
 		if err != nil {
 			return err
 		}

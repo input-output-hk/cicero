@@ -5,6 +5,7 @@ import (
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type InvocationRepository interface {
@@ -15,8 +16,8 @@ type InvocationRepository interface {
 	GetLatestByActionId(uuid.UUID) (*domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
 	GetAll(*Page) ([]domain.Invocation, error)
-	GetByPrivate(*Page, *bool) ([]domain.Invocation, error)
-	GetByInputFactIds([]*uuid.UUID, bool, *bool, *Page) ([]domain.Invocation, error)
+	GetByPrivate(*Page, util.MayBool) ([]domain.Invocation, error)
+	GetByInputFactIds([]*uuid.UUID, bool, util.MayBool, *Page) ([]domain.Invocation, error)
 	Save(*domain.Invocation, map[string]domain.Fact) error
 	End(uuid.UUID) error
 }

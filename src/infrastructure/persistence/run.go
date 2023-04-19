@@ -8,6 +8,7 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type runRepository struct {
@@ -86,18 +87,18 @@ func (a runRepository) GetAll(page *repository.Page) ([]domain.Run, error) {
 	)
 }
 
-func (a runRepository) GetByPrivate(page *repository.Page, private *bool) ([]domain.Run, error) {
+func (a runRepository) GetByPrivate(page *repository.Page, private util.MayBool) ([]domain.Run, error) {
 	from := `run`
 	params := make([]any, 0)
 
-	if private != nil {
+	if privatePtr := private.Ptr(); privatePtr != nil {
 		from += `
 			INNER JOIN invocation  ON invocation.id    = run.invocation_id
 			INNER JOIN action      ON action.id        = invocation.action_id
 			INNER JOIN action_name ON action_name.name = action.name
 			WHERE action_name.private = $1
 		`
-		params = append(params, *private)
+		params = append(params, *privatePtr)
 	}
 
 	runs := make([]domain.Run, page.Limit)

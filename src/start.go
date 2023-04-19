@@ -172,6 +172,7 @@ func NewInstance(opts InstanceOpts, logger *zerolog.Logger) (Instance, error) {
 	evaluationService := service.NewEvaluationService(opts.GetEvaluators(), opts.GetTransformers(), instance.promtailClient.Chan(), logger)
 	actionNameService := service.NewActionNameService(instance.db, logger)
 	sessionService := service.NewSessionService(instance.db, logger)
+	statisticsService := service.NewStatisticsService(instance.db, logger)
 
 	*invocationService = service.NewInvocationService(instance.db, lokiService, actionService, factService, logger)
 	*actionService = service.NewActionService(instance.db, nomadClientWrapper, invocationService, factService, actionNameService, runService, evaluationService, logger)
@@ -207,6 +208,7 @@ func NewInstance(opts InstanceOpts, logger *zerolog.Logger) (Instance, error) {
 			NomadEventService: nomadEventService,
 			EvaluationService: evaluationService,
 			SessionService:    sessionService,
+			StatisticsService: statisticsService,
 			Db:                instance.db,
 		}
 	}

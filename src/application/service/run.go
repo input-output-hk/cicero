@@ -23,6 +23,7 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type RunService interface {
@@ -34,7 +35,7 @@ type RunService interface {
 	GetByActionId(uuid.UUID, *repository.Page) ([]domain.Run, error)
 	GetLatestByActionId(uuid.UUID) (*domain.Run, error)
 	GetAll(*repository.Page) ([]domain.Run, error)
-	GetByPrivate(*repository.Page, *bool) ([]domain.Run, error)
+	GetByPrivate(*repository.Page, util.MayBool) ([]domain.Run, error)
 	Save(*domain.Run) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
@@ -123,7 +124,7 @@ func (self runService) GetAll(page *repository.Page) (runs []domain.Run, err err
 	return
 }
 
-func (self runService) GetByPrivate(page *repository.Page, private *bool) (runs []domain.Run, err error) {
+func (self runService) GetByPrivate(page *repository.Page, private util.MayBool) (runs []domain.Run, err error) {
 	self.logger.Trace().Interface("private", private).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Runs by private")
 	runs, err = self.runRepository.GetByPrivate(page, private)
 	err = errors.WithMessagef(err, "Could not select existing Runs (private: %v) with offset %d and limit %d", private, page.Offset, page.Limit)

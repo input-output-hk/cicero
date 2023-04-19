@@ -5,6 +5,7 @@ import (
 
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type ActionRepository interface {
@@ -16,7 +17,7 @@ type ActionRepository interface {
 	GetByName(string, *Page) ([]domain.Action, error)
 	GetLatestByName(string) (*domain.Action, error)
 	GetAll() ([]domain.Action, error)
-	GetByCurrentByActiveByPrivate(bool, *bool, *bool) ([]domain.Action, error)
+	GetByCurrentByActiveByPrivate(bool, util.MayBool, util.MayBool) ([]domain.Action, error)
 	Save(*domain.Action) error
 	GetSatisfactions(uuid.UUID) (map[string]uuid.UUID, error)
 	SaveSatisfaction(uuid.UUID, string, uuid.UUID) error
