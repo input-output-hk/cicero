@@ -121,4 +121,7 @@ var templateFuncs = template.FuncMap{
 		}
 		return false
 	},
+	"mkslice": func(values ...any) []any {
+		return values
+	},
 }

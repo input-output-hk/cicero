@@ -72,6 +72,37 @@
 					({{.Total}})
 				</span>
 			</li>
+				<select
+					title="entries per page"
+					autocomplete="off"
+				>
+					{{$selected := false}}
+					{{range $v := mkslice 10 15 20 25 50 100}}
+						{{if and (not $selected) (gt $v $.Limit)}}
+							<option selected>{{$.Limit}}</option>
+							{{$selected = true}}
+						{{end}}
+						<option
+							{{if eq $v $.Limit}}
+								selected
+								{{$selected = true}}
+							{{end}}
+						>
+							{{$v}}
+						</option>
+					{{end}}
+				</select>
+				<script>
+				document.scripts[document.scripts.length - 1]
+				.previousElementSibling
+				.onchange = e => {
+					const params = new URLSearchParams(location.search);
+					params.set('limit', e.target.value);
+					location.search = params;
+				};
+				</script>
+			<li>
+			</li>
 			<li>
 				{{if .NextOffset}}
 					<a href="?limit={{.Limit}}&offset={{.NextOffset}}">»</a>
