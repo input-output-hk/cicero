@@ -807,7 +807,7 @@ func getPage(req *http.Request) (*repository.Page, error) {
 	}
 
 	if limitStr := req.FormValue("limit"); limitStr == "" {
-		page.Limit = 10
+		page.Limit = 20
 	} else if limit, err := strconv.Atoi(limitStr); err != nil {
 		return nil, errors.WithMessage(err, "limit parameter is invalid, should be positive integer")
 	} else {
