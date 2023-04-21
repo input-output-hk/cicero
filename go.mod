@@ -29,12 +29,13 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
 	github.com/prometheus/common v0.42.0
-	github.com/proullon/ramsql v0.0.0-20230224205054-8ff679dbf7aa
 	github.com/rs/zerolog v1.29.0
 	github.com/steinfletcher/apitest v1.5.14
 	github.com/stretchr/testify v1.8.2
 	github.com/vgarvardt/pgx-google-uuid/v5 v5.0.0
 	github.com/zitadel/oidc/v2 v2.1.2
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
+	golang.org/x/oauth2 v0.6.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -201,10 +202,8 @@ require (
 	go4.org/intern v0.0.0-20230205224052-192e9f60865c // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20230221090011-e4bae7ad2296 // indirect
 	golang.org/x/crypto v0.7.0 // indirect
-	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
 	golang.org/x/mod v0.9.0 // indirect
 	golang.org/x/net v0.8.0 // indirect
-	golang.org/x/oauth2 v0.6.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
