@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -20,10 +21,9 @@ type InvocationService interface {
 	withQuerier(config.PgxIface, InvocationServiceCyclicDependencies) InvocationService
 
 	GetById(uuid.UUID) (*domain.Invocation, error)
-	GetByActionId(uuid.UUID, *repository.Page) ([]domain.Invocation, error)
 	GetLatestByActionId(uuid.UUID) (*domain.Invocation, error)
 	GetAll(*repository.Page) ([]domain.Invocation, error)
-	GetByPrivate(*repository.Page, util.MayBool) ([]domain.Invocation, error)
+	Get(*repository.Page, repository.InvocationGetOpts) ([]domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, util.MayBool, *repository.Page) ([]domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
 	GetOutputById(uuid.UUID) (*domain.OutputDefinition, error)
@@ -97,13 +97,6 @@ func (self invocationService) GetById(id uuid.UUID) (invocation *domain.Invocati
 	return
 }
 
-func (self invocationService) GetByActionId(id uuid.UUID, page *repository.Page) (invocations []domain.Invocation, err error) {
-	self.logger.Trace().Stringer("id", id).Int("offset", page.Offset).Int("limit", page.Limit).Msgf("Getting Invocation by Action ID")
-	invocations, err = self.invocationRepository.GetByActionId(id, page)
-	err = errors.WithMessagef(err, "Could not select existing Invocation by Action ID %q with offset %d and limit %d", id, page.Offset, page.Limit)
-	return
-}
-
 func (self invocationService) GetLatestByActionId(id uuid.UUID) (invocation *domain.Invocation, err error) {
 	self.logger.Trace().Stringer("action-id", id).Msg("Getting latest Invocation by Action ID")
 	invocation, err = self.invocationRepository.GetLatestByActionId(id)
@@ -118,9 +111,10 @@ func (self invocationService) GetAll(page *repository.Page) (invocations []domai
 	return
 }
 
-func (self invocationService) GetByPrivate(page *repository.Page, private util.MayBool) (invocations []domain.Invocation, err error) {
-	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Stringer("private", private).Msg("Getting all Invocations")
-	invocations, err = self.invocationRepository.GetByPrivate(page, private)
+func (self invocationService) Get(page *repository.Page, opts repository.InvocationGetOpts) (invocations []domain.Invocation, err error) {
+	optsJson, _ := json.Marshal(opts)
+	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).RawJSON("opts", optsJson).Msg("Getting Invocations")
+	invocations, err = self.invocationRepository.Get(page, opts)
 	err = errors.WithMessagef(err, "Could not select existing Invocations with offset %d and limit %d", page.Offset, page.Limit)
 	return
 }

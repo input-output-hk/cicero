@@ -9,9 +9,9 @@ type MayBool struct {
 type mayBoolState byte
 
 const (
-	mayBoolTrue mayBoolState = iota
+	mayBoolNone mayBoolState = iota
+	mayBoolTrue
 	mayBoolFalse
-	mayBoolNone
 )
 
 func NewMayBool[T bool | *bool](v T) MayBool {
@@ -40,7 +40,20 @@ func (self MayBool) String() string {
 	case mayBoolNone:
 		return "none"
 	default:
-		panic("Unknown type. This is a bug.")
+		panic("Unknown state. This is a bug.")
+	}
+}
+
+func (self MayBool) MarshalJSON() ([]byte, error) {
+	switch self.state {
+	case mayBoolTrue:
+		return []byte("true"), nil
+	case mayBoolFalse:
+		return []byte("false"), nil
+	case mayBoolNone:
+		return []byte("null"), nil
+	default:
+		panic("Unknown state. This is a bug.")
 	}
 }
 
@@ -96,4 +109,17 @@ func (self MayBool) FalseElseNone() MayBool {
 		return self
 	}
 	return None()
+}
+
+func (self MayBool) Else(v bool) bool {
+	switch self.state {
+	case mayBoolNone:
+		return v
+	case mayBoolTrue:
+		return true
+	case mayBoolFalse:
+		return false
+	default:
+		panic("Unknown state. This is a bug.")
+	}
 }

@@ -39,15 +39,6 @@ func (self *invocationRepository) GetById(id uuid.UUID) (*domain.Invocation, err
 	return invocation.(*domain.Invocation), err
 }
 
-func (self *invocationRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]domain.Invocation, error) {
-	invocations := make([]domain.Invocation, page.Limit)
-	return invocations, fetchPage(
-		self.db, page, &invocations,
-		`*`, `invocation WHERE action_id = $1`, `created_at DESC`,
-		id,
-	)
-}
-
 func (self *invocationRepository) GetLatestByActionId(id uuid.UUID) (*domain.Invocation, error) {
 	invocation, err := get(
 		self.db, &domain.Invocation{},
@@ -96,24 +87,48 @@ func (self *invocationRepository) GetAll(page *repository.Page) ([]domain.Invoca
 	)
 }
 
-func (self *invocationRepository) GetByPrivate(page *repository.Page, private util.MayBool) ([]domain.Invocation, error) {
-	from := `invocation`
-	if privatePtr := private.Ptr(); privatePtr != nil {
-		from += `
-			JOIN action ON action.id = invocation.action_id
-			JOIN action_name ON action_name.name = action.name
-			WHERE
-		`
-		if !*privatePtr {
-			from += ` NOT `
-		}
-		from += ` action_name.private`
-	}
-
+func (self *invocationRepository) Get(page *repository.Page, opts repository.InvocationGetOpts) ([]domain.Invocation, error) {
 	invocations := make([]domain.Invocation, page.Limit)
 	return invocations, fetchPage(
 		self.db, page, &invocations,
-		`invocation.*`, from, `created_at DESC`,
+		`invocation.*`, `invocation
+			JOIN action ON action.id = invocation.action_id
+			JOIN action_name ON action_name.name = action.name
+			LEFT JOIN run ON run.invocation_id = invocation.id
+			WHERE
+				($1::bool IS NULL OR $1::bool = action_name.private) AND
+				($2::bool IS NULL OR $2::bool = (invocation.finished_at IS NULL)) AND
+				($3::bool IS NULL OR $3::bool = (run IS NULL AND invocation.finished_at IS NOT NULL)) AND
+				(
+					$4::bool IS NULL OR
+					$4::bool AND run.status = 'running' OR
+					NOT $4::bool AND (run.status != 'running' OR run IS NULL)
+				) AND
+				(
+					$5::bool IS NULL OR
+					$5::bool AND run.status = 'succeeded' OR
+					NOT $5::bool AND (run.status != 'succeeded' OR run IS NULL)
+				) AND
+				(
+					$6::bool IS NULL OR
+					$6::bool AND run.status = 'failed' OR
+					NOT $6::bool AND (run.status != 'failed' OR run IS NULL)
+				) AND
+				(
+					$7::bool IS NULL OR
+					$7::bool AND run.status = 'canceled' OR
+					NOT $7::bool AND (run.status != 'canceled' OR run IS NULL)
+				) AND
+				($8::uuid IS NULL OR invocation.action_id = $8::uuid)
+		`, `invocation.created_at DESC`,
+		opts.Private.Ptr(),
+		opts.Filter.InvocationInvoking.Ptr(),
+		opts.Filter.InvocationFailed.Ptr(),
+		opts.Filter.RunRunning.Ptr(),
+		opts.Filter.RunSucceeded.Ptr(),
+		opts.Filter.RunFailed.Ptr(),
+		opts.Filter.RunCanceled.Ptr(),
+		opts.ActionId,
 	)
 }
 

@@ -6,35 +6,35 @@ type Page struct {
 	Total  int
 }
 
-func (p *Page) Number() int {
+func (self Page) Number() int {
 	number := 1
-	for ; number*p.Limit <= p.Offset; number += 1 {
+	for ; number*self.Limit <= self.Offset; number += 1 {
 	}
 	return number
 }
 
-func (p *Page) Pages() int {
-	pages := p.Total / p.Limit
-	if p.Total%p.Limit != 0 {
+func (self Page) Pages() int {
+	pages := self.Total / self.Limit
+	if self.Total%self.Limit != 0 {
 		pages += 1
 	}
 	return pages
 }
 
-func (p *Page) PrevOffset() *int {
-	offset := p.Offset - p.Limit
+func (self Page) PrevOffset() *int {
+	offset := self.Offset - self.Limit
 	if offset < 0 {
 		offset = 0
 	}
-	if offset == p.Offset {
+	if offset == self.Offset {
 		return nil
 	}
 	return &offset
 }
 
-func (p *Page) NextOffset() *int {
-	offset := p.Offset + p.Limit
-	if offset >= p.Total {
+func (self Page) NextOffset() *int {
+	offset := self.Offset + self.Limit
+	if offset >= self.Total {
 		return nil
 	}
 	return &offset

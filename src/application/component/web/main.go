@@ -336,6 +336,7 @@ func (self *Web) ActionCurrentNameGet(w http.ResponseWriter, req *http.Request) 
 }
 
 func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
+	filter := repository.NewInvocationFilter(req.URL.Query())
 	if id, err := uuid.Parse(mux.Vars(req)["id"]); err != nil {
 		self.ClientError(w, errors.WithMessage(err, "Could not parse Action ID"))
 		return
@@ -353,7 +354,7 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 	} else if stats, err := self.StatisticsService.ActionStatus([]uuid.UUID{id}, nil, util.None()); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if invocations, err := self.InvocationService.GetByActionId(id, page); err != nil {
+	} else if invocations, err := self.InvocationService.Get(&page, repository.InvocationGetOpts{ActionId: &id, Filter: filter}); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Invocations by Action ID: %q", id))
 		return
 	} else {
@@ -401,6 +402,7 @@ func (self *Web) ActionIdRunGet(w http.ResponseWriter, req *http.Request) {
 			"Entries": entries,
 			"Page":    page,
 			"Stats":   stats.Total(),
+			"Filter":  filter,
 		}); err != nil {
 			self.ServerError(w, err)
 			return
@@ -426,7 +428,7 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
-	} else if actions, err := self.ActionService.GetByName(action.Name, page); err != nil {
+	} else if actions, err := self.ActionService.GetByName(action.Name, &page); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by name: %q", action.Name))
 		return
 	} else if stats, err := self.StatisticsService.ActionStatus(nil, []string{action.Name}, util.None()); err != nil {
@@ -795,35 +797,36 @@ func (self *Web) RunIdGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func getPage(req *http.Request) (*repository.Page, error) {
-	page := repository.Page{}
+func getPage(req *http.Request) (repository.Page, error) {
+	var page repository.Page
 
-	if offsetStr := req.FormValue("offset"); offsetStr == "" {
-		page.Offset = 0
-	} else if offset, err := strconv.Atoi(offsetStr); err != nil {
-		return nil, errors.WithMessage(err, "offset parameter is invalid, should be positive integer")
-	} else {
-		page.Offset = offset
+	if offsetStr := req.FormValue("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err != nil {
+			return page, errors.WithMessage(err, "offset parameter is invalid, should be positive integer")
+		} else {
+			page.Offset = offset
+		}
 	}
 
 	if limitStr := req.FormValue("limit"); limitStr == "" {
 		page.Limit = 20
 	} else if limit, err := strconv.Atoi(limitStr); err != nil {
-		return nil, errors.WithMessage(err, "limit parameter is invalid, should be positive integer")
+		return page, errors.WithMessage(err, "limit parameter is invalid, should be positive integer")
 	} else {
 		page.Limit = limit
 	}
 
-	return &page, nil
+	return page, nil
 }
 
 func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 	session := self.sessionOidc(w, req, false)
 	private := util.NewMayBool(session != nil).FalseElseNone()
+	filter := repository.NewInvocationFilter(req.URL.Query())
 	if page, err := getPage(req); err != nil {
 		self.ClientError(w, err)
 		return
-	} else if invocations, err := self.InvocationService.GetByPrivate(page, private); err != nil {
+	} else if invocations, err := self.InvocationService.Get(&page, repository.InvocationGetOpts{Private: private, Filter: filter}); err != nil {
 		self.ServerError(w, err)
 		return
 	} else if stats, err := self.StatisticsService.ActionStatus(nil, nil, private); err != nil {
@@ -880,8 +883,9 @@ func (self *Web) RunGet(w http.ResponseWriter, req *http.Request) {
 
 		if err := self.render("run/index.html", w, session, map[string]any{
 			"Entries": entries,
-			"Page":    page,
+			"Filter":  filter,
 			"Stats":   stats.Total(),
+			"Page":    page,
 		}); err != nil {
 			self.ServerError(w, err)
 			return
@@ -951,10 +955,11 @@ func (self *Web) ApiActionDefinitionSourceNameIdGet(w http.ResponseWriter, req *
 func (self *Web) ApiInvocationGet(w http.ResponseWriter, req *http.Request) {
 	session := self.sessionOidc(w, req, false)
 	private := util.NewMayBool(session != nil).FalseElseNone()
+	filter := repository.NewInvocationFilter(req.URL.Query())
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if invocations, err := self.InvocationService.GetByPrivate(page, private); err != nil {
+	} else if invocations, err := self.InvocationService.Get(&page, repository.InvocationGetOpts{Private: private, Filter: filter}); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 		return
 	} else {
@@ -968,7 +973,7 @@ func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if runs, err := self.RunService.GetByPrivate(page, private); err != nil {
+	} else if runs, err := self.RunService.GetByPrivate(&page, private); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Runs"))
 		return
 	} else {
@@ -1009,7 +1014,7 @@ func (self *Web) ApiRunByInputGet(w http.ResponseWriter, req *http.Request) {
 	} else if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, util.True(), page); err != nil {
+	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, util.True(), &page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 		return
 	} else {
@@ -1041,7 +1046,7 @@ func (self *Web) ApiInvocationByInputGet(w http.ResponseWriter, req *http.Reques
 	} else if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, ok, page); err != nil {
+	} else if invocations, err := self.InvocationService.GetByInputFactIds(factIds, recursive, ok, &page); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Invocations"))
 		return
 	} else {

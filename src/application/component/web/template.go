@@ -3,6 +3,7 @@ package web
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -121,7 +122,23 @@ var templateFuncs = template.FuncMap{
 		}
 		return false
 	},
-	"mkslice": func(values ...any) []any {
+	"makeSlice": func(values ...any) []any {
 		return values
+	},
+	"makeMap": func(kv ...any) (map[any]any, error) {
+		if len(kv)%2 != 0 {
+			return nil, errors.New("`kv` must be of even length")
+		}
+		result := make(map[any]any, len(kv)/2)
+		for i := 0; i < len(kv); i += 2 {
+			result[kv[i]] = kv[i+1]
+		}
+		return result, nil
+	},
+	"htmlJs": func(js string) template.JS {
+		return template.JS(js)
+	},
+	"url": func(url string) template.URL {
+		return template.URL(url)
 	},
 }
