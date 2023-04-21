@@ -128,7 +128,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := http.Post(apiAddr+"/fact", "text/json", buf)
+	response, err := http.Post(apiAddr+"/fact?invoke=async", "text/json", buf)
 	if err == nil && response.StatusCode >= 400 {
 		errMsg := fmt.Sprintf("received %d response", response.StatusCode)
 
