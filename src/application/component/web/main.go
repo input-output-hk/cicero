@@ -1972,18 +1972,29 @@ func (self *Web) ApiFactPost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if _, runFunc, err := self.FactService.Save(&fact, binary); err != nil {
+	_, runFunc, err := self.FactService.Save(&fact, binary)
+	if err != nil {
 		self.ServerError(w, err)
 		return
+	}
+
+	if req.URL.Query().Get("invoke") == "async" {
+		go func() {
+			if _, registerFunc, err := runFunc(self.Db); err != nil {
+				self.Logger.Err(err).Stringer("fact", fact.ID).Msg("Error invoking async after fact was posted")
+			} else if err := registerFunc(); err != nil {
+				self.Logger.Err(err).Stringer("fact", fact.ID).Msg("Error registering jobs async after fact was posted")
+			}
+		}()
 	} else if _, registerFunc, err := runFunc(self.Db); err != nil {
 		self.ServerError(w, err)
 		return
 	} else if err := registerFunc(); err != nil {
 		self.ServerError(w, err)
 		return
-	} else {
-		self.json(w, fact, http.StatusOK)
 	}
+
+	self.json(w, fact, http.StatusOK)
 }
 
 func (self *Web) getFact(w http.ResponseWriter, req *http.Request) (fact domain.Fact, binary io.ReadCloser, fErr error) {
