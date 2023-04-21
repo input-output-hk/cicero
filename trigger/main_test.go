@@ -17,6 +17,7 @@ import (
 
 func TestMain(m *testing.M) {
 	go startDnsServer()
+	go startHttpServer()
 
 	for {
 		_, err := net.Dial("udp", "127.0.0.1:10053")
@@ -64,6 +65,24 @@ func TestServer(t *testing.T) {
 		End()
 }
 
+func startHttpServer() {
+	try := 1
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if try <= 2 {
+			w.WriteHeader(503)
+		} else {
+			w.WriteHeader(200)
+			_, _ = fmt.Fprint(w, "ok")
+		}
+		try++
+	})
+	err := http.ListenAndServe(":1234", nil)
+	if err != nil {
+		log.Fatalf("Failed to start http server: %s\n ", err.Error())
+	}
+}
+
 func startDnsServer() {
 	parseQuery := func(m *dns.Msg) {
 		for _, q := range m.Question {
@@ -108,6 +127,6 @@ func startDnsServer() {
 	log.Printf("Starting at %d\n", port)
 	err := server.ListenAndServe()
 	if err != nil {
-		log.Fatalf("Failed to start server: %s\n ", err.Error())
+		log.Fatalf("Failed to start dns server: %s\n ", err.Error())
 	}
 }
