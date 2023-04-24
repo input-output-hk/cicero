@@ -50,20 +50,27 @@
             command.text = config.preset.github.status.lib.reportBulk {
               bulk.text = "nix eval .#packages --apply __attrNames --json | nix-systems -i";
               each.text = ''
-                nix build -L .#packages."$1".default
+                for package in \
+                  cicero \
+                  cicero-evaluator-nix \
+                  webhook-trigger
+                do
+                  nix build -L .#packages."$1"."$package"
 
-                readarray -t tests < <(
-                  nix eval .#packages."$1".default.passthru.tests --apply __attrNames --json |
-                  jq --raw-output .[]
-                )
+                  readarray -t tests < <(
+                    nix eval .#packages."$1"."$package".passthru.tests --apply __attrNames --json |
+                    jq --raw-output .[]
+                  )
 
-                for test in "''${tests[@]}"; do
-                  installables+=(.#packages."$1".default.passthru.tests."$test")
+                  installables=()
+                  for test in "''${tests[@]}"; do
+                    installables+=(.#packages."$1"."$package".passthru.tests."$test")
+                  done
+
+                  if [[ ''${#installables[@]} -gt 0 ]]; then
+                    nix build -L "''${installables[@]}"
+                  fi
                 done
-
-                if [[ ''${#tests[@]} -gt 0 ]]; then
-                  nix build -L "''${installables[@]}"
-                fi
               '';
             };
 
