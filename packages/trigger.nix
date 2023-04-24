@@ -6,7 +6,7 @@
   perSystem = {pkgs, ...}: {
     packages.webhook-trigger = pkgs.buildGoModule rec {
       pname = "trigger";
-      version = "2022.05.19.001";
+      version = "2023.04.20.001";
 
       src = inputs.inclusive.lib.inclusive ../. [
         ../go.mod
@@ -14,7 +14,7 @@
         ../trigger
       ];
 
-      vendorHash = "sha256-6UwNhpR6+gXXgB2s8HLW6NcRluicehXTLJTbgIOGd0M=";
+      vendorHash = "sha256-w8nlWvjfbVfe9MC0SIkCWWjsrr9AnMyV1WTiv5Rludg=";
 
       CGO_ENABLED = 0;
 

@@ -8,12 +8,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/alexflint/go-arg"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/miekg/dns"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -128,7 +131,13 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := http.Post(apiAddr+"/fact?invoke=async", "text/json", buf)
+	retryClient := retryablehttp.NewClient()
+	retryClient.RetryMax = 16
+	retryClient.RetryWaitMin = 1 * time.Second
+	retryClient.RetryWaitMax = 10 * time.Minute
+	retryClient.Backoff = ExponentialJitterBackoff
+	response, err := retryClient.Post(apiAddr+"/fact?invoke=async", "text/json", buf)
+
 	if err == nil && response.StatusCode >= 400 {
 		errMsg := fmt.Sprintf("received %d response", response.StatusCode)
 
@@ -227,4 +236,20 @@ func (h handler) checkMac(msg, msgMac, key []byte) (bool, error) {
 		Send()
 
 	return false, nil
+}
+
+func ExponentialJitterBackoff(min, max time.Duration, attemptNum int, resp *http.Response) time.Duration {
+	rand := rand.New(rand.NewSource(int64(time.Now().Nanosecond())))
+	minf := float64(min)
+	mult := math.Pow(2, float64(attemptNum)) * minf
+	jitter := rand.Float64() * (mult - minf)
+
+	mult += jitter
+
+	sleep := time.Duration(mult)
+	if sleep > max {
+		sleep = max
+	}
+
+	return sleep
 }

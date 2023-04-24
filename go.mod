@@ -19,6 +19,7 @@ require (
 	github.com/grafana/dskit v0.0.0-20230317135621-727cbc22c1fe
 	github.com/grafana/loki v1.6.2-0.20230224170420-98421b0c0187 // https://github.com/grafana/loki/issues/2826#issuecomment-717902042
 	github.com/hashicorp/go-getter/v2 v2.2.1
+	github.com/hashicorp/go-retryablehttp v0.7.2
 	github.com/hashicorp/nomad v1.5.1
 	github.com/hashicorp/nomad/api v0.0.0-20230322082758-39ec124bb88b
 	github.com/jackc/pgx-zerolog v0.0.0-20230315001418-f978528409eb
@@ -112,7 +113,6 @@ require (
 	github.com/hashicorp/go-msgpack v1.1.5 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.4.9 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.2 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
 	github.com/hashicorp/go-secure-stdlib/parseutil v0.1.7 // indirect
