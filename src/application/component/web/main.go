@@ -189,21 +189,6 @@ func (self *Web) Start(ctx context.Context) error {
 						return
 					}
 
-					if pgSession, err := self.SessionService.GetByKey(session.ID); err != nil {
-						self.ServerError(w, err)
-						return
-					} else if pgSession == nil {
-						self.ServerError(w, fmt.Errorf("Could not find session %q", session.ID))
-						return
-					} else if err := self.SessionService.Update(pgSession, sessionOidc, self.Config.Sessions.Codecs, func(data map[any]any) error {
-						// `refreshSessionTokens()` ignores sessions with the zero timestamp
-						pgSession.ModifiedOn = time.Time{}
-						return nil
-					}); err != nil {
-						self.ServerError(w, errors.WithMessage(err, "While saving session"))
-						return
-					}
-
 					state := State{}
 					if err := json.Unmarshal([]byte(stateJson), &state); err != nil {
 						self.ClientError(w, err)
