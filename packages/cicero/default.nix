@@ -18,7 +18,7 @@
         package = pkgs.buildGo120Module rec {
           pname = "cicero";
           version = "2023.04.05";
-          vendorHash = "sha256-YH9w0+7X4gkmbpTm/XzsSD0mKuNAhOo4tjDA0OW7gdU=";
+          vendorHash = "sha256-eUfGDjDyiaMeKA5RMk+qtu2kNCiRsyLK0f4Pg5Iat4I=";
 
           src = inputs.inclusive.lib.inclusive ../.. [
             ../../go.mod

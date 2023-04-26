@@ -14,7 +14,7 @@
         ../trigger
       ];
 
-      vendorHash = "sha256-w8nlWvjfbVfe9MC0SIkCWWjsrr9AnMyV1WTiv5Rludg=";
+      vendorHash = "sha256-L8BZ3lUYD5IxuefKBJ3TIiYnAQ7YJqa1RwKMb7zNmhg=";
 
       CGO_ENABLED = 0;
 
