@@ -301,7 +301,7 @@
 								autocomplete="off"
 								name="{{index . 2}}"
 								id="{{index . 2}}"
-								{{if (index . 3).Else true}}checked{{end}}
+								value="{{toJson (index . 3) false}}"
 							/>
 						{{end}}
 					</label>
@@ -309,18 +309,71 @@
 			{{end}}
 		</dl>
 		<script>
-		document.scripts[document.scripts.length - 1]
-		.previousElementSibling
-		.querySelectorAll('input[type=checkbox]')
-		.forEach(checkbox => checkbox.onchange = () => {
+		(() => {
+			const checkboxes = document.scripts[document.scripts.length - 1].
+				previousElementSibling.
+				querySelectorAll('input[type=checkbox]');
+
 			const params = new URLSearchParams(location.search);
-			if (checkbox.checked) {
-				params.delete(checkbox.name);
-			} else {
-				params.set(checkbox.name, '');
+
+			function setValue(checkbox, value) {
+				switch (value) {
+				case true:
+					checkbox.value = 'true';
+					checkbox.checked = true;
+					checkbox.indeterminate = false;
+					params.set(checkbox.name, 'true');
+					break;
+				case null:
+					checkbox.value = 'null';
+					checkbox.checked = false;
+					checkbox.indeterminate = true;
+					params.delete(checkbox.name);
+					break;
+				case false:
+					checkbox.value = 'false';
+					checkbox.checked = false;
+					checkbox.indeterminate = false;
+					params.set(checkbox.name, '');
+					break;
+				}
 			}
-			location.search = params;
-		});
+
+			for (const checkbox of checkboxes) {
+				setValue(checkbox, JSON.parse(checkbox.value));
+
+				checkbox.onchange = () => {
+					switch (checkbox.value) {
+					case 'true':
+						setValue(checkbox, false);
+
+						for (const checkbox2 of checkboxes) {
+							if (checkbox2.name == checkbox.name) continue;
+							setValue(checkbox2, null);
+						}
+						break;
+					case 'null':
+						setValue(checkbox, true);
+
+						for (const checkbox2 of checkboxes) {
+							if (checkbox2.name == checkbox.name) continue;
+							setValue(checkbox2, false);
+						}
+						break;
+					case 'false':
+						setValue(checkbox, null);
+
+						for (const checkbox2 of checkboxes) {
+							if (checkbox2.name == checkbox.name || checkbox2.value != 'true') continue;
+							setValue(checkbox2, null);
+						}
+						break;
+					}
+
+					location.search = params;
+				};
+			}
+		})();
 		</script>
 	{{end}}
 
