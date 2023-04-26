@@ -8,7 +8,6 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
-	"github.com/input-output-hk/cicero/src/util"
 )
 
 type runRepository struct {
@@ -51,17 +50,6 @@ func (a runRepository) GetByInvocationId(invocationId uuid.UUID) (*domain.Run, e
 	return run.(*domain.Run), err
 }
 
-func (a runRepository) GetByActionId(id uuid.UUID, page *repository.Page) ([]domain.Run, error) {
-	runs := make([]domain.Run, page.Limit)
-	return runs, fetchPage(
-		a.DB, page, &runs,
-		`run.*`,
-		`run JOIN invocation i ON i.id = run.invocation_id AND i.action_id = $1`,
-		`run.created_at DESC`,
-		id,
-	)
-}
-
 func (a runRepository) GetLatestByActionId(id uuid.UUID) (*domain.Run, error) {
 	run, err := get(
 		a.DB, &domain.Run{},
@@ -79,33 +67,27 @@ func (a runRepository) GetLatestByActionId(id uuid.UUID) (*domain.Run, error) {
 	return run.(*domain.Run), err
 }
 
-func (a runRepository) GetAll(page *repository.Page) ([]domain.Run, error) {
-	runs := make([]domain.Run, page.Limit)
+func (a runRepository) Get(page *repository.Page, opts repository.RunGetOpts) ([]domain.Run, error) {
+	var runs []domain.Run
+	if page == nil {
+		runs = make([]domain.Run, 0)
+	} else {
+		runs = make([]domain.Run, 0, page.Limit)
+	}
 	return runs, fetchPage(
 		a.DB, page, &runs,
-		`*`, `run`, `created_at DESC`,
-	)
-}
-
-func (a runRepository) GetByPrivate(page *repository.Page, private util.MayBool) ([]domain.Run, error) {
-	from := `run`
-	params := make([]any, 0)
-
-	if privatePtr := private.Ptr(); privatePtr != nil {
-		from += `
+		`run.*`, `run
 			INNER JOIN invocation  ON invocation.id    = run.invocation_id
 			INNER JOIN action      ON action.id        = invocation.action_id
 			INNER JOIN action_name ON action_name.name = action.name
-			WHERE action_name.private = $1
-		`
-		params = append(params, *privatePtr)
-	}
-
-	runs := make([]domain.Run, page.Limit)
-	return runs, fetchPage(
-		a.DB, page, &runs,
-		`run.*`, from, `run.created_at DESC`,
-		params...,
+			WHERE
+				($1::bool IS NULL OR $1::bool = action_name.private) AND
+				($2::bool IS NULL OR $2::bool = (run.finished_at IS NULL)) AND
+				($3::uuid IS NULL OR $3::uuid = invocation.action_id)
+		`, `run.created_at DESC`,
+		opts.Private.Ptr(),
+		opts.Finished.Ptr(),
+		opts.ActionId,
 	)
 }
 

@@ -9,7 +9,6 @@ import (
 	"github.com/input-output-hk/cicero/src/config"
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
-	"github.com/input-output-hk/cicero/src/util"
 )
 
 type actionRepository struct {
@@ -73,15 +72,6 @@ func (a *actionRepository) GetByRunId(id uuid.UUID) (*domain.Action, error) {
 	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetByName(name string, page *repository.Page) ([]domain.Action, error) {
-	actions := make([]domain.Action, page.Limit)
-	return actions, fetchPage(
-		a.DB, page, &actions,
-		`*`, `action WHERE name = $1`, `created_at DESC`,
-		name,
-	)
-}
-
 func (a *actionRepository) GetLatestByName(name string) (*domain.Action, error) {
 	action, err := get(
 		a.DB, &domain.Action{},
@@ -94,13 +84,33 @@ func (a *actionRepository) GetLatestByName(name string) (*domain.Action, error) 
 	return action.(*domain.Action), err
 }
 
-func (a *actionRepository) GetAll() (actions []domain.Action, err error) {
-	actions = []domain.Action{}
-	err = pgxscan.Select(
-		context.Background(), a.DB, &actions,
-		`SELECT * FROM action ORDER BY created_at DESC`,
+func (a *actionRepository) Get(page *repository.Page, opts repository.ActionGetOpts) ([]domain.Action, error) {
+	var actions []domain.Action
+	if page == nil {
+		actions = make([]domain.Action, 0)
+	} else {
+		actions = make([]domain.Action, 0, page.Limit)
+	}
+
+	var selects string
+	if opts.Current {
+		selects = `DISTINCT ON (action.name) `
+	}
+	selects += `action.*`
+
+	return actions, fetchPage(
+		a.DB, page, &actions,
+		selects, `action
+			NATURAL JOIN action_name
+			WHERE
+				($1::text IS NULL OR $1::text = action.name) AND
+				($2::bool IS NULL OR $2::bool = action_name.private) AND
+				($3::bool IS NULL OR $3::bool = action_name.active)
+		`, `name, action.created_at DESC`,
+		opts.Name,
+		opts.Private.Ptr(),
+		opts.Active.Ptr(),
 	)
-	return
 }
 
 func (a *actionRepository) Save(action *domain.Action) error {
@@ -115,44 +125,6 @@ func (a *actionRepository) Save(action *domain.Action) error {
 		sql,
 		action.ID, action.Name, action.Source, action.InOut,
 	).Scan(&action.ID, &action.CreatedAt)
-}
-
-func (a *actionRepository) GetByCurrentByActiveByPrivate(onlyCurrent bool, active util.MayBool, private util.MayBool) (actions []domain.Action, err error) {
-	sql := `SELECT `
-	if onlyCurrent {
-		sql += ` DISTINCT ON (name) `
-	}
-	sql += `
-		action.*
-		FROM action
-		NATURAL JOIN action_name
-		WHERE TRUE
-	`
-
-	whereName := func(field string, state util.MayBool) {
-		statePtr := state.Ptr()
-
-		if statePtr == nil {
-			return
-		}
-
-		sql += ` AND `
-		if !*statePtr {
-			sql += ` NOT `
-		}
-		sql += ` action_name.` + field
-	}
-
-	whereName(`active`, active)
-	whereName(`private`, private)
-
-	sql += `
-		ORDER BY name, created_at DESC
-	`
-
-	actions = []domain.Action{}
-	err = pgxscan.Select(context.Background(), a.DB, &actions, sql)
-	return
 }
 
 func (a *actionRepository) GetSatisfactions(id uuid.UUID) (inputs map[string]uuid.UUID, err error) {

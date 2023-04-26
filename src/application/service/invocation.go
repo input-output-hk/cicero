@@ -22,7 +22,6 @@ type InvocationService interface {
 
 	GetById(uuid.UUID) (*domain.Invocation, error)
 	GetLatestByActionId(uuid.UUID) (*domain.Invocation, error)
-	GetAll(*repository.Page) ([]domain.Invocation, error)
 	Get(*repository.Page, repository.InvocationGetOpts) ([]domain.Invocation, error)
 	GetByInputFactIds([]*uuid.UUID, bool, util.MayBool, *repository.Page) ([]domain.Invocation, error)
 	GetInputFactIdsById(uuid.UUID) (map[string]uuid.UUID, error)
@@ -104,18 +103,12 @@ func (self invocationService) GetLatestByActionId(id uuid.UUID) (invocation *dom
 	return
 }
 
-func (self invocationService) GetAll(page *repository.Page) (invocations []domain.Invocation, err error) {
-	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting all Invocations")
-	invocations, err = self.invocationRepository.GetAll(page)
-	err = errors.WithMessagef(err, "Could not select existing Invocations with offset %d and limit %d", page.Offset, page.Limit)
-	return
-}
-
 func (self invocationService) Get(page *repository.Page, opts repository.InvocationGetOpts) (invocations []domain.Invocation, err error) {
 	optsJson, _ := json.Marshal(opts)
-	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).RawJSON("opts", optsJson).Msg("Getting Invocations")
+	pageJson, _ := json.Marshal(page)
+	self.logger.Trace().RawJSON("page", pageJson).RawJSON("opts", optsJson).Msg("Getting Invocations")
 	invocations, err = self.invocationRepository.Get(page, opts)
-	err = errors.WithMessagef(err, "Could not select existing Invocations with offset %d and limit %d", page.Offset, page.Limit)
+	err = errors.WithMessagef(err, "Could not select existing Invocations with page %s", pageJson)
 	return
 }
 

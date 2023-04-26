@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	"cuelang.org/go/cue"
@@ -28,10 +29,8 @@ type ActionService interface {
 	GetById(uuid.UUID) (*domain.Action, error)
 	GetByInvocationId(uuid.UUID) (*domain.Action, error)
 	GetByRunId(uuid.UUID) (*domain.Action, error)
-	GetByName(string, *repository.Page) ([]domain.Action, error)
 	GetLatestByName(string) (*domain.Action, error)
-	GetAll() ([]domain.Action, error)
-	GetByCurrentByActiveByPrivate(bool, util.MayBool, util.MayBool) ([]domain.Action, error)
+	Get(*repository.Page, repository.ActionGetOpts) ([]domain.Action, error)
 	Save(*domain.Action) error
 	GetSatisfiedInputs(*domain.Action) (map[string]domain.Fact, error)
 	IsRunnable(*domain.Action) (bool, map[string]domain.Fact, error)
@@ -139,13 +138,6 @@ func (self actionService) GetByInvocationId(id uuid.UUID) (action *domain.Action
 	return
 }
 
-func (self actionService) GetByName(name string, page *repository.Page) (actions []domain.Action, err error) {
-	self.logger.Trace().Str("name", name).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Actions by name")
-	actions, err = self.actionRepository.GetByName(name, page)
-	err = errors.WithMessagef(err, "Could not select Actions for name %q with offset %d and limit %d", name, page.Offset, page.Limit)
-	return
-}
-
 func (self actionService) GetLatestByName(name string) (action *domain.Action, err error) {
 	self.logger.Trace().Str("name", name).Msg("Getting latest Action by name")
 	action, err = self.actionRepository.GetLatestByName(name)
@@ -153,9 +145,13 @@ func (self actionService) GetLatestByName(name string) (action *domain.Action, e
 	return
 }
 
-func (self actionService) GetAll() ([]domain.Action, error) {
-	self.logger.Trace().Msg("Getting all Actions")
-	return self.actionRepository.GetAll()
+func (self actionService) Get(page *repository.Page, opts repository.ActionGetOpts) (actions []domain.Action, err error) {
+	optsJson, _ := json.Marshal(opts)
+	pageJson, _ := json.Marshal(page)
+	self.logger.Trace().RawJSON("page", pageJson).RawJSON("opts", optsJson).Msg("Getting Actions")
+	actions, err = self.actionRepository.Get(page, opts)
+	err = errors.WithMessagef(err, "Could not select existing Actions with page %s", pageJson)
+	return
 }
 
 func (self actionService) Save(action *domain.Action) error {
@@ -166,13 +162,6 @@ func (self actionService) Save(action *domain.Action) error {
 	}
 	logger.Trace().Stringer("id", action.ID).Msg("Created Action")
 	return nil
-}
-
-func (self actionService) GetByCurrentByActiveByPrivate(onlyCurrent bool, active util.MayBool, private util.MayBool) (actions []domain.Action, err error) {
-	self.logger.Trace().Bool("only-current", onlyCurrent).Interface("active", active).Interface("private", private).Msg("Getting current Actions")
-	actions, err = self.actionRepository.GetByCurrentByActiveByPrivate(onlyCurrent, active, private)
-	err = errors.WithMessagef(err, "Could not select current Actions by active %v and private %v", active, private)
-	return
 }
 
 func (self actionService) GetSatisfiedInputs(action *domain.Action) (inputs map[string]domain.Fact, err error) {
@@ -353,7 +342,7 @@ func (self actionService) InvokeCurrentActive() ([]domain.Invocation, InvokeRunF
 		}, pgx.BeginFunc(context.Background(), self.db, func(tx pgx.Tx) error {
 			txSelf := self.WithQuerier(tx).(*actionService)
 
-			actions, err := txSelf.GetByCurrentByActiveByPrivate(true, util.True(), util.None())
+			actions, err := txSelf.Get(nil, repository.ActionGetOpts{Current: true, Active: util.True()})
 			if err != nil {
 				return err
 			}
@@ -498,7 +487,7 @@ func (self actionService) UpdateSatisfaction(fact *domain.Fact) error {
 			}
 		}
 
-		actions, err := txSelf.GetByCurrentByActiveByPrivate(true, util.None(), private)
+		actions, err := txSelf.Get(nil, repository.ActionGetOpts{Current: true, Private: private})
 		if err != nil {
 			return err
 		}

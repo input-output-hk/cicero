@@ -79,16 +79,13 @@ func (self *invocationRepository) GetInputFactIdsById(id uuid.UUID) (inputFactId
 	return
 }
 
-func (self *invocationRepository) GetAll(page *repository.Page) ([]domain.Invocation, error) {
-	invocations := make([]domain.Invocation, page.Limit)
-	return invocations, fetchPage(
-		self.db, page, &invocations,
-		`*`, `invocation`, `created_at DESC`,
-	)
-}
-
 func (self *invocationRepository) Get(page *repository.Page, opts repository.InvocationGetOpts) ([]domain.Invocation, error) {
-	invocations := make([]domain.Invocation, page.Limit)
+	var invocations []domain.Invocation
+	if page == nil {
+		invocations = make([]domain.Invocation, 0)
+	} else {
+		invocations = make([]domain.Invocation, 0, page.Limit)
+	}
 	return invocations, fetchPage(
 		self.db, page, &invocations,
 		`invocation.*`, `invocation

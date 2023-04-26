@@ -1,5 +1,7 @@
 package repository
 
+import "encoding/json"
+
 type Page struct {
 	Limit  int
 	Offset int
@@ -38,4 +40,14 @@ func (self Page) NextOffset() *int {
 		return nil
 	}
 	return &offset
+}
+
+func (self *Page) MarshalJSON() ([]byte, error) {
+	if self == nil {
+		return []byte("null"), nil
+	}
+	return json.Marshal(map[string]int{
+		"offset": self.Offset,
+		"limit":  self.Limit,
+	})
 }

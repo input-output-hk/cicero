@@ -14,13 +14,18 @@ type ActionRepository interface {
 	GetById(uuid.UUID) (*domain.Action, error)
 	GetByInvocationId(uuid.UUID) (*domain.Action, error)
 	GetByRunId(uuid.UUID) (*domain.Action, error)
-	GetByName(string, *Page) ([]domain.Action, error)
 	GetLatestByName(string) (*domain.Action, error)
-	GetAll() ([]domain.Action, error)
-	GetByCurrentByActiveByPrivate(bool, util.MayBool, util.MayBool) ([]domain.Action, error)
+	Get(*Page, ActionGetOpts) ([]domain.Action, error)
 	Save(*domain.Action) error
 	GetSatisfactions(uuid.UUID) (map[string]uuid.UUID, error)
 	SaveSatisfaction(uuid.UUID, string, uuid.UUID) error
 	DeleteSatisfaction(uuid.UUID, string) error
 	HaveSatisfactionsChangedSinceLastInvocation(uuid.UUID) (bool, error)
+}
+
+type ActionGetOpts struct {
+	Name    *string
+	Current bool
+	Active  util.MayBool
+	Private util.MayBool
 }

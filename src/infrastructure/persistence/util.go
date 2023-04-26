@@ -19,6 +19,16 @@ func fetchPage(
 	selects, from, orderBy string,
 	queryArgs ...any,
 ) error {
+	if page == nil {
+		return pgxscan.Select(
+			context.Background(), db, items,
+			`SELECT `+selects+
+				` FROM `+from+
+				` ORDER BY `+orderBy,
+			queryArgs...,
+		)
+	}
+
 	batch := &pgx.Batch{}
 	batch.Queue(`SELECT count(*) FROM `+from, queryArgs...)
 	batch.Queue(

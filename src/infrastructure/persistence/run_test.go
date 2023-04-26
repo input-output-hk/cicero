@@ -41,10 +41,10 @@ func TestShouldGetRunByActionId(t *testing.T) {
 	defer mock.Close(context.Background())
 	rows := mock.NewRows([]string{"nomad_job_id", "invocation_id", "created_at", "finished_at"}).AddRow(run.NomadJobID, run.InvocationId, run.CreatedAt, run.FinishedAt)
 	mock.ExpectQuery("SELECT(.*)").WithArgs(actionId, page.Limit, page.Offset).WillReturnRows(rows)
-	repository := NewRunRepository(mock)
+	repo := NewRunRepository(mock)
 
 	// when
-	runResult, err := repository.GetByActionId(actionId, &page)
+	runResult, err := repo.Get(&page, repository.RunGetOpts{ActionId: &actionId})
 
 	// then
 	assert.Nil(t, err)

@@ -289,7 +289,7 @@ func (self *Web) ActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 
 	_, active := req.URL.Query()["active"]
 	private := util.NewMayBool(session != nil).FalseElseNone()
-	actions, err = self.ActionService.GetByCurrentByActiveByPrivate(true, util.NewMayBool(active), private)
+	actions, err = self.ActionService.Get(nil, repository.ActionGetOpts{Current: true, Active: util.NewMayBool(active), Private: private})
 	if err != nil {
 		self.ServerError(w, err)
 		return
@@ -413,7 +413,7 @@ func (self *Web) ActionIdVersionGet(w http.ResponseWriter, req *http.Request) {
 		return
 	} else if session := self.sessionOidc(w, req, actionName.Private); actionName.Private && session == nil {
 		return
-	} else if actions, err := self.ActionService.GetByName(action.Name, &page); err != nil {
+	} else if actions, err := self.ActionService.Get(&page, repository.ActionGetOpts{Name: &action.Name}); err != nil {
 		self.ServerError(w, errors.WithMessagef(err, "Could not get Action by name: %q", action.Name))
 		return
 	} else if stats, err := self.StatisticsService.ActionStatus(nil, []string{action.Name}, util.None()); err != nil {
@@ -958,7 +958,7 @@ func (self *Web) ApiRunGet(w http.ResponseWriter, req *http.Request) {
 	if page, err := getPage(req); err != nil {
 		self.ServerError(w, err)
 		return
-	} else if runs, err := self.RunService.GetByPrivate(&page, private); err != nil {
+	} else if runs, err := self.RunService.Get(&page, repository.RunGetOpts{Private: private}); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "failed to fetch Runs"))
 		return
 	} else {
@@ -1390,7 +1390,7 @@ func (self *Web) ApiRunIdFactPost(w http.ResponseWriter, req *http.Request) {
 func (self *Web) ApiActionGet(w http.ResponseWriter, req *http.Request) {
 	session := self.sessionOidc(w, req, false)
 	private := util.NewMayBool(session != nil).FalseElseNone()
-	if actions, err := self.ActionService.GetByCurrentByActiveByPrivate(false, util.None(), private); err != nil {
+	if actions, err := self.ActionService.Get(nil, repository.ActionGetOpts{Current: false, Private: private}); err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get all actions"))
 		return
 	} else {
@@ -1411,7 +1411,7 @@ func (self *Web) ApiActionCurrentGet(w http.ResponseWriter, req *http.Request) {
 		active = util.True()
 	}
 
-	actions, err = self.ActionService.GetByCurrentByActiveByPrivate(true, active, private)
+	actions, err = self.ActionService.Get(nil, repository.ActionGetOpts{Current: true, Active: active, Private: private})
 
 	if err != nil {
 		self.ServerError(w, errors.WithMessage(err, "Failed to get current actions"))
