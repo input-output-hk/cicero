@@ -424,7 +424,7 @@ func (self actionService) NewInvokeRunFunc(action *domain.Action, invocation *do
 				Status:       domain.RunStatusRunning,
 			}
 
-			if err := txSelf.runService.Save(&run); err != nil {
+			if err := txSelf.runService.Save(&run, db); err != nil {
 				return errors.WithMessage(err, "Could not insert Run")
 			}
 

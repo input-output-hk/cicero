@@ -15,6 +15,7 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jackc/pgx/v5"
+	"github.com/madflojo/tasks"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 
@@ -36,7 +37,7 @@ type RunService interface {
 	GetLatestByActionId(uuid.UUID) (*domain.Run, error)
 	GetAll(*repository.Page) ([]domain.Run, error)
 	GetByPrivate(*repository.Page, util.MayBool) ([]domain.Run, error)
-	Save(*domain.Run) error
+	Save(*domain.Run, config.PgxIface) error
 	Update(*domain.Run) error
 	End(*domain.Run) error
 	Cancel(*domain.Run) error
@@ -56,6 +57,7 @@ type runService struct {
 	victoriaMetricsAddr string
 	nomadEventService   NomadEventService
 	nomadClient         application.NomadClient
+	timeouts            *tasks.Scheduler
 	db                  config.PgxIface
 }
 
@@ -67,6 +69,7 @@ func NewRunService(db config.PgxIface, lokiService LokiService, nomadEventServic
 		nomadEventService:   nomadEventService,
 		lokiService:         lokiService,
 		victoriaMetricsAddr: victoriaMetricsAddr,
+		timeouts:            tasks.New(),
 		db:                  db,
 	}
 }
@@ -78,6 +81,7 @@ func (self runService) WithQuerier(querier config.PgxIface) RunService {
 		nomadEventService: self.nomadEventService.WithQuerier(querier),
 		lokiService:       self.lokiService,
 		nomadClient:       self.nomadClient,
+		timeouts:          self.timeouts,
 		db:                querier,
 	}
 }
@@ -124,20 +128,34 @@ func (self runService) GetAll(page *repository.Page) (runs []domain.Run, err err
 	return
 }
 
-func (self runService) GetByPrivate(page *repository.Page, private util.MayBool) (runs []domain.Run, err error) {
-	self.logger.Trace().Interface("private", private).Int("offset", page.Offset).Int("limit", page.Limit).Msg("Getting Runs by private")
-	runs, err = self.runRepository.GetByPrivate(page, private)
-	err = errors.WithMessagef(err, "Could not select existing Runs (private: %v) with offset %d and limit %d", private, page.Offset, page.Limit)
+func (self runService) Get(page *repository.Page, opts repository.RunGetOpts) (runs []domain.Run, err error) {
+	optsJson, _ := json.Marshal(opts)
+	self.logger.Trace().Int("offset", page.Offset).Int("limit", page.Limit).RawJSON("opts", optsJson).Msg("Getting Runs")
+	runs, err = self.runRepository.Get(page, opts)
+	err = errors.WithMessagef(err, "Could not select existing Runs with offset %d and limit %d", page.Offset, page.Limit)
 	return
 }
 
-func (self runService) Save(run *domain.Run) error {
+func (self runService) Save(run *domain.Run, db config.PgxIface) error {
 	self.logger.Trace().Msg("Saving new Run")
 	if err := self.runRepository.Save(run); err != nil {
 		return errors.WithMessage(err, "Could not insert Run")
 	}
-	self.logger.Trace().Stringer("id", run.NomadJobID).Msg("Created Run")
-	return nil
+	timeout := run.CreatedAt.Add(24 * time.Hour)
+	self.logger.Trace().Stringer("id", run.NomadJobID).Stringer("timeout", timeout).Msg("Created Run")
+
+	return errors.WithMessage(self.timeouts.AddWithID(run.NomadJobID.String(), &tasks.Task{
+		RunOnce:    true,
+		StartAfter: timeout,
+		Interval:   1,
+		TaskFunc: func() error {
+			self.logger.Info().Stringer("id", run.NomadJobID).Msg("Canceling due to timeout")
+			return self.WithQuerier(db).Cancel(run)
+		},
+		ErrFunc: func(err error) {
+			self.logger.Err(err).Stringer("id", run.NomadJobID).Msg("Error canceling Run after timeout")
+		},
+	}), "While scheduling Run timeout")
 }
 
 func (self runService) Update(run *domain.Run) error {
@@ -162,6 +180,7 @@ func (self runService) End(run *domain.Run) error {
 	}); err != nil {
 		return err
 	}
+	self.timeouts.Del(run.NomadJobID.String())
 	self.logger.Debug().Stringer("id", run.NomadJobID).Msg("Ended Run")
 	return nil
 }
@@ -175,6 +194,7 @@ func (self runService) Cancel(run *domain.Run) error {
 	if _, _, err := self.nomadClient.JobsDeregister(run.NomadJobID.String(), false, &nomad.WriteOptions{}); err != nil {
 		return errors.WithMessagef(err, "Failed to deregister job %q", run.NomadJobID)
 	}
+	self.timeouts.Del(run.NomadJobID.String())
 	self.logger.Debug().Stringer("id", run.NomadJobID).Msg("Stopped Run")
 	return nil
 }

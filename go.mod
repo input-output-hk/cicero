@@ -24,6 +24,7 @@ require (
 	github.com/hashicorp/nomad/api v0.0.0-20230322082758-39ec124bb88b
 	github.com/jackc/pgx-zerolog v0.0.0-20230315001418-f978528409eb
 	github.com/jackc/pgx/v5 v5.3.1
+	github.com/madflojo/tasks v1.0.4
 	github.com/miekg/dns v1.1.52
 	github.com/pashagolub/pgxmock/v2 v2.5.0
 	github.com/pborman/ansi v1.0.0
@@ -171,6 +172,7 @@ require (
 	github.com/prometheus/exporter-toolkit v0.9.1 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/prometheus/prometheus v1.99.0 // indirect
+	github.com/rs/xid v1.4.0 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
 	github.com/sercand/kuberesolver v2.4.0+incompatible // indirect
