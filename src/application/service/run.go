@@ -54,11 +54,12 @@ type runService struct {
 	victoriaMetricsAddr string
 	nomadEventService   NomadEventService
 	nomadClient         application.NomadClient
+	runTimeout          time.Duration
 	timeouts            *tasks.Scheduler
 	db                  config.PgxIface
 }
 
-func NewRunService(db config.PgxIface, lokiService LokiService, nomadEventService NomadEventService, victoriaMetricsAddr string, nomadClient application.NomadClient, logger *zerolog.Logger) RunService {
+func NewRunService(db config.PgxIface, lokiService LokiService, nomadEventService NomadEventService, victoriaMetricsAddr string, nomadClient application.NomadClient, runTimeout time.Duration, logger *zerolog.Logger) RunService {
 	return &runService{
 		logger:              logger.With().Str("component", "RunService").Logger(),
 		runRepository:       persistence.NewRunRepository(db),
@@ -66,6 +67,7 @@ func NewRunService(db config.PgxIface, lokiService LokiService, nomadEventServic
 		nomadEventService:   nomadEventService,
 		lokiService:         lokiService,
 		victoriaMetricsAddr: victoriaMetricsAddr,
+		runTimeout:          runTimeout,
 		timeouts:            tasks.New(),
 		db:                  db,
 	}
@@ -78,6 +80,7 @@ func (self runService) WithQuerier(querier config.PgxIface) RunService {
 		nomadEventService: self.nomadEventService.WithQuerier(querier),
 		lokiService:       self.lokiService,
 		nomadClient:       self.nomadClient,
+		runTimeout:        self.runTimeout,
 		timeouts:          self.timeouts,
 		db:                querier,
 	}
@@ -125,7 +128,7 @@ func (self runService) Save(run *domain.Run, db config.PgxIface) error {
 	if err := self.runRepository.Save(run); err != nil {
 		return errors.WithMessage(err, "Could not insert Run")
 	}
-	timeout := run.CreatedAt.Add(24 * time.Hour)
+	timeout := run.CreatedAt.Add(self.runTimeout)
 	self.logger.Trace().Stringer("id", run.NomadJobID).Stringer("timeout", timeout).Msg("Created Run")
 
 	return errors.WithMessage(self.timeouts.AddWithID(run.NomadJobID.String(), &tasks.Task{

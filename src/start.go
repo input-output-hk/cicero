@@ -24,10 +24,11 @@ import (
 type StartCmd struct {
 	Components []string `arg:"positional,env:CICERO_COMPONENTS" help:"any of: nomad, web"`
 
-	PrometheusAddr      string   `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
-	VictoriaMetricsAddr string   `arg:"--victoriametrics-addr" default:"http://127.0.0.1:8428"`
-	Evaluators          []string `arg:"--evaluators"`
-	Transformers        []string `arg:"--transform"`
+	PrometheusAddr      string        `arg:"--prometheus-addr" default:"http://127.0.0.1:3100"`
+	VictoriaMetricsAddr string        `arg:"--victoriametrics-addr" default:"http://127.0.0.1:8428"`
+	Evaluators          []string      `arg:"--evaluators"`
+	Transformers        []string      `arg:"--transform"`
+	RunTimeout          time.Duration `arg:"--run-timeout" default:"12h" help:"Runs will be canceled if still running after this duration"`
 
 	WebListen             string `arg:"--web-listen,env:CICERO_WEB_LISTEN" default:":8080"`
 	WebCookieAuth         string `arg:"--web-cookie-auth" help:"file that contains the cookie authentication key"`
@@ -47,6 +48,7 @@ type InstanceOpts interface {
 	GetEvaluators() []string
 	GetVictoriaMetricsAddr() string
 	GetTransformers() []string
+	GetRunTimeout() time.Duration
 }
 
 type InstanceComponentsOpts struct {
@@ -127,6 +129,10 @@ func (cmd StartCmd) GetTransformers() []string {
 	return cmd.Transformers
 }
 
+func (cmd StartCmd) GetRunTimeout() time.Duration {
+	return cmd.RunTimeout
+}
+
 func NewInstance(opts InstanceOpts, logger *zerolog.Logger) (Instance, error) {
 	instance := Instance{logger: logger}
 
@@ -168,7 +174,7 @@ func NewInstance(opts InstanceOpts, logger *zerolog.Logger) (Instance, error) {
 	// These don't cyclically depend on other services so we don't need to put them behind a pointer.
 	lokiService := service.NewLokiService(prometheusClient, logger)
 	nomadEventService := service.NewNomadEventService(instance.db, logger)
-	runService := service.NewRunService(instance.db, lokiService, nomadEventService, opts.GetVictoriaMetricsAddr(), nomadClientWrapper, logger)
+	runService := service.NewRunService(instance.db, lokiService, nomadEventService, opts.GetVictoriaMetricsAddr(), nomadClientWrapper, opts.GetRunTimeout(), logger)
 	evaluationService := service.NewEvaluationService(opts.GetEvaluators(), opts.GetTransformers(), instance.promtailClient.Chan(), logger)
 	actionNameService := service.NewActionNameService(instance.db, logger)
 	sessionService := service.NewSessionService(instance.db, logger)
