@@ -270,124 +270,286 @@
 		{{end}}
 	{{end}}
 
-	{{define "filterStats"}}
+	{{define "stats"}}
 		<dl
 			class="inline"
-			style="
-				justify-content: end;
-				align-items: center;
-			"
 		>
-			{{range makeSlice
-				(makeSlice "Running"           $.Stats.RunsRunning         "filter_run_running"         (and $.Filter $.Filter.RunRunning))
-				(makeSlice "Succeeded"         $.Stats.RunsSucceeded       "filter_run_succeeded"       (and $.Filter $.Filter.RunSucceeded))
-				(makeSlice "Failed"            $.Stats.RunsFailed          "filter_run_failed"          (and $.Filter $.Filter.RunFailed))
-				(makeSlice "Canceled"          $.Stats.RunsCanceled        "filter_run_canceled"        (and $.Filter $.Filter.RunCanceled))
-				(makeSlice "Invoking"          $.Stats.InvocationsInvoking "filter_invocation_invoking" (and $.Filter $.Filter.InvocationInvoking))
-				(makeSlice "Invocation failed" $.Stats.InvocationsFailed   "filter_invocation_failed"   (and $.Filter $.Filter.InvocationFailed))
-			}}
-				<dt>
-					<label for="{{index . 2}}">
-						{{index . 0}}
-					</label>
-				</dt>
-				<dd>
-					<label>
-						{{index . 1}}
-						{{if (index . 3)}}
-							<input
-								title="show"
-								type="checkbox"
-								autocomplete="off"
-								name="{{index . 2}}"
-								id="{{index . 2}}"
-								value="{{toJson (index . 3) false}}"
-							/>
-						{{end}}
-					</label>
-				</dd>
-			{{end}}
+			<dt>Running</dt>
+			<dd>{{.RunsRunning}}</dd>
+			<dt>Succeeded</dt>
+			<dd>{{.RunsSucceeded}}</dd>
+			<dt>Failed</dt>
+			<dd>{{.RunsFailed}}</dd>
+			<dt>Canceled</dt>
+			<dd>{{.RunsCanceled}}</dd>
+			<dt>Invoking</dt>
+			<dd>{{.InvocationsInvoking}}</dd>
+			<dt>Invocation failed</dt>
+			<dd>{{.InvocationsFailed}}</dd>
 		</dl>
-		<script>
-		(() => {
-			const checkboxes = document.scripts[document.scripts.length - 1].
-				previousElementSibling.
-				querySelectorAll('input[type=checkbox]');
+	{{end}}
 
-			const params = new URLSearchParams(location.search);
+	{{define "select-multiple"}}
+		{{- /*
+			The dot value is expected to have these fields:
+			- `title` (optional) A `title` attribute for the container.
+			- `label` (optional) Will be shown when the dropdown is closed.
+			- `options` (required) A list of lists, one for each option.
+				Each list for an option has three indices:
+				1. The `value` attribute.
+				2. The display text.
+				3. The initial selected state.
+			- `onblur` (optional) JavaScript code to execute on the `blur` event.
+				This has `event` and `select` variables in scope.
+		*/ -}}
+		{{$class := "effc28ffbea7413c833df8c16e9f4f39"}}
+		<div
+			class="{{$class}}"
+			{{with .title}}title="{{.}}"{{end}}
+		>
+			<!-- participates in layout when the dummy has `display: none` -->
+			<select class="{{$class}}-placeholder" autocomplete="off">
+				<option selected></option>
+			</select>
 
-			function setValue(checkbox, value) {
-				switch (value) {
-				case true:
-					checkbox.value = 'true';
-					checkbox.checked = true;
-					checkbox.indeterminate = false;
-					params.set(checkbox.name, 'true');
-					break;
-				case null:
-					checkbox.value = 'null';
-					checkbox.checked = false;
-					checkbox.indeterminate = true;
-					params.delete(checkbox.name);
-					break;
-				case false:
-					checkbox.value = 'false';
-					checkbox.checked = false;
-					checkbox.indeterminate = false;
-					params.set(checkbox.name, '');
-					break;
+			<!-- shows a summary -->
+			<select class="{{$class}}-dummy" autocomplete="off">
+				<option selected>
+					{{with .label}}
+						{{.}}:
+					{{end}}
+					All
+				</option>
+			</select>
+
+			<!-- the dropdown -->
+			<select
+				class="{{$class}}-select"
+				multiple
+				size="{{addInt (len .options) 1}}"
+				autocomplete="off"
+			>
+				<option value="all">
+					All
+				</option>
+				<optgroup>
+					{{range .options}}
+						<option
+							value="{{index . 0}}"
+							{{if index . 2 -}}
+								selected
+							{{- end}}
+						>
+							{{index . 1}}
+						</option>
+					{{end}}
+				</optgroup>
+			</select>
+
+			<script>
+			(() => {
+				const script = document.scripts[document.scripts.length - 1];
+				const select = script.previousElementSibling;
+				const dummy = select.previousElementSibling;
+				const dummyOption = dummy.getElementsByTagName('option')[0];
+				const placeholder = dummy.previousElementSibling;
+				const placeholderOption = placeholder.getElementsByTagName('option')[0];
+
+				let prevState = {};
+				for (const option of select.options) {
+					prevState[option.value] = option.selected;
 				}
-			}
 
-			for (const checkbox of checkboxes) {
-				setValue(checkbox, JSON.parse(checkbox.value));
+				function onChange() {
+					const nextState = structuredClone(prevState);
+					const optionsArr = Array.from(select.options);
 
-				checkbox.onchange = () => {
-					switch (checkbox.value) {
-					case 'true':
-						setValue(checkbox, false);
+					switch (optionsArr.filter(option => option.selected).length) {
+					case 0: break;
+					case 1:
+						// when the user simply clicks an option the browser deselects all other options
+						const clicked = optionsArr.find(option => option.selected);
 
-						for (const checkbox2 of checkboxes) {
-							if (checkbox2.name == checkbox.name) continue;
-							setValue(checkbox2, null);
+						// toggle clicked option
+						nextState[clicked.value] = !prevState[clicked.value];
+
+						if (clicked.value != 'all') {
+							// deselect `all` if anything else was clicked
+							nextState['all'] = false;
+						} else if (prevState['all']) {
+							// deselect everything else if `all` was deselected by click
+							for (const k in nextState) {
+								nextState[k] = false;
+							}
 						}
 						break;
-					case 'null':
-						setValue(checkbox, true);
-
-						for (const checkbox2 of checkboxes) {
-							if (checkbox2.name == checkbox.name) continue;
-							setValue(checkbox2, false);
-						}
-						break;
-					case 'false':
-						setValue(checkbox, null);
-
-						for (const checkbox2 of checkboxes) {
-							if (checkbox2.name == checkbox.name || checkbox2.value != 'true') continue;
-							setValue(checkbox2, null);
+					default:
+						// just keep the browser's state
+						// if the user selected multiple options at the same time
+						// (for example by dragging)
+						for (const option of optionsArr) {
+							nextState[option.value] = option.selected;
 						}
 						break;
 					}
 
-					location.search = params;
+					prevState = nextState;
+				}
+
+				function updateSelection() {
+					const nextState = structuredClone(prevState);
+
+					if (nextState['all']) {
+						// select everything else if `all` is selected
+						for (const k in nextState) {
+							nextState[k] = true;
+						}
+					} else {
+						// select `all` if everything else is selected
+						nextState['all'] = true;
+						for (const k in nextState) {
+							if (k == 'all') continue;
+							if (!nextState[k]) {
+								nextState['all'] = false;
+								break;
+							}
+						}
+					}
+
+					// update options
+					for (const option of select.options) {
+						option.selected = nextState[option.value];
+					}
+					// save state for next event
+					prevState = nextState;
+				}
+
+				function updateDummy() {
+					let text = '';
+
+					for (const option of select.selectedOptions) {
+						if (text != '') text += ', ';
+						text += option.text;
+						if (option.value == 'all') break;
+					}
+
+					if (text == '') text = '(none)';
+
+					{{with .label}}
+						text = {{.}} + ': ' + text;
+					{{end}}
+
+					dummyOption.textContent = text;
+
+					// make sure the placeholder has the same width
+					placeholderOption.textContent = dummyOption.textContent;
+				}
+
+				updateSelection();
+				updateDummy();
+
+				dummy.onfocus = () => select.focus();
+
+				select.onchange = () => {
+					onChange();
+					updateSelection();
 				};
+
+				select.onblur = event => {
+					updateDummy();
+
+					{{with .onblur}}{{. | js}}{{end}}
+				};
+			})();
+			</script>
+
+			<style>
+			.{{$class}} {
+				display: grid;
+				position: relative;
 			}
-		})();
-		</script>
+
+			.{{$class}}-placeholder {
+				display: none;
+			}
+			.{{$class}}:focus-within .{{$class}}-placeholder {
+				display: initial;
+				visibility: hidden;
+			}
+
+			/*
+			Remove the dummy when the dropdown is visible.
+			`visibility: hidden` does not suffice in Chrome
+			because that still shows the dummy's dropdown.
+			*/
+			.{{$class}}:focus-within .{{$class}}-dummy {
+				display: none;
+			}
+
+			.{{$class}}-select {
+				display: none;
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				z-index: 1;
+			}
+			.{{$class}}-select option:checked::before {
+				content: '✅';
+			}
+			.{{$class}}-select option:not(:checked)::before {
+				content: '❌';
+			}
+			.{{$class}}:focus-within .{{$class}}-select {
+				display: initial;
+			}
+			</style>
+		</div>
 	{{end}}
 
-	{{define "paginationWithFilterStats"}}
-		<nav style="display: flex">
+	{{define "filter"}}
+		{{template "select-multiple" (makeMap
+			"title" "Filter by status"
+			"label" "Show"
+			"options" (makeSlice
+				(makeSlice "filter_run_running"         "Running"           (.RunRunning.Else         true))
+				(makeSlice "filter_run_succeeded"       "Succeeded"         (.RunSucceeded.Else       true))
+				(makeSlice "filter_run_failed"          "Failed"            (.RunFailed.Else          true))
+				(makeSlice "filter_run_canceled"        "Canceled"          (.RunCanceled.Else        true))
+				(makeSlice "filter_invocation_invoking" "Invoking"          (.InvocationInvoking.Else true))
+				(makeSlice "filter_invocation_failed"   "Invocation failed" (.InvocationFailed.Else   true))
+			)
+			"onblur" `
+				const params = new URLSearchParams(location.search);
+				for (const option of event.target.options) {
+					if (option.value == 'all') continue;
+					if (option.selected) {
+						params.delete(option.value);
+					} else {
+						params.set(option.value, '');
+					}
+				}
+				location.search = params;
+			`
+		)}}
+	{{end}}
+
+	{{define "statsAndFilterAndPagination"}}
+		<nav style="
+			display: flex;
+			align-items: center;
+			gap: 1em;
+		">
+			{{template "stats" .Stats}}
+
 			<div style="
 				flex-grow: 1;
-				margin-right: 1em;
-
-				display: flex;
-				justify-content: end;
 			">
-				{{template "filterStats" (makeMap "Stats" .Stats "Filter" .Filter)}}
+				{{with .Filter}}
+					{{template "filter" .}}
+				{{end}}
 			</div>
+
 			{{template "pagination" (makeMap "Page" .Page "Filter" .Filter)}}
 		</nav>
 	{{end}}

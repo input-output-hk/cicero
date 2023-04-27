@@ -135,7 +135,7 @@ var templateFuncs = template.FuncMap{
 		}
 		return result, nil
 	},
-	"htmlJs": func(js string) template.JS {
+	"js": func(js string) template.JS {
 		return template.JS(js)
 	},
 	"url": func(url string) template.URL {
