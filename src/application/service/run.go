@@ -24,11 +24,13 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
+	"github.com/input-output-hk/cicero/src/util"
 )
 
 type RunService interface {
 	WithQuerier(config.PgxIface) RunService
 
+	InitTimeouts() error
 	GetByNomadJobId(uuid.UUID) (*domain.Run, error)
 	GetByNomadJobIdWithLock(uuid.UUID, string) (*domain.Run, error)
 	GetByInvocationId(uuid.UUID) (*domain.Run, error)
@@ -86,6 +88,42 @@ func (self runService) WithQuerier(querier config.PgxIface) RunService {
 	}
 }
 
+func (self runService) initTimeout(run domain.Run, db config.PgxIface) error {
+	if run.FinishedAt != nil {
+		return nil
+	}
+
+	timeout := run.CreatedAt.Add(self.runTimeout)
+	self.logger.Trace().Stringer("id", run.NomadJobID).Stringer("timeout", timeout).Msg("Initializing timeout")
+	return errors.WithMessage(self.timeouts.AddWithID(run.NomadJobID.String(), &tasks.Task{
+		RunOnce:    true,
+		StartAfter: timeout,
+		Interval:   1,
+		TaskFunc: func() error {
+			self.logger.Info().Stringer("id", run.NomadJobID).Msg("Canceling due to timeout")
+			return self.WithQuerier(db).Cancel(&run)
+		},
+		ErrFunc: func(err error) {
+			self.logger.Err(err).Stringer("id", run.NomadJobID).Msg("Error canceling Run after timeout")
+		},
+	}), "While scheduling timeout")
+}
+
+func (self runService) InitTimeouts() error {
+	runs, err := self.Get(nil, repository.RunGetOpts{Finished: util.False()})
+	if err != nil {
+		return err
+	}
+
+	for _, run := range runs {
+		if err := self.initTimeout(run, self.db); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (self runService) GetByNomadJobId(id uuid.UUID) (run *domain.Run, err error) {
 	self.logger.Trace().Stringer("nomad-job-id", id).Msg("Getting Run by Nomad Job ID")
 	run, err = self.runRepository.GetByNomadJobId(id)
@@ -128,21 +166,7 @@ func (self runService) Save(run *domain.Run, db config.PgxIface) error {
 	if err := self.runRepository.Save(run); err != nil {
 		return errors.WithMessage(err, "Could not insert Run")
 	}
-	timeout := run.CreatedAt.Add(self.runTimeout)
-	self.logger.Trace().Stringer("id", run.NomadJobID).Stringer("timeout", timeout).Msg("Created Run")
-
-	return errors.WithMessage(self.timeouts.AddWithID(run.NomadJobID.String(), &tasks.Task{
-		RunOnce:    true,
-		StartAfter: timeout,
-		Interval:   1,
-		TaskFunc: func() error {
-			self.logger.Info().Stringer("id", run.NomadJobID).Msg("Canceling due to timeout")
-			return self.WithQuerier(db).Cancel(run)
-		},
-		ErrFunc: func(err error) {
-			self.logger.Err(err).Stringer("id", run.NomadJobID).Msg("Error canceling Run after timeout")
-		},
-	}), "While scheduling Run timeout")
+	return self.initTimeout(*run, db)
 }
 
 func (self runService) Update(run *domain.Run) error {

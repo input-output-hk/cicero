@@ -219,6 +219,10 @@ func NewInstance(opts InstanceOpts, logger *zerolog.Logger) (Instance, error) {
 		}
 	}
 
+	instance.onRun = func(_ context.Context) error {
+		return runService.InitTimeouts()
+	}
+
 	return instance, nil
 }
 
@@ -230,6 +234,8 @@ type Instance struct {
 	db             *pgxpool.Pool
 	promtailClient promtailClient.Client
 	nomadClient    *nomad.Client
+
+	onRun func(context.Context) error
 }
 
 func (self Instance) Close() {
@@ -267,6 +273,10 @@ func (self Instance) Run(ctx context.Context) error {
 
 	if err := supervisor.Start(ctx); err != nil {
 		return errors.WithMessage(err, "While starting supervisor")
+	}
+
+	if err := self.onRun(ctx); err != nil {
+		return err
 	}
 
 	<-ctx.Done()
