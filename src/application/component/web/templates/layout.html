@@ -150,20 +150,24 @@
 	{{end}}
 
 	{{define "log"}}
-		<table
-			class="panel log"
-			style="display: none"
-		>
+		<table class="panel log">
 			<tbody></tbody>
+			<tfoot>
+				<tr class="info">
+					<td>status</td>
+					<td>Loading…</td>
+				</tr>
+			</tfoot>
 		</table>
-
-		<em>No log found.</em>
 
 		<script>
 		(() => {
-			const noLogFound = document.scripts[document.scripts.length - 1].previousElementSibling;
-			const table = noLogFound.previousElementSibling;
-			const tbody = table.querySelector('tbody');
+			const script = document.scripts[document.scripts.length - 1]
+			const table = script.previousElementSibling;
+			const tbody = table.getElementsByTagName('tbody')[0];
+			const status = table.getElementsByTagName('tfoot')[0].
+				getElementsByTagName('tr')[0].
+				getElementsByTagName('td')[1];
 
 			function renderLine(tr, line) {
 				if (line.error != null) {
@@ -226,9 +230,6 @@
 					// Remove the line after the snip line so we don't accidentally remove the snip line itself.
 					tbody.children[snipLineRowIdx + 1].remove();
 				}
-
-				table.style.display = null;
-				noLogFound.style.display = 'none';
 			}
 
 			document.addEventListener('DOMContentLoaded', async () => {
@@ -241,10 +242,17 @@
 						line = {error: msg.data};
 					}
 					appendLine(line);
+
+					status.textContent = 'Waiting for more lines…';
 				};
-				ws.onerror = msg => {
-					appendLine({error: msg.data});
+				ws.onclose = () => {
+					if (tbody.childElementCount == 0) {
+						status.textContent = 'No log found.';
+					} else {
+						status.textContent = 'No more lines.';
+					}
 				};
+				ws.onerror = msg => appendLine({error: msg.data});
 			});
 		})()
 		</script>
