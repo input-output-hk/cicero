@@ -245,13 +245,10 @@
 
 					status.textContent = 'Waiting for more lines…';
 				};
-				ws.onclose = () => {
-					if (tbody.childElementCount == 0) {
-						status.textContent = 'No log found.';
-					} else {
-						status.textContent = 'No more lines.';
-					}
-				};
+				ws.onclose = () => status.textContent =
+					tbody.childElementCount == 0 ?
+					'No log found.' :
+					'No more lines.';
 				ws.onerror = msg => appendLine({error: msg.data ?? 'Unknown error'});
 			});
 		})()
