@@ -252,7 +252,7 @@
 						status.textContent = 'No more lines.';
 					}
 				};
-				ws.onerror = msg => appendLine({error: msg.data});
+				ws.onerror = msg => appendLine({error: msg.data ?? 'Unknown error'});
 			});
 		})()
 		</script>
