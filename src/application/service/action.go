@@ -234,7 +234,7 @@ func (self actionService) IsRunnable(action *domain.Action) (bool, map[string]do
 			continue
 		}
 
-		if !util.IsConcreteRecursive(v) {
+		if v.Err() != nil || !util.IsConcreteRecursive(v) {
 			_, err := v.MarshalJSON()
 			if err == nil {
 				panic("This should never happen™")
