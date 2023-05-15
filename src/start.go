@@ -271,12 +271,12 @@ func (self Instance) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if err := supervisor.Start(ctx); err != nil {
-		return errors.WithMessage(err, "While starting supervisor")
-	}
-
 	if err := self.onRun(ctx); err != nil {
 		return err
+	}
+
+	if err := supervisor.Start(ctx); err != nil {
+		return errors.WithMessage(err, "While starting supervisor")
 	}
 
 	<-ctx.Done()

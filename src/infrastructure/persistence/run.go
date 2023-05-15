@@ -74,6 +74,12 @@ func (a runRepository) Get(page *repository.Page, opts repository.RunGetOpts) ([
 	} else {
 		runs = make([]domain.Run, 0, page.Limit)
 	}
+
+	status := make([]string, 0, len(opts.Status))
+	for _, s := range opts.Status {
+		status = append(status, s.String())
+	}
+
 	return runs, fetchPage(
 		a.DB, page, &runs,
 		`run.*`, `run
@@ -82,12 +88,14 @@ func (a runRepository) Get(page *repository.Page, opts repository.RunGetOpts) ([
 			INNER JOIN action_name ON action_name.name = action.name
 			WHERE
 				($1::bool IS NULL OR $1::bool = action_name.private) AND
-				($2::bool IS NULL OR $2::bool = (run.finished_at IS NULL)) AND
-				($3::uuid IS NULL OR $3::uuid = invocation.action_id)
+				($2::bool IS NULL OR $2::bool = (run.finished_at IS NOT NULL)) AND
+				($3::uuid IS NULL OR $3::uuid = invocation.action_id) AND
+				($4::run_status[] IS NULL OR run.status = ANY($4::run_status[]))
 		`, `run.created_at DESC`,
 		opts.Private.Ptr(),
 		opts.Finished.Ptr(),
 		opts.ActionId,
+		status,
 	)
 }
 

@@ -24,4 +24,5 @@ type RunGetOpts struct {
 	Private  util.MayBool
 	Finished util.MayBool
 	ActionId *uuid.UUID
+	Status   []domain.RunStatus
 }

@@ -24,7 +24,6 @@ import (
 	"github.com/input-output-hk/cicero/src/domain"
 	"github.com/input-output-hk/cicero/src/domain/repository"
 	"github.com/input-output-hk/cicero/src/infrastructure/persistence"
-	"github.com/input-output-hk/cicero/src/util"
 )
 
 type RunService interface {
@@ -110,7 +109,7 @@ func (self runService) initTimeout(run domain.Run, db config.PgxIface) error {
 }
 
 func (self runService) InitTimeouts() error {
-	runs, err := self.Get(nil, repository.RunGetOpts{Finished: util.False()})
+	runs, err := self.Get(nil, repository.RunGetOpts{Status: []domain.RunStatus{domain.RunStatusRunning}})
 	if err != nil {
 		return err
 	}
