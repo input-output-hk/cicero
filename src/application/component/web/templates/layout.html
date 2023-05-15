@@ -597,4 +597,23 @@
 			</div>
 		</footer>
 	</body>
+
+	<script>
+	(() => {
+		function resize(iframe) {
+			iframe.style.height = iframe.contentWindow.document.body.parentElement.scrollHeight + 'px';
+		}
+
+		const observer = new ResizeObserver(entries => {
+			for (const entry of entries) {
+				resize(entry.target);
+			}
+		});
+
+		for (const iframe of document.querySelectorAll('iframe.iframe')) {
+			iframe.addEventListener('load', () => resize(iframe));
+			observer.observe(iframe);
+		}
+	})();
+	</script>
 </html>
